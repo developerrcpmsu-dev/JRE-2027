@@ -1,7 +1,9 @@
 import React from 'react';
 import { ExternalLink, CheckCircle2, Clock, Sparkles } from 'lucide-react';
 
-export default function FormsBanner({ formsConfig }) {
+export default function FormsBanner({ formsConfig, user }) {
+  // Hide completely when user is logged out
+  if (!user) return null;
   if (!formsConfig) return null;
 
   const activeForms = Object.entries(formsConfig).filter(([_, config]) => config.enabled && config.url);

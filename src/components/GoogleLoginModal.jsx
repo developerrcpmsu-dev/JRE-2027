@@ -1,6 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, CheckCircle2, User, Mail, ArrowRight, AlertCircle, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, ShieldCheck, CheckCircle2, User, Mail, ArrowRight, AlertCircle, ChevronRight, Sparkles } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
+
+// Helper to decode Google JWT Identity Credential Token client-side safely
+function decodeJwtResponse(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error('Failed to decode Google JWT token:', e);
+    return null;
+  }
+}
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [tokenClient, setTokenClient] = useState(null);
@@ -9,12 +27,13 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [customName, setCustomName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const googleBtnContainerRef = useRef(null);
 
   const handleDirectGoogleOAuth = () => {
     setIsLoading(true);
     setErrorMsg(null);
     const origin = window.location.origin;
-    const redirectUri = encodeURIComponent(`${origin}/`);
+    const redirectUri = encodeURIComponent(origin);
     const scope = encodeURIComponent('openid email profile');
     const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&prompt=select_account`;
     window.location.href = googleOAuthUrl;
@@ -24,8 +43,69 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     if (!isOpen) return;
     let initialized = false;
 
-    const initOAuthClient = () => {
+    const setupGoogleAuth = () => {
       if (initialized) return;
+
+      // 1. Setup Official Google Identity Services (GIS) One Tap / Render Button with JWT
+      if (window.google?.accounts?.id && GOOGLE_CLIENT_ID) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: async (response) => {
+              if (response?.credential) {
+                setIsLoading(true);
+                setErrorMsg(null);
+                try {
+                  const payload = decodeJwtResponse(response.credential);
+                  if (payload?.email) {
+                    const cleanEmail = payload.email.trim().toLowerCase();
+                    const cleanName = payload.name || cleanEmail.split('@')[0];
+                    const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+
+                    const user = await DataService.loginWithGoogleProfile({
+                      name: cleanName,
+                      email: cleanEmail,
+                      avatar: avatar
+                    });
+
+                    localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
+                    if (onLoginSuccess) {
+                      onLoginSuccess(user);
+                    }
+                    onClose();
+                  } else {
+                    throw new Error('ไม่พบข้อมูลอีเมลใน Google credential');
+                  }
+                } catch (err) {
+                  console.error('Google credential parse error:', err);
+                  setErrorMsg('เกิดข้อผิดพลาดในการตรวจสอบบัญชี Google');
+                } finally {
+                  setIsLoading(false);
+                }
+              }
+            },
+            auto_select: false,
+            cancel_on_tap_outside: true
+          });
+
+          if (googleBtnContainerRef.current) {
+            googleBtnContainerRef.current.innerHTML = '';
+            window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+              theme: 'filled_blue',
+              size: 'large',
+              type: 'standard',
+              text: 'continue_with',
+              shape: 'pill',
+              logo_alignment: 'left',
+              width: 320
+            });
+          }
+        } catch (e) {
+          console.warn('Google Identity button init notice:', e);
+        }
+      }
+
+      // 2. Setup Google OAuth2 Token Client (Popup flow fallback)
       if (window.google?.accounts?.oauth2 && GOOGLE_CLIENT_ID) {
         try {
           const client = window.google.accounts.oauth2.initTokenClient({
@@ -35,7 +115,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             error_callback: (err) => {
               console.warn('Google OAuth error callback in modal:', err);
               if (err?.type === 'popup_failed_to_open') {
-                // Browser blocked popup! Seamlessly fallback to direct redirect
                 handleDirectGoogleOAuth();
               } else {
                 setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือถูกบล็อกโดยเบราว์เซอร์');
@@ -95,10 +174,10 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
       }
     };
 
-    initOAuthClient();
+    setupGoogleAuth();
     const interval = setInterval(() => {
-      if (!initialized && window.google?.accounts?.oauth2) {
-        initOAuthClient();
+      if (!initialized && (window.google?.accounts?.id || window.google?.accounts?.oauth2)) {
+        setupGoogleAuth();
         clearInterval(interval);
       }
     }, 300);
@@ -193,7 +272,12 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         )}
 
         <div className="space-y-4">
-          {/* THE NATIVE GOOGLE ACCOUNT SELECTOR BUTTON */}
+          {/* 1. Official Google Identity Button (Renders when GIS loaded) */}
+          <div className="flex justify-center w-full min-h-[44px]">
+            <div ref={googleBtnContainerRef} id="google-official-btn" className="w-full flex justify-center" />
+          </div>
+
+          {/* 2. Direct Popup / Redirect Fallback Button */}
           <button
             type="button"
             onClick={handleGoogleClick}
@@ -210,7 +294,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
           </button>
 
-          {/* Quick Select Developer / Primary Account */}
+          {/* 3. Quick Select Developer / Primary Account */}
           <div className="pt-2">
             <button
               type="button"
@@ -223,9 +307,14 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
                   พ
                 </div>
                 <div>
-                  <p className="font-bold text-white group-hover:text-rescue-400 transition-colors">
-                    นายพงศ์ภรณ์ ทองศิริ
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-white group-hover:text-rescue-400 transition-colors">
+                      นายพงศ์ภรณ์ ทองศิริ
+                    </p>
+                    <span className="px-1.5 py-0.2 bg-rescue-500/20 text-rescue-400 rounded text-[9px] font-black">
+                      Dev
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400">developer.rcpmsu@gmail.com</p>
                 </div>
               </div>
@@ -233,7 +322,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             </button>
           </div>
 
-          {/* Option to type any other Gmail if desired */}
+          {/* 4. Option to type any other Gmail if desired */}
           {!showCustomInput ? (
             <button
               type="button"

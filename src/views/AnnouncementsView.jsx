@@ -17,13 +17,20 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
-  Megaphone,
   Check,
   Copy,
-  Share2
+  Share2,
+  Lock,
+  User
 } from 'lucide-react';
 
-export default function AnnouncementsView({ announcements, onNavigateRegister, initialScope = 'all' }) {
+export default function AnnouncementsView({ 
+  announcements, 
+  user,
+  onOpenGoogleLogin,
+  onNavigateRegister, 
+  initialScope = 'all' 
+}) {
   const getInitialScope = () => {
     try {
       const url = new URL(window.location.href);
@@ -89,6 +96,8 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
       matchScope = item.category === 'pr';
     } else if (activeScope === 'members') {
       matchScope = item.category !== 'pr';
+    } else if (!user && activeScope === 'all') {
+      matchScope = item.category === 'pr' || item.category === 'general';
     }
 
     const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
@@ -305,7 +314,36 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
 
       {/* Announcements List */}
       <div className="space-y-6">
-        {filtered.length === 0 ? (
+        {activeScope === 'members' && !user ? (
+          <div className="bg-slate-900/90 border border-amber-500/40 rounded-3xl p-8 sm:p-12 text-center space-y-4 max-w-xl mx-auto shadow-2xl backdrop-blur">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto shadow-xl">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-white">ประกาศคำสั่งเฉพาะสมาชิกโครงการ</h3>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+              ส่วนนี้สงวนสิทธิ์เฉพาะผู้เข้าร่วมโครงการ JRE 2027 ที่ลงทะเบียนแล้ว กรุณาเข้าสู่ระบบด้วยบัญชี Google เพื่อเปิดดูคำสั่งโครงการ, การจัดสรรกลุ่ม/ห้องนอน และลิงก์กลุ่มไลน์ประสานงาน
+            </p>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {onOpenGoogleLogin && (
+                <button
+                  onClick={onOpenGoogleLogin}
+                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-rescue-600 to-amber-600 hover:from-rescue-500 hover:to-amber-500 text-white font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  เข้าสู่ระบบด้วยบัญชี Google
+                </button>
+              )}
+              {onNavigateRegister && (
+                <button
+                  onClick={onNavigateRegister}
+                  className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 transition-all text-xs sm:text-sm"
+                >
+                  ไปหน้าลงทะเบียนโครงการ
+                </button>
+              )}
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-center py-12 bg-slate-900/60 rounded-3xl border border-slate-800 p-8">
             <AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" />
             <p className="text-slate-400 text-sm">ไม่พบประกาศในหมวดหมู่ที่เลือก</p>

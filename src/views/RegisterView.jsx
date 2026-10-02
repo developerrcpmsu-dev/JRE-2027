@@ -384,7 +384,7 @@ export default function RegisterView({
   };
 
   // If user is not logged in with Google yet
-  if (!user && !myRegistration) {
+  if (!user) {
     return (
       <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
         

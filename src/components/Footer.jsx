@@ -104,11 +104,29 @@ export default function Footer({ onOpenAdminLogin }) {
 
         </div>
 
-        <div className="mt-8 pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p className="text-center sm:text-left leading-relaxed">
-            © 2569 - {new Date().getFullYear() + 543} JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม สงวนลิขสิทธิ์ | พัฒนาระบบโดย Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ
-          </p>
-          <p className="flex items-center gap-1 shrink-0">
+        <div className="mt-8 pt-8 border-t border-slate-900 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 gap-4">
+          <div className="text-center md:text-left leading-relaxed space-y-1.5">
+            <p>
+              © 2569 - {new Date().getFullYear() + 543} JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม สงวนลิขสิทธิ์
+            </p>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-0.5">
+              <span className="text-slate-400">พัฒนาระบบโดย:</span>
+              <a
+                href="tel:0889463459"
+                title="คลิกเพื่อโทรติดต่อผู้พัฒนาระบบเมื่อพบปัญหา"
+                className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-semibold transition-all duration-300 hover:border-rescue-500 hover:bg-gradient-to-r hover:from-rescue-950/80 hover:via-slate-900 hover:to-orange-950/80 hover:text-rescue-400 hover:shadow-xl hover:shadow-rescue-500/25 hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="text-rescue-400 font-black group-hover:text-amber-300 transition-colors">
+                  Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ
+                </span>
+                <span className="text-[11px] text-slate-400 group-hover:text-orange-200 transition-colors border-l border-slate-700 pl-2">
+                  ระบบมีปัญหา กรุณาติดต่อ Dev: <span className="font-mono text-emerald-400 font-bold group-hover:underline">088-9463459</span>
+                </span>
+              </a>
+            </div>
+          </div>
+          <p className="flex items-center gap-1 shrink-0 text-slate-400">
             ร่วมใจเพื่อความปลอดภัยของสังคม <Heart className="w-3.5 h-3.5 text-emergency-500 fill-emergency-500" />
           </p>
         </div>
