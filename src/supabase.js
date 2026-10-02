@@ -378,7 +378,7 @@ export const DataService = {
           .from('project_settings')
           .select('value')
           .eq('key', 'forms_config')
-          .single();
+          .maybeSingle();
         if (!error && data?.value) return data.value;
       } catch (e) {
         console.warn('Supabase forms_config query error, fallback', e);
@@ -410,7 +410,7 @@ export const DataService = {
           .from('project_settings')
           .select('value')
           .eq('key', 'payment_config')
-          .single();
+          .maybeSingle();
         if (!error && data?.value) {
           localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(data.value));
           return data.value;
