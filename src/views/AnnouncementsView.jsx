@@ -16,7 +16,11 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Maximize2
+  Maximize2,
+  Megaphone,
+  Check,
+  Copy,
+  Share2
 } from 'lucide-react';
 
 export default function AnnouncementsView({ announcements, onNavigateRegister }) {

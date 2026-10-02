@@ -596,20 +596,29 @@ export const DataService = {
   },
 
   async signInWithGoogleOAuth() {
+    // If Supabase OAuth is attempted but Google is not enabled on Supabase, catch gracefully
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account'
+      try {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'select_account'
+            }
           }
+        });
+        if (error) {
+          console.warn('Supabase signInWithOAuth note (using client token flow instead):', error.message);
+          return null;
         }
-      });
-      if (error) throw error;
-      return data;
+        return data;
+      } catch (err) {
+        console.warn('Supabase OAuth notice:', err?.message);
+        return null;
+      }
     }
-    throw new Error('ระบบ Supabase ไม่ได้เชื่อมต่อ');
+    return null;
   }
 };

@@ -38,7 +38,8 @@ import {
   XCircle,
   Send,
   FileDown,
-  Maximize2
+  Maximize2,
+  Clock
 } from 'lucide-react';
 import { DataService } from '../supabase';
 
