@@ -1,7 +1,9 @@
-import React from 'react';
-import { Flame, Shield, MapPin, Phone, Mail, Heart } from 'lucide-react';
+import React, { useState } from 'react';
+import { Flame, Shield, MapPin, Phone, Mail, Heart, ShieldCheck } from 'lucide-react';
+import PDPAModal from './PDPAModal';
 
 export default function Footer({ onOpenAdminLogin }) {
+  const [showPdpaModal, setShowPdpaModal] = useState(false);
   return (
     <footer className="bg-slate-950 border-t border-slate-800 text-slate-400 text-sm mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -79,6 +81,15 @@ export default function Footer({ onOpenAdminLogin }) {
                   <span>▲</span> Vercel Deployment (rcp-msu)
                 </a>
               </li>
+              <li className="pt-1">
+                <button
+                  onClick={() => setShowPdpaModal(true)}
+                  className="text-slate-400 hover:text-rescue-400 text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-rescue-500" />
+                  นโยบายข้อมูลส่วนบุคคล (PDPA มมส)
+                </button>
+              </li>
               <li className="pt-2">
                 <button
                   onClick={onOpenAdminLogin}
@@ -102,6 +113,11 @@ export default function Footer({ onOpenAdminLogin }) {
           </p>
         </div>
       </div>
+
+      <PDPAModal
+        isOpen={showPdpaModal}
+        onClose={() => setShowPdpaModal(false)}
+      />
     </footer>
   );
 }

@@ -13,12 +13,14 @@ import {
   X
 } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
+import PDPAModal from '../components/PDPAModal';
 
 export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
   const [tokenClient, setTokenClient] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [showFallback, setShowFallback] = useState(false);
+  const [showPdpaModal, setShowPdpaModal] = useState(false);
   const [customEmail, setCustomEmail] = useState('');
   const [customName, setCustomName] = useState('');
 
@@ -272,7 +274,7 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
           )}
 
           {/* Admin Login Link at Bottom */}
-          <div className="mt-8 pt-5 border-t border-slate-800 text-center">
+          <div className="mt-8 pt-5 border-t border-slate-800 text-center space-y-2">
             <button
               type="button"
               onClick={onOpenAdminLogin}
@@ -281,6 +283,17 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
               <Lock className="w-3.5 h-3.5 group-hover:text-rescue-400" />
               <span>สำหรับผู้ดูแลระบบ: เข้าสู่ระบบ Admin (Admin Login)</span>
             </button>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPdpaModal(true)}
+                className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 underline transition-colors"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-rescue-500" />
+                <span>นโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA มมส)</span>
+              </button>
+            </div>
           </div>
 
         </div>
@@ -295,6 +308,12 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
           พัฒนาระบบโดย <span className="text-slate-300 font-medium">Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ</span>
         </p>
       </footer>
+
+      {/* MSU PDPA Policy Modal */}
+      <PDPAModal
+        isOpen={showPdpaModal}
+        onClose={() => setShowPdpaModal(false)}
+      />
 
     </div>
   );

@@ -35,6 +35,7 @@ import {
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
 import { DataService } from '../supabase';
+import PDPAModal from '../components/PDPAModal';
 
 export default function RegisterView({ 
   user, 
@@ -67,6 +68,11 @@ export default function RegisterView({
   const [medicalHistory, setMedicalHistory] = useState('');
   const [foodAllergy, setFoodAllergy] = useState('');
   const [previousTraining, setPreviousTraining] = useState('');
+
+  // Consent & PDPA States
+  const [agreeCorrectInfo, setAgreeCorrectInfo] = useState(!!myRegistration);
+  const [agreePDPAAndRules, setAgreePDPAAndRules] = useState(!!myRegistration);
+  const [showPdpaModal, setShowPdpaModal] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
@@ -109,6 +115,8 @@ export default function RegisterView({
           setBirthDay(parseInt(parts[2], 10).toString());
         }
       }
+      setAgreeCorrectInfo(true);
+      setAgreePDPAAndRules(true);
     } else if (user && user.name) {
       // Auto pre-fill name from Google Account for first-time applicants
       const parts = user.name.trim().split(' ');
@@ -128,6 +136,14 @@ export default function RegisterView({
     e.preventDefault();
     if (!user) {
       onOpenGoogleLogin();
+      return;
+    }
+
+    if (!agreeCorrectInfo || !agreePDPAAndRules) {
+      setStatusMessage({
+        type: 'error',
+        text: 'กรุณาติ๊กยินยอมว่าข้อมูลถูกต้อง และยินยอมปฏิบัติตามนโยบาย PDPA มมส และข้อตกลงโครงการก่อนบันทึกใบสมัคร'
+      });
       return;
     }
 
@@ -1254,12 +1270,63 @@ export default function RegisterView({
           </div>
         </div>
 
+        {/* Consent and Agreement Checkboxes (Required by Project & MSU PDPA) */}
+        <div className="p-5 sm:p-6 bg-slate-950/80 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-800">
+            <ShieldCheck className="w-5 h-5 text-rescue-500" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
+            </h3>
+          </div>
+
+          <div className="space-y-3.5">
+            {/* Checkbox 1: Correct Info Confirmation */}
+            <label className="flex items-start gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                required
+                checked={agreeCorrectInfo}
+                onChange={e => setAgreeCorrectInfo(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+              />
+              <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
+                <strong className="text-white font-semibold">การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ และข้อมูลติดต่อฉุกเฉินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
+              </span>
+            </label>
+
+            {/* Checkbox 2: PDPA and Project Rules */}
+            <label className="flex items-start gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                required
+                checked={agreePDPAAndRules}
+                onChange={e => setAgreePDPAAndRules(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+              />
+              <div className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
+                <strong className="text-white font-semibold">นโยบาย PDPA และข้อตกลงโครงการ:</strong> ข้าพเจ้ายินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) มหาวิทยาลัยมหาสารคาม และตกลงที่จะปฏิบัติตามกฎระเบียบ ข้อตกลง และคำสั่งความปลอดภัยของโครงการ JRE 2027 ตลอดระยะเวลาการฝึกอบรมทุกประการ <span className="text-rose-400 font-bold">*</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowPdpaModal(true);
+                  }}
+                  className="ml-2 text-rescue-400 hover:text-rescue-300 underline font-semibold inline-flex items-center gap-1"
+                >
+                  [อ่านนโยบายข้อมูลส่วนบุคคล PDPA มมส]
+                </button>
+              </div>
+            </label>
+          </div>
+        </div>
+
         {/* Submit Actions */}
         <div className="pt-4 flex items-center gap-3">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="flex-1 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-bold rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.98] disabled:opacity-50 text-base flex items-center justify-center gap-2"
+            disabled={isSubmitting || !agreeCorrectInfo || !agreePDPAAndRules}
+            className="flex-1 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-bold rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-base flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -1283,6 +1350,12 @@ export default function RegisterView({
         </div>
 
       </form>
+
+      {/* MSU PDPA Policy Modal */}
+      <PDPAModal
+        isOpen={showPdpaModal}
+        onClose={() => setShowPdpaModal(false)}
+      />
     </div>
   );
 }

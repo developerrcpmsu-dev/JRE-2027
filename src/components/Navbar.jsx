@@ -12,7 +12,8 @@ import {
   LogOut, 
   UserCheck, 
   Award, 
-  ExternalLink 
+  ExternalLink,
+  Megaphone
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -85,27 +86,41 @@ export default function Navbar({
 
             <button
               onClick={() => handleNav('schedule')}
-              className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 currentTab === 'schedule'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
             >
               <Calendar className="w-4 h-4" />
-              กำหนดการ (14-15 พ.ย.)
+              กำหนดการ
             </button>
 
             <button
-              onClick={() => handleNav('announcements')}
-              className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 relative ${
-                currentTab === 'announcements'
-                  ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
+              onClick={() => handleNav('pr')}
+              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                currentTab === 'pr'
+                  ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
+              title="URL ประชาสัมพันธ์รับสมัครสาธารณะ"
             >
-              <Bell className="w-4 h-4" />
-              ประกาศข่าวสาร
-              <span className="w-2 h-2 rounded-full bg-emergency-500 animate-pulse"></span>
+              <Megaphone className="w-4 h-4 text-orange-400" />
+              <span>รับสมัคร</span>
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+            </button>
+
+            <button
+              onClick={() => handleNav('orders')}
+              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 relative ${
+                currentTab === 'orders' || currentTab === 'announcements'
+                  ? 'bg-indigo-600/30 text-indigo-300 shadow-sm border border-indigo-500/50'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-900'
+              }`}
+              title="URL คำสั่งและประกาศสำหรับสมาชิก"
+            >
+              <Bell className="w-4 h-4 text-indigo-400" />
+              <span>คำสั่งสมาชิก</span>
             </button>
 
             {/* Applicant Dashboard / Register Link */}
@@ -277,13 +292,23 @@ export default function Navbar({
           </button>
 
           <button
-            onClick={() => handleNav('announcements')}
+            onClick={() => handleNav('pr')}
             className={`w-full text-left px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 ${
-              currentTab === 'announcements' ? 'bg-rescue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+              currentTab === 'pr' ? 'bg-orange-600 text-white' : 'text-slate-300 hover:bg-slate-800'
             }`}
           >
-            <Bell className="w-5 h-5" />
-            ประกาศข่าวสาร
+            <Megaphone className="w-5 h-5 text-orange-400" />
+            <span>📢 ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
+          </button>
+
+          <button
+            onClick={() => handleNav('orders')}
+            className={`w-full text-left px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 ${
+              currentTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Bell className="w-5 h-5 text-indigo-400" />
+            <span>📋 ประกาศคำสั่งสมาชิก (เฉพาะผู้เข้าร่วม)</span>
           </button>
 
           <button

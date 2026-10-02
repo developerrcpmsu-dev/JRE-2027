@@ -23,7 +23,20 @@ import {
   Share2
 } from 'lucide-react';
 
-export default function AnnouncementsView({ announcements, onNavigateRegister }) {
+export default function AnnouncementsView({ announcements, onNavigateRegister, initialScope = 'all' }) {
+  const getInitialScope = () => {
+    try {
+      const url = new URL(window.location.href);
+      const tabParam = url.searchParams.get('tab');
+      const typeParam = url.searchParams.get('type') || url.searchParams.get('view');
+      if (tabParam === 'pr' || typeParam === 'public') return 'public';
+      if (tabParam === 'orders' || typeParam === 'members') return 'members';
+      if (initialScope === 'public' || initialScope === 'members') return initialScope;
+    } catch (e) {}
+    return 'all';
+  };
+
+  const [activeScope, setActiveScope] = useState(getInitialScope);
   const [copiedId, setCopiedId] = useState(null);
   const [copiedPageUrl, setCopiedPageUrl] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,6 +48,27 @@ export default function AnnouncementsView({ announcements, onNavigateRegister })
 
   // PDF Preview Modal State
   const [previewPdf, setPreviewPdf] = useState(null); // { url, name }
+
+  const handleScopeChange = (newScope) => {
+    setActiveScope(newScope);
+    try {
+      const url = new URL(window.location.href);
+      if (newScope === 'public') {
+        url.searchParams.set('tab', 'pr');
+        url.searchParams.delete('type');
+        url.searchParams.delete('view');
+      } else if (newScope === 'members') {
+        url.searchParams.set('tab', 'orders');
+        url.searchParams.delete('type');
+        url.searchParams.delete('view');
+      } else {
+        url.searchParams.set('tab', 'announcements');
+        url.searchParams.delete('type');
+        url.searchParams.delete('view');
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {}
+  };
 
   const categories = [
     { id: 'all', label: 'ทั้งหมด' },
@@ -49,9 +83,36 @@ export default function AnnouncementsView({ announcements, onNavigateRegister })
   const filtered = announcements.filter(item => {
     const matchSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         item.content.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    let matchScope = true;
+    if (activeScope === 'public') {
+      matchScope = item.category === 'pr';
+    } else if (activeScope === 'members') {
+      matchScope = item.category !== 'pr';
+    }
+
     const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
-    return matchSearch && matchCat;
+    return matchSearch && matchScope && matchCat;
   });
+
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://jre-2027.vercel.app';
+  const currentShareUrl = activeScope === 'public'
+    ? `${currentOrigin}/?tab=pr`
+    : activeScope === 'members'
+    ? `${currentOrigin}/?tab=orders`
+    : `${currentOrigin}/?tab=announcements`;
+
+  const shareTitle = activeScope === 'public'
+    ? 'ลิงก์ URL หน้าประชาสัมพันธ์รับสมัครทางการ (Public PR)'
+    : activeScope === 'members'
+    ? 'ลิงก์ URL ประกาศคำสั่ง & ข่าวสารสำหรับสมาชิก (เฉพาะผู้เข้าร่วม)'
+    : 'ลิงก์ URL กระดานประกาศข่าวสารทั้งหมด (JRE 2027)';
+
+  const shareButtonText = activeScope === 'public'
+    ? 'คัดลอกลิงก์ประชาสัมพันธ์รับสมัคร'
+    : activeScope === 'members'
+    ? 'คัดลอกลิงก์ประกาศคำสั่งสมาชิก'
+    : 'คัดลอกลิงก์ประกาศทั้งหมด';
 
   const getCategoryBadge = (cat) => {
     switch (cat) {
@@ -95,26 +156,97 @@ export default function AnnouncementsView({ announcements, onNavigateRegister })
           กระดานข่าวสารทางการ
         </div>
         <h1 className="text-3xl font-black text-white">
-          ประกาศข่าวสารโครงการ JRE 2027
+          {activeScope === 'public'
+            ? '📢 ประชาสัมพันธ์รับสมัคร JRE 2027'
+            : activeScope === 'members'
+            ? '📋 ประกาศคำสั่ง & ข่าวสารสำหรับสมาชิก'
+            : 'ประกาศข่าวสารโครงการ JRE 2027'}
         </h1>
         <p className="text-slate-400 text-xs sm:text-sm">
-          ติดตามประกาศคำสั่ง กำหนดการชำระเงิน เอกสารแนบ PDF ลิงก์เข้ากลุ่ม และภาพกิจกรรมจากคณะกรรมการฝึกอบรม
+          {activeScope === 'public'
+            ? 'ข้อมูลประชาสัมพันธ์อย่างเป็นทางการ กำหนดการ วันเปิดรับสมัคร ค่าลงทะเบียน และการรับรองการฝึก'
+            : activeScope === 'members'
+            ? 'ประกาศคำสั่งโครงการ ข้อปฏิบัติ รายการอุปกรณ์ประจำกาย และลิงก์กลุ่มประสานงานสำหรับผู้เข้าร่วม'
+            : 'ติดตามประกาศคำสั่ง กำหนดการชำระเงิน เอกสารแนบ PDF ลิงก์เข้ากลุ่ม และภาพกิจกรรมจากคณะกรรมการฝึกอบรม'}
         </p>
       </div>
 
-      {/* Official PR Share Banner with 1-Click Copy */}
-      <div className="bg-gradient-to-r from-orange-950/50 via-slate-900 to-amber-950/40 border border-orange-500/40 p-4 sm:p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+      {/* Dual Scope Switcher: Public PR vs Member Orders */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-2 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl">
+        <button
+          type="button"
+          onClick={() => handleScopeChange('public')}
+          className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            activeScope === 'public'
+              ? 'bg-gradient-to-r from-orange-600 via-rescue-600 to-amber-600 text-white shadow-lg shadow-orange-600/30 ring-2 ring-orange-400/50'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+          }`}
+        >
+          <Megaphone className="w-4 h-4 shrink-0" />
+          <span>📢 ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleScopeChange('members')}
+          className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            activeScope === 'members'
+              ? 'bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/50'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+          }`}
+        >
+          <FileText className="w-4 h-4 shrink-0" />
+          <span>📋 ประกาศคำสั่งสำหรับสมาชิก</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleScopeChange('all')}
+          className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            activeScope === 'all'
+              ? 'bg-slate-800 text-white border border-slate-700 shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+          }`}
+        >
+          <span>ดูประกาศทั้งหมด</span>
+        </button>
+      </div>
+
+      {/* Dynamic PR vs Member Share Banner with 1-Click Copy */}
+      <div className={`p-4 sm:p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl border ${
+        activeScope === 'public'
+          ? 'bg-gradient-to-r from-orange-950/60 via-slate-900 to-amber-950/40 border-orange-500/50'
+          : activeScope === 'members'
+          ? 'bg-gradient-to-r from-indigo-950/60 via-slate-900 to-blue-950/40 border-indigo-500/50'
+          : 'bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-slate-800'
+      }`}>
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-orange-500/20 text-orange-400 border border-orange-500/40 flex items-center justify-center shrink-0 shadow-lg">
-            <Megaphone className="w-6 h-6 animate-pulse" />
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg border ${
+            activeScope === 'public'
+              ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+              : activeScope === 'members'
+              ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40'
+              : 'bg-slate-800 text-slate-300 border-slate-700'
+          }`}>
+            {activeScope === 'public' ? (
+              <Megaphone className="w-6 h-6 animate-pulse" />
+            ) : (
+              <FileText className="w-6 h-6" />
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-xs sm:text-sm font-bold text-white">ลิงก์ URL หน้าประชาสัมพันธ์ทางการ (JRE 2027)</h3>
-              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/30">Official</span>
+              <h3 className="text-xs sm:text-sm font-bold text-white">{shareTitle}</h3>
+              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                activeScope === 'public'
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+              }`}>
+                {activeScope === 'public' ? 'Public PR' : activeScope === 'members' ? 'Members Only' : 'All'}
+              </span>
             </div>
             <p className="text-[11px] text-slate-300 font-mono mt-0.5 break-all select-all">
-              https://jre-2027.vercel.app/?tab=announcements
+              {currentShareUrl}
             </p>
           </div>
         </div>
@@ -122,14 +254,20 @@ export default function AnnouncementsView({ announcements, onNavigateRegister })
         <button
           type="button"
           onClick={() => {
-            navigator.clipboard.writeText('https://jre-2027.vercel.app/?tab=announcements');
+            navigator.clipboard.writeText(currentShareUrl);
             setCopiedPageUrl(true);
             setTimeout(() => setCopiedPageUrl(false), 2500);
           }}
-          className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-orange-600 via-rescue-600 to-amber-600 hover:from-orange-500 hover:to-rescue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all active:scale-95 shrink-0"
+          className={`w-full sm:w-auto px-5 py-2.5 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 shrink-0 ${
+            activeScope === 'public'
+              ? 'bg-gradient-to-r from-orange-600 via-rescue-600 to-amber-600 hover:from-orange-500 hover:to-rescue-500 shadow-orange-600/30'
+              : activeScope === 'members'
+              ? 'bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 hover:from-indigo-500 hover:to-blue-500 shadow-indigo-600/30'
+              : 'bg-slate-800 hover:bg-slate-700 border border-slate-700'
+          }`}
         >
           {copiedPageUrl ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
-          <span>{copiedPageUrl ? 'คัดลอก URL สำเร็จ!' : 'คัดลอกลิงก์ประชาสัมพันธ์'}</span>
+          <span>{copiedPageUrl ? 'คัดลอก URL สำเร็จ!' : shareButtonText}</span>
         </button>
       </div>
 

@@ -17,7 +17,7 @@ export default function App() {
     try {
       const url = new URL(window.location.href);
       const tabParam = url.searchParams.get('tab') || window.location.hash.replace('#', '');
-      const validTabs = ['home', 'register', 'announcements', 'schedule', 'team', 'forms', 'profile', 'admin'];
+      const validTabs = ['home', 'register', 'announcements', 'schedule', 'team', 'forms', 'profile', 'admin', 'pr', 'orders'];
       if (validTabs.includes(tabParam)) return tabParam;
     } catch (e) {}
     return 'home';
@@ -296,10 +296,11 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'announcements' && (
+        {(currentTab === 'announcements' || currentTab === 'pr' || currentTab === 'orders') && (
           <AnnouncementsView 
             announcements={announcements} 
             onNavigateRegister={() => setCurrentTab('register')}
+            initialScope={currentTab === 'pr' ? 'public' : currentTab === 'orders' ? 'members' : 'all'}
           />
         )}
 
