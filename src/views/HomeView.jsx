@@ -128,6 +128,8 @@ export default function HomeView({
                 frameBorder="0" 
                 allowFullScreen={true} 
                 allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
                 title="JRE 2026 การเข้าระงับเหตุเพลิงไหม้นอกอาคาร"
               ></iframe>
             </div>
