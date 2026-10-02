@@ -116,41 +116,20 @@ export default function HomeView({
       <section className="bg-gradient-to-br from-slate-900 via-slate-950 to-orange-950/30 border border-orange-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col lg:flex-row items-center gap-8">
           
-          {/* Left: Video Preview Thumbnail */}
-          <div className="w-full lg:w-5/12 relative group rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl shrink-0">
-            <div className="relative aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
-              <img 
-                src="https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80" 
-                alt="การเข้าระงับเหตุเพลิงไหม้นอกอาคาร JRE 2026"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-75"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
-              
-              {/* Play Badge */}
-              <a
-                href="https://www.facebook.com/share/v/18cdZwKepQ/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 hover:bg-slate-950/30 transition-colors"
-              >
-                <div className="w-16 h-16 rounded-full bg-emergency-600 group-hover:bg-emergency-500 text-white flex items-center justify-center shadow-xl shadow-emergency-600/50 group-hover:scale-110 transition-all mb-3 border-2 border-white/80">
-                  <svg className="w-8 h-8 fill-current ml-1" viewBox="0 0 24 24">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                  </svg>
-                </div>
-                <span className="px-3 py-1 bg-slate-900/90 text-white rounded-lg text-xs font-bold border border-slate-700 shadow">
-                  ▶ ชมคลิปการฝึกบน Facebook
-                </span>
-              </a>
-
-              <div className="absolute bottom-3 left-3 right-3 text-left">
-                <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded-md uppercase">
-                  JRE 2026 Highlight
-                </span>
-                <p className="text-white text-xs font-bold truncate mt-1">
-                  การเข้าระงับเหตุเพลิงไหม้นอกอาคาร
-                </p>
-              </div>
+          {/* Left: Real Facebook Video Iframe */}
+          <div className="w-full lg:w-5/12 relative rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl shrink-0 bg-slate-950 flex items-center justify-center">
+            <div className="w-full overflow-hidden flex justify-center items-center">
+              <iframe 
+                src="https://www.facebook.com/plugins/video.php?height=314&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F3124397917947926%2F&show_text=true&width=560&t=0" 
+                width="100%" 
+                height="429" 
+                style={{ border: 'none', overflow: 'hidden', minHeight: '380px' }} 
+                scrolling="no" 
+                frameBorder="0" 
+                allowFullScreen={true} 
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                title="JRE 2026 การเข้าระงับเหตุเพลิงไหม้นอกอาคาร"
+              ></iframe>
             </div>
           </div>
 

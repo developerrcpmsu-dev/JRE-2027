@@ -40,52 +40,8 @@ function initializeLocalStorage() {
     localStorage.setItem(STORAGE_KEYS.FORMS_CONFIG, JSON.stringify(DEFAULT_FORMS_CONFIG));
   }
   if (!localStorage.getItem(STORAGE_KEYS.REGISTRATIONS)) {
-    // Seed sample mock registration for demonstration
-    const sample = [
-      {
-        id: 'sample-reg-1',
-        user_id: 'sample_google_user_001',
-        user_email: 'volunteer.rescue@gmail.com',
-        user_avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
-        first_name: 'วีระชัย',
-        last_name: 'ใจสู้ภัย',
-        dob: '2545-05-14',
-        age_years: 24,
-        age_months: 4,
-        age_days: 18,
-        blood_group: 'B',
-        phone: '089-123-4567',
-        institution: 'มหาวิทยาลัยมหาสารคาม (มมส)',
-        emergency_name: 'นาง สมศรี ใจสู้ภัย (มารดา)',
-        emergency_phone: '081-999-8877',
-        group_assigned: 'Alpha-1 (ชุดเผชิญเหตุเบื้องต้น)',
-        room_assigned: 'หอนอน 1 ห้อง 204 (เตียง A)',
-        status: 'confirmed',
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'sample-reg-2',
-        user_id: 'sample_google_user_002',
-        user_email: 'chatchai.kku@gmail.com',
-        user_avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80',
-        first_name: 'ฉัตรชัย',
-        last_name: 'มงคลรัตน์',
-        dob: '2546-11-20',
-        age_years: 22,
-        age_months: 10,
-        age_days: 12,
-        blood_group: 'O',
-        phone: '092-456-7890',
-        institution: 'มหาวิทยาลัยขอนแก่น (มข)',
-        emergency_name: 'นาย วิรัตน์ มงคลรัตน์ (บิดา)',
-        emergency_phone: '086-777-6655',
-        group_assigned: 'Bravo-2 (ชุดกู้ภัยทางดิ่ง)',
-        room_assigned: 'หอนอน 1 ห้อง 205 (เตียง B)',
-        status: 'confirmed',
-        created_at: new Date().toISOString()
-      }
-    ];
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(sample));
+    // Start with empty real registrations
+    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify([]));
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEAM)) {
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));

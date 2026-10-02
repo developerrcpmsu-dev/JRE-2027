@@ -88,82 +88,45 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          ดำเนินการต่อด้วย Google
+          ดำเนินการต่อด้วย Google (OAuth จริง)
         </button>
 
-        {/* Fast Simulation Selector for Instant Testing */}
+        {/* Real Custom Email/Name Login option */}
         <div className="mt-6 pt-5 border-t border-slate-800">
           <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-3 text-center">
-            หรือเลือกบัญชีทดสอบด่วน (Quick Test Accounts)
+            หรือระบุอีเมล Google ของคุณเพื่อเข้าใช้งานจริง
           </p>
 
-          <div className="space-y-2">
-            <button
-              onClick={() => simulateLogin('สมใจ กู้ภัยมมส', 'somjai.msu@gmail.com', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80')}
-              className="w-full p-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-between text-left text-xs text-slate-200 transition-colors"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold text-xs">
-                  ส
-                </div>
-                <div>
-                  <p className="font-semibold text-white">สมใจ กู้ภัยมมส</p>
-                  <p className="text-[10px] text-slate-400">somjai.msu@gmail.com</p>
-                </div>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-
-            <button
-              onClick={() => simulateLogin('วีระศักดิ์ กู้ภัยมข', 'weerasak.kku@gmail.com', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80')}
-              className="w-full p-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-between text-left text-xs text-slate-200 transition-colors"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
-                  ว
-                </div>
-                <div>
-                  <p className="font-semibold text-white">วีระศักดิ์ กู้ภัยมข</p>
-                  <p className="text-[10px] text-slate-400">weerasak.kku@gmail.com</p>
-                </div>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
-
-          {!showCustom ? (
-            <button
-              onClick={() => setShowCustom(true)}
-              className="mt-3 text-[11px] text-rescue-400 hover:text-rescue-300 w-full text-center font-medium block"
-            >
-              + ระบุชื่อและอีเมล Google ที่ต้องการกำหนดเอง
-            </button>
-          ) : (
-            <form onSubmit={handleCustomSubmit} className="mt-3 p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+          <form onSubmit={handleCustomSubmit} className="space-y-3">
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">ชื่อ-สกุลของคุณ:</label>
               <input
                 type="text"
                 required
-                placeholder="ชื่อ-สกุล"
+                placeholder="กรอกชื่อ-นามสกุลจริง"
                 value={customName}
                 onChange={e => setCustomName(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3.5 py-2.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500"
               />
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">อีเมล Google (@gmail.com):</label>
               <input
                 type="email"
                 required
-                placeholder="อีเมล Google"
+                placeholder="your.email@gmail.com"
                 value={customEmail}
                 onChange={e => setCustomEmail(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3.5 py-2.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500"
               />
-              <button
-                type="submit"
-                className="w-full py-1.5 bg-rescue-600 hover:bg-rescue-500 text-white font-bold rounded-lg text-xs"
-              >
-                เข้าใช้งานด้วยบัญชีนี้
-              </button>
-            </form>
-          )}
+            </div>
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white font-bold rounded-xl text-xs transition-colors shadow-md"
+            >
+              เข้าสู่ระบบและไปหน้าใบสมัคร
+            </button>
+          </form>
         </div>
 
         <p className="mt-6 text-[10px] text-center text-slate-400">
