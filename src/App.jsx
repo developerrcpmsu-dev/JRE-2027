@@ -159,6 +159,15 @@ export default function App() {
     }
   };
 
+  const handleUpdateRegistration = async (userId, updates) => {
+    await DataService.updateRegistrationDetails(userId, updates);
+    const updated = await DataService.getRegistrations();
+    setRegistrations(updated);
+    if (user && (user.id === userId || user.email === updated.find(r => r.user_id === userId)?.user_email)) {
+      setMyRegistration(updated.find(r => r.user_id === userId));
+    }
+  };
+
   const handleDeleteRegistration = async (userId) => {
     await DataService.deleteRegistration(userId);
     const updated = await DataService.getRegistrations();
@@ -237,7 +246,7 @@ export default function App() {
             user={user}
             myRegistration={myRegistration}
             onSaveRegistration={handleSaveRegistration}
-            onUpdateRegistration={handleUpdateAllocation}
+            onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             formsConfig={formsConfig}
           />
