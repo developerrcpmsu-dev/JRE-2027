@@ -13,7 +13,26 @@ import AuthPortalView from './views/AuthPortalView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState('home');
+  const getInitialTab = () => {
+    try {
+      const url = new URL(window.location.href);
+      const tabParam = url.searchParams.get('tab') || window.location.hash.replace('#', '');
+      const validTabs = ['home', 'register', 'announcements', 'schedule', 'team', 'forms', 'profile', 'admin'];
+      if (validTabs.includes(tabParam)) return tabParam;
+    } catch (e) {}
+    return 'home';
+  };
+
+  const [currentTab, setCurrentTabState] = useState(getInitialTab);
+
+  const setCurrentTab = (newTab) => {
+    setCurrentTabState(newTab);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', newTab);
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {}
+  };
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -278,7 +297,10 @@ export default function App() {
         )}
 
         {currentTab === 'announcements' && (
-          <AnnouncementsView announcements={announcements} />
+          <AnnouncementsView 
+            announcements={announcements} 
+            onNavigateRegister={() => setCurrentTab('register')}
+          />
         )}
 
         {currentTab === 'admin' && isAdmin && (

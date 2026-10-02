@@ -47,7 +47,7 @@ export default function HomeView({
             </span>
             <span className="px-3 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-full text-xs font-medium flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-rescue-400" />
-              7 - 8 พฤศจิกายน 2569 (2 วัน 1 คืน)
+              14 - 15 พฤศจิกายน 2569 (2 วัน 1 คืน)
             </span>
           </div>
 

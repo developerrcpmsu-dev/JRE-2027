@@ -19,7 +19,9 @@ import {
   Maximize2
 } from 'lucide-react';
 
-export default function AnnouncementsView({ announcements }) {
+export default function AnnouncementsView({ announcements, onNavigateRegister }) {
+  const [copiedId, setCopiedId] = useState(null);
+  const [copiedPageUrl, setCopiedPageUrl] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -32,6 +34,7 @@ export default function AnnouncementsView({ announcements }) {
 
   const categories = [
     { id: 'all', label: 'ทั้งหมด' },
+    { id: 'pr', label: '📢 ประชาสัมพันธ์' },
     { id: 'payment', label: '💰 ชำระค่าสมัคร' },
     { id: 'line_group', label: '💬 เข้ากลุ่มไลน์' },
     { id: 'order', label: '📋 คำสั่งโครงการ' },
@@ -48,6 +51,8 @@ export default function AnnouncementsView({ announcements }) {
 
   const getCategoryBadge = (cat) => {
     switch (cat) {
+      case 'pr':
+        return <span className="px-2.5 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-[10px] font-bold">📢 ประชาสัมพันธ์</span>;
       case 'payment':
         return <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">ค่าลงทะเบียน</span>;
       case 'line_group':
@@ -91,6 +96,37 @@ export default function AnnouncementsView({ announcements }) {
         <p className="text-slate-400 text-xs sm:text-sm">
           ติดตามประกาศคำสั่ง กำหนดการชำระเงิน เอกสารแนบ PDF ลิงก์เข้ากลุ่ม และภาพกิจกรรมจากคณะกรรมการฝึกอบรม
         </p>
+      </div>
+
+      {/* Official PR Share Banner with 1-Click Copy */}
+      <div className="bg-gradient-to-r from-orange-950/50 via-slate-900 to-amber-950/40 border border-orange-500/40 p-4 sm:p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-orange-500/20 text-orange-400 border border-orange-500/40 flex items-center justify-center shrink-0 shadow-lg">
+            <Megaphone className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-bold text-white">ลิงก์ URL หน้าประชาสัมพันธ์ทางการ (JRE 2027)</h3>
+              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/30">Official</span>
+            </div>
+            <p className="text-[11px] text-slate-300 font-mono mt-0.5 break-all select-all">
+              https://jre-2027.vercel.app/?tab=announcements
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText('https://jre-2027.vercel.app/?tab=announcements');
+            setCopiedPageUrl(true);
+            setTimeout(() => setCopiedPageUrl(false), 2500);
+          }}
+          className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-orange-600 via-rescue-600 to-amber-600 hover:from-orange-500 hover:to-rescue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all active:scale-95 shrink-0"
+        >
+          {copiedPageUrl ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
+          <span>{copiedPageUrl ? 'คัดลอก URL สำเร็จ!' : 'คัดลอกลิงก์ประชาสัมพันธ์'}</span>
+        </button>
       </div>
 
       {/* Filter & Search Bar */}
@@ -156,7 +192,21 @@ export default function AnnouncementsView({ announcements }) {
                     {getCategoryBadge(item.category)}
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `https://jre-2027.vercel.app/?tab=announcements&annId=${item.id}`;
+                        navigator.clipboard.writeText(url);
+                        setCopiedId(item.id);
+                        setTimeout(() => setCopiedId(null), 2000);
+                      }}
+                      className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors border border-slate-700"
+                    >
+                      {copiedId === item.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3 text-rescue-400" />}
+                      <span>{copiedId === item.id ? 'คัดลอกแล้ว' : 'แชร์โพสต์นี้'}</span>
+                    </button>
+                    <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
                     <Calendar className="w-3 h-3" />
                     <span>
                       {item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', {
@@ -166,6 +216,7 @@ export default function AnnouncementsView({ announcements }) {
                       }) : 'เพิ่งประกาศ'}
                     </span>
                   </div>
+                </div>
                 </div>
 
                 <h2 className="text-lg sm:text-xl font-bold text-white mb-2 leading-snug">
