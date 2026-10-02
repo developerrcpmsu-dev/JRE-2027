@@ -298,7 +298,7 @@ export default function Navbar({
             }`}
           >
             <Megaphone className="w-5 h-5 text-orange-400" />
-            <span>📢 ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
+            <span>ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
           </button>
 
           <button
@@ -308,7 +308,7 @@ export default function Navbar({
             }`}
           >
             <Bell className="w-5 h-5 text-indigo-400" />
-            <span>📋 ประกาศคำสั่งสมาชิก (เฉพาะผู้เข้าร่วม)</span>
+            <span>ประกาศคำสั่งสมาชิก (เฉพาะผู้เข้าร่วม)</span>
           </button>
 
           <button

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Award } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import FormsBanner from './components/FormsBanner';
@@ -29,10 +30,29 @@ export default function App() {
     setCurrentTabState(newTab);
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set('tab', newTab);
-      window.history.replaceState({}, '', url.toString());
+      if (newTab === 'home') {
+        url.searchParams.delete('tab');
+      } else {
+        url.searchParams.set('tab', newTab);
+      }
+      window.history.pushState({ tab: newTab }, '', url.toString());
     } catch (e) {}
   };
+
+  // Sync browser back/forward buttons and hash navigation
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const tab = getInitialTab();
+      setCurrentTabState(tab);
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -265,30 +285,6 @@ export default function App() {
     );
   }
 
-  // Gate: Users must be authenticated before accessing project information and dashboard
-  if (!user && !isAdmin) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rescue-500 selection:text-white">
-        <AuthPortalView
-          onLoginSuccess={handleGoogleLoginSuccess}
-          onOpenAdminLogin={() => setAdminModalOpen(true)}
-        />
-
-        <AdminLoginModal
-          isOpen={adminModalOpen}
-          onClose={() => setAdminModalOpen(false)}
-          onLoginSuccess={handleAdminLoginSuccess}
-        />
-
-        <GoogleLoginModal
-          isOpen={googleModalOpen}
-          onClose={() => setGoogleModalOpen(false)}
-          onLoginSuccess={handleGoogleLoginSuccess}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rescue-500 selection:text-white">
       
@@ -362,6 +358,26 @@ export default function App() {
             speakers={speakers}
             onSaveSpeakers={DataService.saveSpeakers}
           />
+        )}
+
+        {currentTab === 'admin' && !isAdmin && (
+          <div className="max-w-md mx-auto py-16 px-4 text-center space-y-6">
+            <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/40 rounded-3xl mx-auto flex items-center justify-center text-purple-400 shadow-xl shadow-purple-600/20">
+              <Award className="w-8 h-8" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white">ระบบควบคุมสำหรับผู้ดูแลระบบ (Admin)</h2>
+              <p className="text-slate-400 text-xs sm:text-sm mt-2">
+                หน้านี้สงวนสิทธิ์เฉพาะคณะกรรมการและผู้ดูแลระบบโครงการ JRE 2027 เท่านั้น
+              </p>
+            </div>
+            <button
+              onClick={() => setAdminModalOpen(true)}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-sm shadow-xl shadow-purple-600/30 transition-all cursor-pointer"
+            >
+              เข้าสู่ระบบ Admin (Admin Login)
+            </button>
+          </div>
         )}
       </main>
 

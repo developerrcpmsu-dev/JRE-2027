@@ -625,7 +625,7 @@ export default function AdminDashboardView({
           }`}
         >
           <CreditCard className="w-4 h-4" />
-          <span>💰 ตั้งค่าค่าสมัคร & ระบบแบ่งจ่าย 2 งวด</span>
+          <span>ตั้งค่าค่าสมัคร & ระบบแบ่งจ่าย 2 งวด</span>
         </button>
 
         <button

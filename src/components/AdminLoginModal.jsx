@@ -15,12 +15,14 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
     setIsSubmitting(true);
     setErrorMsg('');
 
-    // Environment variables (ห้ามฝังรหัสลงใน source code โดยตรง!)
-    const expectedUser = import.meta.env.VITE_ADMIN_USERNAME || 'admin';
-    const expectedPass = import.meta.env.VITE_ADMIN_PASSWORD || 'adminjre27';
+    // ตรวจสอบผ่าน Environment Variables (ต้องตั้งค่าใน Vercel หรือไฟล์ .env)
+    const expectedUser = import.meta.env.VITE_ADMIN_USERNAME;
+    const expectedPass = import.meta.env.VITE_ADMIN_PASSWORD;
 
     setTimeout(() => {
-      if (username.trim() === expectedUser && password === expectedPass) {
+      if (!expectedUser || !expectedPass) {
+        setErrorMsg('ยังไม่ได้ตั้งค่า VITE_ADMIN_USERNAME และ VITE_ADMIN_PASSWORD ใน Environment Variables กรุณาตั้งค่าใน Vercel เพื่อเปิดใช้งาน');
+      } else if (username.trim() === expectedUser && password === expectedPass) {
         onLoginSuccess();
         onClose();
         setUsername('');

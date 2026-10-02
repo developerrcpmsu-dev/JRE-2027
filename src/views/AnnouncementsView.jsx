@@ -72,12 +72,12 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
 
   const categories = [
     { id: 'all', label: 'ทั้งหมด' },
-    { id: 'pr', label: '📢 ประชาสัมพันธ์' },
-    { id: 'payment', label: '💰 ชำระค่าสมัคร' },
-    { id: 'line_group', label: '💬 เข้ากลุ่มไลน์' },
-    { id: 'order', label: '📋 คำสั่งโครงการ' },
-    { id: 'change', label: '⚡ การเปลี่ยนแปลง' },
-    { id: 'general', label: '📌 ทั่วไป' },
+    { id: 'pr', label: 'ประชาสัมพันธ์' },
+    { id: 'payment', label: 'ชำระค่าสมัคร' },
+    { id: 'line_group', label: 'เข้ากลุ่มไลน์' },
+    { id: 'order', label: 'คำสั่งโครงการ' },
+    { id: 'change', label: 'การเปลี่ยนแปลง' },
+    { id: 'general', label: 'ทั่วไป' },
   ];
 
   const filtered = announcements.filter(item => {
@@ -117,7 +117,7 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
   const getCategoryBadge = (cat) => {
     switch (cat) {
       case 'pr':
-        return <span className="px-2.5 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-[10px] font-bold">📢 ประชาสัมพันธ์</span>;
+        return <span className="px-2.5 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-[10px] font-bold">ประชาสัมพันธ์</span>;
       case 'payment':
         return <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">ค่าลงทะเบียน</span>;
       case 'line_group':
@@ -152,14 +152,14 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
       {/* Header */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
-          <Bell className="w-4 h-4 animate-bounce" />
+          <Bell className="w-4 h-4" />
           กระดานข่าวสารทางการ
         </div>
         <h1 className="text-3xl font-black text-white">
           {activeScope === 'public'
-            ? '📢 ประชาสัมพันธ์รับสมัคร JRE 2027'
+            ? 'ประชาสัมพันธ์รับสมัคร JRE 2027'
             : activeScope === 'members'
-            ? '📋 ประกาศคำสั่ง & ข่าวสารสำหรับสมาชิก'
+            ? 'ประกาศคำสั่ง & ข่าวสารสำหรับสมาชิก'
             : 'ประกาศข่าวสารโครงการ JRE 2027'}
         </h1>
         <p className="text-slate-400 text-xs sm:text-sm">
@@ -183,7 +183,7 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
           }`}
         >
           <Megaphone className="w-4 h-4 shrink-0" />
-          <span>📢 ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
+          <span>ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
         </button>
 
         <button
@@ -196,7 +196,7 @@ export default function AnnouncementsView({ announcements, onNavigateRegister, i
           }`}
         >
           <FileText className="w-4 h-4 shrink-0" />
-          <span>📋 ประกาศคำสั่งสำหรับสมาชิก</span>
+          <span>ประกาศคำสั่งสำหรับสมาชิก</span>
         </button>
 
         <button
