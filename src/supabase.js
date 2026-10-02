@@ -4,7 +4,9 @@ import {
   DEFAULT_FORMS_CONFIG, 
   DEFAULT_TEAM_MEMBERS, 
   DEFAULT_SPEAKERS,
-  DEFAULT_PAYMENT_CONFIG
+  DEFAULT_PAYMENT_CONFIG,
+  DEFAULT_MERCHANDISE_CONFIG,
+  DEFAULT_MERCHANDISE_ORDERS
 } from './data/defaultData';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -29,6 +31,8 @@ const STORAGE_KEYS = {
   ANNOUNCEMENTS: 'jre2027_announcements',
   FORMS_CONFIG: 'jre2027_forms_config',
   PAYMENT_CONFIG: 'jre2027_payment_config',
+  MERCHANDISE_CONFIG: 'jre2027_merchandise_config',
+  MERCHANDISE_ORDERS: 'jre2027_merchandise_orders',
   AUTH_USER: 'jre2027_auth_user',
   ADMIN_AUTH: 'jre2027_is_admin',
   TEAM: 'jre2027_team',
@@ -49,6 +53,12 @@ function initializeLocalStorage() {
   }
   if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG)) {
     localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(DEFAULT_PAYMENT_CONFIG));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG)) {
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS)) {
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(DEFAULT_MERCHANDISE_ORDERS));
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEAM)) {
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
@@ -435,6 +445,132 @@ export const DataService = {
     }
     localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(config));
     return config;
+  },
+
+  // MERCHANDISE CONFIG & STORE SETTINGS
+  async getMerchandiseConfig() {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'merchandise_config')
+          .maybeSingle();
+        if (!error && data?.value) {
+          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(data.value));
+          return data.value;
+        }
+      } catch (e) {
+        console.warn('Supabase merchandise_config query error, fallback', e);
+      }
+    }
+    const raw = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG);
+    return raw ? JSON.parse(raw) : DEFAULT_MERCHANDISE_CONFIG;
+  },
+
+  async saveMerchandiseConfig(config) {
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ key: 'merchandise_config', value: config, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn('Supabase merchandise_config save error', e);
+      }
+    }
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(config));
+    return config;
+  },
+
+  // MERCHANDISE ORDERS
+  async getMerchandiseOrders() {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('merchandise_orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(data));
+          return data;
+        }
+      } catch (e) {
+        console.warn('Supabase merchandise_orders query error, fallback', e);
+      }
+    }
+    const raw = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS);
+    return raw ? JSON.parse(raw) : DEFAULT_MERCHANDISE_ORDERS;
+  },
+
+  async saveMerchandiseOrder(orderData) {
+    const orders = await this.getMerchandiseOrders();
+    const newOrder = {
+      ...orderData,
+      id: orderData.id || `order_${Date.now()}`,
+      order_number: orderData.order_number || `JRE-SHIRT-${Math.floor(10000 + Math.random() * 90000)}`,
+      created_at: orderData.created_at || new Date().toISOString()
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('merchandise_orders')
+          .upsert(newOrder, { onConflict: 'id' });
+      } catch (e) {
+        console.warn('Supabase saveMerchandiseOrder error, fallback', e);
+      }
+    }
+
+    const idx = orders.findIndex(o => o.id === newOrder.id || o.order_number === newOrder.order_number);
+    let updated;
+    if (idx >= 0) {
+      updated = [...orders];
+      updated[idx] = newOrder;
+    } else {
+      updated = [newOrder, ...orders];
+    }
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
+    return newOrder;
+  },
+
+  async updateMerchandiseOrder(orderId, patch) {
+    const orders = await this.getMerchandiseOrders();
+    const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId);
+    if (idx === -1) return null;
+
+    const updatedOrder = { ...orders[idx], ...patch, updated_at: new Date().toISOString() };
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('merchandise_orders')
+          .update(patch)
+          .eq('id', orders[idx].id);
+      } catch (e) {
+        console.warn('Supabase updateMerchandiseOrder error, fallback', e);
+      }
+    }
+
+    const updated = [...orders];
+    updated[idx] = updatedOrder;
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
+    return updatedOrder;
+  },
+
+  async verifyOrderPayment(orderId, isApproved, adminNotes = '') {
+    return this.updateMerchandiseOrder(orderId, {
+      payment_status: isApproved ? 'paid_verified' : 'rejected',
+      slip_admin_notes: adminNotes,
+      pickup_status: isApproved ? 'ready' : 'pending'
+    });
+  },
+
+  async markOrderReceived(orderId, adminName = 'Admin JRE 2027') {
+    return this.updateMerchandiseOrder(orderId, {
+      pickup_status: 'received',
+      pickup_at: new Date().toISOString(),
+      pickup_by_admin: adminName
+    });
   },
 
   // TEAM & SPEAKERS

@@ -13,7 +13,8 @@ import {
   UserCheck, 
   Award, 
   ExternalLink,
-  Megaphone
+  Megaphone,
+  Shirt
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -121,6 +122,19 @@ export default function Navbar({
             >
               <Bell className="w-4 h-4 text-indigo-400" />
               <span>คำสั่งสมาชิก</span>
+            </button>
+
+            <button
+              onClick={() => handleNav('merchandise')}
+              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                currentTab === 'merchandise' || currentTab === 'shop'
+                  ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-900'
+              }`}
+              title="สั่งซื้อเสื้อ & กางเกงกู้ภัยโครงการ JRE 2027"
+            >
+              <Shirt className="w-4 h-4 text-orange-400" />
+              <span>สั่งเสื้อ/กางเกง</span>
             </button>
 
             {/* Applicant Dashboard / Register Link */}
@@ -309,6 +323,16 @@ export default function Navbar({
           >
             <Bell className="w-5 h-5 text-indigo-400" />
             <span>ประกาศคำสั่งสมาชิก (เฉพาะผู้เข้าร่วม)</span>
+          </button>
+
+          <button
+            onClick={() => handleNav('merchandise')}
+            className={`w-full text-left px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 ${
+              currentTab === 'merchandise' || currentTab === 'shop' ? 'bg-orange-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Shirt className="w-5 h-5 text-orange-400" />
+            <span>สั่งซื้อเสื้อ/กางเกง & บัตรรับของ</span>
           </button>
 
           <button

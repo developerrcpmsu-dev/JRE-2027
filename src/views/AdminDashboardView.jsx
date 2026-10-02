@@ -40,11 +40,16 @@ import {
   FileDown,
   Maximize2,
   Clock,
-  RotateCcw
+  RotateCcw,
+  Shirt,
+  QrCode,
+  PackageCheck,
+  Camera
 } from 'lucide-react';
 import { DataService } from '../supabase';
-import { DEFAULT_PAYMENT_CONFIG } from '../data/defaultData';
+import { DEFAULT_PAYMENT_CONFIG, DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import AdminQRScannerModal from '../components/AdminQRScannerModal';
 
 export default function AdminDashboardView({
   registrations,
@@ -60,9 +65,35 @@ export default function AdminDashboardView({
   teamMembers,
   onSaveTeam,
   speakers,
-  onSaveSpeakers
+  onSaveSpeakers,
+  merchandiseConfig,
+  onSaveMerchandiseConfig,
+  merchandiseOrders = [],
+  onUpdateMerchandiseOrder,
+  onVerifyOrderPayment,
+  onMarkOrderReceived
 }) {
-  const [activeTab, setActiveTab] = useState('applicants'); // 'applicants', 'payment_settings', 'forms', 'announcements'
+  const [activeTab, setActiveTab] = useState('applicants'); // 'applicants', 'payment_settings', 'forms', 'announcements', 'merchandise'
+
+  // Merchandise State
+  const [localMerchConfig, setLocalMerchConfig] = useState(() => {
+    return merchandiseConfig || DEFAULT_MERCHANDISE_CONFIG;
+  });
+  const [isSavingMerch, setIsSavingMerch] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [merchSearchQuery, setMerchSearchQuery] = useState('');
+  const [merchStatusFilter, setMerchStatusFilter] = useState('all');
+  const [selectedProductIndex, setSelectedProductIndex] = useState(0);
+  const [newSizeName, setNewSizeName] = useState('');
+  const [newSizeMeasurement, setNewSizeMeasurement] = useState('');
+  const [newSizeExtra, setNewSizeExtra] = useState(0);
+  const [previewMerchSlip, setPreviewMerchSlip] = useState(null);
+
+  React.useEffect(() => {
+    if (merchandiseConfig) {
+      setLocalMerchConfig(merchandiseConfig);
+    }
+  }, [merchandiseConfig]);
 
   // Search & Filter for Applicants
   const [searchTerm, setSearchTerm] = useState('');
@@ -403,6 +434,79 @@ export default function AdminDashboardView({
     }));
   };
 
+  // --- Handlers for Merchandise & Orders ---
+  const handleSaveMerchandiseConfig = async (e) => {
+    if (e) e.preventDefault();
+    setIsSavingMerch(true);
+    try {
+      await onSaveMerchandiseConfig(localMerchConfig);
+      triggerToast('บันทึกการตั้งค่าสินค้า ไซต์ ราคา และ Google Form สำรองเรียบร้อยแล้ว');
+    } catch (err) {
+      triggerToast('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
+    } finally {
+      setIsSavingMerch(false);
+    }
+  };
+
+  const handleAddSizeToProduct = () => {
+    if (!newSizeName.trim()) {
+      alert('กรุณาระบุชื่อไซส์ เช่น 2XL, 3XL');
+      return;
+    }
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const targetProduct = { ...updatedProducts[selectedProductIndex] };
+    const sizes = [...(targetProduct.sizes || [])];
+    
+    sizes.push({
+      name: newSizeName.trim(),
+      chest: targetProduct.category === 'shirt' ? newSizeMeasurement.trim() : undefined,
+      waist: targetProduct.category === 'pants' ? newSizeMeasurement.trim() : undefined,
+      extra_price: Number(newSizeExtra) || 0,
+      is_special: Number(newSizeExtra) > 0
+    });
+
+    targetProduct.sizes = sizes;
+    updatedProducts[selectedProductIndex] = targetProduct;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    setNewSizeName('');
+    setNewSizeMeasurement('');
+    setNewSizeExtra(0);
+    triggerToast(`เพิ่มไซส์ ${newSizeName.trim()} แล้ว (อย่าลืมกดปุ่มบันทึก)`);
+  };
+
+  const handleRemoveSizeFromProduct = (sizeIdx) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const targetProduct = { ...updatedProducts[selectedProductIndex] };
+    const sizes = [...(targetProduct.sizes || [])];
+    sizes.splice(sizeIdx, 1);
+    targetProduct.sizes = sizes;
+    updatedProducts[selectedProductIndex] = targetProduct;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+  };
+
+  const handleUpdateSizeExtraPrice = (sizeIdx, extraVal) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const targetProduct = { ...updatedProducts[selectedProductIndex] };
+    const sizes = [...(targetProduct.sizes || [])];
+    sizes[sizeIdx] = {
+      ...sizes[sizeIdx],
+      extra_price: Number(extraVal) || 0,
+      is_special: Number(extraVal) > 0
+    };
+    targetProduct.sizes = sizes;
+    updatedProducts[selectedProductIndex] = targetProduct;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+  };
+
+  const handleUpdateProductBasePrice = (newPrice) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    updatedProducts[selectedProductIndex] = {
+      ...updatedProducts[selectedProductIndex],
+      base_price: Number(newPrice) || 0
+    };
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+  };
+
   // --- Handlers for Announcements ---
   const handleOpenAnnModal = (item = null) => {
     if (item) {
@@ -650,6 +754,18 @@ export default function AdminDashboardView({
         >
           <Bell className="w-4 h-4" />
           <span>ระบบประกาศ & อัปโหลดรูป/PDF ({announcements.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('merchandise')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'merchandise'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <Shirt className="w-4 h-4 text-rescue-400" />
+          <span>จัดการเสื้อ/กางเกง & สแกน QR รับของ ({merchandiseOrders.length})</span>
         </button>
       </div>
 
@@ -2530,6 +2646,635 @@ export default function AdminDashboardView({
               </div>
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: MERCHANDISE, SIZES, AND QR PICKUP MANAGEMENT */}
+      {activeTab === 'merchandise' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-8 animate-in fade-in duration-200">
+          
+          {/* Header & Quick Action Buttons */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rescue-500/10 text-rescue-400 border border-rescue-500/30 mb-2">
+                <Shirt className="w-3.5 h-3.5" />
+                <span>ระบบจัดการเสื้อ & กางเกงกู้ภัย JRE 2027</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                จัดการคำสั่งซื้อ, สแกน QR รับของ & ตั้งค่าราคาไซต์พิเศษ
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                ตรวจสอบสลิป, สแกน QR Code ส่งมอบสินค้าหน้างาน, และกำหนดราคาบวกเพิ่มสำหรับไซต์พิเศษ
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowQRScanner(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95"
+              >
+                <Camera className="w-4 h-4" />
+                <span>เปิดกล้องสแกน QR รับสินค้า</span>
+              </button>
+
+              <a
+                href="#merchandise-settings"
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all"
+              >
+                <Settings className="w-4 h-4 text-rescue-400" />
+                <span>ไปที่ตั้งค่าไซต์ & ราคา</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <span className="text-xs text-slate-400 font-bold uppercase">ออเดอร์ทั้งหมด</span>
+              <p className="text-2xl sm:text-3xl font-black text-white mt-1">
+                {merchandiseOrders.length} <span className="text-xs font-normal text-slate-400">รายการ</span>
+              </p>
+            </div>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <span className="text-xs text-slate-400 font-bold uppercase">ยอดชำระแล้วสุทธิ</span>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
+                {merchandiseOrders
+                  .filter(o => o.payment_status === 'paid_verified')
+                  .reduce((sum, o) => sum + (o.total_amount || 0), 0)
+                  .toLocaleString()}{' '}
+                <span className="text-xs font-normal text-slate-400">บาท</span>
+              </p>
+            </div>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <span className="text-xs text-slate-400 font-bold uppercase">รอตรวจสอบสลิป</span>
+              <p className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
+                {merchandiseOrders.filter(o => o.payment_status === 'pending_verification').length}{' '}
+                <span className="text-xs font-normal text-slate-400">รายการ</span>
+              </p>
+            </div>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <span className="text-xs text-slate-400 font-bold uppercase">ส่งมอบสินค้าแล้ว</span>
+              <p className="text-2xl sm:text-3xl font-black text-purple-400 mt-1">
+                {merchandiseOrders.filter(o => o.pickup_status === 'received').length}{' '}
+                <span className="text-xs font-normal text-slate-400">รายการ</span>
+              </p>
+            </div>
+          </div>
+
+          {/* ORDERS LIST SECTION */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <PackageCheck className="w-5 h-5 text-rescue-500" />
+                <span>รายการคำสั่งซื้อของสมาชิก & ผู้เข้าร่วมโครงการ</span>
+              </h3>
+
+              {/* Search & Filter */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={merchSearchQuery}
+                    onChange={(e) => setMerchSearchQuery(e.target.value)}
+                    placeholder="ค้นหาชื่อ, เบอร์, รหัสออเดอร์..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <select
+                  value={merchStatusFilter}
+                  onChange={(e) => setMerchStatusFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
+                >
+                  <option value="all">สถานะทั้งหมด</option>
+                  <option value="pending_verification">รอตรวจสอบสลิป</option>
+                  <option value="paid_verified">ชำระแล้ว (รอส่งมอบ)</option>
+                  <option value="received">ส่งมอบแล้ว</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Orders Cards / Table */}
+            {(() => {
+              const filteredOrders = merchandiseOrders.filter(o => {
+                if (merchStatusFilter !== 'all') {
+                  if (merchStatusFilter === 'received' && o.pickup_status !== 'received') return false;
+                  if (merchStatusFilter === 'pending_verification' && o.payment_status !== 'pending_verification') return false;
+                  if (merchStatusFilter === 'paid_verified' && (o.payment_status !== 'paid_verified' || o.pickup_status === 'received')) return false;
+                }
+                if (!merchSearchQuery.trim()) return true;
+                const q = merchSearchQuery.toLowerCase().trim();
+                return (
+                  o.order_number?.toLowerCase().includes(q) ||
+                  o.customer_name?.toLowerCase().includes(q) ||
+                  o.customer_phone?.includes(q) ||
+                  o.user_email?.toLowerCase().includes(q)
+                );
+              });
+
+              if (filteredOrders.length === 0) {
+                return (
+                  <div className="p-12 text-center bg-slate-950/60 border border-slate-800 rounded-2xl space-y-2">
+                    <PackageCheck className="w-10 h-10 text-slate-600 mx-auto" />
+                    <p className="text-sm font-bold text-slate-300">ไม่พบรายการสั่งซื้อตามเงื่อนไขที่ค้นหา</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {filteredOrders.map((ord) => {
+                    const isVerified = ord.payment_status === 'paid_verified';
+                    const isReceived = ord.pickup_status === 'received';
+
+                    return (
+                      <div
+                        key={ord.id}
+                        className="p-4 sm:p-5 bg-slate-950/90 border border-slate-800 hover:border-slate-700 rounded-2xl shadow-lg space-y-3 transition-all"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-black text-rescue-400 bg-rescue-500/10 px-2 py-0.5 rounded border border-rescue-500/30">
+                                {ord.order_number}
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                {new Date(ord.created_at).toLocaleDateString('th-TH')} • {new Date(ord.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 bg-slate-800 rounded text-slate-300 font-bold">
+                                {ord.pickup_method === 'shipping' ? 'จัดส่งพัสดุ' : 'รับหน้างาน'}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-white mt-1">
+                              {ord.customer_name} • เบอร์โทร: <a href={`tel:${ord.customer_phone}`} className="text-indigo-400 hover:underline">{ord.customer_phone}</a>
+                              {ord.user_email && <span className="text-slate-400 font-normal ml-1">({ord.user_email})</span>}
+                            </h4>
+                            {ord.shipping_address && (
+                              <p className="text-xs text-amber-300/90 mt-0.5">
+                                ที่อยู่จัดส่ง: {ord.shipping_address}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Status badges */}
+                          <div className="flex items-center gap-2">
+                            {isReceived ? (
+                              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs rounded-full font-bold flex items-center gap-1">
+                                <PackageCheck className="w-3.5 h-3.5" /> ส่งมอบสินค้าแล้ว
+                              </span>
+                            ) : isVerified ? (
+                              <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs rounded-full font-bold flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> ยอดเงินถูกต้อง • รอส่งมอบ
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs rounded-full font-bold flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> รอตรวจสลิป
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Items breakdown & Slip */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                          {/* Items Column (7 cols) */}
+                          <div className="md:col-span-7 space-y-1.5">
+                            {ord.items?.map((it, idx) => (
+                              <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs flex justify-between items-center">
+                                <div>
+                                  <p className="font-bold text-white">{it.product_name}</p>
+                                  <p className="text-[11px] text-slate-400">
+                                    ไซต์: <span className="text-rescue-400 font-black">{it.size}</span>
+                                    {it.extra_price > 0 && <span className="text-amber-400 ml-1 font-bold">(+{it.extra_price} บ. ไซต์พิเศษ)</span>}
+                                    {it.color && <span> • {it.color}</span>}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-black text-white px-2 py-0.5 bg-slate-800 rounded text-xs mr-2">x{it.quantity}</span>
+                                  <span className="font-black text-rescue-400">{it.unit_price * it.quantity} บ.</span>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="text-right pt-1 text-xs">
+                              <span className="text-slate-400 mr-2">ยอดรวมทั้งสิ้น:</span>
+                              <span className="text-sm font-black text-rescue-400 font-mono">{ord.total_amount} บาท</span>
+                            </div>
+                          </div>
+
+                          {/* Slip Preview & Admin Actions (5 cols) */}
+                          <div className="md:col-span-5 bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                            {ord.slip_url ? (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <img
+                                    src={ord.slip_url}
+                                    alt="Slip"
+                                    className="w-10 h-10 rounded-lg object-cover border border-slate-700"
+                                  />
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-300">สลิปโอนเงิน</p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {ord.slip_uploaded_at ? new Date(ord.slip_uploaded_at).toLocaleString('th-TH') : 'แนบแล้ว'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewMerchSlip(ord.slip_url)}
+                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ตรวจสลิป</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-amber-400 flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>ยังไม่มีสลิป</span>
+                              </p>
+                            )}
+
+                            {/* Action Buttons for Admin */}
+                            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+                              {!isVerified && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await onVerifyOrderPayment(ord.id, true, 'อนุมัติโดย Admin');
+                                    triggerToast(`อนุมัติสลิปออเดอร์ ${ord.order_number} แล้ว`);
+                                  }}
+                                  className="flex-1 py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow"
+                                >
+                                  ✓ อนุมัติสลิป
+                                </button>
+                              )}
+
+                              {!isVerified && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const note = prompt('ระบุเหตุผลที่ปฏิเสธสลิป:', 'ยอดเงินไม่ถูกต้อง กรุณาแนบสลิปใหม่');
+                                    if (note !== null) {
+                                      await onVerifyOrderPayment(ord.id, false, note);
+                                      triggerToast(`ปฏิเสธสลิปออเดอร์ ${ord.order_number}`);
+                                    }
+                                  }}
+                                  className="py-1.5 px-2.5 bg-slate-800 hover:bg-rose-900/60 text-rose-300 rounded-lg text-xs font-semibold transition-all"
+                                >
+                                  ปฏิเสธ
+                                </button>
+                              )}
+
+                              {!isReceived ? (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await onMarkOrderReceived(ord.id, 'Admin JRE 2027');
+                                    triggerToast(`บันทึกส่งมอบออเดอร์ ${ord.order_number} เรียบร้อยแล้ว`);
+                                  }}
+                                  className="flex-1 py-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow"
+                                >
+                                  <PackageCheck className="w-3.5 h-3.5" />
+                                  <span>กดยืนยันรับสินค้าแล้ว</span>
+                                </button>
+                              ) : (
+                                <div className="w-full text-center py-1 text-[11px] text-emerald-400 font-bold">
+                                  ✓ ส่งมอบแล้ว {ord.pickup_at ? `(${new Date(ord.pickup_at).toLocaleDateString('th-TH')})` : ''}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* SETTINGS SECTION: PRODUCTS, SIZES, PRICES & BACKUP GOOGLE FORM */}
+          <div id="merchandise-settings" className="pt-8 border-t border-slate-800 space-y-6">
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-rescue-500" />
+                  <span>ตั้งค่าสินค้า, ไซต์, ราคาบวกเพิ่ม & Google Form สำรอง</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  ปรับราคาฐาน, เพิ่ม/ลดขนาดไซต์, กำหนดราคาไซต์พิเศษบวกเพิ่มกี่บาท และจัดการระบบสั่งซื้อสำรอง
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveMerchandiseConfig}
+                disabled={isSavingMerch}
+                className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingMerch ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่าทั้งหมด'}</span>
+              </button>
+            </div>
+
+            {/* Google Form Backup Configuration */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>ระบบสั่งซื้อผ่าน Google Form (ช่องทางสำรอง)</span>
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    เปิดให้มีปุ่มสั่งซื้อผ่าน Google Form สำหรับผู้ที่ไม่สะดวกสั่งผ่านเว็บ
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentEnabled = localMerchConfig.google_form?.enabled;
+                    setLocalMerchConfig({
+                      ...localMerchConfig,
+                      google_form: {
+                        ...localMerchConfig.google_form,
+                        enabled: !currentEnabled
+                      }
+                    });
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-black transition-all ${
+                    localMerchConfig.google_form?.enabled
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-slate-800 text-slate-500 border border-slate-700'
+                  }`}
+                >
+                  {localMerchConfig.google_form?.enabled ? '✓ เปิดใช้งานแล้ว' : 'ปิดการใช้งาน'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-400">ลิงก์ Google Form URL:</label>
+                  <input
+                    type="url"
+                    value={localMerchConfig.google_form?.url || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        google_form: {
+                          ...localMerchConfig.google_form,
+                          url: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="https://docs.google.com/forms/d/e/..."
+                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400">ข้อความบนปุ่ม:</label>
+                  <input
+                    type="text"
+                    value={localMerchConfig.google_form?.title || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        google_form: {
+                          ...localMerchConfig.google_form,
+                          title: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="สั่งซื้อเสื้อ/กางเกงโครงการผ่าน Google Form (ช่องทางสำรอง)"
+                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Products & Sizes Configuration */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+              
+              {/* Product Selector Tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {(localMerchConfig.products || []).map((prod, idx) => (
+                  <button
+                    key={prod.id}
+                    type="button"
+                    onClick={() => setSelectedProductIndex(idx)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                      selectedProductIndex === idx
+                        ? 'bg-rescue-600 text-white shadow-md'
+                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {prod.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Selected Product Editor */}
+              {localMerchConfig.products?.[selectedProductIndex] && (() => {
+                const curProd = localMerchConfig.products[selectedProductIndex];
+
+                return (
+                  <div className="space-y-4 pt-2">
+                    
+                    {/* Base Price Editor */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{curProd.name}</h4>
+                        <p className="text-xs text-slate-400">{curProd.description}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-slate-300 whitespace-nowrap">
+                          ราคาฐาน (Base Price):
+                        </label>
+                        <div className="relative w-28">
+                          <input
+                            type="number"
+                            value={curProd.base_price}
+                            onChange={(e) => handleUpdateProductBasePrice(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-bold text-rescue-400 focus:outline-none focus:border-rescue-500"
+                          />
+                          <span className="absolute right-2.5 top-2 text-[10px] text-slate-400">บ.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SIZES TABLE & SURCHARGES */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-300">
+                          รายการขนาดไซส์ และราคาบวกเพิ่มสำหรับไซต์พิเศษ:
+                        </label>
+                        <span className="text-[11px] text-slate-400">
+                          {curProd.sizes?.length || 0} ไซส์ที่เปิดรับ
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                              <th className="p-2.5 font-bold">ชื่อไซส์</th>
+                              <th className="p-2.5 font-bold">{curProd.category === 'shirt' ? 'รอบอก / ความยาว' : 'รอบเอว / ความยาว'}</th>
+                              <th className="p-2.5 font-bold">ราคาบวกพิเศษ (+บาท)</th>
+                              <th className="p-2.5 font-bold">ราคาสุทธิของไซส์นี้</th>
+                              <th className="p-2.5 font-bold text-center">จัดการ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {curProd.sizes?.map((sz, szIdx) => {
+                              const sizeTotal = curProd.base_price + (sz.extra_price || 0);
+
+                              return (
+                                <tr key={szIdx} className="hover:bg-slate-900/50">
+                                  <td className="p-2.5 font-black text-white">{sz.name}</td>
+                                  <td className="p-2.5 text-slate-300">
+                                    {curProd.category === 'shirt'
+                                      ? `${sz.chest || '-'} • ${sz.length || '-'}`
+                                      : `${sz.waist || '-'} • ${sz.length || '-'}`}
+                                  </td>
+                                  <td className="p-2.5">
+                                    <div className="flex items-center gap-1.5 w-28">
+                                      <span className="text-amber-400 font-bold">+</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={sz.extra_price || 0}
+                                        onChange={(e) => handleUpdateSizeExtraPrice(szIdx, e.target.value)}
+                                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500"
+                                      />
+                                      <span className="text-slate-400 text-[10px]">บ.</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-2.5 font-black text-rescue-400">
+                                    {sizeTotal} บาท
+                                  </td>
+                                  <td className="p-2.5 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSizeFromProduct(szIdx)}
+                                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
+                                      title="ลบไซส์นี้"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* ADD NEW SIZE FORM */}
+                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-slate-300 shrink-0">
+                          + เพิ่มไซส์ใหม่:
+                        </span>
+                        
+                        <input
+                          type="text"
+                          value={newSizeName}
+                          onChange={(e) => setNewSizeName(e.target.value)}
+                          placeholder="ชื่อไซส์ (เช่น 6XL)"
+                          className="w-28 px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rescue-500"
+                        />
+
+                        <input
+                          type="text"
+                          value={newSizeMeasurement}
+                          onChange={(e) => setNewSizeMeasurement(e.target.value)}
+                          placeholder={curProd.category === 'shirt' ? 'รอบอก เช่น 56 นิ้ว' : 'รอบเอว เช่น 50-52 นิ้ว'}
+                          className="flex-1 min-w-[150px] px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rescue-500"
+                        />
+
+                        <div className="flex items-center gap-1 w-28">
+                          <span className="text-amber-400 text-xs font-bold">+</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={newSizeExtra}
+                            onChange={(e) => setNewSizeExtra(e.target.value)}
+                            placeholder="บวกเพิ่ม บ."
+                            className="w-full px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddSizeToProduct}
+                          className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition-all border border-slate-700 active:scale-95"
+                        >
+                          + เพิ่มไซส์
+                        </button>
+                      </div>
+
+                    </div>
+
+                  </div>
+                );
+              })()}
+
+            </div>
+
+            {/* Bottom Save Button */}
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={handleSaveMerchandiseConfig}
+                disabled={isSavingMerch}
+                className="px-6 py-3 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 ml-auto disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingMerch ? 'กำลังบันทึกข้อมูล...' : 'บันทึกการตั้งค่าทั้งหมด (Save Changes)'}</span>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ADMIN QR SCANNER MODAL */}
+      {showQRScanner && (
+        <AdminQRScannerModal
+          orders={merchandiseOrders}
+          onClose={() => setShowQRScanner(false)}
+          onMarkReceived={onMarkOrderReceived}
+          onVerifyPayment={onVerifyOrderPayment}
+        />
+      )}
+
+      {/* MERCHANDISE SLIP PREVIEW MODAL */}
+      {previewMerchSlip && (
+        <div 
+          onClick={() => setPreviewMerchSlip(null)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div className="relative max-w-lg max-h-[85vh]">
+            <img
+              src={previewMerchSlip}
+              alt="Merchandise Slip"
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl"
+            />
+            <button
+              onClick={() => setPreviewMerchSlip(null)}
+              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
       )}

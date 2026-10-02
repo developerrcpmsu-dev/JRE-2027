@@ -10,6 +10,7 @@ import ScheduleView from './views/ScheduleView';
 import RegisterView from './views/RegisterView';
 import AnnouncementsView from './views/AnnouncementsView';
 import AdminDashboardView from './views/AdminDashboardView';
+import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
 
@@ -18,7 +19,7 @@ export default function App() {
     try {
       const url = new URL(window.location.href);
       const tabParam = url.searchParams.get('tab') || window.location.hash.replace('#', '');
-      const validTabs = ['home', 'register', 'announcements', 'schedule', 'team', 'forms', 'profile', 'admin', 'pr', 'orders'];
+      const validTabs = ['home', 'register', 'announcements', 'schedule', 'team', 'forms', 'profile', 'admin', 'pr', 'orders', 'merchandise', 'shop', 'store'];
       if (validTabs.includes(tabParam)) return tabParam;
     } catch (e) {}
     return 'home';
@@ -66,6 +67,8 @@ export default function App() {
   const [announcements, setAnnouncements] = useState([]);
   const [formsConfig, setFormsConfig] = useState(null);
   const [paymentConfig, setPaymentConfig] = useState(null);
+  const [merchandiseConfig, setMerchandiseConfig] = useState(null);
+  const [merchandiseOrders, setMerchandiseOrders] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,11 +77,13 @@ export default function App() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [regs, anns, forms, payCfg, team, spks] = await Promise.all([
+        const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks] = await Promise.all([
           DataService.getRegistrations(),
           DataService.getAnnouncements(),
           DataService.getFormsConfig(),
           DataService.getPaymentConfig(),
+          DataService.getMerchandiseConfig(),
+          DataService.getMerchandiseOrders(),
           DataService.getTeam(),
           DataService.getSpeakers()
         ]);
@@ -86,6 +91,8 @@ export default function App() {
         setAnnouncements(anns);
         setFormsConfig(forms);
         setPaymentConfig(payCfg);
+        setMerchandiseConfig(merchCfg);
+        setMerchandiseOrders(merchOrds);
         setTeamMembers(team);
         setSpeakers(spks);
 
@@ -274,6 +281,36 @@ export default function App() {
     setPaymentConfig(cfg);
   };
 
+  const handleSaveMerchandiseConfig = async (cfg) => {
+    await DataService.saveMerchandiseConfig(cfg);
+    setMerchandiseConfig(cfg);
+  };
+
+  const handleSaveMerchandiseOrder = async (order) => {
+    const saved = await DataService.saveMerchandiseOrder(order);
+    const updated = await DataService.getMerchandiseOrders();
+    setMerchandiseOrders(updated);
+    return saved;
+  };
+
+  const handleUpdateMerchandiseOrder = async (orderId, patch) => {
+    await DataService.updateMerchandiseOrder(orderId, patch);
+    const updated = await DataService.getMerchandiseOrders();
+    setMerchandiseOrders(updated);
+  };
+
+  const handleVerifyOrderPayment = async (orderId, isApproved, adminNotes) => {
+    await DataService.verifyOrderPayment(orderId, isApproved, adminNotes);
+    const updated = await DataService.getMerchandiseOrders();
+    setMerchandiseOrders(updated);
+  };
+
+  const handleMarkOrderReceived = async (orderId, adminName) => {
+    await DataService.markOrderReceived(orderId, adminName);
+    const updated = await DataService.getMerchandiseOrders();
+    setMerchandiseOrders(updated);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
@@ -312,6 +349,7 @@ export default function App() {
             speakers={speakers}
             onNavigateRegister={() => setCurrentTab('register')}
             onNavigateSchedule={() => setCurrentTab('schedule')}
+            onNavigateMerchandise={() => setCurrentTab('merchandise')}
             myRegistration={myRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
           />
@@ -341,6 +379,16 @@ export default function App() {
           />
         )}
 
+        {(currentTab === 'merchandise' || currentTab === 'shop' || currentTab === 'store') && (
+          <MerchandiseView
+            user={user}
+            merchandiseConfig={merchandiseConfig}
+            orders={merchandiseOrders}
+            onSaveOrder={handleSaveMerchandiseOrder}
+            onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+          />
+        )}
+
         {currentTab === 'admin' && isAdmin && (
           <AdminDashboardView
             registrations={registrations}
@@ -357,6 +405,12 @@ export default function App() {
             onSaveTeam={DataService.saveTeam}
             speakers={speakers}
             onSaveSpeakers={DataService.saveSpeakers}
+            merchandiseConfig={merchandiseConfig}
+            onSaveMerchandiseConfig={handleSaveMerchandiseConfig}
+            merchandiseOrders={merchandiseOrders}
+            onUpdateMerchandiseOrder={handleUpdateMerchandiseOrder}
+            onVerifyOrderPayment={handleVerifyOrderPayment}
+            onMarkOrderReceived={handleMarkOrderReceived}
           />
         )}
 

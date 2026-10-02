@@ -11,7 +11,8 @@ import {
   Building2, 
   Activity, 
   FileCheck2,
-  HeartHandshake
+  HeartHandshake,
+  Shirt
 } from 'lucide-react';
 
 export default function HomeView({ 
@@ -19,6 +20,7 @@ export default function HomeView({
   speakers, 
   onNavigateRegister, 
   onNavigateSchedule,
+  onNavigateMerchandise,
   myRegistration,
   onOpenGoogleLogin
 }) {
@@ -106,6 +108,14 @@ export default function HomeView({
             >
               <Calendar className="w-4 h-4 text-rescue-400" />
               ดูกำหนดการ 2 วัน 1 คืน
+            </button>
+
+            <button
+              onClick={onNavigateMerchandise}
+              className="px-6 py-4 bg-gradient-to-r from-orange-600/30 to-amber-600/30 hover:from-orange-600/50 hover:to-amber-600/50 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/50 flex items-center gap-2 text-sm transition-all shadow-md"
+            >
+              <Shirt className="w-4 h-4 text-orange-400" />
+              สั่งซื้อเสื้อ & กางเกงกู้ภัย
             </button>
           </div>
 
