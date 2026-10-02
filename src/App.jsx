@@ -45,6 +45,7 @@ export default function App() {
   const [myRegistration, setMyRegistration] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [formsConfig, setFormsConfig] = useState(null);
+  const [paymentConfig, setPaymentConfig] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,18 +54,52 @@ export default function App() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [regs, anns, forms, team, spks] = await Promise.all([
+        const [regs, anns, forms, payCfg, team, spks] = await Promise.all([
           DataService.getRegistrations(),
           DataService.getAnnouncements(),
           DataService.getFormsConfig(),
+          DataService.getPaymentConfig(),
           DataService.getTeam(),
           DataService.getSpeakers()
         ]);
         setRegistrations(regs);
         setAnnouncements(anns);
         setFormsConfig(forms);
+        setPaymentConfig(payCfg);
         setTeamMembers(team);
         setSpeakers(spks);
+
+        // Check for Google OAuth Direct Redirect Hash Callback (#access_token=...)
+        if (window.location.hash && window.location.hash.includes('access_token=')) {
+          try {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            const accessToken = params.get('access_token');
+            if (accessToken) {
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+              });
+              const profile = await res.json();
+              if (profile?.email) {
+                const cleanEmail = profile.email.trim().toLowerCase();
+                const cleanName = profile.name || cleanEmail.split('@')[0];
+                const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+                const userObj = await DataService.loginWithGoogleProfile({
+                  name: cleanName,
+                  email: cleanEmail,
+                  avatar: avatar
+                });
+                localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
+                setUser(userObj);
+                const found = regs.find(r => r.user_id === userObj.id || r.user_email === userObj.email);
+                if (found) setMyRegistration(found);
+              }
+            }
+          } catch (oauthErr) {
+            console.warn('OAuth redirect hash parse error:', oauthErr);
+          }
+        }
 
         // Check stored auth
         const storedUser = localStorage.getItem('jre2027_auth_user');
@@ -214,6 +249,11 @@ export default function App() {
     setFormsConfig(cfg);
   };
 
+  const handleSavePaymentConfig = async (cfg) => {
+    await DataService.savePaymentConfig(cfg);
+    setPaymentConfig(cfg);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
@@ -293,6 +333,7 @@ export default function App() {
             onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             formsConfig={formsConfig}
+            paymentConfig={paymentConfig}
           />
         )}
 
@@ -314,6 +355,8 @@ export default function App() {
             onDeleteAnnouncement={handleDeleteAnnouncement}
             formsConfig={formsConfig}
             onSaveFormsConfig={handleSaveFormsConfig}
+            paymentConfig={paymentConfig}
+            onSavePaymentConfig={handleSavePaymentConfig}
             teamMembers={teamMembers}
             onSaveTeam={DataService.saveTeam}
             speakers={speakers}

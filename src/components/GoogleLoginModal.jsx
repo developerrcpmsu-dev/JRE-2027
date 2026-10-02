@@ -10,6 +10,16 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
+  const handleDirectGoogleOAuth = () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    const origin = window.location.origin;
+    const redirectUri = encodeURIComponent(`${origin}/`);
+    const scope = encodeURIComponent('openid email profile');
+    const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&prompt=select_account`;
+    window.location.href = googleOAuthUrl;
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     let initialized = false;
@@ -22,6 +32,16 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             client_id: GOOGLE_CLIENT_ID,
             scope: 'openid email profile',
             prompt: 'select_account',
+            error_callback: (err) => {
+              console.warn('Google OAuth error callback in modal:', err);
+              if (err?.type === 'popup_failed_to_open') {
+                // Browser blocked popup! Seamlessly fallback to direct redirect
+                handleDirectGoogleOAuth();
+              } else {
+                setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือถูกบล็อกโดยเบราว์เซอร์');
+                setIsLoading(false);
+              }
+            },
             callback: async (tokenResponse) => {
               if (tokenResponse.error) {
                 console.warn('Google OAuth token error:', tokenResponse);
@@ -102,8 +122,8 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
       }
     }
 
-    setIsLoading(false);
-    setShowCustomInput(true);
+    // Direct redirect fallback if tokenClient popup blocked or not ready
+    handleDirectGoogleOAuth();
   };
 
   const handleSelectAccount = async (name, email, avatar) => {

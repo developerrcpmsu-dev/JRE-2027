@@ -39,9 +39,12 @@ import {
   Send,
   FileDown,
   Maximize2,
-  Clock
+  Clock,
+  RotateCcw
 } from 'lucide-react';
 import { DataService } from '../supabase';
+import { DEFAULT_PAYMENT_CONFIG } from '../data/defaultData';
+import DocumentPreviewModal from '../components/DocumentPreviewModal';
 
 export default function AdminDashboardView({
   registrations,
@@ -52,12 +55,14 @@ export default function AdminDashboardView({
   onDeleteAnnouncement,
   formsConfig,
   onSaveFormsConfig,
+  paymentConfig,
+  onSavePaymentConfig,
   teamMembers,
   onSaveTeam,
   speakers,
   onSaveSpeakers
 }) {
-  const [activeTab, setActiveTab] = useState('applicants'); // 'applicants', 'forms', 'announcements'
+  const [activeTab, setActiveTab] = useState('applicants'); // 'applicants', 'payment_settings', 'forms', 'announcements'
 
   // Search & Filter for Applicants
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,6 +130,39 @@ export default function AdminDashboardView({
     evaluation: { title: 'แบบประเมินความพึงพอใจโครงการ (Evaluation)', url: '', enabled: false }
   });
   const [formsSavedMsg, setFormsSavedMsg] = useState(false);
+
+  // Payment Settings Config State
+  const [localPayment, setLocalPayment] = useState(() => {
+    return paymentConfig || DEFAULT_PAYMENT_CONFIG;
+  });
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+
+  React.useEffect(() => {
+    if (paymentConfig) {
+      setLocalPayment(paymentConfig);
+    }
+  }, [paymentConfig]);
+
+  const handleSavePaymentSettings = async (e) => {
+    if (e) e.preventDefault();
+    setIsSavingPayment(true);
+    try {
+      if (onSavePaymentConfig) {
+        await onSavePaymentConfig(localPayment);
+      } else {
+        await DataService.savePaymentConfig(localPayment);
+      }
+      triggerToast('บันทึกการตั้งค่าค่าสมัครและระบบแบ่งจ่าย 2 งวดเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่าค่าสมัคร');
+    } finally {
+      setIsSavingPayment(false);
+    }
+  };
+
+  // In-App Document Preview Modal State
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   // Notification Toast
   const [alertToast, setAlertToast] = useState(null);
@@ -198,7 +236,7 @@ export default function AdminDashboardView({
       setProfileModalReg(prev => ({ ...prev, ...updates }));
       triggerToast(`บันทึกข้อมูลของ ${profileModalReg.first_name} เรียบร้อยแล้ว`);
     } catch (err) {
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
       setIsSavingProfile(false);
     }
@@ -227,7 +265,7 @@ export default function AdminDashboardView({
       triggerToast(`ส่งข้อความแจ้งเตือนถึง ${profileModalReg.first_name} สำเร็จ`);
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการส่งข้อความ');
+      triggerToast('เกิดข้อผิดพลาดในการส่งข้อความ');
     } finally {
       setIsSendingMsg(false);
     }
@@ -399,7 +437,7 @@ export default function AdminDashboardView({
 
     const availableSlots = 10 - annImages.length;
     if (availableSlots <= 0) {
-      alert('แนบรูปภาพได้สูงสุด 10 รูปเท่านั้น');
+      triggerToast('แนบรูปภาพได้สูงสุด 10 รูปเท่านั้น');
       return;
     }
 
@@ -418,7 +456,7 @@ export default function AdminDashboardView({
       triggerToast(`อัปโหลดสำเร็จ ${uploadedUrls.length} รูป`);
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
     } finally {
       setIsUploadingImage(false);
       e.target.value = '';
@@ -434,7 +472,7 @@ export default function AdminDashboardView({
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      alert('กรุณาเลือกไฟล์เอกสารนามสกุล .pdf เท่านั้น');
+      triggerToast('กรุณาเลือกไฟล์เอกสารนามสกุล .pdf เท่านั้น');
       return;
     }
 
@@ -448,7 +486,7 @@ export default function AdminDashboardView({
       }
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์ PDF');
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดไฟล์ PDF');
     } finally {
       setIsUploadingPdf(false);
       e.target.value = '';
@@ -576,6 +614,18 @@ export default function AdminDashboardView({
         >
           <Users className="w-4 h-4" />
           <span>จัดการผู้สมัคร & ตรวจสอบสลิป/เอกสาร ({registrations.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('payment_settings')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'payment_settings'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>💰 ตั้งค่าค่าสมัคร & ระบบแบ่งจ่าย 2 งวด</span>
         </button>
 
         <button
@@ -711,21 +761,56 @@ export default function AdminDashboardView({
 
                         {/* Payment Status & Slip */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          {paymentStatus === 'paid' ? (
-                            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> ชำระแล้ว ({reg.payment_amount || 350} บ.)
-                            </span>
+                          {reg.payment_plan === 'installment' || reg.installment_1_slip_url || reg.installment_2_slip_url ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenProfileModal(reg, 'payment')}
+                              className="text-left group cursor-pointer block hover:opacity-90"
+                            >
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[9px] font-bold">
+                                  แบ่งจ่าย 2 งวด
+                                </span>
+                                {paymentStatus === 'paid' ? (
+                                  <span className="text-[10px] text-emerald-400 font-bold">✓ ครบ 2 งวด</span>
+                                ) : (
+                                  <span className="text-[10px] text-amber-300 font-medium">(คลิกตรวจ)</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className={reg.installment_1_status === 'paid' ? 'text-emerald-400 font-bold' : reg.installment_1_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
+                                  งวด 1: {reg.installment_1_status === 'paid' ? '✓ ชำระแล้ว' : reg.installment_1_status === 'pending_review' ? '🟡 รอตรวจ' : '🔴 ค้าง'}
+                                </span>
+                                <span className="text-slate-600">|</span>
+                                <span className={reg.installment_2_status === 'paid' ? 'text-emerald-400 font-bold' : reg.installment_2_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
+                                  งวด 2: {reg.installment_2_status === 'paid' ? '✓ ชำระแล้ว' : reg.installment_2_status === 'pending_review' ? '🟡 รอตรวจ' : '🔴 ค้าง'}
+                                </span>
+                              </div>
+                            </button>
+                          ) : paymentStatus === 'paid' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenProfileModal(reg, 'payment')}
+                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <CheckCircle className="w-3 h-3" /> ชำระแล้ว ({reg.payment_amount || localPayment.fee_total || 650} บ.)
+                            </button>
                           ) : paymentStatus === 'pending_review' ? (
                             <button
+                              type="button"
                               onClick={() => handleOpenProfileModal(reg, 'payment')}
-                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors"
+                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors animate-pulse cursor-pointer"
                             >
                               <Clock className="w-3 h-3" /> รอตรวจสลิป (คลิก)
                             </button>
                           ) : (
-                            <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" /> ค้างชำระ ({reg.payment_amount || 350} บ.)
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenProfileModal(reg, 'payment')}
+                              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <AlertCircle className="w-3 h-3" /> ค้างชำระ ({reg.payment_amount || localPayment.fee_total || 650} บ.)
+                            </button>
                           )}
                         </td>
 
@@ -1185,14 +1270,214 @@ export default function AdminDashboardView({
                   </div>
                 </div>
 
-                {/* Uploaded Slip Card */}
+                {/* 2-Round Installments Review if participant opted for installments or uploaded installment slips */}
+                {(profileModalReg.payment_plan === 'installment' || profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url) ? (
+                  <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-indigo-400" />
+                        <h4 className="font-bold text-white text-sm">หลักฐานการชำระแบบแบ่งจ่าย 2 งวด</h4>
+                      </div>
+                      <span className="text-[11px] font-bold px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded border border-indigo-500/30">
+                        แผนผ่อนชำระ 2 งวด
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* ROUND 1 */}
+                      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-indigo-300 text-xs">งวดที่ 1: {paymentConfig?.installment_round1_amount || 350} บาท</span>
+                          {profileModalReg.installment_1_status === 'paid' ? (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
+                              ✓ อนุมัติแล้ว
+                            </span>
+                          ) : profileModalReg.installment_1_slip_url ? (
+                            <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
+                              ⏳ รอตรวจสอบ
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
+                              ยังไม่ส่งสลิป
+                            </span>
+                          )}
+                        </div>
+
+                        {profileModalReg.installment_1_slip_url ? (
+                          <div className="space-y-2">
+                            <div
+                              onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 1 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_1_slip_url, file_name: 'installment-1-slip.jpg' })}
+                              className="cursor-pointer group relative w-full h-44 rounded-xl overflow-hidden border border-slate-700 bg-slate-950"
+                            >
+                              <img
+                                src={profileModalReg.installment_1_slip_url}
+                                alt="สลิปงวด 1"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
+                                <Eye className="w-4 h-4" /> คลิกเพื่อขยาย
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-slate-400">
+                              ส่งเมื่อ: {profileModalReg.installment_1_slip_date ? new Date(profileModalReg.installment_1_slip_date).toLocaleString('th-TH') : '-'}
+                            </p>
+
+                            {profileModalReg.installment_1_notes && (
+                              <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
+                                หมายเหตุ: {profileModalReg.installment_1_notes}
+                              </p>
+                            )}
+
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const isBothPaid = profileModalReg.installment_2_status === 'paid';
+                                  const updates = {
+                                    installment_1_status: 'paid',
+                                    installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย',
+                                    ...(isBothPaid ? { payment_status: 'paid' } : {})
+                                  };
+                                  await onUpdateAllocation(profileModalReg.user_id, updates);
+                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                  triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
+                                }}
+                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                ✓ อนุมัติงวด 1
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const reason = prompt('ระบุเหตุผลที่ปฏิเสธสลิปงวด 1:', 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่');
+                                  if (reason) {
+                                    const updates = {
+                                      installment_1_status: 'unpaid',
+                                      installment_1_notes: reason,
+                                      payment_status: 'unpaid'
+                                    };
+                                    await onUpdateAllocation(profileModalReg.user_id, updates);
+                                    setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                    triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
+                                  }
+                                }}
+                                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                ✕ ให้ส่งใหม่
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
+                            <Clock className="w-6 h-6 mb-2 opacity-50" />
+                            <span>ยังไม่มีการส่งสลิปงวดที่ 1</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ROUND 2 */}
+                      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-purple-300 text-xs">งวดที่ 2: {paymentConfig?.installment_round2_amount || 300} บาท</span>
+                          {profileModalReg.installment_2_status === 'paid' ? (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
+                              ✓ อนุมัติแล้ว
+                            </span>
+                          ) : profileModalReg.installment_2_slip_url ? (
+                            <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
+                              ⏳ รอตรวจสอบ
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
+                              ยังไม่ส่งสลิป
+                            </span>
+                          )}
+                        </div>
+
+                        {profileModalReg.installment_2_slip_url ? (
+                          <div className="space-y-2">
+                            <div
+                              onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 2 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_2_slip_url, file_name: 'installment-2-slip.jpg' })}
+                              className="cursor-pointer group relative w-full h-44 rounded-xl overflow-hidden border border-slate-700 bg-slate-950"
+                            >
+                              <img
+                                src={profileModalReg.installment_2_slip_url}
+                                alt="สลิปงวด 2"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
+                                <Eye className="w-4 h-4" /> คลิกเพื่อขยาย
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-slate-400">
+                              ส่งเมื่อ: {profileModalReg.installment_2_slip_date ? new Date(profileModalReg.installment_2_slip_date).toLocaleString('th-TH') : '-'}
+                            </p>
+
+                            {profileModalReg.installment_2_notes && (
+                              <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
+                                หมายเหตุ: {profileModalReg.installment_2_notes}
+                              </p>
+                            )}
+
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const isBothPaid = profileModalReg.installment_1_status === 'paid';
+                                  const updates = {
+                                    installment_2_status: 'paid',
+                                    installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย',
+                                    ...(isBothPaid ? { payment_status: 'paid' } : {})
+                                  };
+                                  await onUpdateAllocation(profileModalReg.user_id, updates);
+                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                  triggerToast('อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
+                                }}
+                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                ✓ อนุมัติงวด 2
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const reason = prompt('ระบุเหตุผลที่ปฏิเสธสลิปงวด 2:', 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่');
+                                  if (reason) {
+                                    const updates = {
+                                      installment_2_status: 'unpaid',
+                                      installment_2_notes: reason
+                                    };
+                                    await onUpdateAllocation(profileModalReg.user_id, updates);
+                                    setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                    triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
+                                  }
+                                }}
+                                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                ✕ ให้ส่งใหม่
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
+                            <Clock className="w-6 h-6 mb-2 opacity-50" />
+                            <span>ยังไม่มีการส่งสลิปงวดที่ 2</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Uploaded Slip Card (Standard Full Payment or additional slip) */}
                 <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
-                  <h4 className="font-bold text-white text-sm">หลักฐานสลิปการโอนเงินที่ผู้สมัครแนบมา</h4>
+                  <h4 className="font-bold text-white text-sm">หลักฐานสลิปการโอนเงิน (ชำระเต็มจำนวน / ทั่วไป)</h4>
                   
                   {profileModalReg.payment_slip_url ? (
                     <div className="flex flex-col sm:flex-row items-start gap-4">
                       <div 
-                        onClick={() => setPreviewSlipUrl(profileModalReg.payment_slip_url)}
+                        onClick={() => setPreviewDoc({ title: 'สลิปการโอนเงิน - ' + profileModalReg.first_name, file_url: profileModalReg.payment_slip_url, file_name: 'payment-slip.jpg' })}
                         className="cursor-pointer group relative w-40 h-48 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shrink-0"
                       >
                         <img 
@@ -1200,8 +1485,8 @@ export default function AdminDashboardView({
                           alt="สลิปโอนเงิน" 
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
                         />
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <Maximize2 className="w-6 h-6 text-white" />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
+                          <Eye className="w-4 h-4" /> ดูสลิป
                         </div>
                       </div>
 
@@ -1223,10 +1508,10 @@ export default function AdminDashboardView({
                                 payment_status: 'paid',
                                 payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
                               });
-                              setProfileModalReg(prev => ({ ...prev, payment_status: 'paid' }));
+                              setProfileModalReg(prev => ({ ...prev, payment_status: 'paid', payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว' }));
                               triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
                             }}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
                           >
                             <CheckCircle className="w-4 h-4" />
                             <span>อนุมัติสลิป (ชำระแล้ว)</span>
@@ -1247,7 +1532,7 @@ export default function AdminDashboardView({
                                 triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
                               }
                             }}
-                            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow"
+                            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
                           >
                             <XCircle className="w-4 h-4" />
                             <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
@@ -1256,7 +1541,9 @@ export default function AdminDashboardView({
                       </div>
                     </div>
                   ) : (
-                    <p className="text-slate-500 italic py-4">ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน</p>
+                    <p className="text-slate-500 italic py-2">
+                      {profileModalReg.payment_plan === 'installment' ? 'ผู้สมัครเลือกแผนแบ่งจ่าย 2 งวด (ดูสลิปด้านบน)' : 'ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน'}
+                    </p>
                   )}
                 </div>
               </div>
@@ -1425,9 +1712,13 @@ export default function AdminDashboardView({
                           {doc.file_url && (
                             <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
                               <span>ไฟล์: {doc.file_name || 'เอกสารแนบ'}</span>
-                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-0.5">
-                                <Eye className="w-3 h-3" /> เปิดดู
-                              </a>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDoc(doc)}
+                                className="text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> เปิดดู
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1437,7 +1728,7 @@ export default function AdminDashboardView({
                             <button
                               type="button"
                               onClick={() => handleVerifyDoc(doc.id, 'approved')}
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
                             >
                               ✓ อนุมัติ
                             </button>
@@ -1447,20 +1738,18 @@ export default function AdminDashboardView({
                                 const reason = prompt('ระบุเหตุผลที่ให้ส่งเอกสารใหม่:', 'เอกสารไม่ชัดเจน');
                                 if (reason) handleVerifyDoc(doc.id, 'rejected', reason);
                               }}
-                              className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold"
+                              className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
                             >
                               ✕ ให้ส่งใหม่
                             </button>
-                            <a
-                              href={doc.file_url}
-                              download={doc.file_name || 'doc.pdf'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
-                              title="ดาวน์โหลด"
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDoc(doc)}
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
+                              title="เปิดดูเอกสาร"
                             >
-                              <Download className="w-4 h-4" />
-                            </a>
+                              <Eye className="w-4 h-4" />
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1474,6 +1763,274 @@ export default function AdminDashboardView({
 
           </div>
         </div>
+      )}
+
+      {/* TAB: PAYMENT SETTINGS & INSTALLMENTS CONFIG */}
+      {activeTab === 'payment_settings' && (
+        <form onSubmit={handleSavePaymentSettings} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8 animate-in fade-in duration-200">
+          <div className="border-b border-slate-800 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-purple-400" />
+                ตั้งค่าค่าธรรมเนียมการลงทะเบียน & ระบบแบ่งชำระ 2 งวด
+              </h3>
+              <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                กำหนดค่าลงทะเบียนรวม บัญชีธนาคารสำหรับรับโอนเงิน และเปิด/ปิดระบบแบ่งจ่าย 2 งวด พร้อมกำหนดจำนวนเงินและวันครบกำหนด
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingPayment}
+              className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              {isSavingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>บันทึกการตั้งค่าทั้งหมด</span>
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            {/* CARD 1: GENERAL FEE & BANK INFO */}
+            <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-5">
+              <div className="flex items-center gap-2 text-white font-bold text-base border-b border-slate-800 pb-3">
+                <Building className="w-5 h-5 text-indigo-400" />
+                <h4>1. ข้อมูลบัญชีธนาคารรับโอน & ค่าลงทะเบียนหลัก</h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    ยอดค่าลงทะเบียนรวมเต็มจำนวน (บาท):
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={localPayment.fee_total ?? 650}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, fee_total: Number(e.target.value) || 0 }))}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="เช่น 650"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">ยอดรวมทั้งหมดสำหรับผู้ที่ชำระครั้งเดียวเต็มจำนวน</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    ชื่อธนาคาร:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={localPayment.bank_name ?? ''}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, bank_name: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="เช่น ธนาคารกรุงไทย"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    เลขที่บัญชีธนาคาร:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={localPayment.bank_account_number ?? ''}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, bank_account_number: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none tracking-wider"
+                    placeholder="เช่น 984-0-12345-6"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    ชื่อบัญชี:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={localPayment.bank_account_name ?? ''}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, bank_account_name: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    หมายเลขพร้อมเพย์ (PromptPay) (ถ้ามี):
+                  </label>
+                  <input
+                    type="text"
+                    value={localPayment.bank_promptpay ?? ''}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, bank_promptpay: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="เช่น 098-765-4321 หรือ เลขประจำตัวผู้เสียภาษี"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">ผู้สมัครจะมีปุ่มกดคัดลอกเลขพร้อมเพย์ได้ทันที</p>
+                </div>
+              </div>
+            </div>
+
+            {/* CARD 2: 2-ROUND INSTALLMENT SYSTEM */}
+            <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-white font-bold text-base">
+                  <Clock className="w-5 h-5 text-amber-400" />
+                  <h4>2. ระบบแบ่งจ่าย 2 งวด (2-Round Installments)</h4>
+                </div>
+
+                <label className="inline-flex items-center gap-3 cursor-pointer bg-slate-900 px-4 py-2 rounded-xl border border-slate-700 hover:border-purple-500 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(localPayment.allow_installments)}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, allow_installments: e.target.checked }))}
+                    className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-slate-600 focus:ring-purple-500"
+                  />
+                  <span className="text-xs font-bold text-white">
+                    {localPayment.allow_installments ? 'เปิดใช้งานระบบแบ่งจ่าย 2 งวด' : 'ปิดระบบแบ่งจ่าย (ให้จ่ายเต็มจำนวนเท่านั้น)'}
+                  </span>
+                </label>
+              </div>
+
+              {localPayment.allow_installments ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-amber-300 bg-amber-950/20 border border-amber-800/40 p-3 rounded-xl flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>ผู้สมัครสามารถเลือก "ขอทำเรื่องแบ่งจ่าย 2 งวด" ได้ในหน้าลงทะเบียน โดยส่งสลิปแยกทีละงวดตามกำหนดวัน</span>
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Round 1 */}
+                    <div className="p-4 bg-slate-900 border border-indigo-900/50 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 font-bold text-xs rounded-lg border border-indigo-500/30">
+                          งวดที่ 1 (รอบแรก)
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">วันเปิดรับสมัคร</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          จำนวนเงินงวดที่ 1 (บาท):
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={localPayment.installment_round1_amount ?? 350}
+                          onChange={e => setLocalPayment(prev => ({ ...prev, installment_round1_amount: Number(e.target.value) || 0 }))}
+                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                          placeholder="350"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          กำหนดชำระงวดที่ 1:
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={localPayment.installment_round1_due ?? ''}
+                          onChange={e => setLocalPayment(prev => ({ ...prev, installment_round1_due: e.target.value }))}
+                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                          placeholder="เช่น 15 ตุลาคม 2569 (วันเปิดรับสมัคร)"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Round 2 */}
+                    <div className="p-4 bg-slate-900 border border-purple-900/50 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-1 bg-purple-500/20 text-purple-300 font-bold text-xs rounded-lg border border-purple-500/30">
+                          งวดที่ 2 (รอบสอง)
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">1 หรือ 5 พ.ย.</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          จำนวนเงินงวดที่ 2 (บาท):
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={localPayment.installment_round2_amount ?? 300}
+                          onChange={e => setLocalPayment(prev => ({ ...prev, installment_round2_amount: Number(e.target.value) || 0 }))}
+                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="300"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          กำหนดชำระงวดที่ 2:
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={localPayment.installment_round2_due ?? ''}
+                          onChange={e => setLocalPayment(prev => ({ ...prev, installment_round2_due: e.target.value }))}
+                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="เช่น 1 หรือ 5 พฤศจิกายน 2569"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Installment sum validation badge */}
+                  <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                    <span className="text-slate-400">สรุปยอดรวม 2 งวด:</span>
+                    <span className="font-mono font-bold text-white">
+                      {Number(localPayment.installment_round1_amount || 0)} + {Number(localPayment.installment_round2_amount || 0)} = {(Number(localPayment.installment_round1_amount || 0) + Number(localPayment.installment_round2_amount || 0)).toLocaleString()} บาท
+                      {(Number(localPayment.installment_round1_amount || 0) + Number(localPayment.installment_round2_amount || 0)) === Number(localPayment.fee_total || 0) ? (
+                        <span className="ml-2 text-emerald-400 font-semibold">(✓ ยอดตรงกับยอดรวม {localPayment.fee_total} บ.)</span>
+                      ) : (
+                        <span className="ml-2 text-rose-400 font-semibold">(⚠️ ไม่ตรงกับยอดเต็มจำนวน {localPayment.fee_total} บ.)</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 bg-slate-900/50 border border-dashed border-slate-800 rounded-xl text-center text-slate-500 text-xs">
+                  ระบบแบ่งจ่าย 2 งวดปิดอยู่ ผู้สมัครทุกคนจะถูกกำหนดให้ชำระเต็มจำนวน {localPayment.fee_total} บาท
+                </div>
+              )}
+            </div>
+
+            {/* CARD 3: NOTES & GUIDELINES */}
+            <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-white font-bold text-base">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <h4>3. ข้อความแจ้งเตือน / คำแนะนำเรื่องการชำระเงิน</h4>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  คำชี้แจงสำหรับผู้สมัคร (แสดงในการ์ดชำระเงิน):
+                </label>
+                <textarea
+                  rows="3"
+                  value={localPayment.notes ?? ''}
+                  onChange={e => setLocalPayment(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none"
+                  placeholder="เช่น สามารถเลือกชำระเต็มจำนวน หรือแบ่งจ่าย 2 งวดตามกำหนดการข้างต้น..."
+                />
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={isSavingPayment}
+                className="px-8 py-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-rescue-600 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center gap-2 shadow-xl shadow-purple-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isSavingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>บันทึกการตั้งค่าระบบการเงิน</span>
+              </button>
+            </div>
+          </div>
+        </form>
       )}
 
       {/* TAB 2: GOOGLE FORMS MANAGER */}
@@ -1992,6 +2549,13 @@ export default function AdminDashboardView({
           </div>
         </div>
       )}
+
+      {/* IN-APP DOCUMENT & SLIP PREVIEW MODAL */}
+      <DocumentPreviewModal
+        isOpen={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        doc={previewDoc}
+      />
 
     </div>
   );

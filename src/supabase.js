@@ -3,7 +3,8 @@ import {
   DEFAULT_ANNOUNCEMENTS, 
   DEFAULT_FORMS_CONFIG, 
   DEFAULT_TEAM_MEMBERS, 
-  DEFAULT_SPEAKERS 
+  DEFAULT_SPEAKERS,
+  DEFAULT_PAYMENT_CONFIG
 } from './data/defaultData';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -27,6 +28,7 @@ const STORAGE_KEYS = {
   REGISTRATIONS: 'jre2027_registrations',
   ANNOUNCEMENTS: 'jre2027_announcements',
   FORMS_CONFIG: 'jre2027_forms_config',
+  PAYMENT_CONFIG: 'jre2027_payment_config',
   AUTH_USER: 'jre2027_auth_user',
   ADMIN_AUTH: 'jre2027_is_admin',
   TEAM: 'jre2027_team',
@@ -44,6 +46,9 @@ function initializeLocalStorage() {
   if (!localStorage.getItem(STORAGE_KEYS.REGISTRATIONS)) {
     // Start with empty real registrations
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify([]));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG)) {
+    localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(DEFAULT_PAYMENT_CONFIG));
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEAM)) {
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
@@ -146,6 +151,17 @@ export const DataService = {
       payment_slip_date: new Date().toISOString(),
       payment_status: 'pending_review'
     });
+  },
+
+  // User submits an installment payment slip (Round 1 or Round 2)
+  async submitInstallmentSlip(userId, round, slipUrl) {
+    const update = {
+      payment_plan: 'installment',
+      [`installment_${round}_slip_url`]: slipUrl,
+      [`installment_${round}_slip_date`]: new Date().toISOString(),
+      [`installment_${round}_status`]: 'pending_review'
+    };
+    return this.updateRegistrationDetails(userId, update);
   },
 
   // Send Admin Message to User
@@ -383,6 +399,41 @@ export const DataService = {
       }
     }
     localStorage.setItem(STORAGE_KEYS.FORMS_CONFIG, JSON.stringify(config));
+    return config;
+  },
+
+  // PAYMENT & INSTALLMENT CONFIG
+  async getPaymentConfig() {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'payment_config')
+          .single();
+        if (!error && data?.value) {
+          localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(data.value));
+          return data.value;
+        }
+      } catch (e) {
+        console.warn('Supabase payment_config query error, fallback', e);
+      }
+    }
+    const raw = localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG);
+    return raw ? JSON.parse(raw) : DEFAULT_PAYMENT_CONFIG;
+  },
+
+  async savePaymentConfig(config) {
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ key: 'payment_config', value: config, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn('Supabase payment_config save error', e);
+      }
+    }
+    localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(config));
     return config;
   },
 

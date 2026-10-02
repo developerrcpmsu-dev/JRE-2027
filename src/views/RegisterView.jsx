@@ -30,12 +30,20 @@ import {
   Loader2,
   Maximize2,
   Mail,
-  ArrowRight
+  ArrowRight,
+  Copy,
+  Check,
+  CalendarClock,
+  Layers,
+  HelpCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
 import { DataService } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
+import Toast from '../components/Toast';
+import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import { DEFAULT_PAYMENT_CONFIG } from '../data/defaultData';
 
 export default function RegisterView({ 
   user, 
@@ -43,8 +51,10 @@ export default function RegisterView({
   onSaveRegistration, 
   onUpdateRegistration,
   onOpenGoogleLogin,
-  formsConfig 
+  formsConfig,
+  paymentConfig 
 }) {
+  const effectivePaymentConfig = paymentConfig || DEFAULT_PAYMENT_CONFIG;
   const [isEditing, setIsEditing] = useState(false);
 
   // Form State
@@ -77,12 +87,49 @@ export default function RegisterView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
+  // In-App Toast Notification State
+  const [toast, setToast] = useState(null);
+  const triggerToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  // In-App Document Preview Modal State
+  const [previewDocModal, setPreviewDocModal] = useState(null);
+
   // Payment Slip Upload State
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [previewSlipModal, setPreviewSlipModal] = useState(null);
 
+  // 2-Round Installments State
+  const [paymentPlan, setPaymentPlan] = useState('full'); // 'full' or 'installment'
+  const [isUploadingRound1, setIsUploadingRound1] = useState(false);
+  const [isUploadingRound2, setIsUploadingRound2] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(null);
+
   // Document Upload State
   const [uploadingDocId, setUploadingDocId] = useState(null);
+
+  const handleCopyText = (text, keyName, label) => {
+    if (!text) return;
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedKey(keyName);
+      setTimeout(() => setCopiedKey(null), 2500);
+      triggerToast(`คัดลอก${label}เรียบร้อยแล้ว: ${text}`, 'success');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePhoneChange = (val) => {
+    const digits = val.replace(/\D/g, '').slice(0, 10);
+    setPhone(digits);
+  };
+
+  const handleEmergencyPhoneChange = (val) => {
+    const digits = val.replace(/\D/g, '').slice(0, 10);
+    setEmergencyPhone(digits);
+  };
 
   // Load existing data if registered
   useEffect(() => {
@@ -97,6 +144,7 @@ export default function RegisterView({
       setMedicalHistory(myRegistration.medical_history || '');
       setFoodAllergy(myRegistration.food_allergy || '');
       setPreviousTraining(myRegistration.previous_training || '');
+      setPaymentPlan(myRegistration.payment_plan || 'full');
       
       // Parse relation if present
       if (myRegistration.emergency_name && myRegistration.emergency_name.includes('(')) {
@@ -139,11 +187,31 @@ export default function RegisterView({
       return;
     }
 
+    // Strict 10-Digit Mobile Phone Enforcement
+    if (phone.length !== 10 || !/^0\d{9}$/.test(phone)) {
+      setStatusMessage({
+        type: 'error',
+        text: 'กรุณาระบุเบอร์โทรศัพท์มือถือให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0 และต้องมีตัวเลข 10 ตัวพอดี ห้ามขาดหรือเกิน)'
+      });
+      triggerToast('เบอร์โทรศัพท์มือถือต้องมีครบ 10 หลักพอดี (ห้ามขาดหรือเกิน)', 'error');
+      return;
+    }
+
+    if (emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) {
+      setStatusMessage({
+        type: 'error',
+        text: 'กรุณาระบุเบอร์โทรศัพท์ติดต่อฉุกเฉินให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0 และต้องมีตัวเลข 10 ตัวพอดี ห้ามขาดหรือเกิน)'
+      });
+      triggerToast('เบอร์โทรศัพท์ติดต่อฉุกเฉินต้องมีครบ 10 หลักพอดี (ห้ามขาดหรือเกิน)', 'error');
+      return;
+    }
+
     if (!agreeCorrectInfo || !agreePDPAAndRules) {
       setStatusMessage({
         type: 'error',
         text: 'กรุณาติ๊กยินยอมว่าข้อมูลถูกต้อง และยินยอมปฏิบัติตามนโยบาย PDPA มมส และข้อตกลงโครงการก่อนบันทึกใบสมัคร'
       });
+      triggerToast('กรุณาติ๊กรับรองข้อมูลและยินยอมนโยบาย PDPA ก่อนบันทึก', 'error');
       return;
     }
 
@@ -174,11 +242,22 @@ export default function RegisterView({
       room_assigned: myRegistration?.room_assigned || '',
       is_special_care: myRegistration?.is_special_care || false,
       special_notes: myRegistration?.special_notes || '',
+      payment_plan: myRegistration?.payment_plan || paymentPlan,
       payment_status: myRegistration?.payment_status || 'unpaid',
-      payment_amount: myRegistration?.payment_amount || 350,
-      payment_bank_info: myRegistration?.payment_bank_info || 'ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส',
+      payment_amount: myRegistration?.payment_amount || effectivePaymentConfig.fee_total,
+      payment_bank_info: myRegistration?.payment_bank_info || `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
       payment_slip_url: myRegistration?.payment_slip_url || '',
       payment_slip_date: myRegistration?.payment_slip_date || '',
+      installment_1_status: myRegistration?.installment_1_status || 'unpaid',
+      installment_1_amount: myRegistration?.installment_1_amount || effectivePaymentConfig.installment_round1_amount,
+      installment_1_due: myRegistration?.installment_1_due || effectivePaymentConfig.installment_round1_due,
+      installment_1_slip_url: myRegistration?.installment_1_slip_url || '',
+      installment_1_slip_date: myRegistration?.installment_1_slip_date || '',
+      installment_2_status: myRegistration?.installment_2_status || 'unpaid',
+      installment_2_amount: myRegistration?.installment_2_amount || effectivePaymentConfig.installment_round2_amount,
+      installment_2_due: myRegistration?.installment_2_due || effectivePaymentConfig.installment_round2_due,
+      installment_2_slip_url: myRegistration?.installment_2_slip_url || '',
+      installment_2_slip_date: myRegistration?.installment_2_slip_date || '',
       admin_messages: myRegistration?.admin_messages || [],
       requested_docs: myRegistration?.requested_docs || [],
       status: 'confirmed'
@@ -188,6 +267,7 @@ export default function RegisterView({
       await onSaveRegistration(payload);
       setIsEditing(false);
       setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลประวัติผู้สมัครเรียบร้อยแล้ว!' });
+      triggerToast('บันทึกข้อมูลใบสมัคร JRE 2027 เรียบร้อยแล้ว', 'success');
       
       try {
         confetti({
@@ -198,12 +278,13 @@ export default function RegisterView({
       } catch (err) {}
     } catch (err) {
       setStatusMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่' });
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Upload Payment Slip Handler
+  // Upload Payment Slip Handler (Full Payment)
   const handleUploadPaymentSlip = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !myRegistration) return;
@@ -220,13 +301,49 @@ export default function RegisterView({
             payment_status: 'pending_review'
           });
         }
-        alert('อัปโหลดสลิปการโอนเงินเรียบร้อยแล้ว เจ้าหน้าที่จะทำการตรวจสอบยอดเงิน');
+        triggerToast('อัปโหลดสลิปการโอนเงินเรียบร้อยแล้ว เจ้าหน้าที่จะทำการตรวจสอบยอดเงิน', 'success');
       }
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการอัปโหลดสลิป');
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดสลิป', 'error');
     } finally {
       setIsUploadingSlip(false);
+      e.target.value = '';
+    }
+  };
+
+  // Upload Installment Payment Slip Handler (Round 1 or Round 2)
+  const handleUploadInstallmentSlip = async (e, round) => {
+    const file = e.target.files?.[0];
+    if (!file || !myRegistration) return;
+
+    if (round === 1) setIsUploadingRound1(true);
+    else setIsUploadingRound2(true);
+
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'slips');
+      if (uploadResult?.url) {
+        await DataService.submitInstallmentSlip(myRegistration.user_id, round, uploadResult.url);
+        if (onUpdateRegistration) {
+          const update = {
+            payment_plan: 'installment',
+            [`installment_${round}_slip_url`]: uploadResult.url,
+            [`installment_${round}_slip_date`]: new Date().toISOString(),
+            [`installment_${round}_status`]: 'pending_review'
+          };
+          if (round === 1 && myRegistration.installment_2_status !== 'paid') {
+            update.payment_status = 'pending_review';
+          }
+          await onUpdateRegistration(myRegistration.user_id, update);
+        }
+        triggerToast(`อัปโหลดสลิปงวดที่ ${round} เรียบร้อยแล้ว เจ้าหน้าที่จะตรวจสอบยอดเงิน`, 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast(`เกิดข้อผิดพลาดในการอัปโหลดสลิปงวดที่ ${round}`, 'error');
+    } finally {
+      if (round === 1) setIsUploadingRound1(false);
+      else setIsUploadingRound2(false);
       e.target.value = '';
     }
   };
@@ -255,11 +372,11 @@ export default function RegisterView({
           }
           await onUpdateRegistration(myRegistration.user_id, { requested_docs: currentDocs });
         }
-        alert(`อัปโหลดเอกสาร "${file.name}" เรียบร้อยแล้ว`);
+        triggerToast(`อัปโหลดเอกสาร "${file.name}" เรียบร้อยแล้ว`, 'success');
       }
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการอัปโหลดเอกสาร');
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดเอกสาร', 'error');
     } finally {
       setUploadingDocId(null);
       e.target.value = '';
@@ -516,101 +633,421 @@ export default function RegisterView({
             </div>
           )}
 
-          {/* SECTION: สถานะการชำระเงิน & ส่งสลิปโอนเงิน (Real Payment System) */}
-          <div className="mt-8 p-5 rounded-2xl border bg-slate-950/70 border-slate-800 space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-white text-sm">
-                  สถานะการชำระค่าลงทะเบียน & การส่งสลิป
-                </h3>
+          {/* SECTION: สถานะการชำระเงิน & ระบบแบ่งจ่าย 2 งวด (Interactive Payment & Installments) */}
+          <div className="mt-8 p-5 sm:p-6 rounded-3xl border bg-slate-950/80 border-slate-800 space-y-5 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
+                    <span>ข้อมูลค่าสมัคร & สถานะการชำระเงิน</span>
+                    <span className="text-[11px] font-normal text-slate-400">
+                      ({myRegistration.payment_plan === 'installment' ? 'แผนแบ่งจ่าย 2 งวด' : 'แผนชำระเต็มจำนวน'})
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    ค่าสมัครรวม {effectivePaymentConfig.fee_total} บาท • {effectivePaymentConfig.notes || 'รองรับการชำระเต็มจำนวนหรือแบ่งจ่าย 2 งวด'}
+                  </p>
+                </div>
               </div>
 
-              {paymentStatus === 'paid' ? (
-                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4" /> ชำระเงินเรียบร้อยแล้ว
+              {/* Overall Payment Status Pill */}
+              {myRegistration.payment_status === 'paid' ? (
+                <span className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                  <CheckCircle className="w-4 h-4" /> ชำระค่าสมัครครบถ้วนแล้ว
                 </span>
-              ) : paymentStatus === 'pending_review' ? (
-                <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 animate-pulse">
+              ) : myRegistration.payment_status === 'pending_review' ? (
+                <span className="px-3.5 py-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 animate-pulse shadow-sm">
                   <Clock className="w-4 h-4" /> ส่งสลิปแล้ว กำลังรอผู้ดูแลตรวจสอบ
                 </span>
               ) : (
-                <span className="px-3 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4" /> ค้างชำระค่าลงทะเบียน ({paymentAmount} บาท)
+                <span className="px-3.5 py-1.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                  <AlertCircle className="w-4 h-4" /> ค้างชำระค่าลงทะเบียน ({effectivePaymentConfig.fee_total} บ.)
                 </span>
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="space-y-1.5">
-                <p className="text-slate-400">
-                  ยอดค่าลงทะเบียน: <span className="font-bold text-white text-sm">{paymentAmount} บาท</span>
-                </p>
-                <p className="text-slate-400 leading-relaxed">
-                  บัญชีรับโอน: <span className="text-amber-300 font-semibold">{myRegistration.payment_bank_info || 'ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส'}</span>
-                </p>
-                {myRegistration.payment_notes && (
-                  <p className="text-slate-300 bg-slate-900 p-2 rounded-lg border border-slate-800 text-[11px]">
-                    หมายเหตุจากฝ่ายการเงิน: {myRegistration.payment_notes}
-                  </p>
-                )}
+            {/* Bank Account Info Card with 1-Click Copy */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/30 border border-slate-800 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  🏦 ข้อมูลบัญชีธนาคารสำหรับโอนเงิน
+                </span>
+                <span className="text-[10px] text-emerald-400 font-medium">
+                  ✓ คลิกปุ่มเพื่อคัดลอกได้ทันที
+                </span>
               </div>
 
-              {/* Slip Upload & Viewer */}
-              <div className="flex flex-col justify-center items-start sm:items-end gap-2">
-                {myRegistration.payment_slip_url ? (
-                  <div className="flex items-center gap-3">
-                    <div 
-                      onClick={() => setPreviewSlipModal(myRegistration.payment_slip_url)}
-                      className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-900"
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                {/* Bank Account Number */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 block">{effectivePaymentConfig.bank_name}</span>
+                    <span className="font-mono font-bold text-amber-300 text-sm truncate block">
+                      {effectivePaymentConfig.bank_account_number}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(effectivePaymentConfig.bank_account_number, 'bank_acc', 'เลขบัญชี')}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
+                    title="คัดลอกเลขบัญชี"
+                  >
+                    {copiedKey === 'bank_acc' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'bank_acc' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                  </button>
+                </div>
+
+                {/* Account Name */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 block">ชื่อบัญชี</span>
+                    <span className="font-semibold text-white text-xs truncate block" title={effectivePaymentConfig.bank_account_name}>
+                      {effectivePaymentConfig.bank_account_name}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(effectivePaymentConfig.bank_account_name, 'bank_name', 'ชื่อบัญชี')}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
+                    title="คัดลอกชื่อบัญชี"
+                  >
+                    {copiedKey === 'bank_name' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'bank_name' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                  </button>
+                </div>
+
+                {/* PromptPay */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 block">พร้อมเพย์ (PromptPay)</span>
+                    <span className="font-mono font-bold text-sky-300 text-sm truncate block">
+                      {effectivePaymentConfig.bank_promptpay || '-'}
+                    </span>
+                  </div>
+                  {effectivePaymentConfig.bank_promptpay && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(effectivePaymentConfig.bank_promptpay, 'bank_prompt', 'พร้อมเพย์')}
+                      className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
+                      title="คัดลอกพร้อมเพย์"
                     >
-                      <img 
-                        src={myRegistration.payment_slip_url} 
-                        alt="สลิปโอนเงิน" 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                      />
-                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <Maximize2 className="w-4 h-4 text-white" />
+                      {copiedKey === 'bank_prompt' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === 'bank_prompt' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {myRegistration.payment_notes && (
+                <div className="text-[11px] text-amber-200/90 bg-amber-950/40 p-2.5 rounded-xl border border-amber-800/40">
+                  <span className="font-bold">หมายเหตุจากฝ่ายการเงิน: </span>
+                  {myRegistration.payment_notes}
+                </div>
+              )}
+            </div>
+
+            {/* Plan Switcher Pills (If allow_installments is true) */}
+            {effectivePaymentConfig.allow_installments && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-2xl border border-slate-800">
+                <span className="text-xs text-slate-400 px-2 font-medium">
+                  เลือกรูปแบบการชำระเงิน:
+                </span>
+                <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onUpdateRegistration) {
+                        await onUpdateRegistration(myRegistration.user_id, { payment_plan: 'full' });
+                        triggerToast('เปลี่ยนเป็นแผนชำระเต็มจำนวนแล้ว', 'info');
+                      }
+                    }}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      myRegistration.payment_plan !== 'installment'
+                        ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                        : 'bg-slate-800 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    ชำระเต็มจำนวน ({effectivePaymentConfig.fee_total} บ.)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onUpdateRegistration) {
+                        await onUpdateRegistration(myRegistration.user_id, { payment_plan: 'installment' });
+                        triggerToast('เปลี่ยนเป็นแผนแบ่งจ่าย 2 งวดแล้ว', 'info');
+                      }
+                    }}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      myRegistration.payment_plan === 'installment'
+                        ? 'bg-purple-600 text-white shadow-md font-black'
+                        : 'bg-slate-800 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    แบ่งจ่าย 2 งวด ({effectivePaymentConfig.installment_round1_amount} + {effectivePaymentConfig.installment_round2_amount} บ.)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW A: 2-ROUND INSTALLMENT VIEW */}
+            {myRegistration.payment_plan === 'installment' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                {/* Round 1 Installment Box */}
+                <div className="bg-slate-900/90 border border-purple-500/40 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider block">
+                        งวดที่ 1 (รอบแรก - วันเปิดรับสมัคร)
+                      </span>
+                      <p className="text-xl font-black text-white mt-0.5">
+                        {effectivePaymentConfig.installment_round1_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
+                      </p>
+                    </div>
+
+                    {myRegistration.installment_1_status === 'paid' ? (
+                      <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5" /> ชำระแล้ว
+                      </span>
+                    ) : myRegistration.installment_1_status === 'pending_review' ? (
+                      <span className="px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
+                        <Clock className="w-3.5 h-3.5" /> รอตรวจสอบ
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-[11px] font-bold">
+                        ค้างชำระงวด 1
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-300 space-y-1">
+                    <p className="flex items-center gap-1.5 text-slate-400">
+                      <CalendarClock className="w-3.5 h-3.5 text-purple-400" />
+                      <span>กำหนดชำระ: <strong className="text-white">{effectivePaymentConfig.installment_round1_due}</strong></span>
+                    </p>
+                  </div>
+
+                  {/* Slip 1 Section */}
+                  <div className="pt-2 border-t border-slate-800">
+                    {myRegistration.installment_1_slip_url ? (
+                      <div className="flex items-center gap-3">
+                        <div
+                          onClick={() => setPreviewSlipModal(myRegistration.installment_1_slip_url)}
+                          className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shrink-0"
+                        >
+                          <img
+                            src={myRegistration.installment_1_slip_url}
+                            alt="สลิปงวด 1"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Maximize2 className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[11px] text-emerald-400 font-semibold block">
+                            ✓ อัปโหลดสลิปงวดที่ 1 แล้ว
+                          </span>
+                          <span className="text-[10px] text-slate-500 block truncate">
+                            {myRegistration.installment_1_slip_date ? new Date(myRegistration.installment_1_slip_date).toLocaleString('th-TH') : '-'}
+                          </span>
+                        {myRegistration.installment_1_status === 'paid' ? (
+                          <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" /> อนุมัติงวดที่ 1 แล้ว (ล็อคสลิป)
+                          </span>
+                        ) : (
+                          <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
+                            <span>{myRegistration.installment_1_status === 'unpaid' ? 'อัปโหลดสลิปงวด 1 ใหม่' : 'ส่งสลิปงวด 1 ใหม่ทดแทน (กรณีแนบผิด)'}</span>
+                            <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
+                          </label>
+                        )}
                       </div>
                     </div>
-                    <div>
-                      <span className="text-[11px] text-emerald-400 font-semibold block">
-                        ✓ อัปโหลดสลิปแล้ว
-                      </span>
-                      <span className="text-[10px] text-slate-500 block">
-                        ส่งเมื่อ: {myRegistration.payment_slip_date ? new Date(myRegistration.payment_slip_date).toLocaleString('th-TH') : '-'}
-                      </span>
-                      <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-block">
-                        ส่งสลิปใหม่ทดแทน
-                        <input type="file" accept="image/*" onChange={handleUploadPaymentSlip} className="hidden" />
-                      </label>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {isUploadingSlip ? (
+                  ) : (
+                    <label className={`w-full cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingRound1 ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {isUploadingRound1 ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>กำลังส่งสลิป...</span>
+                          <span>กำลังส่งสลิปงวด 1...</span>
                         </>
                       ) : (
                         <>
                           <Upload className="w-4 h-4" />
-                          <span>อัปโหลดสลิปโอนเงิน ({paymentAmount} บ.)</span>
+                          <span>แนบสลิปงวดที่ 1 ({effectivePaymentConfig.installment_round1_amount} บ.)</span>
                         </>
                       )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleUploadPaymentSlip}
-                        className="hidden"
-                      />
+                      <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
                     </label>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+
+              {/* Round 2 Installment Box */}
+              <div className="bg-slate-900/90 border border-indigo-500/40 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">
+                      งวดที่ 2 (รอบที่ 2)
+                    </span>
+                    <p className="text-xl font-black text-white mt-0.5">
+                      {effectivePaymentConfig.installment_round2_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
+                    </p>
+                  </div>
+
+                  {myRegistration.installment_2_status === 'paid' ? (
+                    <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" /> ชำระแล้ว
+                    </span>
+                  ) : myRegistration.installment_2_status === 'pending_review' ? (
+                    <span className="px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
+                      <Clock className="w-3.5 h-3.5" /> รอตรวจสอบ
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-[11px] font-bold">
+                      ค้างชำระงวด 2
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-300 space-y-1">
+                  <p className="flex items-center gap-1.5 text-slate-400">
+                    <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>กำหนดชำระ: <strong className="text-white">{effectivePaymentConfig.installment_round2_due}</strong></span>
+                  </p>
+                </div>
+
+                {/* Slip 2 Section */}
+                <div className="pt-2 border-t border-slate-800">
+                  {myRegistration.installment_2_slip_url ? (
+                    <div className="flex items-center gap-3">
+                      <div
+                        onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url)}
+                        className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shrink-0"
+                      >
+                        <img
+                          src={myRegistration.installment_2_slip_url}
+                          alt="สลิปงวด 2"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Maximize2 className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[11px] text-emerald-400 font-semibold block">
+                          ✓ อัปโหลดสลิปงวดที่ 2 แล้ว
+                        </span>
+                        <span className="text-[10px] text-slate-500 block truncate">
+                          {myRegistration.installment_2_slip_date ? new Date(myRegistration.installment_2_slip_date).toLocaleString('th-TH') : '-'}
+                        </span>
+                        {myRegistration.installment_2_status === 'paid' ? (
+                          <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" /> อนุมัติงวดที่ 2 แล้ว (ล็อคสลิป)
+                          </span>
+                        ) : (
+                          <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
+                            <span>{myRegistration.installment_2_status === 'unpaid' ? 'อัปโหลดสลิปงวด 2 ใหม่' : 'ส่งสลิปงวด 2 ใหม่ทดแทน (กรณีแนบผิด)'}</span>
+                            <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
+                          </label>
+                        )}
+                      </div>
+                      </div>
+                    ) : (
+                      <label className={`w-full cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingRound2 ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>กำลังส่งสลิปงวด 2...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            <span>แนบสลิปงวดที่ 2 ({effectivePaymentConfig.installment_round2_amount} บ.)</span>
+                          </>
+                        )}
+                        <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* VIEW B: FULL PAYMENT VIEW */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
+                <div className="space-y-1.5">
+                  <p className="text-slate-400">
+                    ยอดค่าลงทะเบียนเต็มจำนวน: <span className="font-bold text-white text-base">{effectivePaymentConfig.fee_total} บาท</span>
+                  </p>
+                  <p className="text-slate-400 leading-relaxed">
+                    ครอบคลุมค่าประกันอุบัติเหตุ อาหารทุกมื้อ ที่พักค้างแรม อุปกรณ์การฝึก และวุฒิบัตรรับรอง
+                  </p>
+                </div>
+
+                {/* Full Payment Slip Upload & Viewer */}
+                <div className="flex flex-col justify-center items-start sm:items-end gap-2">
+                  {myRegistration.payment_slip_url ? (
+                    <div className="flex items-center gap-3">
+                      <div 
+                        onClick={() => setPreviewSlipModal(myRegistration.payment_slip_url)}
+                        className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-900"
+                      >
+                        <img 
+                          src={myRegistration.payment_slip_url} 
+                          alt="สลิปโอนเงิน" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Maximize2 className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-emerald-400 font-semibold block">
+                          ✓ อัปโหลดสลิปเต็มจำนวนแล้ว
+                        </span>
+                        <span className="text-[10px] text-slate-500 block">
+                          ส่งเมื่อ: {myRegistration.payment_slip_date ? new Date(myRegistration.payment_slip_date).toLocaleString('th-TH') : '-'}
+                        </span>
+                        {myRegistration.payment_status === 'paid' ? (
+                          <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" /> ตรวจสอบและอนุมัติยอดเงินแล้ว (ล็อคสลิป)
+                          </span>
+                        ) : (
+                          <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
+                            <span>{myRegistration.payment_status === 'unpaid' ? 'อัปโหลดสลิปใหม่ (ส่งใหม่)' : 'ส่งสลิปใหม่ทดแทน (กรณีแนบผิด)'}</span>
+                            <input type="file" accept="image/*" onChange={handleUploadPaymentSlip} className="hidden" />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingSlip ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>กำลังส่งสลิป...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            <span>อัปโหลดสลิปโอนเงินเต็มจำนวน ({effectivePaymentConfig.fee_total} บ.)</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadPaymentSlip}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* SECTION: ข้อความแจ้งเตือนจาก Admin (Admin Direct Messages) */}
@@ -677,9 +1114,18 @@ export default function RegisterView({
                         {hasSubmitted && (
                           <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
                             <span>ไฟล์: {doc.file_name || 'เอกสารแนบ'}</span>
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline inline-flex items-center gap-0.5">
-                              <Eye className="w-3 h-3" /> เปิดดู
-                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDocModal({
+                                title: doc.title,
+                                fileName: doc.file_name || 'เอกสารแนบ',
+                                fileUrl: doc.file_url
+                              })}
+                              className="text-blue-400 hover:text-blue-300 font-semibold inline-flex items-center gap-1 hover:underline cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>เปิดดู</span>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -855,6 +1301,16 @@ export default function RegisterView({
             </div>
           </div>
         )}
+
+        {/* IN-APP DOCUMENT PREVIEW MODAL */}
+        <DocumentPreviewModal
+          isOpen={Boolean(previewDocModal)}
+          onClose={() => setPreviewDocModal(null)}
+          doc={previewDocModal}
+        />
+
+        {/* TOAST NOTIFICATION */}
+        <Toast toast={toast} onClose={() => setToast(null)} />
 
       </div>
     );
@@ -1147,18 +1603,35 @@ export default function RegisterView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-rescue-500" />
-                เบอร์โทรศัพท์มือถือ *
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-rescue-500" />
+                  เบอร์โทรศัพท์มือถือ *
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  (เฉพาะตัวเลข 10 หลัก)
+                </span>
               </label>
-              <input
-                type="tel"
-                required
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="เช่น 089-123-4567"
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-mono"
-              />
+              <div className="relative">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  required
+                  value={phone}
+                  onChange={e => handlePhoneChange(e.target.value)}
+                  placeholder="08XXXXXXXX"
+                  className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 font-mono text-sm pr-24 ${
+                    phone.length === 10 ? 'border-emerald-500/70 focus:ring-emerald-500' : 'border-slate-700 focus:ring-rescue-500'
+                  }`}
+                />
+                <span className={`absolute right-3 top-3 text-[11px] font-mono px-2 py-0.5 rounded-md font-bold select-none ${
+                  phone.length === 10 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {phone.length}/10 หลัก
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -1204,17 +1677,35 @@ export default function RegisterView({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              เบอร์โทรศัพท์ติดต่อฉุกเฉิน *
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emergency-500" />
+                เบอร์โทรศัพท์ติดต่อฉุกเฉิน *
+              </span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                (เฉพาะตัวเลข 10 หลัก)
+              </span>
             </label>
-            <input
-              type="tel"
-              required
-              value={emergencyPhone}
-              onChange={e => setEmergencyPhone(e.target.value)}
-              placeholder="เช่น 081-999-8877"
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-mono"
-            />
+            <div className="relative">
+              <input
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                required
+                value={emergencyPhone}
+                onChange={e => handleEmergencyPhoneChange(e.target.value)}
+                placeholder="08XXXXXXXX"
+                className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 font-mono text-sm pr-24 ${
+                  emergencyPhone.length === 10 ? 'border-emerald-500/70 focus:ring-emerald-500' : 'border-slate-700 focus:ring-rescue-500'
+                }`}
+              />
+              <span className={`absolute right-3 top-3 text-[11px] font-mono px-2 py-0.5 rounded-md font-bold select-none ${
+                emergencyPhone.length === 10 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {emergencyPhone.length}/10 หลัก
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1267,6 +1758,129 @@ export default function RegisterView({
               placeholder="ระบุหลักสูตรหรือการฝึกอบรมกู้ภัยที่เคยผ่าน เช่น เคยอบรม First Aid & CPR, BLS, การใช้เชือกกู้ภัย, กู้ชีพทางน้ำ, ดับเพลิง หรือ หากเป็นมือใหม่ให้ระบุ 'ไม่มี / ฝึกอบรมครั้งแรก'"
               className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
+          </div>
+        </div>
+
+        {/* Section 5: รูปแบบการชำระเงิน & ข้อมูลบัญชีโอนเงิน */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-amber-500" />
+              5. ค่าสมัคร & รูปแบบการชำระเงิน
+            </h3>
+            <span className="text-[11px] text-slate-400">
+              ค่าสมัครรวม {effectivePaymentConfig.fee_total} บาท
+            </span>
+          </div>
+
+          {/* Payment Plan Selection Radio Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div
+              onClick={() => setPaymentPlan('full')}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                paymentPlan === 'full'
+                  ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-lg'
+                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-amber-400" />
+                  ชำระเต็มจำนวน
+                </span>
+                <span className="text-sm font-black text-amber-400">
+                  {effectivePaymentConfig.fee_total} บาท
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                ชำระครั้งเดียวครบถ้วน {effectivePaymentConfig.fee_total} บาท พร้อมรับสิทธิ์เข้าร่วมฝึกทันทีหลังตรวจสอบ
+              </p>
+            </div>
+
+            {effectivePaymentConfig.allow_installments && (
+              <div
+                onClick={() => setPaymentPlan('installment')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  paymentPlan === 'installment'
+                    ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/20 shadow-lg'
+                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-purple-400" />
+                    ขอแบ่งจ่าย 2 งวด
+                  </span>
+                  <span className="text-sm font-black text-purple-400">
+                    {effectivePaymentConfig.installment_round1_amount} + {effectivePaymentConfig.installment_round2_amount} บาท
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  งวดที่ 1: {effectivePaymentConfig.installment_round1_amount} บ. ({effectivePaymentConfig.installment_round1_due}) • งวดที่ 2: {effectivePaymentConfig.installment_round2_amount} บ. ({effectivePaymentConfig.installment_round2_due})
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Bank Info Card with 1-Click Copy */}
+          <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-300">
+                ข้อมูลบัญชีธนาคารสำหรับโอนเงิน:
+              </span>
+              <span className="text-[10px] text-emerald-400">
+                (โอนและส่งสลิปผ่านระบบหลังบันทึกใบสมัคร)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block">{effectivePaymentConfig.bank_name}</span>
+                  <span className="font-mono font-bold text-amber-300 text-xs truncate block">{effectivePaymentConfig.bank_account_number}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(effectivePaymentConfig.bank_account_number, 'form_bank_acc', 'เลขบัญชี')}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                >
+                  {copiedKey === 'form_bank_acc' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedKey === 'form_bank_acc' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block">ชื่อบัญชี</span>
+                  <span className="font-medium text-white text-[11px] truncate block" title={effectivePaymentConfig.bank_account_name}>{effectivePaymentConfig.bank_account_name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(effectivePaymentConfig.bank_account_name, 'form_bank_name', 'ชื่อบัญชี')}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                >
+                  {copiedKey === 'form_bank_name' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedKey === 'form_bank_name' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block">พร้อมเพย์</span>
+                  <span className="font-mono font-bold text-sky-300 text-xs truncate block">{effectivePaymentConfig.bank_promptpay || '-'}</span>
+                </div>
+                {effectivePaymentConfig.bank_promptpay && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(effectivePaymentConfig.bank_promptpay, 'form_prompt', 'พร้อมเพย์')}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                  >
+                    {copiedKey === 'form_prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedKey === 'form_prompt' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1356,6 +1970,16 @@ export default function RegisterView({
         isOpen={showPdpaModal}
         onClose={() => setShowPdpaModal(false)}
       />
+
+      {/* IN-APP DOCUMENT PREVIEW MODAL */}
+      <DocumentPreviewModal
+        isOpen={Boolean(previewDocModal)}
+        onClose={() => setPreviewDocModal(null)}
+        doc={previewDocModal}
+      />
+
+      {/* TOAST NOTIFICATION */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

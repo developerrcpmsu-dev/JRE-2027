@@ -24,6 +24,16 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
   const [customEmail, setCustomEmail] = useState('');
   const [customName, setCustomName] = useState('');
 
+  const handleDirectGoogleOAuth = () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    const origin = window.location.origin;
+    const redirectUri = encodeURIComponent(`${origin}/`);
+    const scope = encodeURIComponent('openid email profile');
+    const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&prompt=select_account`;
+    window.location.href = googleOAuthUrl;
+  };
+
   // 1. Initialize Google Identity Services OAuth 2.0 Token Client (Official Google Account Chooser)
   useEffect(() => {
     let initialized = false;
@@ -36,6 +46,16 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
             client_id: GOOGLE_CLIENT_ID,
             scope: 'openid email profile',
             prompt: 'select_account',
+            error_callback: (err) => {
+              console.warn('Google OAuth error callback in AuthPortal:', err);
+              if (err?.type === 'popup_failed_to_open') {
+                // Browser blocked popup! Seamlessly fallback to direct redirect
+                handleDirectGoogleOAuth();
+              } else {
+                setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือถูกบล็อกโดยเบราว์เซอร์');
+                setIsLoading(false);
+              }
+            },
             callback: async (tokenResponse) => {
               if (tokenResponse.error) {
                 console.warn('Google OAuth token error:', tokenResponse);
@@ -107,7 +127,6 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
     if (tokenClient) {
       try {
         tokenClient.requestAccessToken({ prompt: 'select_account' });
-        // The popup opened directly by user click
         setIsLoading(false);
         return;
       } catch (err) {
@@ -115,9 +134,8 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
       }
     }
 
-    // Fallback: If script failed to load or popup blocked, open fallback
-    setIsLoading(false);
-    setShowFallback(true);
+    // Direct redirect fallback if popup is blocked or not ready
+    handleDirectGoogleOAuth();
   };
 
   // Direct login with developer profile or email
@@ -217,6 +235,17 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>ดึงชื่อ อีเมล และรูปโปรไฟล์จาก Google อัตโนมัติ 100%</span>
             </div>
+
+            {/* Direct Redirect fallback if browser blocks popups */}
+            <button
+              type="button"
+              onClick={handleDirectGoogleOAuth}
+              disabled={isLoading}
+              className="w-full py-2.5 px-3 text-[11px] text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-800 border border-slate-800 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+            >
+              <span>หากเบราว์เซอร์บล็อกป๊อปอัป: คลิกเปิดหน้าต่าง Google โดยตรง (Direct Redirect)</span>
+              <ArrowRight className="w-3 h-3 text-rescue-400" />
+            </button>
           </div>
 
           {/* Quick Fallback if popup blocked by user's browser settings */}

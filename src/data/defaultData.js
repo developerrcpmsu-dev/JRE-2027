@@ -342,3 +342,17 @@ export const DEFAULT_FORMS_CONFIG = {
     description: 'โปรดร่วมให้คะแนนและข้อเสนอแนะเพื่อนำไปพัฒนาโครงการในรุ่นถัดไป'
   }
 };
+
+export const DEFAULT_PAYMENT_CONFIG = {
+  fee_total: 650,
+  bank_name: 'ธนาคารกรุงไทย',
+  bank_account_number: '984-0-12345-6',
+  bank_account_name: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม',
+  bank_promptpay: '098-765-4321',
+  allow_installments: true,
+  installment_round1_amount: 350,
+  installment_round1_due: '15 ตุลาคม 2569 (วันเปิดรับสมัคร)',
+  installment_round2_amount: 300,
+  installment_round2_due: '1 หรือ 5 พฤศจิกายน 2569 (ตามที่ผู้ดูแลกำหนด)',
+  notes: 'สามารถเลือกชำระเต็มจำนวน 650 บาท หรือขอทำเรื่องแบ่งจ่าย 2 งวดได้'
+};
