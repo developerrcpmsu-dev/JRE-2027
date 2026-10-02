@@ -299,6 +299,16 @@ export default function RegisterView({
                   <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[11px] font-bold">
                     ลงทะเบียนแล้ว
                   </span>
+                  {myRegistration.group_assigned && (
+                    <span className="px-2.5 py-0.5 bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      🎯 กลุ่ม: {myRegistration.group_assigned}
+                    </span>
+                  )}
+                  {myRegistration.room_assigned && (
+                    <span className="px-2.5 py-0.5 bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      🛏️ ห้อง: {myRegistration.room_assigned}
+                    </span>
+                  )}
                   {myRegistration.is_special_care && (
                     <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[11px] font-black animate-pulse flex items-center gap-1">
                       ⭐ ดูแลเป็นพิเศษ
@@ -321,6 +331,73 @@ export default function RegisterView({
               <Edit className="w-3.5 h-3.5" />
               <span>แก้ไขข้อมูลประวัติของฉัน</span>
             </button>
+          </div>
+
+          {/* ADMIN ALLOCATIONS: Group & Room (Top Priority Display) */}
+          <div className="mt-8 p-5 bg-gradient-to-r from-indigo-950/40 via-slate-950 to-amber-950/40 border border-indigo-700/40 rounded-3xl shadow-xl">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-rescue-500" />
+                <h2 className="text-base sm:text-lg font-black text-white">
+                  ผลการจัดสรรกลุ่มฝึก & ห้องนอนจากผู้ดูแลระบบ (Admin Assignment)
+                </h2>
+              </div>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                อัปเดตตามคำสั่งโครงการ JRE 2027
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Group Assigned Card */}
+              <div className="bg-slate-900/90 border border-indigo-600/50 p-5 rounded-2xl relative overflow-hidden shadow-lg">
+                <p className="text-xs uppercase font-bold text-indigo-300 tracking-wider flex items-center gap-1.5">
+                  <span>🎯</span> กลุ่มฝึกปฏิบัติการที่สังกัด (Assigned Group)
+                </p>
+                <div className="mt-2.5">
+                  {myRegistration.group_assigned ? (
+                    <div>
+                      <p className="text-2xl sm:text-3xl font-black text-white text-indigo-200">
+                        {myRegistration.group_assigned}
+                      </p>
+                      <p className="text-[11px] text-slate-300 mt-1.5 flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>เข้ารายงานตัว ณ จุดรวมพลของกลุ่มตามเวลากำหนดการ</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-amber-400 py-2">
+                      <Clock className="w-4 h-4 animate-spin-slow" />
+                      <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรกลุ่มฝึกปฏิบัติการ...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Room Assigned Card */}
+              <div className="bg-slate-900/90 border border-amber-600/50 p-5 rounded-2xl relative overflow-hidden shadow-lg">
+                <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
+                  <span>🛏️</span> ห้องนอน / ที่พักค้างแรม (Assigned Room)
+                </p>
+                <div className="mt-2.5">
+                  {myRegistration.room_assigned ? (
+                    <div>
+                      <p className="text-2xl sm:text-3xl font-black text-white text-amber-200">
+                        {myRegistration.room_assigned}
+                      </p>
+                      <p className="text-[11px] text-slate-300 mt-1.5 flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>เข้าพักตามห้องนอนที่ระบุ ณ เรือนนอนหอพักนิสิต มมส</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-amber-400 py-2">
+                      <Clock className="w-4 h-4 animate-spin-slow" />
+                      <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรห้องพักค้างแรม...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* ADMIN SPECIAL CARE REMARKS (If flagged by Admin) */}
@@ -534,65 +611,6 @@ export default function RegisterView({
             </div>
           )}
 
-          {/* ADMIN ALLOCATIONS: Group & Room */}
-          <div className="mt-8">
-            <div className="flex items-center gap-2 mb-4">
-              <ShieldCheck className="w-5 h-5 text-rescue-500" />
-              <h2 className="text-lg font-black text-white">
-                ผลการจัดสรรจากผู้ดูแลระบบ (Admin Assignment)
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Group Assigned */}
-              <div className="bg-gradient-to-br from-indigo-950/80 to-slate-900 border border-indigo-800/60 p-5 rounded-2xl relative overflow-hidden">
-                <p className="text-xs uppercase font-bold text-indigo-300 tracking-wider">
-                  กลุ่มฝึกปฏิบัติการ (Assigned Group)
-                </p>
-                <div className="mt-2">
-                  {myRegistration.group_assigned ? (
-                    <div>
-                      <p className="text-2xl font-black text-white flex items-center gap-2">
-                        <span>🎯 {myRegistration.group_assigned}</span>
-                      </p>
-                      <p className="text-[11px] text-indigo-300 mt-1">
-                        เข้ารายงานตัว ณ จุดรวมพลของกลุ่มตามเวลากำหนดการ
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-amber-400 py-1">
-                      <Clock className="w-4 h-4 animate-spin-slow" />
-                      <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรกลุ่มฝึก...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Room Assigned */}
-              <div className="bg-gradient-to-br from-amber-950/80 to-slate-900 border border-amber-800/60 p-5 rounded-2xl relative overflow-hidden">
-                <p className="text-xs uppercase font-bold text-amber-300 tracking-wider">
-                  ห้องนอน / ที่พักค้างแรม (Assigned Room)
-                </p>
-                <div className="mt-2">
-                  {myRegistration.room_assigned ? (
-                    <div>
-                      <p className="text-2xl font-black text-white flex items-center gap-2">
-                        <span>🛏️ {myRegistration.room_assigned}</span>
-                      </p>
-                      <p className="text-[11px] text-amber-300 mt-1">
-                        เข้าพักตามห้องนอนที่ระบุ ณ เรือนนอนหอพักนิสิต มมส
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-amber-400 py-1">
-                      <Clock className="w-4 h-4 animate-spin-slow" />
-                      <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรห้องพัก...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Section: ข้อมูลส่วนตัว & การคำนวณอายุ */}
           <div className="mt-8 pt-6 border-t border-slate-800">

@@ -94,8 +94,10 @@ export default function Footer({ onOpenAdminLogin }) {
         </div>
 
         <div className="mt-8 pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p>© 2569 - 2570 JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม สงวนลิขสิทธิ์</p>
-          <p className="flex items-center gap-1">
+          <p className="text-center sm:text-left leading-relaxed">
+            © 2569 - {new Date().getFullYear() + 543} JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม สงวนลิขสิทธิ์ | พัฒนาระบบโดย Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ
+          </p>
+          <p className="flex items-center gap-1 shrink-0">
             ร่วมใจเพื่อความปลอดภัยของสังคม <Heart className="w-3.5 h-3.5 text-emergency-500 fill-emergency-500" />
           </p>
         </div>
