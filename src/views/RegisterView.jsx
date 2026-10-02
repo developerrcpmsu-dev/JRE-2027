@@ -418,17 +418,43 @@ export default function RegisterView({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              สังกัด / มหาวิทยาลัย / ชมรมกู้ภัย *
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) *
+              </label>
+              <span className="text-[11px] text-rescue-400">
+                เปิดรับทุกมหาวิทยาลัยทั่วประเทศ
+              </span>
+            </div>
             <input
               type="text"
               required
               value={institution}
               onChange={e => setInstitution(e.target.value)}
-              placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, กู้ภัย มข, หรือ อื่นๆ"
+              placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, อาสาสมัครกู้ภัย มข, ชุดเคลื่อนที่เร็ว มก, จุฬาฯ, มธ, มช, มอ ฯลฯ"
               className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm"
             />
+            {/* Quick Suggestions Pills */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <span className="text-[11px] text-slate-500 mr-1 self-center">ตัวอย่างด่วน:</span>
+              {[
+                'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+                'อาสาสมัครกู้ภัย มหาวิทยาลัยขอนแก่น (มข)',
+                'ชุดเคลื่อนที่เร็ว มหาวิทยาลัยเกษตรศาสตร์ (มก)',
+                'เครือข่ายกู้ภัย มหาวิทยาลัยเชียงใหม่ (มช)',
+                'เครือข่ายกู้ภัย มหาวิทยาลัยสงขลานครินทร์ (มอ)',
+                'เครือข่ายกู้ภัย มหาวิทยาลัยบูรพา (มบ)'
+              ].map((uni, idx) => (
+                <button
+                  type="button"
+                  key={idx}
+                  onClick={() => setInstitution(uni)}
+                  className="px-2.5 py-1 bg-slate-950 hover:bg-slate-800 text-[10px] text-slate-300 hover:text-white rounded-lg border border-slate-800 transition-colors"
+                >
+                  + {uni.split(' ')[0]} {uni.split(' ')[1]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

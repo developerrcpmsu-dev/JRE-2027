@@ -53,12 +53,13 @@ export default function HomeView({
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight mb-6">
             มมส จัด <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-rescue-500 to-amber-300">JRE 2027</span><br />
-            ติวเข้มเครือข่ายกู้ภัยนักศึกษาอีสาน
+            ติวเข้มเครือข่ายกู้ภัยนักศึกษาทั่วประเทศ
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed mb-8 max-w-3xl">
-            ยกระดับทักษะรับมือเหตุฉุกเฉิน สานต่อความสำเร็จจากการฝึกซ้อม JRE 2026 โดย 
+            ยกระดับทักษะรับมือเหตุฉุกเฉินระดับประเทศ สานต่อความสำเร็จจากการฝึกซ้อม JRE 2026 โดย 
             <span className="font-semibold text-white"> ชมรมกู้ภัยราชพฤกษ์ สังกัดองค์การนิสิต มหาวิทยาลัยมหาสารคาม </span>
+            ร่วมกับมหาวิทยาลัยและเครือข่ายกู้ภัยนักศึกษาทั่วประเทศทุกภูมิภาค (ภาคอีสาน, ภาคกลาง, ภาคเหนือ, ภาคใต้, ภาคตะวันออก)
             ได้รับเกียรติจาก <span className="text-amber-300 font-semibold">รองศาสตราจารย์ ดร.นิตยา วรรณกิตร์</span> รองอธิการบดีฝ่ายพัฒนานิสิตและภาพลักษณ์องค์กร มหาวิทยาลัยมหาสารคาม เป็นประธานเปิดโครงการ
           </p>
 
@@ -68,9 +69,9 @@ export default function HomeView({
                 <HeartHandshake className="w-6 h-6" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-slate-200">การรวมพลังเครือข่ายกู้ชีพกู้ภัยระดับอุดมศึกษาภาคอีสาน</p>
+                <p className="font-bold text-slate-200">การรวมพลังเครือข่ายกู้ชีพกู้ภัยระดับอุดมศึกษาทั่วประเทศ (ทุกภูมิภาค)</p>
                 <p className="text-slate-400">
-                  ชมรมกู้ภัยราชพฤกษ์ มมส • อาสาสมัครปฏิบัติการและสืบสวนพิเศษ มข. • ชมรมอาสาสมัครกู้ชีพ มก.
+                  ชมรมกู้ภัยราชพฤกษ์ มมส • อาสาสมัครกู้ภัย มข. • ชุดเคลื่อนที่เร็ว มก. • และสถาบันอุดมศึกษาทั่วประเทศ
                 </p>
               </div>
             </div>
@@ -106,6 +107,100 @@ export default function HomeView({
               <Calendar className="w-4 h-4 text-rescue-400" />
               ดูกำหนดการ 2 วัน 1 คืน
             </button>
+          </div>
+
+        </div>
+      </section>
+
+      {/* JRE 2026 Video Spotlight & Philosophy Card */}
+      <section className="bg-gradient-to-br from-slate-900 via-slate-950 to-orange-950/30 border border-orange-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+        <div className="flex flex-col lg:flex-row items-center gap-8">
+          
+          {/* Left: Video Preview Thumbnail */}
+          <div className="w-full lg:w-5/12 relative group rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl shrink-0">
+            <div className="relative aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
+              <img 
+                src="https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80" 
+                alt="การเข้าระงับเหตุเพลิงไหม้นอกอาคาร JRE 2026"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-75"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+              
+              {/* Play Badge */}
+              <a
+                href="https://www.facebook.com/share/v/18cdZwKepQ/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 hover:bg-slate-950/30 transition-colors"
+              >
+                <div className="w-16 h-16 rounded-full bg-emergency-600 group-hover:bg-emergency-500 text-white flex items-center justify-center shadow-xl shadow-emergency-600/50 group-hover:scale-110 transition-all mb-3 border-2 border-white/80">
+                  <svg className="w-8 h-8 fill-current ml-1" viewBox="0 0 24 24">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                  </svg>
+                </div>
+                <span className="px-3 py-1 bg-slate-900/90 text-white rounded-lg text-xs font-bold border border-slate-700 shadow">
+                  ▶ ชมคลิปการฝึกบน Facebook
+                </span>
+              </a>
+
+              <div className="absolute bottom-3 left-3 right-3 text-left">
+                <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded-md uppercase">
+                  JRE 2026 Highlight
+                </span>
+                <p className="text-white text-xs font-bold truncate mt-1">
+                  การเข้าระงับเหตุเพลิงไหม้นอกอาคาร
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Message & Philosophy */}
+          <div className="w-full lg:w-7/12 space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emergency-500/20 text-emergency-400 border border-emergency-500/30 rounded-full text-xs font-bold">
+              🔥 มากกว่าการฝึก คือการเตรียมความพร้อมสู่สถานการณ์จริง
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-black text-white leading-snug">
+              "เราไม่ได้ฝึกให้เก่งแค่ในสนามฝึก<br />
+              แต่เราฝึกเพื่อให้ทุกคนสามารถกลับออกมาได้อย่างปลอดภัย"
+            </h3>
+
+            <div className="text-xs sm:text-sm text-slate-300 space-y-2.5 leading-relaxed bg-slate-950/60 p-4 sm:p-5 rounded-2xl border border-slate-800">
+              <p>
+                ในมุมมองของวิทยากร การฝึกครั้งนี้ไม่ใช่เพียงการถ่ายทอดความรู้ แต่คือการปลูกฝัง 
+                <span className="text-amber-400 font-bold"> “วิธีคิด” </span> และ 
+                <span className="text-emerald-400 font-bold"> “ความปลอดภัย” </span> ให้กับผู้ปฏิบัติ
+              </p>
+              <p>
+                ผู้เข้าร่วมได้เรียนรู้ตั้งแต่การประเมินสถานการณ์อย่างเป็นระบบ การเลือกใช้อุปกรณ์ให้เหมาะสมกับเหตุการณ์ 
+                การเข้าพื้นที่อย่างปลอดภัย และการทำงานเป็นทีมภายใต้ข้อจำกัดและแรงกดดันจริง
+              </p>
+              <p className="text-orange-300 font-semibold italic border-l-2 border-orange-500 pl-3">
+                ทุกขั้นตอนคือสิ่งที่ต้อง “เข้าใจและปฏิบัติได้จริง” เพราะในสถานการณ์จริง ความผิดพลาดเพียงเล็กน้อย อาจหมายถึงความสูญเสียที่ยิ่งใหญ่
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex flex-wrap gap-1.5 text-[11px] font-mono text-slate-400">
+                <span className="hover:text-rescue-400">#JRE2026</span>
+                <span className="hover:text-rescue-400">#กู้ภัยราชพฤกษ์</span>
+                <span className="hover:text-rescue-400">#ฝึกกู้ภัย</span>
+                <span className="hover:text-rescue-400">#ดับเพลิง</span>
+                <span className="hover:text-rescue-400">#EmergencyResponse</span>
+                <span className="hover:text-rescue-400">#MSU</span>
+              </div>
+
+              <a
+                href="https://www.facebook.com/share/v/18cdZwKepQ/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-bold text-rescue-400 hover:text-rescue-300 bg-rescue-500/10 hover:bg-rescue-500/20 px-3.5 py-2 rounded-xl border border-rescue-500/30 transition-all"
+              >
+                <span>เปิดดูวิดีโอบน Facebook</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
           </div>
 
         </div>
