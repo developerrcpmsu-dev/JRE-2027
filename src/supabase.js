@@ -114,20 +114,24 @@ export const DataService = {
     return updated;
   },
 
-  async updateRegistrationAllocations(userId, { group_assigned, room_assigned }) {
+  async updateRegistrationAllocations(userId, fields) {
+    return this.updateRegistrationDetails(userId, fields);
+  },
+
+  async updateRegistrationDetails(userId, fields) {
     if (isSupabaseConfigured) {
       try {
         const { error } = await supabase
           .from('registrations')
-          .update({ group_assigned, room_assigned })
+          .update(fields)
           .eq('user_id', userId);
         if (!error) return true;
       } catch (e) {
-        console.warn('Supabase update failed, fallback to local', e);
+        console.warn('Supabase update details failed, fallback to local', e);
       }
     }
     const regs = await this.getRegistrations();
-    const updated = regs.map(r => r.user_id === userId ? { ...r, group_assigned, room_assigned } : r);
+    const updated = regs.map(r => r.user_id === userId ? { ...r, ...fields, updated_at: new Date().toISOString() } : r);
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     return true;
   },
@@ -165,32 +169,40 @@ export const DataService = {
   },
 
   async saveAnnouncement(announcement) {
+    const annToSave = {
+      ...announcement,
+      images: Array.isArray(announcement.images) ? announcement.images : [],
+      pdf_url: announcement.pdf_url || '',
+      pdf_name: announcement.pdf_name || ''
+    };
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
           .from('announcements')
-          .upsert(announcement)
+          .upsert(annToSave)
           .select();
-        if (!error && data) return data[0];
+        if (!error && data && data.length > 0) return data[0];
+        if (error) console.warn('Supabase announcement save error details:', error);
       } catch (e) {
         console.warn('Supabase announcement save error', e);
       }
     }
     const items = await this.getAnnouncements();
     let updated;
-    if (announcement.id) {
-      const idx = items.findIndex(i => i.id === announcement.id);
+    if (annToSave.id) {
+      const idx = items.findIndex(i => i.id === annToSave.id);
       if (idx >= 0) {
-        items[idx] = { ...items[idx], ...announcement };
+        items[idx] = { ...items[idx], ...annToSave };
         updated = items[idx];
       } else {
-        items.unshift(announcement);
-        updated = announcement;
+        items.unshift(annToSave);
+        updated = annToSave;
       }
     } else {
       updated = {
         id: 'ann-' + Date.now(),
-        ...announcement,
+        ...annToSave,
         created_at: new Date().toISOString()
       };
       items.unshift(updated);
@@ -211,6 +223,60 @@ export const DataService = {
     const filtered = items.filter(i => i.id !== id);
     localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(filtered));
     return true;
+  },
+
+  // FILE UPLOAD SERVICE (Supports Supabase Storage bucket 'announcements' with Base64 fallback)
+  async uploadFile(file, folder = 'images') {
+    if (!file) throw new Error('No file provided');
+
+    // 1. Try Supabase Storage
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const cleanName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${cleanName}`;
+        
+        const { data, error } = await supabase.storage
+          .from('announcements')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (!error && data) {
+          const { data: urlData } = supabase.storage
+            .from('announcements')
+            .getPublicUrl(filePath);
+
+          if (urlData?.publicUrl) {
+            return {
+              url: urlData.publicUrl,
+              name: file.name,
+              size: file.size,
+              type: file.type
+            };
+          }
+        } else {
+          console.warn('Supabase storage upload failed:', error?.message);
+        }
+      } catch (err) {
+        console.warn('Supabase storage upload exception:', err);
+      }
+    }
+
+    // 2. Fallback to FileReader Base64 Data URL so uploads never fail
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve({
+          url: reader.result,
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
   },
 
   // FORMS CONFIG (Pre-test, Post-test, Evaluation)

@@ -14,7 +14,13 @@ import {
   Edit,
   Clock,
   Sparkles,
-  MapPin
+  MapPin,
+  HeartPulse,
+  Award,
+  Stethoscope,
+  UtensilsCrossed,
+  ShieldAlert,
+  Info
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
@@ -45,6 +51,11 @@ export default function RegisterView({
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [emergencyRelation, setEmergencyRelation] = useState('ผู้ปกครอง');
 
+  // Health, Allergies & Training History
+  const [medicalHistory, setMedicalHistory] = useState('');
+  const [foodAllergy, setFoodAllergy] = useState('');
+  const [previousTraining, setPreviousTraining] = useState('');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
@@ -56,9 +67,20 @@ export default function RegisterView({
       setBloodGroup(myRegistration.blood_group || 'O');
       setPhone(myRegistration.phone || '');
       setInstitution(myRegistration.institution || 'มหาวิทยาลัยมหาสารคาม (มมส)');
-      setEmergencyName(myRegistration.emergency_name || '');
+      setEmergencyName(myRegistration.emergency_name ? myRegistration.emergency_name.split(' (')[0] : '');
       setEmergencyPhone(myRegistration.emergency_phone || '');
+      setMedicalHistory(myRegistration.medical_history || '');
+      setFoodAllergy(myRegistration.food_allergy || '');
+      setPreviousTraining(myRegistration.previous_training || '');
       
+      // Parse relation if present
+      if (myRegistration.emergency_name && myRegistration.emergency_name.includes('(')) {
+        const relMatch = myRegistration.emergency_name.match(/\((.*?)\)/);
+        if (relMatch && relMatch[1]) {
+          setEmergencyRelation(relMatch[1]);
+        }
+      }
+
       // Parse DOB
       if (myRegistration.dob) {
         const parts = myRegistration.dob.split('-');
@@ -101,15 +123,20 @@ export default function RegisterView({
       institution: institution.trim(),
       emergency_name: `${emergencyName.trim()} (${emergencyRelation})`,
       emergency_phone: emergencyPhone.trim(),
+      medical_history: medicalHistory.trim(),
+      food_allergy: foodAllergy.trim(),
+      previous_training: previousTraining.trim(),
       group_assigned: myRegistration?.group_assigned || '',
       room_assigned: myRegistration?.room_assigned || '',
+      is_special_care: myRegistration?.is_special_care || false,
+      special_notes: myRegistration?.special_notes || '',
       status: 'confirmed'
     };
 
     try {
       await onSaveRegistration(payload);
       setIsEditing(false);
-      setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลการสมัครเรียบร้อยแล้ว!' });
+      setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลประวัติผู้สมัครเรียบร้อยแล้ว!' });
       
       // Trigger celebration confetti
       try {
@@ -136,10 +163,10 @@ export default function RegisterView({
           </div>
 
           <h2 className="text-3xl font-black text-white mb-3">
-            เข้าสู่ระบบเพื่อสมัครเข้าร่วม JRE 2027
+            เข้าสู่ระบบเพื่อสมัครและดูประวัติ JRE 2027
           </h2>
           <p className="text-slate-400 text-sm max-w-md mx-auto mb-8">
-            กรุณาเข้าสู่ระบบด้วยบัญชี Google เพื่อกรอกใบสมัคร ตรวจสอบสถานะการจัดสรรกลุ่ม และห้องพักประจำโครงการ
+            กรุณาเข้าสู่ระบบด้วยบัญชี Google เพื่อกรอกใบสมัคร ดูและแก้ไขประวัติส่วนตัว ตรวจสอบกลุ่มฝึก และห้องพักประจำโครงการ
           </p>
 
           <button
@@ -159,12 +186,12 @@ export default function RegisterView({
     );
   }
 
-  // APPLICANT DASHBOARD (View existing application & Admin allocations)
+  // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
   if (myRegistration && !isEditing) {
     return (
       <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
         
-        {/* Top Header Card */}
+        {/* Top Header Profile Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-slate-800 pb-6">
             <div className="flex items-center gap-4">
@@ -174,18 +201,23 @@ export default function RegisterView({
                 className="w-16 h-16 rounded-2xl object-cover border-2 border-rescue-500 shadow-md"
               />
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-black text-white">
                     {myRegistration.first_name} {myRegistration.last_name}
                   </h1>
                   <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[11px] font-bold">
                     ลงทะเบียนแล้ว
                   </span>
+                  {myRegistration.is_special_care && (
+                    <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[11px] font-black animate-pulse flex items-center gap-1">
+                      ⭐ ดูแลเป็นพิเศษ
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  สังกัด: <span className="text-slate-200">{myRegistration.institution}</span>
+                  สังกัด: <span className="text-slate-200 font-semibold">{myRegistration.institution}</span>
                 </p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   อีเมล: {myRegistration.user_email} • รหัสอ้างอิง: JRE27-{myRegistration.id?.slice(0, 6).toUpperCase()}
                 </p>
               </div>
@@ -193,14 +225,29 @@ export default function RegisterView({
 
             <button
               onClick={() => setIsEditing(true)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 transition-colors"
+              className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
             >
               <Edit className="w-3.5 h-3.5" />
-              แก้ไขข้อมูลส่วนตัว
+              <span>แก้ไขข้อมูลประวัติของฉัน</span>
             </button>
           </div>
 
-          {/* ADMIN ALLOCATIONS: Group & Room (User requirement highlighted) */}
+          {/* ADMIN SPECIAL CARE REMARKS (If flagged by Admin) */}
+          {myRegistration.is_special_care && (
+            <div className="mt-6 p-4 bg-gradient-to-r from-rose-950/40 via-amber-950/30 to-slate-900 border border-rose-600/50 rounded-2xl flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-rose-300 uppercase tracking-wider">
+                  หมายเหตุการดูแลพิเศษจากคณะกรรมการ / ทีมแพทย์สนาม
+                </h4>
+                <p className="text-xs text-slate-200 mt-1">
+                  {myRegistration.special_notes || 'ผู้เข้าร่วมอบรมท่านนี้ได้รับการบันทึกข้อมูลเพื่อเฝ้าระวังและสนับสนุนเป็นพิเศษระหว่างการฝึก'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ADMIN ALLOCATIONS: Group & Room */}
           <div className="mt-8">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="w-5 h-5 text-rescue-500" />
@@ -260,42 +307,86 @@ export default function RegisterView({
             </div>
           </div>
 
-          {/* Personal Information & Age Detail Box */}
+          {/* Section: ข้อมูลส่วนตัว & การคำนวณอายุ */}
           <div className="mt-8 pt-6 border-t border-slate-800">
-            <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">
-              ข้อมูลส่วนตัวที่ลงทะเบียน
+            <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider flex items-center gap-2">
+              <User className="w-4 h-4 text-rescue-400" />
+              ข้อมูลส่วนตัวประจำตัวผู้สมัคร
             </h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
               <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                 <span className="text-slate-400 block mb-0.5">อายุที่คำนวณได้:</span>
                 <span className="font-bold text-rescue-400 text-sm">
-                  {myRegistration.age_years} ปี {myRegistration.age_months} เดือน {myRegistration.age_days} วัน
+                  {myRegistration.age_years || 0} ปี {myRegistration.age_months || 0} เดือน {myRegistration.age_days || 0} วัน
                 </span>
                 <span className="text-[10px] text-slate-500 block mt-0.5">
-                  เกิดวันที่: {myRegistration.dob} (พ.ศ.)
+                  เกิดวันที่: {myRegistration.dob || '-'} (พ.ศ.)
                 </span>
               </div>
 
               <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                 <span className="text-slate-400 block mb-0.5">กรุ๊ปเลือด & เบอร์ติดต่อ:</span>
                 <span className="font-bold text-emergency-400 text-sm">
-                  กรุ๊ป {myRegistration.blood_group}
+                  กรุ๊ป {myRegistration.blood_group || '-'}
                 </span>
                 <span className="text-slate-300 block mt-0.5 font-mono">
-                  โทร: {myRegistration.phone}
+                  โทร: {myRegistration.phone || '-'}
                 </span>
               </div>
 
               <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                 <span className="text-slate-400 block mb-0.5">ผู้ติดต่อกรณีฉุกเฉิน:</span>
                 <span className="font-bold text-white text-sm truncate block">
-                  {myRegistration.emergency_name}
+                  {myRegistration.emergency_name || '-'}
                 </span>
                 <span className="text-emerald-400 block mt-0.5 font-mono">
-                  โทร: {myRegistration.emergency_phone}
+                  โทร: {myRegistration.emergency_phone || '-'}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Section: ข้อมูลสุขภาพ ประวัติการแพ้ & ประวัติการฝึกอบรม */}
+          <div className="mt-8 pt-6 border-t border-slate-800 space-y-4">
+            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <HeartPulse className="w-4 h-4 text-rose-400" />
+              ข้อมูลสุขภาพ & ประวัติการฝึกอบรมกู้ภัย
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              {/* Medical History */}
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-2 text-rose-300 font-semibold mb-1">
+                  <Stethoscope className="w-4 h-4 text-rose-400" />
+                  <span>โรคประจำตัว / ข้อจำกัดทางกาย:</span>
+                </div>
+                <p className="text-slate-300 mt-1 whitespace-pre-line">
+                  {myRegistration.medical_history || 'ไม่มีโรคประจำตัว'}
+                </p>
+              </div>
+
+              {/* Food & Drug Allergies */}
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-2 text-amber-300 font-semibold mb-1">
+                  <UtensilsCrossed className="w-4 h-4 text-amber-400" />
+                  <span>ประวัติแพ้อาหาร / แพ้ยา / มังสวิรัติ:</span>
+                </div>
+                <p className="text-slate-300 mt-1 whitespace-pre-line">
+                  {myRegistration.food_allergy || 'ไม่มีประวัติแพ้ยาหรืออาหาร'}
+                </p>
+              </div>
+            </div>
+
+            {/* Training History */}
+            <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-xs">
+              <div className="flex items-center gap-2 text-indigo-300 font-semibold mb-1">
+                <Award className="w-4 h-4 text-indigo-400" />
+                <span>ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา:</span>
+              </div>
+              <p className="text-slate-300 mt-1 whitespace-pre-line leading-relaxed">
+                {myRegistration.previous_training || 'ผู้เข้าร่วมอบรมใหม่ / ไม่เคยผ่านการฝึกอบรมมาก่อน'}
+              </p>
             </div>
           </div>
 
@@ -357,13 +448,13 @@ export default function RegisterView({
       <div className="text-center space-y-2 mb-4">
         <div className="inline-flex items-center gap-2 px-4 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
           <FileText className="w-4 h-4" />
-          ระบบรับสมัครเข้าร่วมโครงการ
+          {isEditing ? 'แก้ไขข้อมูลประวัติผู้สมัคร' : 'ระบบรับสมัครเข้าร่วมโครงการ'}
         </div>
         <h1 className="text-3xl font-black text-white">
-          ใบสมัครโครงการฝึกอบรมเชิงปฏิบัติการ JRE 2027
+          {isEditing ? 'แก้ไขข้อมูลและประวัติการฝึกอบรม' : 'ใบสมัครโครงการฝึกอบรมเชิงปฏิบัติการ JRE 2027'}
         </h1>
         <p className="text-slate-400 text-xs sm:text-sm">
-          กรอกข้อมูลตามความเป็นจริงเพื่อใช้ในการทำประกันอุบัติเหตุ จัดสรรกลุ่ม และจัดห้องนอน
+          กรอกข้อมูลตามความเป็นจริงเพื่อใช้ในการทำประกันอุบัติเหตุ สวัสดิการความปลอดภัย จัดสรรกลุ่ม และจัดห้องนอน
         </p>
       </div>
 
@@ -458,7 +549,7 @@ export default function RegisterView({
           </div>
         </div>
 
-        {/* Section 2: วันเดือนปี พ.ศ. เกิด และการคำนวณอายุ อัตโนมัติ (User Requirement) */}
+        {/* Section 2: วันเดือนปี พ.ศ. เกิด และการคำนวณอายุ อัตโนมัติ */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-rescue-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
             <Calendar className="w-4 h-4" />
@@ -577,7 +668,7 @@ export default function RegisterView({
           </div>
         </div>
 
-        {/* Section 3: บุคคลที่ติดต่อได้กรณีฉุกเฉิน (User Requirement) */}
+        {/* Section 3: บุคคลที่ติดต่อได้กรณีฉุกเฉิน */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-emergency-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
             <AlertCircle className="w-4 h-4 text-emergency-500" />
@@ -632,6 +723,58 @@ export default function RegisterView({
           </div>
         </div>
 
+        {/* Section 4: ข้อมูลสุขภาพ ประวัติการแพ้ & ประวัติการฝึกอบรม (New Comprehensive Fields) */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+            <HeartPulse className="w-4 h-4 text-rose-500" />
+            4. ข้อมูลสุขภาพและความปลอดภัย & ประวัติการฝึกอบรม
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <Stethoscope className="w-3.5 h-3.5 text-rose-400" />
+                โรคประจำตัว / ข้อจำกัดทางกาย
+              </label>
+              <input
+                type="text"
+                value={medicalHistory}
+                onChange={e => setMedicalHistory(e.target.value)}
+                placeholder="เช่น หอบหืด, ความดัน, ไม่มี (ใส่ ไม่มี หากไม่มี)"
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400" />
+                ประวัติแพ้อาหาร / ยา / มังสวิรัติ
+              </label>
+              <input
+                type="text"
+                value={foodAllergy}
+                onChange={e => setFoodAllergy(e.target.value)}
+                placeholder="เช่น แพ้ยาเพนนิซิลิน, แพ้อาหารทะเล, ทานมังสวิรัติ, ไม่มี"
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-indigo-400" />
+              ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา
+            </label>
+            <textarea
+              rows="3"
+              value={previousTraining}
+              onChange={e => setPreviousTraining(e.target.value)}
+              placeholder="ระบุหลักสูตรหรือการฝึกอบรมกู้ภัยที่เคยผ่าน เช่น เคยอบรม First Aid & CPR, BLS, การใช้เชือกกู้ภัย, กู้ชีพทางน้ำ, ดับเพลิง หรือ หากเป็นมือใหม่ให้ระบุ 'ไม่มี / ฝึกอบรมครั้งแรก'"
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+        </div>
+
         {/* Submit Actions */}
         <div className="pt-4 flex items-center gap-3">
           <button
@@ -644,7 +787,7 @@ export default function RegisterView({
             ) : (
               <>
                 <Save className="w-5 h-5" />
-                <span>ยืนยันและบันทึกใบสมัคร JRE 2027</span>
+                <span>{isEditing ? 'บันทึกการแก้ไขข้อมูลประวัติ' : 'ยืนยันและบันทึกใบสมัคร JRE 2027'}</span>
               </>
             )}
           </button>
