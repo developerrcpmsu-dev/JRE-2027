@@ -92,7 +92,7 @@ export default function Navbar({
               }`}
             >
               <Calendar className="w-4 h-4" />
-              กำหนดการ (7-8 พ.ย.)
+              กำหนดการ (14-15 พ.ย.)
             </button>
 
             <button
@@ -120,7 +120,7 @@ export default function Navbar({
               }`}
             >
               <FileText className="w-4 h-4" />
-              {myRegistration ? 'แดชบอร์ดของฉัน' : 'สมัครเข้าร่วมโครงการ'}
+              {myRegistration ? 'แดชบอร์ด / บัญชีของฉัน' : 'สมัครเข้าร่วมโครงการ'}
             </button>
 
             {/* Admin Panel Tab if logged in as Admin */}
@@ -142,19 +142,26 @@ export default function Navbar({
           {/* Desktop Right Action Area: Auth & Status */}
           <div className="hidden md:flex items-center gap-3">
             {user ? (
-              <div className="flex items-center gap-3 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-2xl shadow-inner">
-                <img 
-                  src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
-                  alt={user.name || 'User'} 
-                  className="w-8 h-8 rounded-full border border-rescue-500/50 object-cover"
-                />
-                <div className="text-left text-xs leading-tight">
-                  <p className="font-semibold text-white truncate max-w-[120px]">{user.name || user.email?.split('@')[0]}</p>
-                  <p className="text-slate-400 text-[10px] flex items-center gap-1">
-                    <UserCheck className="w-3 h-3 text-emerald-400" />
-                    Google Login
-                  </p>
-                </div>
+              <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 p-1.5 pl-2.5 rounded-2xl shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => handleNav('register')}
+                  title="ดูประวัติบัญชี / ผลการจัดสรรกลุ่มและห้องนอน"
+                  className="flex items-center gap-2.5 hover:opacity-80 transition-opacity text-left"
+                >
+                  <img 
+                    src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
+                    alt={user.name || 'User'} 
+                    className="w-8 h-8 rounded-full border border-rescue-500/50 object-cover"
+                  />
+                  <div className="text-left text-xs leading-tight">
+                    <p className="font-semibold text-white truncate max-w-[120px]">{user.name || user.email?.split('@')[0]}</p>
+                    <p className="text-slate-400 text-[10px] flex items-center gap-1">
+                      <UserCheck className="w-3 h-3 text-emerald-400" />
+                      {myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}
+                    </p>
+                  </div>
+                </button>
                 <button
                   onClick={onLogout}
                   title="ออกจากระบบ"
@@ -226,16 +233,24 @@ export default function Navbar({
         <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 pt-3 pb-6 space-y-3">
           {user && (
             <div className="flex items-center gap-3 p-3 bg-slate-800/80 rounded-xl mb-2">
-              <img 
-                src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
-                alt={user.name || 'User'} 
-                className="w-9 h-9 rounded-full object-cover border border-rescue-500"
-              />
-              <div className="flex-1 truncate">
-                <p className="font-bold text-white text-sm">{user.name}</p>
-                <p className="text-slate-400 text-xs truncate">{user.email}</p>
-              </div>
-              <button onClick={onLogout} className="p-2 text-red-400 hover:bg-slate-700 rounded-lg">
+              <button
+                type="button"
+                onClick={() => handleNav('register')}
+                className="flex items-center gap-3 flex-1 text-left truncate"
+              >
+                <img 
+                  src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
+                  alt={user.name || 'User'} 
+                  className="w-9 h-9 rounded-full object-cover border border-rescue-500"
+                />
+                <div className="flex-1 truncate">
+                  <p className="font-bold text-white text-sm truncate">{user.name}</p>
+                  <p className="text-slate-400 text-xs truncate">
+                    {myRegistration ? (myRegistration.group_assigned ? `กลุ่ม: ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : user.email}
+                  </p>
+                </div>
+              </button>
+              <button onClick={onLogout} title="ออกจากระบบ" className="p-2 text-red-400 hover:bg-slate-700 rounded-lg">
                 <LogOut className="w-5 h-5" />
               </button>
             </div>
