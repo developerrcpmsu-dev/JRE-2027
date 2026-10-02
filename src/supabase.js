@@ -9,6 +9,8 @@ import {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '292467898061-a10ff6et3k1up950hfvstelqh7hu5f6d.apps.googleusercontent.com';
+
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
@@ -535,6 +537,59 @@ export const DataService = {
       role: 'applicant',
       verified: true
     };
+
+    await this.syncUserAccount(userObj);
+    return userObj;
+  },
+
+  parseJwt(token) {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error('Failed to parse Google JWT credential:', e);
+      return null;
+    }
+  },
+
+  async handleGoogleCredential(credentialResponse) {
+    if (!credentialResponse?.credential) throw new Error('No credential received from Google');
+    const payload = this.parseJwt(credentialResponse.credential);
+    if (!payload || !payload.email) throw new Error('Invalid Google credential payload');
+
+    const cleanEmail = payload.email.trim().toLowerCase();
+    const cleanName = payload.name || cleanEmail.split('@')[0];
+    const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+    const userId = payload.sub ? `google_${payload.sub}` : `usr_${Date.now()}`;
+
+    const userObj = {
+      id: userId,
+      name: cleanName,
+      email: cleanEmail,
+      avatar: avatar,
+      provider: 'google',
+      role: 'applicant',
+      verified: true
+    };
+
+    // Try Supabase auth signInWithIdToken if Supabase project has Google enabled
+    if (isSupabaseConfigured && supabase?.auth?.signInWithIdToken) {
+      try {
+        await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: credentialResponse.credential
+        });
+      } catch (e) {
+        console.warn('Supabase signInWithIdToken note:', e?.message);
+      }
+    }
 
     await this.syncUserAccount(userObj);
     return userObj;

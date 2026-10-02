@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ShieldCheck, CheckCircle2, User, Mail, ArrowRight, AlertCircle, Sparkles, ChevronRight, LogIn } from 'lucide-react';
-import { DataService } from '../supabase';
+import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [showAccountChooser, setShowAccountChooser] = useState(false);
@@ -8,6 +8,59 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [customName, setCustomName] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const initGsi = () => {
+      if (window.google?.accounts?.id && GOOGLE_CLIENT_ID) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: async (response) => {
+              setIsLoading(true);
+              try {
+                const user = await DataService.handleGoogleCredential(response);
+                localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
+                if (onLoginSuccess) onLoginSuccess(user);
+                onClose();
+              } catch (err) {
+                console.error('Google GSI error:', err);
+              } finally {
+                setIsLoading(false);
+              }
+            }
+          });
+
+          const btnEl = document.getElementById('google-signin-btn-modal');
+          if (btnEl) {
+            btnEl.innerHTML = '';
+            window.google.accounts.id.renderButton(btnEl, {
+              theme: 'outline',
+              size: 'large',
+              type: 'standard',
+              text: 'continue_with',
+              shape: 'pill',
+              logo_alignment: 'left',
+              width: 320
+            });
+          }
+        } catch (e) {
+          console.warn('GSI init modal note:', e);
+        }
+      }
+    };
+
+    initGsi();
+    const timer = setInterval(() => {
+      if (window.google?.accounts?.id) {
+        initGsi();
+        clearInterval(timer);
+      }
+    }, 400);
+
+    return () => clearInterval(timer);
+  }, [isOpen, onLoginSuccess, onClose]);
 
   if (!isOpen) return null;
 
@@ -83,6 +136,11 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         {/* View 1: Main Clean View matching exact user specification */}
         {!showAccountChooser ? (
           <div className="space-y-4">
+            {/* Real Official Google Identity Services Button Container */}
+            <div className="flex flex-col items-center justify-center">
+              <div id="google-signin-btn-modal" className="flex justify-center w-full min-h-[44px]"></div>
+            </div>
+
             <button
               onClick={handleInitiateGoogleOAuth}
               className="w-full py-4 px-5 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] border border-slate-200 text-sm sm:text-base group"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Flame, 
   Shield, 
@@ -15,7 +15,7 @@ import {
   UserPlus,
   LogIn
 } from 'lucide-react';
-import { DataService } from '../supabase';
+import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
 
 export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
   const [activeTab, setActiveTab] = useState('signin'); // 'signin' or 'signup'
@@ -38,6 +38,62 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  // Initialize Google Identity Services (GIS) for 100% direct Google Authentication
+  useEffect(() => {
+    const initGsi = () => {
+      if (window.google?.accounts?.id && GOOGLE_CLIENT_ID) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: async (response) => {
+              setIsLoading(true);
+              setErrorMsg(null);
+              try {
+                const user = await DataService.handleGoogleCredential(response);
+                localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
+                setSuccessMsg('เข้าสู่ระบบด้วย Google สำเร็จ');
+                setTimeout(() => {
+                  onLoginSuccess(user);
+                }, 300);
+              } catch (err) {
+                console.error('Google credential login error:', err);
+                setErrorMsg('เกิดข้อผิดพลาดในการเชื่อมต่อข้อมูลบัญชี Google');
+              } finally {
+                setIsLoading(false);
+              }
+            }
+          });
+
+          const btnEl = document.getElementById('google-signin-btn-portal');
+          if (btnEl) {
+            btnEl.innerHTML = '';
+            window.google.accounts.id.renderButton(btnEl, {
+              theme: 'outline',
+              size: 'large',
+              type: 'standard',
+              text: 'continue_with',
+              shape: 'pill',
+              logo_alignment: 'left',
+              width: 320
+            });
+          }
+        } catch (e) {
+          console.warn('GSI init notice:', e);
+        }
+      }
+    };
+
+    initGsi();
+    const timer = setInterval(() => {
+      if (window.google?.accounts?.id) {
+        initGsi();
+        clearInterval(timer);
+      }
+    }, 400);
+
+    return () => clearInterval(timer);
+  }, [onLoginSuccess]);
 
   // 1. Google OAuth Initiation (Native Google OAuth + Fallback)
   const handleInitiateGoogleOAuth = async () => {
@@ -229,6 +285,11 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
 
           {/* GOOGLE QUICK AUTH BUTTON (Always available in both tabs) */}
           <div className="space-y-3">
+            {/* Real Official Google Identity Services Button Container */}
+            <div className="flex flex-col items-center justify-center">
+              <div id="google-signin-btn-portal" className="flex justify-center w-full min-h-[44px]"></div>
+            </div>
+
             {!showGoogleChooser ? (
               <div>
                 <button
