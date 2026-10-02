@@ -11,6 +11,18 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   if (!isOpen) return null;
 
+  const handleInitiateGoogleOAuth = async () => {
+    setIsLoading(true);
+    try {
+      await DataService.signInWithGoogleOAuth();
+    } catch (err) {
+      console.warn('Native Google OAuth not enabled yet, opening chooser:', err);
+      setShowAccountChooser(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSelectAccount = async (name, email, avatar) => {
     setIsLoading(true);
     try {
@@ -72,7 +84,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         {!showAccountChooser ? (
           <div className="space-y-4">
             <button
-              onClick={() => setShowAccountChooser(true)}
+              onClick={handleInitiateGoogleOAuth}
               className="w-full py-4 px-5 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] border border-slate-200 text-sm sm:text-base group"
             >
               <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">

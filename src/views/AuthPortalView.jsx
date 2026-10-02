@@ -39,7 +39,21 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // 1. Google 1-Click Authentication
+  // 1. Google OAuth Initiation (Native Google OAuth + Fallback)
+  const handleInitiateGoogleOAuth = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      await DataService.signInWithGoogleOAuth();
+    } catch (err) {
+      console.warn('Native Google OAuth not ready or failed, fallback to chooser:', err);
+      setShowGoogleChooser(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 1.1 Google Profile Authentication
   const handleGoogleAuth = async (name, email, avatar) => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -219,7 +233,7 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
               <div>
                 <button
                   type="button"
-                  onClick={() => setShowGoogleChooser(true)}
+                  onClick={handleInitiateGoogleOAuth}
                   disabled={isLoading}
                   className="w-full py-3.5 px-4 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98] border border-slate-200 text-xs sm:text-sm group"
                 >

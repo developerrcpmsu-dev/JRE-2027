@@ -538,5 +538,23 @@ export const DataService = {
 
     await this.syncUserAccount(userObj);
     return userObj;
+  },
+
+  async signInWithGoogleOAuth() {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account'
+          }
+        }
+      });
+      if (error) throw error;
+      return data;
+    }
+    throw new Error('ระบบ Supabase ไม่ได้เชื่อมต่อ');
   }
 };
