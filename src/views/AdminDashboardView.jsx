@@ -30,7 +30,15 @@ import {
   Calendar,
   Phone,
   Droplet,
-  UserCheck
+  UserCheck,
+  CreditCard,
+  MessageSquare,
+  FileCheck,
+  CheckCircle,
+  XCircle,
+  Send,
+  FileDown,
+  Maximize2
 } from 'lucide-react';
 import { DataService } from '../supabase';
 
@@ -52,7 +60,7 @@ export default function AdminDashboardView({
 
   // Search & Filter for Applicants
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'special_care', 'no_group', 'has_group', 'no_room', 'has_room'
+  const [filterType, setFilterType] = useState('all'); // 'all', 'special_care', 'unpaid', 'pending_review', 'paid', 'no_group', 'has_group'
   const [bloodFilter, setBloodFilter] = useState('all');
 
   // Inline Quick Edit Allocation State
@@ -62,6 +70,9 @@ export default function AdminDashboardView({
 
   // Full Profile & Remarks Modal State
   const [profileModalReg, setProfileModalReg] = useState(null);
+  const [profileModalTab, setProfileModalTab] = useState('info'); // 'info', 'payment', 'messages', 'docs'
+  
+  // Modal Fields
   const [modalGroup, setModalGroup] = useState('');
   const [modalRoom, setModalRoom] = useState('');
   const [modalSpecialCare, setModalSpecialCare] = useState(false);
@@ -71,6 +82,24 @@ export default function AdminDashboardView({
   const [modalMedical, setModalMedical] = useState('');
   const [modalAllergy, setModalAllergy] = useState('');
   const [modalTraining, setModalTraining] = useState('');
+  
+  // Payment Modal Fields
+  const [modalPaymentStatus, setModalPaymentStatus] = useState('unpaid');
+  const [modalPaymentAmount, setModalPaymentAmount] = useState(350);
+  const [modalPaymentBank, setModalPaymentBank] = useState('');
+  const [modalPaymentNotes, setModalPaymentNotes] = useState('');
+
+  // Admin Direct Message State
+  const [newMsgText, setNewMsgText] = useState('');
+  const [isSendingMsg, setIsSendingMsg] = useState(false);
+
+  // Document Request State
+  const [newDocTitle, setNewDocTitle] = useState('');
+  const [newDocRequired, setNewDocRequired] = useState(true);
+
+  // Preview Slip Modal
+  const [previewSlipUrl, setPreviewSlipUrl] = useState(null);
+
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Announcement Form Modal State
@@ -120,8 +149,9 @@ export default function AdminDashboardView({
   };
 
   // Open Full Profile & Remarks Modal
-  const handleOpenProfileModal = (reg) => {
+  const handleOpenProfileModal = (reg, initialTab = 'info') => {
     setProfileModalReg(reg);
+    setProfileModalTab(initialTab);
     setModalGroup(reg.group_assigned || '');
     setModalRoom(reg.room_assigned || '');
     setModalSpecialCare(Boolean(reg.is_special_care));
@@ -131,11 +161,16 @@ export default function AdminDashboardView({
     setModalMedical(reg.medical_history || '');
     setModalAllergy(reg.food_allergy || '');
     setModalTraining(reg.previous_training || '');
+    setModalPaymentStatus(reg.payment_status || 'unpaid');
+    setModalPaymentAmount(reg.payment_amount || 350);
+    setModalPaymentBank(reg.payment_bank_info || 'ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส');
+    setModalPaymentNotes(reg.payment_notes || '');
+    setNewMsgText('');
   };
 
   // Save Full Profile & Special Care Remarks
   const handleSaveProfileModal = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!profileModalReg) return;
 
     setIsSavingProfile(true);
@@ -149,16 +184,93 @@ export default function AdminDashboardView({
         institution: modalInstitution.trim(),
         medical_history: modalMedical.trim(),
         food_allergy: modalAllergy.trim(),
-        previous_training: modalTraining.trim()
+        previous_training: modalTraining.trim(),
+        payment_status: modalPaymentStatus,
+        payment_amount: Number(modalPaymentAmount) || 350,
+        payment_bank_info: modalPaymentBank.trim(),
+        payment_notes: modalPaymentNotes.trim()
       };
 
       await onUpdateAllocation(profileModalReg.user_id, updates);
-      triggerToast(`บันทึกประวัติและหมายเหตุพิเศษของ ${profileModalReg.first_name} เรียบร้อยแล้ว`);
-      setProfileModalReg(null);
+      
+      // Update local modal state copy
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+      triggerToast(`บันทึกข้อมูลของ ${profileModalReg.first_name} เรียบร้อยแล้ว`);
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  // Send Direct Message to Participant
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMsgText.trim() || !profileModalReg) return;
+
+    setIsSendingMsg(true);
+    try {
+      await DataService.sendAdminMessage(profileModalReg.user_id, newMsgText.trim(), {
+        payment_amount: Number(modalPaymentAmount) || 350,
+        payment_bank_info: modalPaymentBank.trim(),
+        payment_status: modalPaymentStatus
+      });
+
+      const updatedRegs = await DataService.getRegistrations();
+      const updatedTarget = updatedRegs.find(r => r.user_id === profileModalReg.user_id);
+      if (updatedTarget) {
+        setProfileModalReg(updatedTarget);
+      }
+
+      setNewMsgText('');
+      triggerToast(`ส่งข้อความแจ้งเตือนถึง ${profileModalReg.first_name} สำเร็จ`);
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการส่งข้อความ');
+    } finally {
+      setIsSendingMsg(false);
+    }
+  };
+
+  // Add Document Request
+  const handleAddDocRequest = async (e) => {
+    e.preventDefault();
+    if (!newDocTitle.trim() || !profileModalReg) return;
+
+    const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
+    const newDoc = {
+      id: 'doc-' + Date.now(),
+      title: newDocTitle.trim(),
+      required: newDocRequired,
+      status: 'pending',
+      file_url: '',
+      file_name: '',
+      submitted_at: ''
+    };
+
+    const updatedDocs = [...currentDocs, newDoc];
+    await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
+    await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
+    setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
+    setNewDocTitle('');
+    triggerToast(`เพิ่มคำขอเอกสาร "${newDoc.title}" เรียบร้อยแล้ว`);
+  };
+
+  // Verify Document (Approve / Reject)
+  const handleVerifyDoc = async (docId, status, note = '') => {
+    if (!profileModalReg) return;
+    const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
+    const idx = currentDocs.findIndex(d => d.id === docId);
+    if (idx >= 0) {
+      currentDocs[idx] = {
+        ...currentDocs[idx],
+        status,
+        note
+      };
+      await DataService.updateRequestedDocs(profileModalReg.user_id, currentDocs);
+      await onUpdateAllocation(profileModalReg.user_id, { requested_docs: currentDocs });
+      setProfileModalReg(prev => ({ ...prev, requested_docs: currentDocs }));
+      triggerToast(status === 'approved' ? 'อนุมัติเอกสารเรียบร้อย' : 'ส่งคำขอแก้ไขเอกสารแล้ว');
     }
   };
 
@@ -188,6 +300,9 @@ export default function AdminDashboardView({
     
     let matchFilter = true;
     if (filterType === 'special_care') matchFilter = Boolean(reg.is_special_care);
+    else if (filterType === 'unpaid') matchFilter = reg.payment_status === 'unpaid' || !reg.payment_status;
+    else if (filterType === 'pending_review') matchFilter = reg.payment_status === 'pending_review';
+    else if (filterType === 'paid') matchFilter = reg.payment_status === 'paid';
     else if (filterType === 'no_group') matchFilter = !reg.group_assigned;
     else if (filterType === 'has_group') matchFilter = Boolean(reg.group_assigned);
     else if (filterType === 'no_room') matchFilter = !reg.room_assigned;
@@ -200,7 +315,7 @@ export default function AdminDashboardView({
   const handleExportCSV = () => {
     const headers = [
       'ชื่อ-สกุล', 'วันเกิด', 'อายุ', 'กรุ๊ปเลือด', 'เบอร์โทร', 'สังกัด', 
-      'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'ดูแลพิเศษ', 'หมายเหตุพิเศษ', 'โรคประจำตัว', 'แพ้อาหารยา', 'ประวัติฝึกอบรม'
+      'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'สถานะการชำระเงิน', 'ยอดเงิน', 'สลิปโอนเงิน', 'ดูแลพิเศษ', 'หมายเหตุพิเศษ'
     ];
     const rows = registrations.map(r => [
       `"${r.first_name || ''} ${r.last_name || ''}"`,
@@ -213,11 +328,11 @@ export default function AdminDashboardView({
       `"${r.emergency_phone || ''}"`,
       `"${r.group_assigned || 'ยังไม่จัดสรร'}"`,
       `"${r.room_assigned || 'ยังไม่จัดสรร'}"`,
+      `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
+      `"${r.payment_amount || 350}"`,
+      `"${r.payment_slip_url || ''}"`,
       `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
-      `"${(r.special_notes || '').replace(/"/g, '""')}"`,
-      `"${(r.medical_history || '').replace(/"/g, '""')}"`,
-      `"${(r.food_allergy || '').replace(/"/g, '""')}"`,
-      `"${(r.previous_training || '').replace(/"/g, '""')}"`
+      `"${(r.special_notes || '').replace(/"/g, '""')}"`
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -277,7 +392,6 @@ export default function AdminDashboardView({
     setShowAnnModal(true);
   };
 
-  // Multiple Images Upload (Up to 10 photos)
   const handleImagesUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files || files.length === 0) return;
@@ -314,7 +428,6 @@ export default function AdminDashboardView({
     setAnnImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  // PDF Document Upload
   const handlePdfUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -396,7 +509,7 @@ export default function AdminDashboardView({
               ระบบควบคุมและจัดการโครงการ (Admin)
             </h1>
             <p className="text-slate-400 text-xs mt-1">
-              ค้นหาประวัติผู้สมัคร ดูแลพิเศษ จัดกลุ่มและห้องนอน จัดการ Google Forms และประกาศพร้อมแนบรูป/PDF
+              ตรวจสอบสลิปการโอนเงิน, ส่งข้อความแจ้งเตือนผู้สมัคร, ขอเอกสารสำคัญ, ดูแลพิเศษ และจัดกลุ่ม/ห้องพัก
             </p>
           </div>
 
@@ -412,10 +525,26 @@ export default function AdminDashboardView({
         </div>
 
         {/* Quick Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5 mt-6">
           <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800">
             <span className="text-[11px] text-slate-400 font-medium">ผู้สมัครทั้งหมด</span>
             <p className="text-2xl font-black text-white mt-1">{registrations.length} คน</p>
+          </div>
+          <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-900/40">
+            <span className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> รอตรวจสลิป
+            </span>
+            <p className="text-2xl font-black text-amber-400 mt-1">
+              {registrations.filter(r => r.payment_status === 'pending_review').length} คน
+            </p>
+          </div>
+          <div className="bg-slate-950/70 p-4 rounded-2xl border border-emerald-900/40">
+            <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+              <CheckCircle className="w-3.5 h-3.5" /> ชำระเงินแล้ว
+            </span>
+            <p className="text-2xl font-black text-emerald-400 mt-1">
+              {registrations.filter(r => r.payment_status === 'paid').length} คน
+            </p>
           </div>
           <div className="bg-slate-950/70 p-4 rounded-2xl border border-rose-900/40">
             <span className="text-[11px] text-rose-400 font-bold flex items-center gap-1">
@@ -429,12 +558,6 @@ export default function AdminDashboardView({
             <span className="text-[11px] text-slate-400 font-medium">จัดกลุ่มแล้ว</span>
             <p className="text-2xl font-black text-indigo-400 mt-1">
               {registrations.filter(r => r.group_assigned).length} คน
-            </p>
-          </div>
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800">
-            <span className="text-[11px] text-slate-400 font-medium">จัดห้องนอนแล้ว</span>
-            <p className="text-2xl font-black text-amber-400 mt-1">
-              {registrations.filter(r => r.room_assigned).length} คน
             </p>
           </div>
         </div>
@@ -451,7 +574,7 @@ export default function AdminDashboardView({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>จัดการผู้สมัคร & ดูประวัติละเอียด ({registrations.length})</span>
+          <span>จัดการผู้สมัคร & ตรวจสอบสลิป/เอกสาร ({registrations.length})</span>
         </button>
 
         <button
@@ -485,19 +608,17 @@ export default function AdminDashboardView({
           
           {/* Search & Filters */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-            {/* Search Input */}
             <div className="relative flex-1 max-w-md">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                placeholder="ค้นหาชื่อ, เบอร์โทร, สังกัด, ประวัติ, หรือหมายเหตุ..."
+                placeholder="ค้นหาชื่อ, เบอร์โทร, สังกัด, หมายเหตุ..."
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
-            {/* Filter Pills / Selects */}
             <div className="flex flex-wrap items-center gap-3">
               <select
                 value={filterType}
@@ -505,11 +626,12 @@ export default function AdminDashboardView({
                 className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
               >
                 <option value="all">สถานะทั้งหมด</option>
+                <option value="pending_review">🟡 รอตรวจสลิป ({registrations.filter(r => r.payment_status === 'pending_review').length})</option>
+                <option value="unpaid">🔴 ค้างชำระ ({registrations.filter(r => r.payment_status === 'unpaid' || !r.payment_status).length})</option>
+                <option value="paid">🟢 ชำระแล้ว ({registrations.filter(r => r.payment_status === 'paid').length})</option>
                 <option value="special_care">⭐ ดูแลเป็นพิเศษ ({registrations.filter(r => r.is_special_care).length})</option>
                 <option value="no_group">ยังไม่จัดกลุ่ม ({registrations.filter(r => !r.group_assigned).length})</option>
                 <option value="has_group">จัดกลุ่มแล้ว ({registrations.filter(r => r.group_assigned).length})</option>
-                <option value="no_room">ยังไม่จัดห้อง ({registrations.filter(r => !r.room_assigned).length})</option>
-                <option value="has_room">จัดห้องแล้ว ({registrations.filter(r => r.room_assigned).length})</option>
               </select>
 
               <select
@@ -532,8 +654,8 @@ export default function AdminDashboardView({
               <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
                 <tr>
                   <th className="py-4 px-4">ผู้สมัคร & สังกัด</th>
-                  <th className="py-4 px-3">อายุ / วันเกิด</th>
-                  <th className="py-4 px-3">กรุ๊ปเลือด / เบอร์โทร</th>
+                  <th className="py-4 px-3">สถานะชำระเงิน / สลิป</th>
+                  <th className="py-4 px-3">เอกสารแนบ</th>
                   <th className="py-4 px-3">สุขภาพ / หมายเหตุ</th>
                   <th className="py-4 px-4 bg-indigo-950/40 text-indigo-300">
                     กลุ่มฝึก (Group)
@@ -554,6 +676,9 @@ export default function AdminDashboardView({
                 ) : (
                   filteredRegs.map(reg => {
                     const isEditingThis = editingUserId === reg.user_id;
+                    const paymentStatus = reg.payment_status || 'unpaid';
+                    const docs = Array.isArray(reg.requested_docs) ? reg.requested_docs : [];
+                    const submittedDocsCount = docs.filter(d => d.file_url).length;
 
                     return (
                       <tr 
@@ -563,7 +688,7 @@ export default function AdminDashboardView({
                         }`}
                       >
                         
-                        {/* Name, Org, Email & Special Care Badge */}
+                        {/* Name, Org, Email */}
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-white text-sm">
@@ -579,32 +704,52 @@ export default function AdminDashboardView({
                             {reg.institution}
                           </div>
                           <div className="text-[10px] text-slate-500 font-mono">
-                            {reg.user_email}
+                            {reg.phone} • {reg.user_email}
                           </div>
                         </td>
 
-                        {/* Age & DOB */}
+                        {/* Payment Status & Slip */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          <span className="font-semibold text-rescue-400">
-                            {reg.age_years || 0} ปี {reg.age_months || 0} ด.
-                          </span>
-                          <span className="block text-[10px] text-slate-500 mt-0.5">
-                            เกิด: {reg.dob || '-'}
-                          </span>
+                          {paymentStatus === 'paid' ? (
+                            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> ชำระแล้ว ({reg.payment_amount || 350} บ.)
+                            </span>
+                          ) : paymentStatus === 'pending_review' ? (
+                            <button
+                              onClick={() => handleOpenProfileModal(reg, 'payment')}
+                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors"
+                            >
+                              <Clock className="w-3 h-3" /> รอตรวจสลิป (คลิก)
+                            </button>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> ค้างชำระ ({reg.payment_amount || 350} บ.)
+                            </span>
+                          )}
                         </td>
 
-                        {/* Blood & Phone */}
+                        {/* Documents Status */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          <span className="px-2 py-0.5 bg-red-950 text-red-300 border border-red-800/70 rounded-md font-bold text-[10px]">
-                            {reg.blood_group}
-                          </span>
-                          <span className="block text-slate-300 font-mono mt-1 text-[11px]">
-                            {reg.phone}
-                          </span>
+                          {docs.length > 0 ? (
+                            <button
+                              onClick={() => handleOpenProfileModal(reg, 'docs')}
+                              className="text-[11px] text-blue-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <FileCheck className="w-3.5 h-3.5" />
+                              <span>ส่ง {submittedDocsCount}/{docs.length} รายการ</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleOpenProfileModal(reg, 'docs')}
+                              className="text-[10px] text-slate-500 hover:text-slate-300"
+                            >
+                              + ขอเอกสาร
+                            </button>
+                          )}
                         </td>
 
                         {/* Health & Special Notes */}
-                        <td className="py-4 px-3 max-w-[180px]">
+                        <td className="py-4 px-3 max-w-[170px]">
                           {reg.is_special_care && reg.special_notes ? (
                             <div className="text-rose-300 text-[11px] font-medium line-clamp-2 bg-rose-950/30 p-1.5 rounded-lg border border-rose-900/40">
                               ⚠️ {reg.special_notes}
@@ -612,10 +757,6 @@ export default function AdminDashboardView({
                           ) : reg.medical_history && reg.medical_history !== 'ไม่มี' ? (
                             <div className="text-amber-300 text-[11px] truncate">
                               🩺 {reg.medical_history}
-                            </div>
-                          ) : reg.food_allergy && reg.food_allergy !== 'ไม่มี' ? (
-                            <div className="text-yellow-300 text-[11px] truncate">
-                              🍽️ {reg.food_allergy}
                             </div>
                           ) : (
                             <span className="text-slate-500 text-[11px]">ปกติ</span>
@@ -679,9 +820,9 @@ export default function AdminDashboardView({
                             <div className="flex items-center justify-center gap-1.5">
                               {/* Open Profile Modal */}
                               <button
-                                onClick={() => handleOpenProfileModal(reg)}
+                                onClick={() => handleOpenProfileModal(reg, 'info')}
                                 className="px-2.5 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700/60 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
-                                title="ดูประวัติเต็ม & บันทึกข้อควรระวังพิเศษ"
+                                title="ดูประวัติเต็ม, สลิป, และส่งข้อความ"
                               >
                                 <Eye className="w-3.5 h-3.5 text-purple-300" />
                                 <span>ดูประวัติ</span>
@@ -720,7 +861,7 @@ export default function AdminDashboardView({
       {/* MODAL: VIEW FULL PARTICIPANT PROFILE & REMARKS */}
       {profileModalReg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-3xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto">
             
             <button
               onClick={() => setProfileModalReg(null)}
@@ -746,6 +887,19 @@ export default function AdminDashboardView({
                       ⭐ ผู้เข้าร่วมดูแลเป็นพิเศษ
                     </span>
                   )}
+                  {modalPaymentStatus === 'paid' ? (
+                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                      ✓ ชำระเงินแล้ว
+                    </span>
+                  ) : modalPaymentStatus === 'pending_review' ? (
+                    <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                      ⏳ รอตรวจสลิป
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                      🔴 ค้างชำระ ({modalPaymentAmount} บ.)
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-300 mt-0.5">
                   สังกัด: <span className="text-white font-medium">{profileModalReg.institution}</span>
@@ -756,177 +910,566 @@ export default function AdminDashboardView({
               </div>
             </div>
 
-            <form onSubmit={handleSaveProfileModal} className="mt-6 space-y-6">
-              
-              {/* Detailed Readonly / Summary Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">อายุที่คำนวณได้</span>
-                  <span className="font-bold text-rescue-400">
-                    {profileModalReg.age_years || 0} ปี {profileModalReg.age_months || 0} เดือน
-                  </span>
-                  <span className="block text-[10px] text-slate-500 mt-0.5">
-                    เกิด: {profileModalReg.dob || '-'}
-                  </span>
-                </div>
+            {/* Modal Internal Navigation Tabs */}
+            <div className="flex border-b border-slate-800 gap-2 mt-4 pb-2">
+              <button
+                onClick={() => setProfileModalTab('info')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  profileModalTab === 'info'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-400 hover:text-white bg-slate-950'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>ประวัติ & ดูแลพิเศษ</span>
+              </button>
 
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">กรุ๊ปเลือด</span>
-                  <span className="font-bold text-red-400 text-sm">
-                    {profileModalReg.blood_group}
-                  </span>
-                </div>
+              <button
+                onClick={() => setProfileModalTab('payment')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  profileModalTab === 'payment'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-400 hover:text-white bg-slate-950'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>การเงิน & สลิปโอนเงิน</span>
+              </button>
 
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 col-span-2">
-                  <span className="text-slate-400 block text-[10px]">ผู้ติดต่อฉุกเฉิน</span>
-                  <span className="font-bold text-white block truncate">
-                    {profileModalReg.emergency_name || '-'}
-                  </span>
-                  <span className="text-emerald-400 font-mono text-[10px]">
-                    โทร: {profileModalReg.emergency_phone || '-'}
-                  </span>
-                </div>
-              </div>
+              <button
+                onClick={() => setProfileModalTab('messages')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  profileModalTab === 'messages'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-400 hover:text-white bg-slate-950'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>ส่งข้อความแจ้งเตือน ({Array.isArray(profileModalReg.admin_messages) ? profileModalReg.admin_messages.length : 0})</span>
+              </button>
 
-              {/* Health & Training Details */}
-              <div className="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-rose-300 flex items-center gap-1.5 mb-1">
-                      <Stethoscope className="w-3.5 h-3.5 text-rose-400" />
-                      โรคประจำตัว / ข้อจำกัดทางกาย
-                    </label>
-                    <input
-                      type="text"
-                      value={modalMedical}
-                      onChange={e => setModalMedical(e.target.value)}
-                      placeholder="เช่น ไม่มี หรือ โรคหอบหืด"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
-                    />
-                  </div>
+              <button
+                onClick={() => setProfileModalTab('docs')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  profileModalTab === 'docs'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-400 hover:text-white bg-slate-950'
+                }`}
+              >
+                <FileCheck className="w-3.5 h-3.5" />
+                <span>ขอ & ตรวจเอกสาร ({Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs.length : 0})</span>
+              </button>
+            </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
-                      <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400" />
-                      ประวัติการแพ้ยา / แพ้อาหาร
-                    </label>
-                    <input
-                      type="text"
-                      value={modalAllergy}
-                      onChange={e => setModalAllergy(e.target.value)}
-                      placeholder="เช่น ไม่มี หรือ แพ้ยาเพนนิซิลิน"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-indigo-300 flex items-center gap-1.5 mb-1">
-                    <Award className="w-3.5 h-3.5 text-indigo-400" />
-                    ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา
-                  </label>
-                  <textarea
-                    rows="2"
-                    value={modalTraining}
-                    onChange={e => setModalTraining(e.target.value)}
-                    placeholder="ประวัติการฝึกอบรมกู้ภัย เช่น BLS, CPR, เชือกกู้ภัย"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Admin Special Care & Remarks Section (Key User Requirement) */}
-              <div className="p-4 bg-gradient-to-r from-rose-950/30 via-slate-950 to-amber-950/20 border border-rose-500/40 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between border-b border-rose-900/30 pb-3">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-rose-400" />
-                    <h4 className="font-bold text-white text-sm">
-                      การบันทึกดูแลพิเศษและการจัดสรร (Admin Remarks)
-                    </h4>
-                  </div>
-                  
-                  {/* Special Care Checkbox Toggle */}
-                  <label className="flex items-center gap-2 cursor-pointer bg-rose-950/60 px-3 py-1.5 rounded-xl border border-rose-600/40 hover:bg-rose-900/40 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={modalSpecialCare}
-                      onChange={e => setModalSpecialCare(e.target.checked)}
-                      className="w-4 h-4 rounded text-rose-600 bg-slate-950 border-rose-400"
-                    />
-                    <span className="text-xs font-bold text-rose-300">
-                      ⭐ กำหนดเป็นบุคคลดูแลพิเศษ (Special Care)
+            {/* TAB 1: INFO & SPECIAL CARE & ALLOCATIONS */}
+            {profileModalTab === 'info' && (
+              <form onSubmit={handleSaveProfileModal} className="mt-5 space-y-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">อายุที่คำนวณได้</span>
+                    <span className="font-bold text-rescue-400">
+                      {profileModalReg.age_years || 0} ปี {profileModalReg.age_months || 0} เดือน
                     </span>
-                  </label>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">
+                      เกิด: {profileModalReg.dob || '-'}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">กรุ๊ปเลือด</span>
+                    <span className="font-bold text-red-400 text-sm">
+                      {profileModalReg.blood_group}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 col-span-2">
+                    <span className="text-slate-400 block text-[10px]">ผู้ติดต่อฉุกเฉิน</span>
+                    <span className="font-bold text-white block truncate">
+                      {profileModalReg.emergency_name || '-'}
+                    </span>
+                    <span className="text-emerald-400 font-mono text-[10px]">
+                      โทร: {profileModalReg.emergency_phone || '-'}
+                    </span>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-rose-300 mb-1">
-                    หมายเหตุจากแอดมิน / ข้อควรระวังพิเศษสำหรับทีมครูฝึกและทีมแพทย์:
-                  </label>
+                <div className="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-rose-300 flex items-center gap-1.5 mb-1">
+                        <Stethoscope className="w-3.5 h-3.5 text-rose-400" />
+                        โรคประจำตัว / ข้อจำกัดทางกาย
+                      </label>
+                      <input
+                        type="text"
+                        value={modalMedical}
+                        onChange={e => setModalMedical(e.target.value)}
+                        placeholder="เช่น ไม่มี หรือ โรคหอบหืด"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
+                        <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400" />
+                        ประวัติการแพ้ยา / แพ้อาหาร
+                      </label>
+                      <input
+                        type="text"
+                        value={modalAllergy}
+                        onChange={e => setModalAllergy(e.target.value)}
+                        placeholder="เช่น ไม่มี หรือ แพ้ยาเพนนิซิลิน"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-indigo-300 flex items-center gap-1.5 mb-1">
+                      <Award className="w-3.5 h-3.5 text-indigo-400" />
+                      ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา
+                    </label>
+                    <textarea
+                      rows="2"
+                      value={modalTraining}
+                      onChange={e => setModalTraining(e.target.value)}
+                      placeholder="ประวัติการฝึกอบรมกู้ภัย เช่น BLS, CPR, เชือกกู้ภัย"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-rose-950/30 via-slate-950 to-amber-950/20 border border-rose-500/40 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-rose-900/30 pb-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-5 h-5 text-rose-400" />
+                      <h4 className="font-bold text-white text-sm">
+                        การบันทึกดูแลพิเศษและการจัดสรร (Admin Remarks)
+                      </h4>
+                    </div>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer bg-rose-950/60 px-3 py-1.5 rounded-xl border border-rose-600/40 hover:bg-rose-900/40 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={modalSpecialCare}
+                        onChange={e => setModalSpecialCare(e.target.checked)}
+                        className="w-4 h-4 rounded text-rose-600 bg-slate-950 border-rose-400"
+                      />
+                      <span className="text-xs font-bold text-rose-300">
+                        ⭐ กำหนดเป็นบุคคลดูแลพิเศษ (Special Care)
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-rose-300 mb-1">
+                      หมายเหตุจากแอดมิน / ข้อควรระวังพิเศษสำหรับทีมครูฝึกและทีมแพทย์:
+                    </label>
+                    <textarea
+                      rows="3"
+                      value={modalNotes}
+                      onChange={e => setModalNotes(e.target.value)}
+                      placeholder="ระบุข้อควรระวัง เช่น มีโรคประจำตัวหอบหืด ต้องพกยาพ่นติดตัวตลอดเวลา, ทานอาหารฮาลาล/มังสวิรัติ ฯลฯ"
+                      className="w-full px-3 py-2 bg-slate-900 border border-rose-800/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-rose-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-indigo-300 mb-1">
+                        กลุ่มฝึกปฏิบัติการ (Assigned Group):
+                      </label>
+                      <input
+                        type="text"
+                        value={modalGroup}
+                        onChange={e => setModalGroup(e.target.value)}
+                        placeholder="เช่น Alpha-1"
+                        className="w-full px-3 py-2 bg-slate-900 border border-indigo-700/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-300 mb-1">
+                        ห้องนอน / ที่พักค้างแรม (Assigned Room):
+                      </label>
+                      <input
+                        type="text"
+                        value={modalRoom}
+                        onChange={e => setModalRoom(e.target.value)}
+                        placeholder="เช่น เรือนนอน 1 ห้อง 204"
+                        className="w-full px-3 py-2 bg-slate-900 border border-amber-700/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg flex items-center gap-2"
+                  >
+                    {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>บันทึกข้อมูลและหมายเหตุ</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: PAYMENT & SLIP VERIFICATION */}
+            {profileModalTab === 'payment' && (
+              <div className="mt-5 space-y-6 text-xs">
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
+                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-amber-400" />
+                    การจัดการยอดชำระเงินและตรวจสอบสลิป
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-300 mb-1 font-semibold">สถานะการชำระเงิน:</label>
+                      <select
+                        value={modalPaymentStatus}
+                        onChange={e => setModalPaymentStatus(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold"
+                      >
+                        <option value="unpaid">🔴 ค้างชำระ (Unpaid)</option>
+                        <option value="pending_review">🟡 รอตรวจสอบสลิป (Pending Review)</option>
+                        <option value="paid">🟢 ชำระเงินแล้ว (Paid)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 mb-1 font-semibold">จำนวนเงินที่ต้องชำระ (บาท):</label>
+                      <input
+                        type="number"
+                        value={modalPaymentAmount}
+                        onChange={e => setModalPaymentAmount(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 mb-1 font-semibold">หมายเหตุเรื่องเงิน:</label>
+                      <input
+                        type="text"
+                        value={modalPaymentNotes}
+                        onChange={e => setModalPaymentNotes(e.target.value)}
+                        placeholder="เช่น ชำระครบถ้วน, โอนผ่าน KTB"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">ข้อมูลบัญชีรับโอนเงิน:</label>
+                    <input
+                      type="text"
+                      value={modalPaymentBank}
+                      onChange={e => setModalPaymentBank(e.target.value)}
+                      placeholder="ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveProfileModal}
+                      className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>บันทึกสถานะการชำระเงิน</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Uploaded Slip Card */}
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
+                  <h4 className="font-bold text-white text-sm">หลักฐานสลิปการโอนเงินที่ผู้สมัครแนบมา</h4>
+                  
+                  {profileModalReg.payment_slip_url ? (
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
+                      <div 
+                        onClick={() => setPreviewSlipUrl(profileModalReg.payment_slip_url)}
+                        className="cursor-pointer group relative w-40 h-48 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shrink-0"
+                      >
+                        <img 
+                          src={profileModalReg.payment_slip_url} 
+                          alt="สลิปโอนเงิน" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Maximize2 className="w-6 h-6 text-white" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 flex-1">
+                        <div>
+                          <p className="text-slate-400">วันที่ส่งสลิป:</p>
+                          <p className="text-white font-semibold">
+                            {profileModalReg.payment_slip_date ? new Date(profileModalReg.payment_slip_date).toLocaleString('th-TH') : '-'}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setModalPaymentStatus('paid');
+                              setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
+                              await onUpdateAllocation(profileModalReg.user_id, {
+                                payment_status: 'paid',
+                                payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
+                              });
+                              setProfileModalReg(prev => ({ ...prev, payment_status: 'paid' }));
+                              triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
+                            }}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            <span>อนุมัติสลิป (ชำระแล้ว)</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const reason = prompt('ระบุเหตุผลที่ปฏิเสธสลิป (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):', 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่');
+                              if (reason) {
+                                setModalPaymentStatus('unpaid');
+                                setModalPaymentNotes(reason);
+                                await onUpdateAllocation(profileModalReg.user_id, {
+                                  payment_status: 'unpaid',
+                                  payment_notes: reason
+                                });
+                                setProfileModalReg(prev => ({ ...prev, payment_status: 'unpaid', payment_notes: reason }));
+                                triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
+                              }
+                            }}
+                            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 italic py-4">ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: ADMIN MESSAGING */}
+            {profileModalTab === 'messages' && (
+              <div className="mt-5 space-y-5 text-xs">
+                <form onSubmit={handleSendMessage} className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
+                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                    <Send className="w-4 h-4 text-purple-400" />
+                    ส่งข้อความหรือหมายเหตุตรงไปยัง {profileModalReg.first_name}
+                  </h4>
+
                   <textarea
                     rows="3"
-                    value={modalNotes}
-                    onChange={e => setModalNotes(e.target.value)}
-                    placeholder="ระบุข้อควรระวัง เช่น มีโรคประจำตัวหอบหืด ต้องพกยาพ่นติดตัวตลอดเวลา, ทานอาหารฮาลาล/มังสวิรัติ, หรือเฝ้าระวังอาการแพ้แดดจัด ฯลฯ"
-                    className="w-full px-3 py-2 bg-slate-900 border border-rose-800/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-rose-500 outline-none"
+                    required
+                    value={newMsgText}
+                    onChange={e => setNewMsgText(e.target.value)}
+                    placeholder="พิมพ์ข้อความที่ต้องการแจ้ง เช่น ขอแจ้งค้างชำระค่าลงทะเบียนจำนวน 350 บาท โปรดโอนเข้าบัญชี ... หรือ เอกสารไม่สมบูรณ์..."
+                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none"
                   />
-                </div>
 
-                {/* Group & Room Allocation in Modal */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-indigo-300 mb-1">
-                      กลุ่มฝึกปฏิบัติการ (Assigned Group):
-                    </label>
-                    <input
-                      type="text"
-                      value={modalGroup}
-                      onChange={e => setModalGroup(e.target.value)}
-                      placeholder="เช่น Alpha-1 หรือ ฐานปฏิบัติการ 2"
-                      className="w-full px-3 py-2 bg-slate-900 border border-indigo-700/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
+                  {/* Quick message template buttons */}
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-slate-500 text-[10px] self-center mr-1">ข้อความด่วน:</span>
+                    <button
+                      type="button"
+                      onClick={() => setNewMsgText(`ขอแจ้งเตือนค้างชำระค่าลงทะเบียนโครงการ JRE 2027 จำนวน ${modalPaymentAmount} บาท โปรดโอนเข้าบัญชี ${modalPaymentBank} ภายในวันที่ 31 ต.ค. 2569 พร้อมแนบสลิปผ่านเว็บไซต์นี้`)}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-amber-300 rounded-lg border border-slate-800"
+                    >
+                      + แจ้งค้างชำระค่าสมัคร
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewMsgText('ได้รับสลิปการโอนเงินเรียบร้อยแล้ว อยู่ระหว่างการตรวจสอบยอดเงินจากฝ่ายการเงิน')}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-indigo-300 rounded-lg border border-slate-800"
+                    >
+                      + ได้รับสลิปแล้ว
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewMsgText('ฝ่ายการเงินได้ตรวจสอบและยืนยันการชำระเงินค่าลงทะเบียน JRE 2027 เรียบร้อยแล้ว ขอบคุณครับ')}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-emerald-300 rounded-lg border border-slate-800"
+                    >
+                      + ยืนยันชำระเงินสำเร็จ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewMsgText('โปรดจัดส่งเอกสารสำคัญ (สำเนาบัตรประชาชน / ใบยินยอม) ผ่านระบบอัปโหลดเอกสารบนเว็บไซต์')}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-rose-300 rounded-lg border border-slate-800"
+                    >
+                      + แจ้งเตือนส่งเอกสาร
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-amber-300 mb-1">
-                      ห้องนอน / ที่พักค้างแรม (Assigned Room):
-                    </label>
-                    <input
-                      type="text"
-                      value={modalRoom}
-                      onChange={e => setModalRoom(e.target.value)}
-                      placeholder="เช่น เรือนนอน 1 ห้อง 204"
-                      className="w-full px-3 py-2 bg-slate-900 border border-amber-700/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500 outline-none"
-                    />
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={isSendingMsg}
+                      className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow"
+                    >
+                      {isSendingMsg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      <span>ส่งข้อความถึงผู้สมัคร</span>
+                    </button>
                   </div>
-                </div>
-              </div>
+                </form>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setProfileModalReg(null)}
-                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
-                >
-                  ปิดหน้าต่าง
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={isSavingProfile}
-                  className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-purple-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isSavingProfile ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                {/* History of messages sent */}
+                <div className="space-y-2.5">
+                  <h5 className="font-bold text-slate-300 text-xs">ประวัติข้อความที่ส่งหาผู้สมัครคนนี้:</h5>
+                  {Array.isArray(profileModalReg.admin_messages) && profileModalReg.admin_messages.length > 0 ? (
+                    profileModalReg.admin_messages.map((m, idx) => (
+                      <div key={m.id || idx} className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                          <span className="font-semibold text-purple-400">ผู้ดูแลระบบ JRE 2027</span>
+                          <span>{m.created_at ? new Date(m.created_at).toLocaleString('th-TH') : ''}</span>
+                        </div>
+                        <p className="text-slate-200 whitespace-pre-line">{m.text}</p>
+                      </div>
+                    ))
                   ) : (
-                    <Save className="w-4 h-4" />
+                    <p className="text-slate-500 italic">ยังไม่มีประวัติการส่งข้อความ</p>
                   )}
-                  <span>บันทึกการจัดสรรและหมายเหตุพิเศษ</span>
-                </button>
+                </div>
               </div>
+            )}
 
-            </form>
+            {/* TAB 4: REQUESTED DOCUMENTS */}
+            {profileModalTab === 'docs' && (
+              <div className="mt-5 space-y-6 text-xs">
+                {/* Form to Request New Doc */}
+                <form onSubmit={handleAddDocRequest} className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
+                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                    <Plus className="w-4 h-4 text-emerald-400" />
+                    ขอเอกสารเพิ่มเติมจาก {profileModalReg.first_name}
+                  </h4>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={newDocTitle}
+                      onChange={e => setNewDocTitle(e.target.value)}
+                      placeholder="ระบุชื่อเอกสาร เช่น สำเนาบัตรประชาชน หรือ สำเนาทะเบียนบ้าน"
+                      className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                    />
+
+                    <label className="flex items-center gap-1.5 text-slate-300 shrink-0 px-2">
+                      <input
+                        type="checkbox"
+                        checked={newDocRequired}
+                        onChange={e => setNewDocRequired(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>จำเป็นต้องส่ง</span>
+                    </label>
+
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shrink-0"
+                    >
+                      + ขอเอกสาร
+                    </button>
+                  </div>
+
+                  {/* Quick Doc suggestions */}
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-slate-500 text-[10px] self-center mr-1">เอกสารที่พบบ่อย:</span>
+                    {['สำเนาบัตรประจำตัวประชาชน', 'สำเนาทะเบียนบ้าน', 'ใบรับรองแพทย์ / ประวัติการรักษา', 'หนังสือยินยอมจากผู้ปกครอง', 'รูปถ่ายขนาด 1 นิ้ว'].map((docName, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setNewDocTitle(docName)}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-slate-300 rounded-lg border border-slate-800"
+                      >
+                        + {docName}
+                      </button>
+                    ))}
+                  </div>
+                </form>
+
+                {/* List of Requested Docs */}
+                <div className="space-y-3">
+                  <h5 className="font-bold text-slate-300 text-xs">รายการเอกสารที่ร้องขอและสถานะ:</h5>
+                  {Array.isArray(profileModalReg.requested_docs) && profileModalReg.requested_docs.length > 0 ? (
+                    profileModalReg.requested_docs.map((doc, idx) => (
+                      <div key={doc.id || idx} className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white">{doc.title}</span>
+                            {doc.required && (
+                              <span className="px-1.5 py-0.5 bg-red-950 text-red-300 border border-red-800 text-[10px] rounded font-bold">
+                                จำเป็น
+                              </span>
+                            )}
+                            {doc.status === 'approved' ? (
+                              <span className="text-[10px] text-emerald-400 font-bold">✓ อนุมัติแล้ว</span>
+                            ) : doc.file_url ? (
+                              <span className="text-[10px] text-amber-400 font-bold">⏳ ส่งแล้ว รอตรวจ</span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 font-bold">ยังไม่ส่ง</span>
+                            )}
+                          </div>
+
+                          {doc.file_url && (
+                            <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                              <span>ไฟล์: {doc.file_name || 'เอกสารแนบ'}</span>
+                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-0.5">
+                                <Eye className="w-3 h-3" /> เปิดดู
+                              </a>
+                            </div>
+                          )}
+                        </div>
+
+                        {doc.file_url && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyDoc(doc.id, 'approved')}
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                            >
+                              ✓ อนุมัติ
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const reason = prompt('ระบุเหตุผลที่ให้ส่งเอกสารใหม่:', 'เอกสารไม่ชัดเจน');
+                                if (reason) handleVerifyDoc(doc.id, 'rejected', reason);
+                              }}
+                              className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold"
+                            >
+                              ✕ ให้ส่งใหม่
+                            </button>
+                            <a
+                              href={doc.file_url}
+                              download={doc.file_name || 'doc.pdf'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
+                              title="ดาวน์โหลด"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-500 italic">ยังไม่มีการขอเอกสารเพิ่มเติมจากผู้สมัครท่านนี้</p>
+                  )}
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
@@ -942,7 +1485,7 @@ export default function AdminDashboardView({
               จัดการ URL แบบทดสอบก่อน-หลัง และแบบประเมิน (Google Forms)
             </h3>
             <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              Admin สามารถใส่ URL ของ Google Form แต่ละรายการ และเปิด/ปิดการแสดงผลให้ผู้เข้าอบรมเห็นได้ตลอดเวลา (ใช้งานได้จริงและบันทึกสู่ Supabase)
+              Admin สามารถใส่ URL ของ Google Form แต่ละรายการ และเปิด/ปิดการแสดงผลให้ผู้เข้าอบรมเห็นได้ตลอดเวลา
             </p>
           </div>
 
@@ -957,7 +1500,6 @@ export default function AdminDashboardView({
                     1. แบบทดสอบก่อนการฝึกอบรม (Pre-Test)
                   </h4>
                 </div>
-                {/* Switch Toggle */}
                 <button
                   type="button"
                   onClick={() => handleToggleForm('pretest')}
@@ -973,9 +1515,7 @@ export default function AdminDashboardView({
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
-                  Google Form URL (Pre-test):
-                </label>
+                <label className="block text-xs text-slate-400 mb-1">Google Form URL (Pre-test):</label>
                 <div className="flex gap-2">
                   <input
                     type="url"
@@ -985,14 +1525,14 @@ export default function AdminDashboardView({
                       ...localForms,
                       pretest: { ...localForms.pretest, url: e.target.value }
                     })}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono"
                   />
                   {localForms.pretest?.url && (
                     <a
                       href={localForms.pretest.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       <span>ทดสอบเปิด</span>
@@ -1011,7 +1551,6 @@ export default function AdminDashboardView({
                     2. แบบทดสอบหลังการฝึกอบรม (Post-Test)
                   </h4>
                 </div>
-                {/* Switch Toggle */}
                 <button
                   type="button"
                   onClick={() => handleToggleForm('posttest')}
@@ -1027,9 +1566,7 @@ export default function AdminDashboardView({
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
-                  Google Form URL (Post-test):
-                </label>
+                <label className="block text-xs text-slate-400 mb-1">Google Form URL (Post-test):</label>
                 <div className="flex gap-2">
                   <input
                     type="url"
@@ -1039,14 +1576,14 @@ export default function AdminDashboardView({
                       ...localForms,
                       posttest: { ...localForms.posttest, url: e.target.value }
                     })}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono"
                   />
                   {localForms.posttest?.url && (
                     <a
                       href={localForms.posttest.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       <span>ทดสอบเปิด</span>
@@ -1065,7 +1602,6 @@ export default function AdminDashboardView({
                     3. แบบประเมินความพึงพอใจโครงการ (Evaluation Form)
                   </h4>
                 </div>
-                {/* Switch Toggle */}
                 <button
                   type="button"
                   onClick={() => handleToggleForm('evaluation')}
@@ -1081,9 +1617,7 @@ export default function AdminDashboardView({
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
-                  Google Form URL (Evaluation):
-                </label>
+                <label className="block text-xs text-slate-400 mb-1">Google Form URL (Evaluation):</label>
                 <div className="flex gap-2">
                   <input
                     type="url"
@@ -1093,14 +1627,14 @@ export default function AdminDashboardView({
                       ...localForms,
                       evaluation: { ...localForms.evaluation, url: e.target.value }
                     })}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono"
                   />
                   {localForms.evaluation?.url && (
                     <a
                       href={localForms.evaluation.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       <span>ทดสอบเปิด</span>
@@ -1131,7 +1665,7 @@ export default function AdminDashboardView({
         </form>
       )}
 
-      {/* TAB 3: ANNOUNCEMENTS MANAGER WITH IMAGE & PDF UPLOAD */}
+      {/* TAB 3: ANNOUNCEMENTS MANAGER */}
       {activeTab === 'announcements' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
           
@@ -1185,13 +1719,8 @@ export default function AdminDashboardView({
                     )}
                   </div>
 
-                  <h4 className="font-bold text-white text-base">
-                    {ann.title}
-                  </h4>
-
-                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                    {ann.content}
-                  </p>
+                  <h4 className="font-bold text-white text-base">{ann.title}</h4>
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">{ann.content}</p>
 
                   {ann.action_url && (
                     <p className="text-[11px] text-rescue-400 flex items-center gap-1">
@@ -1294,7 +1823,6 @@ export default function AdminDashboardView({
                   </span>
                 </div>
 
-                {/* Previews Grid */}
                 {annImages.length > 0 && (
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-1">
                     {annImages.map((imgUrl, idx) => (
@@ -1304,7 +1832,6 @@ export default function AdminDashboardView({
                           type="button"
                           onClick={() => handleRemoveImage(idx)}
                           className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow"
-                          title="ลบรูปภาพนี้"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -1313,7 +1840,6 @@ export default function AdminDashboardView({
                   </div>
                 )}
 
-                {/* File Upload Button */}
                 {annImages.length < 10 && (
                   <div>
                     <label className={`cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-850 text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition-colors ${isUploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -1345,9 +1871,7 @@ export default function AdminDashboardView({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-red-400" />
-                    <span className="text-xs font-bold text-white">
-                      เอกสารแนบ PDF ทางการ
-                    </span>
+                    <span className="text-xs font-bold text-white">เอกสารแนบ PDF ทางการ</span>
                   </div>
                 </div>
 
@@ -1356,15 +1880,8 @@ export default function AdminDashboardView({
                     <div className="flex items-center gap-2.5 truncate">
                       <FileText className="w-5 h-5 text-red-400 shrink-0" />
                       <div className="truncate">
-                        <p className="text-xs font-bold text-white truncate">
-                          {annPdfName || 'เอกสารทางการ.pdf'}
-                        </p>
-                        <a
-                          href={annPdfUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] text-blue-400 hover:underline flex items-center gap-1 mt-0.5"
-                        >
+                        <p className="text-xs font-bold text-white truncate">{annPdfName || 'เอกสารทางการ.pdf'}</p>
+                        <a href={annPdfUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 hover:underline flex items-center gap-1 mt-0.5">
                           <Eye className="w-3 h-3" /> เปิดดูตัวอย่าง
                         </a>
                       </div>
@@ -1373,7 +1890,6 @@ export default function AdminDashboardView({
                       type="button"
                       onClick={handleRemovePdf}
                       className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg transition-colors ml-2 shrink-0"
-                      title="ลบไฟล์ PDF นี้"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1456,6 +1972,22 @@ export default function AdminDashboardView({
               </div>
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* PREVIEW SLIP MODAL FOR ADMIN */}
+      {previewSlipUrl && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative">
+            <button
+              onClick={() => setPreviewSlipUrl(null)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+            <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงินของผู้สมัคร</h4>
+            <img src={previewSlipUrl} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
           </div>
         </div>
       )}

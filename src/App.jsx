@@ -237,6 +237,7 @@ export default function App() {
             user={user}
             myRegistration={myRegistration}
             onSaveRegistration={handleSaveRegistration}
+            onUpdateRegistration={handleUpdateAllocation}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             formsConfig={formsConfig}
           />

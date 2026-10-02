@@ -126,6 +126,7 @@ export const DataService = {
           .update(fields)
           .eq('user_id', userId);
         if (!error) return true;
+        console.warn('Supabase update details returned error:', error);
       } catch (e) {
         console.warn('Supabase update details failed, fallback to local', e);
       }
@@ -134,6 +135,78 @@ export const DataService = {
     const updated = regs.map(r => r.user_id === userId ? { ...r, ...fields, updated_at: new Date().toISOString() } : r);
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     return true;
+  },
+
+  // Submit Payment Slip
+  async submitPaymentSlip(userId, slipUrl) {
+    return this.updateRegistrationDetails(userId, {
+      payment_slip_url: slipUrl,
+      payment_slip_date: new Date().toISOString(),
+      payment_status: 'pending_review'
+    });
+  },
+
+  // Send Admin Message to User
+  async sendAdminMessage(userId, messageText, extraData = {}) {
+    const regs = await this.getRegistrations();
+    const target = regs.find(r => r.user_id === userId);
+    const existingMessages = Array.isArray(target?.admin_messages) ? target.admin_messages : [];
+    
+    const newMsg = {
+      id: 'msg-' + Date.now(),
+      text: messageText,
+      created_at: new Date().toISOString(),
+      ...extraData
+    };
+
+    const updatedMessages = [newMsg, ...existingMessages];
+    const updatePayload = { admin_messages: updatedMessages };
+
+    if (extraData.payment_amount !== undefined) {
+      updatePayload.payment_amount = extraData.payment_amount;
+    }
+    if (extraData.payment_bank_info) {
+      updatePayload.payment_bank_info = extraData.payment_bank_info;
+    }
+    if (extraData.payment_status) {
+      updatePayload.payment_status = extraData.payment_status;
+    }
+
+    return this.updateRegistrationDetails(userId, updatePayload);
+  },
+
+  // Request or update documents checklist
+  async updateRequestedDocs(userId, docsList) {
+    return this.updateRegistrationDetails(userId, { requested_docs: docsList });
+  },
+
+  // User submits a document
+  async submitUserDoc(userId, docId, fileUrl, fileName) {
+    const regs = await this.getRegistrations();
+    const target = regs.find(r => r.user_id === userId);
+    const docs = Array.isArray(target?.requested_docs) ? [...target.requested_docs] : [];
+    
+    const docIdx = docs.findIndex(d => d.id === docId);
+    if (docIdx >= 0) {
+      docs[docIdx] = {
+        ...docs[docIdx],
+        file_url: fileUrl,
+        file_name: fileName,
+        submitted_at: new Date().toISOString(),
+        status: 'submitted'
+      };
+    } else {
+      docs.push({
+        id: docId,
+        title: fileName,
+        file_url: fileUrl,
+        file_name: fileName,
+        submitted_at: new Date().toISOString(),
+        status: 'submitted'
+      });
+    }
+
+    return this.updateRegistrationDetails(userId, { requested_docs: docs });
   },
 
   async deleteRegistration(userId) {

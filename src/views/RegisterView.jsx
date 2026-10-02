@@ -20,15 +20,25 @@ import {
   Stethoscope,
   UtensilsCrossed,
   ShieldAlert,
-  Info
+  CreditCard,
+  Upload,
+  Eye,
+  CheckCircle,
+  XCircle,
+  MessageSquare,
+  FileCheck,
+  Loader2,
+  Maximize2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
+import { DataService } from '../supabase';
 
 export default function RegisterView({ 
   user, 
   myRegistration, 
   onSaveRegistration, 
+  onUpdateRegistration,
   onOpenGoogleLogin,
   formsConfig 
 }) {
@@ -58,6 +68,13 @@ export default function RegisterView({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+
+  // Payment Slip Upload State
+  const [isUploadingSlip, setIsUploadingSlip] = useState(false);
+  const [previewSlipModal, setPreviewSlipModal] = useState(null);
+
+  // Document Upload State
+  const [uploadingDocId, setUploadingDocId] = useState(null);
 
   // Load existing data if registered
   useEffect(() => {
@@ -130,6 +147,13 @@ export default function RegisterView({
       room_assigned: myRegistration?.room_assigned || '',
       is_special_care: myRegistration?.is_special_care || false,
       special_notes: myRegistration?.special_notes || '',
+      payment_status: myRegistration?.payment_status || 'unpaid',
+      payment_amount: myRegistration?.payment_amount || 350,
+      payment_bank_info: myRegistration?.payment_bank_info || 'ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส',
+      payment_slip_url: myRegistration?.payment_slip_url || '',
+      payment_slip_date: myRegistration?.payment_slip_date || '',
+      admin_messages: myRegistration?.admin_messages || [],
+      requested_docs: myRegistration?.requested_docs || [],
       status: 'confirmed'
     };
 
@@ -138,7 +162,6 @@ export default function RegisterView({
       setIsEditing(false);
       setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลประวัติผู้สมัครเรียบร้อยแล้ว!' });
       
-      // Trigger celebration confetti
       try {
         confetti({
           particleCount: 80,
@@ -150,6 +173,69 @@ export default function RegisterView({
       setStatusMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Upload Payment Slip Handler
+  const handleUploadPaymentSlip = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !myRegistration) return;
+
+    setIsUploadingSlip(true);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'slips');
+      if (uploadResult?.url) {
+        await DataService.submitPaymentSlip(myRegistration.user_id, uploadResult.url);
+        if (onUpdateRegistration) {
+          await onUpdateRegistration(myRegistration.user_id, {
+            payment_slip_url: uploadResult.url,
+            payment_slip_date: new Date().toISOString(),
+            payment_status: 'pending_review'
+          });
+        }
+        alert('อัปโหลดสลิปการโอนเงินเรียบร้อยแล้ว เจ้าหน้าที่จะทำการตรวจสอบยอดเงิน');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการอัปโหลดสลิป');
+    } finally {
+      setIsUploadingSlip(false);
+      e.target.value = '';
+    }
+  };
+
+  // Upload Requested Document Handler
+  const handleUploadUserDoc = async (e, docId) => {
+    const file = e.target.files?.[0];
+    if (!file || !myRegistration) return;
+
+    setUploadingDocId(docId);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'docs');
+      if (uploadResult?.url) {
+        await DataService.submitUserDoc(myRegistration.user_id, docId, uploadResult.url, file.name);
+        if (onUpdateRegistration) {
+          const currentDocs = Array.isArray(myRegistration.requested_docs) ? [...myRegistration.requested_docs] : [];
+          const idx = currentDocs.findIndex(d => d.id === docId);
+          if (idx >= 0) {
+            currentDocs[idx] = {
+              ...currentDocs[idx],
+              file_url: uploadResult.url,
+              file_name: file.name,
+              submitted_at: new Date().toISOString(),
+              status: 'submitted'
+            };
+          }
+          await onUpdateRegistration(myRegistration.user_id, { requested_docs: currentDocs });
+        }
+        alert(`อัปโหลดเอกสาร "${file.name}" เรียบร้อยแล้ว`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการอัปโหลดเอกสาร');
+    } finally {
+      setUploadingDocId(null);
+      e.target.value = '';
     }
   };
 
@@ -166,7 +252,7 @@ export default function RegisterView({
             เข้าสู่ระบบเพื่อสมัครและดูประวัติ JRE 2027
           </h2>
           <p className="text-slate-400 text-sm max-w-md mx-auto mb-8">
-            กรุณาเข้าสู่ระบบด้วยบัญชี Google เพื่อกรอกใบสมัคร ดูและแก้ไขประวัติส่วนตัว ตรวจสอบกลุ่มฝึก และห้องพักประจำโครงการ
+            กรุณาเข้าสู่ระบบด้วยบัญชี Google เพื่อกรอกใบสมัคร ดูและแก้ไขประวัติส่วนตัว ส่งสลิป และติดตามเอกสาร
           </p>
 
           <button
@@ -188,6 +274,11 @@ export default function RegisterView({
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
   if (myRegistration && !isEditing) {
+    const paymentStatus = myRegistration.payment_status || 'unpaid';
+    const paymentAmount = myRegistration.payment_amount || 350;
+    const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
+    const requestedDocs = Array.isArray(myRegistration.requested_docs) ? myRegistration.requested_docs : [];
+
     return (
       <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
         
@@ -243,6 +334,202 @@ export default function RegisterView({
                 <p className="text-xs text-slate-200 mt-1">
                   {myRegistration.special_notes || 'ผู้เข้าร่วมอบรมท่านนี้ได้รับการบันทึกข้อมูลเพื่อเฝ้าระวังและสนับสนุนเป็นพิเศษระหว่างการฝึก'}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: สถานะการชำระเงิน & ส่งสลิปโอนเงิน (Real Payment System) */}
+          <div className="mt-8 p-5 rounded-2xl border bg-slate-950/70 border-slate-800 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-white text-sm">
+                  สถานะการชำระค่าลงทะเบียน & การส่งสลิป
+                </h3>
+              </div>
+
+              {paymentStatus === 'paid' ? (
+                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" /> ชำระเงินเรียบร้อยแล้ว
+                </span>
+              ) : paymentStatus === 'pending_review' ? (
+                <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 animate-pulse">
+                  <Clock className="w-4 h-4" /> ส่งสลิปแล้ว กำลังรอผู้ดูแลตรวจสอบ
+                </span>
+              ) : (
+                <span className="px-3 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4" /> ค้างชำระค่าลงทะเบียน ({paymentAmount} บาท)
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1.5">
+                <p className="text-slate-400">
+                  ยอดค่าลงทะเบียน: <span className="font-bold text-white text-sm">{paymentAmount} บาท</span>
+                </p>
+                <p className="text-slate-400 leading-relaxed">
+                  บัญชีรับโอน: <span className="text-amber-300 font-semibold">{myRegistration.payment_bank_info || 'ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส'}</span>
+                </p>
+                {myRegistration.payment_notes && (
+                  <p className="text-slate-300 bg-slate-900 p-2 rounded-lg border border-slate-800 text-[11px]">
+                    หมายเหตุจากฝ่ายการเงิน: {myRegistration.payment_notes}
+                  </p>
+                )}
+              </div>
+
+              {/* Slip Upload & Viewer */}
+              <div className="flex flex-col justify-center items-start sm:items-end gap-2">
+                {myRegistration.payment_slip_url ? (
+                  <div className="flex items-center gap-3">
+                    <div 
+                      onClick={() => setPreviewSlipModal(myRegistration.payment_slip_url)}
+                      className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-900"
+                    >
+                      <img 
+                        src={myRegistration.payment_slip_url} 
+                        alt="สลิปโอนเงิน" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                      />
+                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Maximize2 className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-emerald-400 font-semibold block">
+                        ✓ อัปโหลดสลิปแล้ว
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        ส่งเมื่อ: {myRegistration.payment_slip_date ? new Date(myRegistration.payment_slip_date).toLocaleString('th-TH') : '-'}
+                      </span>
+                      <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-block">
+                        ส่งสลิปใหม่ทดแทน
+                        <input type="file" accept="image/*" onChange={handleUploadPaymentSlip} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {isUploadingSlip ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>กำลังส่งสลิป...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>อัปโหลดสลิปโอนเงิน ({paymentAmount} บ.)</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadPaymentSlip}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION: ข้อความแจ้งเตือนจาก Admin (Admin Direct Messages) */}
+          {adminMessages.length > 0 && (
+            <div className="mt-6 p-5 rounded-2xl border bg-slate-950/70 border-slate-800 space-y-3">
+              <div className="flex items-center gap-2 text-indigo-400">
+                <MessageSquare className="w-4 h-4" />
+                <h3 className="font-bold text-white text-sm">
+                  ข้อความและการแจ้งเตือนจากผู้ดูแลระบบ ({adminMessages.length} ข้อความ)
+                </h3>
+              </div>
+
+              <div className="space-y-2">
+                {adminMessages.map((msg, idx) => (
+                  <div key={msg.id || idx} className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-xs">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                      <span className="font-semibold text-purple-400">ฝ่ายประสานงาน JRE 2027</span>
+                      <span>{msg.created_at ? new Date(msg.created_at).toLocaleString('th-TH') : ''}</span>
+                    </div>
+                    <p className="text-slate-200 whitespace-pre-line leading-relaxed">
+                      {msg.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: รายการเอกสารที่ต้องนำส่ง (Requested Documents) */}
+          {requestedDocs.length > 0 && (
+            <div className="mt-6 p-5 rounded-2xl border bg-slate-950/70 border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2 text-rose-400">
+                  <FileCheck className="w-4 h-4" />
+                  <h3 className="font-bold text-white text-sm">
+                    เอกสารที่ต้องนำส่งผ่านเว็บไซต์ ({requestedDocs.length} รายการ)
+                  </h3>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {requestedDocs.map((doc, idx) => {
+                  const isUploadingThis = uploadingDocId === doc.id;
+                  const hasSubmitted = Boolean(doc.file_url);
+
+                  return (
+                    <div key={doc.id || idx} className="p-3.5 bg-slate-900 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{doc.title}</span>
+                          {doc.required && (
+                            <span className="px-1.5 py-0.5 bg-red-950 text-red-300 border border-red-800 text-[10px] rounded font-bold">
+                              จำเป็น
+                            </span>
+                          )}
+                          {doc.status === 'approved' ? (
+                            <span className="text-[10px] text-emerald-400 font-bold">✓ อนุมัติแล้ว</span>
+                          ) : hasSubmitted ? (
+                            <span className="text-[10px] text-amber-400 font-bold">⏳ ส่งแล้ว รอตรวจ</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 font-bold">ยังไม่ได้ส่ง</span>
+                          )}
+                        </div>
+                        {hasSubmitted && (
+                          <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                            <span>ไฟล์: {doc.file_name || 'เอกสารแนบ'}</span>
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline inline-flex items-center gap-0.5">
+                              <Eye className="w-3 h-3" /> เปิดดู
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-colors ${isUploadingThis ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {isUploadingThis ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>กำลังอัปโหลด...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3 h-3 text-rescue-400" />
+                              <span>{hasSubmitted ? 'อัปโหลดไฟล์ใหม่' : 'อัปโหลดไฟล์เอกสาร'}</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e) => handleUploadUserDoc(e, doc.id)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -355,7 +642,6 @@ export default function RegisterView({
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              {/* Medical History */}
               <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800">
                 <div className="flex items-center gap-2 text-rose-300 font-semibold mb-1">
                   <Stethoscope className="w-4 h-4 text-rose-400" />
@@ -366,7 +652,6 @@ export default function RegisterView({
                 </p>
               </div>
 
-              {/* Food & Drug Allergies */}
               <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800">
                 <div className="flex items-center gap-2 text-amber-300 font-semibold mb-1">
                   <UtensilsCrossed className="w-4 h-4 text-amber-400" />
@@ -378,7 +663,6 @@ export default function RegisterView({
               </div>
             </div>
 
-            {/* Training History */}
             <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-xs">
               <div className="flex items-center gap-2 text-indigo-300 font-semibold mb-1">
                 <Award className="w-4 h-4 text-indigo-400" />
@@ -436,6 +720,22 @@ export default function RegisterView({
           )}
 
         </div>
+
+        {/* PREVIEW SLIP MODAL */}
+        {previewSlipModal && (
+          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative">
+              <button
+                onClick={() => setPreviewSlipModal(null)}
+                className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+              <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงิน</h4>
+              <img src={previewSlipModal} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
+            </div>
+          </div>
+        )}
 
       </div>
     );
@@ -525,27 +825,6 @@ export default function RegisterView({
               placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, อาสาสมัครกู้ภัย มข, ชุดเคลื่อนที่เร็ว มก, จุฬาฯ, มธ, มช, มอ ฯลฯ"
               className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm"
             />
-            {/* Quick Suggestions Pills */}
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              <span className="text-[11px] text-slate-500 mr-1 self-center">ตัวอย่างด่วน:</span>
-              {[
-                'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
-                'อาสาสมัครกู้ภัย มหาวิทยาลัยขอนแก่น (มข)',
-                'ชุดเคลื่อนที่เร็ว มหาวิทยาลัยเกษตรศาสตร์ (มก)',
-                'เครือข่ายกู้ภัย มหาวิทยาลัยเชียงใหม่ (มช)',
-                'เครือข่ายกู้ภัย มหาวิทยาลัยสงขลานครินทร์ (มอ)',
-                'เครือข่ายกู้ภัย มหาวิทยาลัยบูรพา (มบ)'
-              ].map((uni, idx) => (
-                <button
-                  type="button"
-                  key={idx}
-                  onClick={() => setInstitution(uni)}
-                  className="px-2.5 py-1 bg-slate-950 hover:bg-slate-800 text-[10px] text-slate-300 hover:text-white rounded-lg border border-slate-800 transition-colors"
-                >
-                  + {uni.split(' ')[0]} {uni.split(' ')[1]}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -723,7 +1002,7 @@ export default function RegisterView({
           </div>
         </div>
 
-        {/* Section 4: ข้อมูลสุขภาพ ประวัติการแพ้ & ประวัติการฝึกอบรม (New Comprehensive Fields) */}
+        {/* Section 4: ข้อมูลสุขภาพ ประวัติการแพ้ & ประวัติการฝึกอบรม */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
             <HeartPulse className="w-4 h-4 text-rose-500" />
