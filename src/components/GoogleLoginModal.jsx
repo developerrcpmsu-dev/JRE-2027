@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, CheckCircle2, User, Mail, ArrowRight, AlertCircle, Sparkles, ChevronRight, LogIn } from 'lucide-react';
+import { DataService } from '../supabase';
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [showAccountChooser, setShowAccountChooser] = useState(false);
@@ -10,31 +11,20 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   if (!isOpen) return null;
 
-  const handleSelectAccount = (name, email, avatar) => {
+  const handleSelectAccount = async (name, email, avatar) => {
     setIsLoading(true);
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanName = name.trim();
-    
-    // Google official style avatar or Dicebear bottts with Google colors
-    const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-
-    const userObj = {
-      id: 'google_' + btoa(cleanEmail).replace(/=/g, '').toLowerCase().slice(0, 16),
-      name: cleanName,
-      email: cleanEmail,
-      avatar: avatarUrl,
-      provider: 'google',
-      verified: true
-    };
-
-    setTimeout(() => {
-      localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
+    try {
+      const user = await DataService.loginWithGoogleProfile({ name, email, avatar });
+      localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
       if (onLoginSuccess) {
-        onLoginSuccess(userObj);
+        onLoginSuccess(user);
       }
       setIsLoading(false);
       onClose();
-    }, 400);
+    } catch (err) {
+      console.error('Google profile login error:', err);
+      setIsLoading(false);
+    }
   };
 
   const handleCustomSubmit = (e) => {

@@ -9,6 +9,7 @@ import ScheduleView from './views/ScheduleView';
 import RegisterView from './views/RegisterView';
 import AnnouncementsView from './views/AnnouncementsView';
 import AdminDashboardView from './views/AdminDashboardView';
+import AuthPortalView from './views/AuthPortalView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
 
 export default function App() {
@@ -201,6 +202,30 @@ export default function App() {
         <p className="text-sm font-semibold tracking-wider text-slate-300">
           กำลังเตรียมระบบ JRE 2027 มหาวิทยาลัยมหาสารคาม...
         </p>
+      </div>
+    );
+  }
+
+  // Gate: Users must be authenticated before accessing project information and dashboard
+  if (!user && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rescue-500 selection:text-white">
+        <AuthPortalView
+          onLoginSuccess={handleGoogleLoginSuccess}
+          onOpenAdminLogin={() => setAdminModalOpen(true)}
+        />
+
+        <AdminLoginModal
+          isOpen={adminModalOpen}
+          onClose={() => setAdminModalOpen(false)}
+          onLoginSuccess={handleAdminLoginSuccess}
+        />
+
+        <GoogleLoginModal
+          isOpen={googleModalOpen}
+          onClose={() => setGoogleModalOpen(false)}
+          onLoginSuccess={handleGoogleLoginSuccess}
+        />
       </div>
     );
   }

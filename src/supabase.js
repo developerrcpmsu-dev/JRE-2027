@@ -403,5 +403,140 @@ export const DataService = {
   saveSpeakers(speakers) {
     localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(speakers));
     return speakers;
+  },
+
+  // USER ACCOUNTS & REAL AUTHENTICATION
+  async getUserAccounts() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Supabase user_accounts query error, fallback', e);
+      }
+    }
+    const raw = localStorage.getItem('jre2027_user_accounts');
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  async syncUserAccount(userObj) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .upsert({
+            id: userObj.id,
+            name: userObj.name,
+            email: userObj.email,
+            avatar: userObj.avatar || '',
+            role: userObj.role || 'applicant',
+            provider: userObj.provider || 'email',
+            last_login_at: new Date().toISOString()
+          }, { onConflict: 'email' })
+          .select();
+        if (!error && data && data[0]) return data[0];
+      } catch (err) {
+        console.warn('Sync user account error:', err);
+      }
+    }
+    const raw = localStorage.getItem('jre2027_user_accounts');
+    const accounts = raw ? JSON.parse(raw) : [];
+    const idx = accounts.findIndex(a => a.email === userObj.email);
+    if (idx >= 0) {
+      accounts[idx] = { ...accounts[idx], ...userObj, last_login_at: new Date().toISOString() };
+    } else {
+      accounts.unshift({ ...userObj, created_at: new Date().toISOString(), last_login_at: new Date().toISOString() });
+    }
+    localStorage.setItem('jre2027_user_accounts', JSON.stringify(accounts));
+    return userObj;
+  },
+
+  async signUpUser({ name, email, password }) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+    
+    let userId = 'usr_' + Date.now();
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: password,
+        options: {
+          data: {
+            full_name: cleanName,
+            avatar_url: avatar
+          }
+        }
+      });
+      if (error) throw error;
+      if (data?.user?.id) {
+        userId = data.user.id;
+      }
+    }
+
+    const userObj = {
+      id: userId,
+      name: cleanName,
+      email: cleanEmail,
+      avatar: avatar,
+      provider: 'email',
+      role: 'applicant',
+      verified: true
+    };
+
+    await this.syncUserAccount(userObj);
+    return userObj;
+  },
+
+  async signInUser({ email, password }) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password
+      });
+      if (error) throw error;
+      
+      const user = data.user;
+      const userObj = {
+        id: user.id,
+        name: user.user_metadata?.full_name || cleanEmail.split('@')[0],
+        email: user.email,
+        avatar: user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`,
+        provider: 'email',
+        role: 'applicant',
+        verified: true
+      };
+
+      await this.syncUserAccount(userObj);
+      return userObj;
+    }
+
+    throw new Error('ระบบ Supabase ไม่ได้เชื่อมต่อ');
+  },
+
+  async loginWithGoogleProfile({ name, email, avatar }) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+    const userId = 'google_' + btoa(cleanEmail).replace(/=/g, '').toLowerCase().slice(0, 16);
+
+    const userObj = {
+      id: userId,
+      name: cleanName,
+      email: cleanEmail,
+      avatar: avatarUrl,
+      provider: 'google',
+      role: 'applicant',
+      verified: true
+    };
+
+    await this.syncUserAccount(userObj);
+    return userObj;
   }
 };
