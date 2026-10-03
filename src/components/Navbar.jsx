@@ -140,12 +140,12 @@ export default function Navbar({
             {/* Applicant Dashboard / Register Link */}
             <button
               onClick={() => handleNav('register')}
-              className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 shadow-md active:scale-95 whitespace-nowrap ${
+              className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all duration-200 flex items-center gap-2 shadow-md active:scale-95 whitespace-nowrap cursor-pointer ${
                 currentTab === 'register'
-                  ? 'bg-rescue-600 text-white shadow-lg shadow-rescue-600/40 ring-2 ring-rescue-400'
+                  ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-xl shadow-orange-500/40 ring-2 ring-orange-400/80 -translate-y-0.5'
                   : myRegistration
-                  ? 'bg-slate-900 text-emerald-400 border border-emerald-500/50 hover:bg-slate-800 hover:border-emerald-400'
-                  : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white shadow-orange-500/25 hover:shadow-lg hover:-translate-y-0.5'
+                  ? 'bg-slate-900/90 text-emerald-400 border border-emerald-500/50 hover:bg-slate-850 hover:border-emerald-400 shadow-sm'
+                  : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5'
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
@@ -156,7 +156,7 @@ export default function Navbar({
             {isAdmin && (
               <button
                 onClick={() => handleNav('admin')}
-                className={`px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   currentTab === 'admin'
                     ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/40 ring-2 ring-purple-400'
                     : 'bg-purple-950/60 text-purple-300 border border-purple-800/60 hover:bg-purple-900/80'
@@ -171,30 +171,33 @@ export default function Navbar({
           {/* Desktop Right Action Area: Auth & Status */}
           <div className="hidden md:flex items-center gap-2.5">
             {user ? (
-              <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 p-1.5 pl-2.5 rounded-2xl shadow-inner">
+              <div className="flex items-center gap-2 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1.5 pl-2.5 rounded-2xl shadow-xl shadow-black/30 backdrop-blur-md transition-all">
                 <button
                   type="button"
                   onClick={() => handleNav('register')}
                   title="ดูประวัติบัญชี / ผลการจัดสรรกลุ่มและห้องนอน"
-                  className="flex items-center gap-2.5 hover:opacity-80 transition-opacity text-left"
+                  className="flex items-center gap-2.5 hover:opacity-90 transition-opacity text-left cursor-pointer"
                 >
-                  <img 
-                    src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
-                    alt={user.name || 'User'} 
-                    className="w-8 h-8 rounded-full border border-rescue-500/50 object-cover"
-                  />
+                  <div className="relative">
+                    <img 
+                      src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
+                      alt={user.name || 'User'} 
+                      className="w-8 h-8 rounded-full border border-orange-500/60 object-cover ring-2 ring-emerald-500/30 shadow-sm"
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-900 rounded-full" />
+                  </div>
                   <div className="text-left text-xs leading-tight">
-                    <p className="font-semibold text-white truncate max-w-[120px]">{user.name || user.email?.split('@')[0]}</p>
-                    <p className="text-slate-400 text-[10px] flex items-center gap-1">
-                      <UserCheck className="w-3 h-3 text-emerald-400" />
-                      {myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}
+                    <p className="font-bold text-white truncate max-w-[125px]">{user.name || user.email?.split('@')[0]}</p>
+                    <p className="text-slate-400 text-[10px] flex items-center gap-1 font-medium mt-0.5">
+                      <span className="text-emerald-400 font-semibold">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
                     </p>
                   </div>
                 </button>
+                <div className="w-[1px] h-6 bg-slate-800 mx-0.5" />
                 <button
                   onClick={onLogout}
                   title="ออกจากระบบ"
-                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors ml-1"
+                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
