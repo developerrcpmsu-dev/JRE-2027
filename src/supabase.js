@@ -603,23 +603,71 @@ export const DataService = {
     });
   },
 
-  // TEAM & SPEAKERS
-  getTeam() {
+  // TEAM & SPEAKERS (Persisted in Supabase project_settings + localStorage)
+  async getTeam() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'team_members')
+          .maybeSingle();
+        if (!error && data?.value && Array.isArray(data.value)) {
+          localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(data.value));
+          return data.value;
+        }
+      } catch (e) {
+        console.warn('Supabase getTeam notice, fallback to local', e);
+      }
+    }
     const raw = localStorage.getItem(STORAGE_KEYS.TEAM);
     return raw ? JSON.parse(raw) : DEFAULT_TEAM_MEMBERS;
   },
 
-  saveTeam(team) {
+  async saveTeam(team) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ key: 'team_members', value: team, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn('Supabase saveTeam error', e);
+      }
+    }
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(team));
     return team;
   },
 
-  getSpeakers() {
+  async getSpeakers() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'speakers_config')
+          .maybeSingle();
+        if (!error && data?.value && Array.isArray(data.value)) {
+          localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(data.value));
+          return data.value;
+        }
+      } catch (e) {
+        console.warn('Supabase getSpeakers notice, fallback to local', e);
+      }
+    }
     const raw = localStorage.getItem(STORAGE_KEYS.SPEAKERS);
     return raw ? JSON.parse(raw) : DEFAULT_SPEAKERS;
   },
 
-  saveSpeakers(speakers) {
+  async saveSpeakers(speakers) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ key: 'speakers_config', value: speakers, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn('Supabase saveSpeakers error', e);
+      }
+    }
     localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(speakers));
     return speakers;
   },

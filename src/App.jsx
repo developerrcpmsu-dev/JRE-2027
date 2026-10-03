@@ -303,6 +303,16 @@ export default function App() {
     setPaymentConfig(cfg);
   };
 
+  const handleSaveTeam = async (team) => {
+    await DataService.saveTeam(team);
+    setTeamMembers(team);
+  };
+
+  const handleSaveSpeakers = async (spks) => {
+    await DataService.saveSpeakers(spks);
+    setSpeakers(spks);
+  };
+
   const handleSaveMerchandiseConfig = async (cfg) => {
     await DataService.saveMerchandiseConfig(cfg);
     setMerchandiseConfig(cfg);
@@ -447,9 +457,9 @@ export default function App() {
             paymentConfig={paymentConfig}
             onSavePaymentConfig={handleSavePaymentConfig}
             teamMembers={teamMembers}
-            onSaveTeam={DataService.saveTeam}
+            onSaveTeam={handleSaveTeam}
             speakers={speakers}
-            onSaveSpeakers={DataService.saveSpeakers}
+            onSaveSpeakers={handleSaveSpeakers}
             merchandiseConfig={merchandiseConfig}
             onSaveMerchandiseConfig={handleSaveMerchandiseConfig}
             merchandiseOrders={merchandiseOrders}

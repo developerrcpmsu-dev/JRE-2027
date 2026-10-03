@@ -93,7 +93,7 @@ export function parseCurrentRoute() {
 
   // Admin & Sub-pages
   if (first === 'admin') {
-    const validSections = ['applicants', 'announcements', 'merchandise', 'payment', 'payment_settings', 'forms', 'settings'];
+    const validSections = ['applicants', 'announcements', 'merchandise', 'payment', 'payment_settings', 'speakers', 'team', 'forms', 'settings'];
     const rawSection = validSections.includes(second) ? second : 'applicants';
     const subRoute = (rawSection === 'payment' || rawSection === 'payment_settings') ? 'payment_settings' : rawSection;
     const canonicalPath = subRoute === 'applicants' ? '/admin' : subRoute === 'payment_settings' ? '/admin/payment' : `/admin/${subRoute}`;

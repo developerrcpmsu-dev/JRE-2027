@@ -46,10 +46,18 @@ import {
   PackageCheck,
   Camera,
   Star,
-  Check
+  Check,
+  ArrowUp,
+  ArrowDown,
+  GraduationCap
 } from 'lucide-react';
 import { DataService } from '../supabase';
-import { DEFAULT_PAYMENT_CONFIG, DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
+import { 
+  DEFAULT_PAYMENT_CONFIG, 
+  DEFAULT_MERCHANDISE_CONFIG,
+  DEFAULT_SPEAKERS,
+  DEFAULT_TEAM_MEMBERS
+} from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
 
@@ -228,6 +236,323 @@ export default function AdminDashboardView({
   const triggerToast = (msg) => {
     setAlertToast(msg);
     setTimeout(() => setAlertToast(null), 3500);
+  };
+
+  // Speakers Management State
+  const [localSpeakers, setLocalSpeakers] = useState(() => {
+    return (speakers && speakers.length > 0) ? speakers : DEFAULT_SPEAKERS;
+  });
+  const [isSavingSpeakers, setIsSavingSpeakers] = useState(false);
+  const [showSpeakerModal, setShowSpeakerModal] = useState(false);
+  const [editingSpeaker, setEditingSpeaker] = useState(null);
+  const [speakerFormNum, setSpeakerFormNum] = useState(1);
+  const [speakerFormName, setSpeakerFormName] = useState('');
+  const [speakerFormTitle, setSpeakerFormTitle] = useState('');
+  const [speakerFormOrg, setSpeakerFormOrg] = useState('');
+  const [speakerFormTopic, setSpeakerFormTopic] = useState('');
+  const [speakerFormPhoto, setSpeakerFormPhoto] = useState('');
+  const [isUploadingSpeakerPhoto, setIsUploadingSpeakerPhoto] = useState(false);
+
+  React.useEffect(() => {
+    if (speakers && speakers.length > 0) {
+      setLocalSpeakers(speakers);
+    }
+  }, [speakers]);
+
+  // Team & Committee Management State
+  const [localTeam, setLocalTeam] = useState(() => {
+    return (teamMembers && teamMembers.length > 0) ? teamMembers : DEFAULT_TEAM_MEMBERS;
+  });
+  const [isSavingTeam, setIsSavingTeam] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [editingTeamMember, setEditingTeamMember] = useState(null);
+  const [teamFormName, setTeamFormName] = useState('');
+  const [teamFormRole, setTeamFormRole] = useState('');
+  const [teamFormUniversity, setTeamFormUniversity] = useState('มหาวิทยาลัยมหาสารคาม (มมส)');
+  const [teamFormInstitution, setTeamFormInstitution] = useState('');
+  const [teamFormTag, setTeamFormTag] = useState('');
+  const [teamFormPhoto, setTeamFormPhoto] = useState('');
+  const [isUploadingTeamPhoto, setIsUploadingTeamPhoto] = useState(false);
+  const [teamFilterUni, setTeamFilterUni] = useState('all');
+
+  React.useEffect(() => {
+    if (teamMembers && teamMembers.length > 0) {
+      setLocalTeam(teamMembers);
+    }
+  }, [teamMembers]);
+
+  // --- Speakers Handlers ---
+  const handleMoveSpeakerUp = async (index) => {
+    if (index <= 0) return;
+    const updated = [...localSpeakers];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    const renumbered = updated.map((s, idx) => ({ ...s, num: idx + 1 }));
+    setLocalSpeakers(renumbered);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(renumbered);
+      triggerToast('จัดลำดับวิทยากรเลื่อนขึ้นเรียบร้อย');
+    } catch (e) {
+      console.error(e);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกลำดับ');
+    }
+  };
+
+  const handleMoveSpeakerDown = async (index) => {
+    if (index >= localSpeakers.length - 1) return;
+    const updated = [...localSpeakers];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    const renumbered = updated.map((s, idx) => ({ ...s, num: idx + 1 }));
+    setLocalSpeakers(renumbered);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(renumbered);
+      triggerToast('จัดลำดับวิทยากรเลื่อนลงเรียบร้อย');
+    } catch (e) {
+      console.error(e);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกลำดับ');
+    }
+  };
+
+  const handleOpenAddSpeaker = () => {
+    setEditingSpeaker(null);
+    setSpeakerFormNum(localSpeakers.length + 1);
+    setSpeakerFormName('');
+    setSpeakerFormTitle('');
+    setSpeakerFormOrg('');
+    setSpeakerFormTopic('');
+    setSpeakerFormPhoto('');
+    setShowSpeakerModal(true);
+  };
+
+  const handleOpenEditSpeaker = (spk) => {
+    setEditingSpeaker(spk);
+    setSpeakerFormNum(spk.num || 1);
+    setSpeakerFormName(spk.name || '');
+    setSpeakerFormTitle(spk.title || '');
+    setSpeakerFormOrg(spk.org || '');
+    setSpeakerFormTopic(spk.topic || '');
+    setSpeakerFormPhoto(spk.photo || '');
+    setShowSpeakerModal(true);
+  };
+
+  const handleSpeakerPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSpeakerPhoto(true);
+    try {
+      const result = await DataService.uploadFile(file, 'speakers');
+      if (result?.url) {
+        setSpeakerFormPhoto(result.url);
+        triggerToast('อัปโหลดรูปภาพวิทยากรสำเร็จ');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+    } finally {
+      setIsUploadingSpeakerPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveSpeakerModal = async (e) => {
+    if (e) e.preventDefault();
+    if (!speakerFormName.trim()) {
+      triggerToast('กรุณากรอกชื่อ-สกุลของวิทยากร');
+      return;
+    }
+    const defaultPhoto = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(speakerFormName.trim())}`;
+    const payload = {
+      id: editingSpeaker?.id || 'spk-' + Date.now(),
+      num: Number(speakerFormNum) || (editingSpeaker?.num || localSpeakers.length + 1),
+      name: speakerFormName.trim(),
+      title: speakerFormTitle.trim(),
+      org: speakerFormOrg.trim(),
+      topic: speakerFormTopic.trim(),
+      photo: speakerFormPhoto.trim() || defaultPhoto
+    };
+
+    let updated;
+    if (editingSpeaker) {
+      updated = localSpeakers.map(s => s.id === editingSpeaker.id ? payload : s);
+    } else {
+      updated = [...localSpeakers, payload];
+    }
+    updated.sort((a, b) => (Number(a.num) || 0) - (Number(b.num) || 0));
+    setLocalSpeakers(updated);
+    setShowSpeakerModal(false);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(updated);
+      triggerToast(editingSpeaker ? 'แก้ไขข้อมูลวิทยากรเรียบร้อย' : 'เพิ่มวิทยากรใหม่เรียบร้อย');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    }
+  };
+
+  const handleDeleteSpeaker = async (id) => {
+    const spkToDelete = localSpeakers.find(s => s.id === id);
+    if (!window.confirm(`ยืนยันการลบวิทยากร "${spkToDelete?.name || ''}" หรือไม่?`)) return;
+    const filtered = localSpeakers.filter(s => s.id !== id).map((s, idx) => ({ ...s, num: idx + 1 }));
+    setLocalSpeakers(filtered);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(filtered);
+      triggerToast('ลบข้อมูลวิทยากรเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการลบข้อมูล');
+    }
+  };
+
+  const handleSaveAllSpeakers = async () => {
+    setIsSavingSpeakers(true);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(localSpeakers);
+      triggerToast('บันทึกข้อมูลวิทยากรทั้งหมดลงฐานข้อมูลเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลวิทยากร');
+    } finally {
+      setIsSavingSpeakers(false);
+    }
+  };
+
+  // --- Team & Committee Handlers ---
+  const handleMoveTeamUp = async (index) => {
+    if (index <= 0) return;
+    const updated = [...localTeam];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    setLocalTeam(updated);
+    try {
+      if (onSaveTeam) await onSaveTeam(updated);
+      triggerToast('จัดลำดับทีมงานเลื่อนขึ้นเรียบร้อย');
+    } catch (e) {
+      console.error(e);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกลำดับ');
+    }
+  };
+
+  const handleMoveTeamDown = async (index) => {
+    if (index >= localTeam.length - 1) return;
+    const updated = [...localTeam];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    setLocalTeam(updated);
+    try {
+      if (onSaveTeam) await onSaveTeam(updated);
+      triggerToast('จัดลำดับทีมงานเลื่อนลงเรียบร้อย');
+    } catch (e) {
+      console.error(e);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกลำดับ');
+    }
+  };
+
+  const handleOpenAddTeamMember = () => {
+    setEditingTeamMember(null);
+    setTeamFormName('');
+    setTeamFormRole('');
+    setTeamFormUniversity('มหาวิทยาลัยมหาสารคาม (มมส)');
+    setTeamFormInstitution('ชมรมกู้ภัยราชพฤกษ์ มมส');
+    setTeamFormTag('');
+    setTeamFormPhoto('');
+    setShowTeamModal(true);
+  };
+
+  const handleOpenEditTeamMember = (member) => {
+    setEditingTeamMember(member);
+    setTeamFormName(member.name || '');
+    setTeamFormRole(member.role || '');
+    const uni = member.university || (member.tag?.includes('มมส') || member.institution?.includes('มมส') ? 'มหาวิทยาลัยมหาสารคาม (มมส)' : member.tag?.includes('มข') || member.institution?.includes('มข') ? 'มหาวิทยาลัยขอนแก่น (มข)' : member.institution || '');
+    setTeamFormUniversity(uni);
+    setTeamFormInstitution(member.institution || '');
+    setTeamFormTag(member.tag || '');
+    setTeamFormPhoto(member.photo || '');
+    setShowTeamModal(true);
+  };
+
+  const handleTeamPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingTeamPhoto(true);
+    try {
+      const result = await DataService.uploadFile(file, 'team');
+      if (result?.url) {
+        setTeamFormPhoto(result.url);
+        triggerToast('อัปโหลดรูปภาพทีมงานสำเร็จ');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+    } finally {
+      setIsUploadingTeamPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveTeamModal = async (e) => {
+    if (e) e.preventDefault();
+    if (!teamFormName.trim()) {
+      triggerToast('กรุณากรอกชื่อ-สกุลของคณะทำงาน');
+      return;
+    }
+    const defaultPhoto = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(teamFormName.trim())}`;
+    const payload = {
+      id: editingTeamMember?.id || 'team-' + Date.now(),
+      name: teamFormName.trim(),
+      role: teamFormRole.trim(),
+      university: teamFormUniversity.trim() || 'เครือข่ายสถาบันร่วมฝึกอบรม',
+      institution: teamFormInstitution.trim(),
+      tag: teamFormTag.trim(),
+      photo: teamFormPhoto.trim() || defaultPhoto
+    };
+
+    let updated;
+    if (editingTeamMember) {
+      updated = localTeam.map(m => m.id === editingTeamMember.id ? payload : m);
+    } else {
+      updated = [...localTeam, payload];
+    }
+    setLocalTeam(updated);
+    setShowTeamModal(false);
+    try {
+      if (onSaveTeam) await onSaveTeam(updated);
+      triggerToast(editingTeamMember ? 'แก้ไขข้อมูลคณะดำเนินงานเรียบร้อย' : 'เพิ่มคณะดำเนินงานใหม่เรียบร้อย');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    }
+  };
+
+  const handleDeleteTeamMember = async (id) => {
+    const memberToDelete = localTeam.find(m => m.id === id);
+    if (!window.confirm(`ยืนยันการลบ "${memberToDelete?.name || ''}" หรือไม่?`)) return;
+    const filtered = localTeam.filter(m => m.id !== id);
+    setLocalTeam(filtered);
+    try {
+      if (onSaveTeam) await onSaveTeam(filtered);
+      triggerToast('ลบสมาชิกคณะดำเนินงานเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการลบข้อมูล');
+    }
+  };
+
+  const handleSaveAllTeam = async () => {
+    setIsSavingTeam(true);
+    try {
+      if (onSaveTeam) await onSaveTeam(localTeam);
+      triggerToast('บันทึกข้อมูลคณะดำเนินงานทั้งหมดลงฐานข้อมูลเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } finally {
+      setIsSavingTeam(false);
+    }
   };
 
   // --- Handlers for Applicants ---
@@ -892,7 +1217,31 @@ export default function AdminDashboardView({
           }`}
         >
           <Shirt className="w-4 h-4 text-rescue-400" />
-          <span>จัดการเสื้อ/กางเกง & สแกน QR รับของ ({merchandiseOrders.length})</span>
+          <span>จัดการเสื้อ/กางเกง & สแกน QR ({merchandiseOrders.length})</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('speakers')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            activeTab === 'speakers'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <Award className="w-4 h-4 text-amber-400" />
+          <span>วิทยากรประจำโครงการ ({localSpeakers.length})</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('team')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            activeTab === 'team'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <Users className="w-4 h-4 text-blue-400" />
+          <span>คณะดำเนินงาน & ทีมงาน ({localTeam.length})</span>
         </button>
       </div>
 
@@ -3697,6 +4046,706 @@ export default function AdminDashboardView({
 
           </div>
 
+        </div>
+      )}
+
+      {/* TAB 6: SPEAKERS MANAGEMENT */}
+      {activeTab === 'speakers' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+            <div>
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
+                <Award className="w-4 h-4" />
+                Keynote Instructors & Doctors
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                ข้อมูลวิทยากรประจำโครงการ ({localSpeakers.length} ท่าน)
+              </h2>
+              <p className="text-slate-400 text-xs mt-1">
+                แก้ไข เพิ่ม ลบ จัดลำดับ (เลื่อนขึ้น/เลื่อนลง) และอัปโหลดรูปภาพวิทยากรสำหรับการแสดงผลบนหน้าหลัก
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleOpenAddSpeaker}
+                className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>เพิ่มวิทยากรใหม่</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveAllSpeakers}
+                disabled={isSavingSpeakers}
+                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingSpeakers ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด (Save)'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-xs text-amber-300">
+            <span className="text-base">💡</span>
+            <span>
+              <strong>คำแนะนำ:</strong> สามารถกดปุ่ม <span className="underline font-bold">⬆️ เลื่อนขึ้น</span> หรือ <span className="underline font-bold">⬇️ เลื่อนลง</span> บนการ์ดวิทยากรเพื่อสลับลำดับการแสดงผลในหน้าแรกได้อย่างอิสระ
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {localSpeakers.map((spk, idx) => {
+              const displayNum = spk.num || idx + 1;
+              return (
+                <div
+                  key={spk.id || idx}
+                  className="bg-slate-950 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 flex flex-col justify-between transition-all group relative"
+                >
+                  <div>
+                    {/* Header: Number & Reorder buttons */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-xl bg-emergency-600 text-white text-xs font-black flex items-center justify-center shadow">
+                          {displayNum}
+                        </span>
+                        <span className="text-xs font-bold text-amber-400">
+                          วิทยากรลำดับที่ {displayNum}
+                        </span>
+                      </div>
+
+                      {/* Reorder Buttons */}
+                      <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSpeakerUp(idx)}
+                          disabled={idx === 0}
+                          title="เลื่อนขึ้น"
+                          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSpeakerDown(idx)}
+                          disabled={idx === localSpeakers.length - 1}
+                          title="เลื่อนลง"
+                          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Photo & Basic Info */}
+                    <div className="flex items-start gap-3.5 mb-3.5">
+                      <div className="relative shrink-0">
+                        <img
+                          src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`}
+                          alt={spk.name}
+                          className="w-16 h-16 rounded-xl object-cover border border-slate-700 bg-slate-900"
+                          onError={(e) => {
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
+                          }}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-white text-sm leading-tight group-hover:text-amber-300 transition-colors">
+                          {spk.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-300 font-medium mt-1 line-clamp-2">
+                          {spk.title}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Details */}
+                    <div className="space-y-1.5 text-xs pt-3 border-t border-slate-900">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block">สังกัด / หน่วยงาน:</span>
+                        <span className="text-slate-300 font-medium text-[11px]">{spk.org || '-'}</span>
+                      </div>
+                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 mt-2">
+                        <span className="text-[10px] text-amber-400 font-bold block mb-0.5">หัวข้อฝึกอบรม:</span>
+                        <span className="text-slate-300 text-[11px] line-clamp-2">{spk.topic || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions: Edit & Delete */}
+                  <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditSpeaker(spk)}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                      <span>แก้ไข</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSpeaker(spk.id)}
+                      className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ลบ</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: TEAM & COMMITTEE MANAGEMENT */}
+      {activeTab === 'team' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+            <div>
+              <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">
+                <Users className="w-4 h-4" />
+                Organizing Committee & Staff
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                คณะดำเนินงาน & ทีมงานผู้ดำเนินการฝึกอบรม ({localTeam.length} ท่าน)
+              </h2>
+              <p className="text-slate-400 text-xs mt-1">
+                แก้ไข เพิ่ม ลบ จัดลำดับโครงสร้างทีม ปรับเปลี่ยนมหาวิทยาลัย (มมส, มข, หรือ ม.อื่นๆ ได้ตามต้องการ) และจัดการรูปภาพ
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleOpenAddTeamMember}
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>เพิ่มคณะทำงาน</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveAllTeam}
+                disabled={isSavingTeam}
+                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingTeam ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด (Save)'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Filter by University */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-950/80 rounded-2xl border border-slate-800">
+            <div className="flex items-center gap-2">
+              <Building className="w-4 h-4 text-blue-400" />
+              <span className="text-xs font-bold text-slate-300">กรองตามสังกัด/มหาวิทยาลัย:</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTeamFilterUni('all')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                  teamFilterUni === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-900 text-slate-400 hover:text-white'
+                }`}
+              >
+                ทั้งหมด ({localTeam.length})
+              </button>
+              {Array.from(new Set(localTeam.map(m => m.university || (m.tag?.includes('มมส') ? 'มหาวิทยาลัยมหาสารคาม (มมส)' : m.tag?.includes('มข') ? 'มหาวิทยาลัยขอนแก่น (มข)' : m.institution || 'ทั่วไป')))).map(uni => {
+                const count = localTeam.filter(m => (m.university || (m.tag?.includes('มมส') ? 'มหาวิทยาลัยมหาสารคาม (มมส)' : m.tag?.includes('มข') ? 'มหาวิทยาลัยขอนแก่น (มข)' : m.institution || 'ทั่วไป')) === uni).length;
+                return (
+                  <button
+                    key={uni}
+                    type="button"
+                    onClick={() => setTeamFilterUni(uni)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                      teamFilterUni === uni
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {uni.replace(/มหาวิทยาลัย/g, 'ม.').slice(0, 18)} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {localTeam
+              .map((member, originalIdx) => ({ member, originalIdx }))
+              .filter(({ member }) => {
+                if (teamFilterUni === 'all') return true;
+                const memberUni = member.university || (member.tag?.includes('มมส') ? 'มหาวิทยาลัยมหาสารคาม (มมส)' : member.tag?.includes('มข') ? 'มหาวิทยาลัยขอนแก่น (มข)' : member.institution || 'ทั่วไป');
+                return memberUni === teamFilterUni;
+              })
+              .map(({ member, originalIdx }) => {
+                return (
+                  <div
+                    key={member.id || originalIdx}
+                    className="bg-slate-950 border border-slate-800 hover:border-blue-500/40 rounded-2xl p-4 flex flex-col justify-between transition-all group"
+                  >
+                    <div>
+                      {/* Top Bar: Tag & Reorder */}
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-0.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[10px] font-black rounded-full">
+                          {member.tag || `ลำดับที่ ${originalIdx + 1}`}
+                        </span>
+
+                        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveTeamUp(originalIdx)}
+                            disabled={originalIdx === 0}
+                            title="เลื่อนขึ้น"
+                            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveTeamDown(originalIdx)}
+                            disabled={originalIdx === localTeam.length - 1}
+                            title="เลื่อนลง"
+                            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Photo & Name */}
+                      <div className="text-center mb-3">
+                        <img
+                          src={member.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`}
+                          alt={member.name}
+                          className="w-18 h-18 rounded-2xl object-cover border-2 border-slate-800 group-hover:border-blue-500/50 mx-auto transition-colors shadow-md bg-slate-900"
+                          onError={(e) => {
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`;
+                          }}
+                        />
+                        <h4 className="font-bold text-white text-sm mt-2.5 truncate group-hover:text-blue-300 transition-colors">
+                          {member.name}
+                        </h4>
+                        <p className="text-xs font-semibold text-rescue-400 mt-0.5 line-clamp-1">
+                          {member.role}
+                        </p>
+                      </div>
+
+                      {/* Institution & University */}
+                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 text-[11px] space-y-1">
+                        <div className="truncate text-slate-300">
+                          <span className="text-slate-500 mr-1">สถาบัน:</span>
+                          <span className="font-semibold text-white">{member.university || 'มหาวิทยาลัยมหาสารคาม (มมส)'}</span>
+                        </div>
+                        <div className="truncate text-slate-400">
+                          <span className="text-slate-500 mr-1">สังกัด:</span>
+                          <span>{member.institution || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions: Edit & Delete */}
+                    <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditTeamMember(member)}
+                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Edit3 className="w-3 h-3 text-blue-400" />
+                        <span>แก้ไข</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTeamMember(member.id)}
+                        className="px-2 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>ลบ</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* SPEAKER MODAL */}
+      {showSpeakerModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+            <button
+              type="button"
+              onClick={() => setShowSpeakerModal(false)}
+              className="absolute top-5 right-5 p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  {editingSpeaker ? 'แก้ไขข้อมูลวิทยากรประจำโครงการ' : 'เพิ่มวิทยากรประจำโครงการใหม่'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  ระบุรายละเอียดของวิทยากร ข้อมูลรูปถ่าย และหัวข้อบรรยาย
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSpeakerModal} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    ลำดับที่
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={speakerFormNum}
+                    onChange={e => setSpeakerFormNum(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-amber-400 font-black focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    ชื่อ-สกุล (พร้อมคำนำหน้า/ยศ) <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={speakerFormName}
+                    onChange={e => setSpeakerFormName(e.target.value)}
+                    placeholder="เช่น รศ.ดร. นพดล เชี่ยวชาญ"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  ตำแหน่ง / ความเชี่ยวชาญ
+                </label>
+                <input
+                  type="text"
+                  value={speakerFormTitle}
+                  onChange={e => setSpeakerFormTitle(e.target.value)}
+                  placeholder="เช่น แพทย์เฉพาะทางเวชศาสตร์ฉุกเฉิน (Emergency Medicine)"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  สังกัด / หน่วยงาน / สถาบัน
+                </label>
+                <input
+                  type="text"
+                  value={speakerFormOrg}
+                  onChange={e => setSpeakerFormOrg(e.target.value)}
+                  placeholder="เช่น โรงพยาบาลศูนย์ และอาจารย์แพทย์ / สพฉ."
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  หัวข้อฝึกอบรม / บรรยาย
+                </label>
+                <textarea
+                  rows="2"
+                  value={speakerFormTopic}
+                  onChange={e => setSpeakerFormTopic(e.target.value)}
+                  placeholder="เช่น ระบบการแพทย์ฉุกเฉินและการคัดแยกผู้บาดเจ็บหมู่ (Triage)"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 resize-none"
+                />
+              </div>
+
+              {/* Photo Upload & Preview */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                <label className="block text-[11px] font-bold text-slate-300">
+                  รูปถ่ายวิทยากร (Photo)
+                </label>
+                
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
+                    {speakerFormPhoto ? (
+                      <img
+                        src={speakerFormPhoto}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=fallback`;
+                        }}
+                      />
+                    ) : (
+                      <Camera className="w-6 h-6 text-slate-600" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-colors">
+                        <Upload className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{isUploadingSpeakerPhoto ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ภาพจากเครื่อง'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSpeakerPhotoUpload}
+                          disabled={isUploadingSpeakerPhoto}
+                          className="hidden"
+                        />
+                      </label>
+                      {speakerFormPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => setSpeakerFormPhoto('')}
+                          className="px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        >
+                          ลบรูป
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      value={speakerFormPhoto}
+                      onChange={e => setSpeakerFormPhoto(e.target.value)}
+                      placeholder="หรือวาง URL รูปภาพ (https://...)"
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSpeakerModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/30 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกข้อมูลวิทยากร</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TEAM MEMBER MODAL */}
+      {showTeamModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+            <button
+              type="button"
+              onClick={() => setShowTeamModal(false)}
+              className="absolute top-5 right-5 p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  {editingTeamMember ? 'แก้ไขข้อมูลคณะดำเนินงาน' : 'เพิ่มคณะดำเนินงาน / ทีมงานใหม่'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  กำหนดชื่อ บทบาทหน้าที่ มหาวิทยาลัย/สถาบัน (มมส, มข, หรือสถาบันอื่นๆ) และรูปถ่าย
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveTeamModal} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  ชื่อ-สกุล <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={teamFormName}
+                  onChange={e => setTeamFormName(e.target.value)}
+                  placeholder="เช่น นาย สมชาย รัตนวิชัย"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  บทบาท / หน้าที่ในโครงการ
+                </label>
+                <input
+                  type="text"
+                  value={teamFormRole}
+                  onChange={e => setTeamFormRole(e.target.value)}
+                  placeholder="เช่น ประธานโครงการและผู้อำนวยการฝึก / หัวหน้าฝ่ายสื่อสาร"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* University / Main Institution with Quick Tags */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  มหาวิทยาลัย / สถาบันหลัก (กำหนดได้อิสระ)
+                </label>
+                <input
+                  type="text"
+                  value={teamFormUniversity}
+                  onChange={e => setTeamFormUniversity(e.target.value)}
+                  placeholder="เช่น มหาวิทยาลัยมหาสารคาม (มมส), มหาวิทยาลัยขอนแก่น (มข) หรือ ม. อื่นๆ"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 font-semibold"
+                />
+
+                {/* Quick Presets */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-500 self-center mr-1">เลือกด่วน:</span>
+                  {[
+                    'มหาวิทยาลัยมหาสารคาม (มมส)',
+                    'มหาวิทยาลัยขอนแก่น (มข)',
+                    'จุฬาลงกรณ์มหาวิทยาลัย',
+                    'มหาวิทยาลัยเชียงใหม่',
+                    'มหาวิทยาลัยธรรมศาสตร์',
+                    'มหาวิทยาลัยเกษตรศาสตร์',
+                    'มหาวิทยาลัยสงขลานครินทร์'
+                  ].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setTeamFormUniversity(preset)}
+                      className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                        teamFormUniversity === preset
+                          ? 'bg-blue-600/30 text-blue-300 border-blue-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      {preset.replace(/มหาวิทยาลัย/g, 'ม.')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    ชมรม / หน่วยงานย่อย
+                  </label>
+                  <input
+                    type="text"
+                    value={teamFormInstitution}
+                    onChange={e => setTeamFormInstitution(e.target.value)}
+                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มมส"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    แท็กย่อ (Tag เช่น มมส 1, มข 4)
+                  </label>
+                  <input
+                    type="text"
+                    value={teamFormTag}
+                    onChange={e => setTeamFormTag(e.target.value)}
+                    placeholder="เช่น มมส 1, มข 4, มช 1"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Photo Upload & Preview */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                <label className="block text-[11px] font-bold text-slate-300">
+                  รูปถ่ายประจำตัว (Photo)
+                </label>
+                
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
+                    {teamFormPhoto ? (
+                      <img
+                        src={teamFormPhoto}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=fallback`;
+                        }}
+                      />
+                    ) : (
+                      <Camera className="w-6 h-6 text-slate-600" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-colors">
+                        <Upload className="w-3.5 h-3.5 text-blue-400" />
+                        <span>{isUploadingTeamPhoto ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ภาพจากเครื่อง'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleTeamPhotoUpload}
+                          disabled={isUploadingTeamPhoto}
+                          className="hidden"
+                        />
+                      </label>
+                      {teamFormPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamFormPhoto('')}
+                          className="px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        >
+                          ลบรูป
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      value={teamFormPhoto}
+                      onChange={e => setTeamFormPhoto(e.target.value)}
+                      placeholder="หรือวาง URL รูปภาพ (https://...)"
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowTeamModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกข้อมูลคณะทำงาน</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

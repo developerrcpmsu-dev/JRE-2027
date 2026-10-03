@@ -24,8 +24,34 @@ export default function HomeView({
   myRegistration,
   onOpenGoogleLogin
 }) {
-  const msuTeam = teamMembers.filter(m => m.tag?.includes('มมส') || m.institution?.includes('มมส'));
-  const kkuTeam = teamMembers.filter(m => m.tag?.includes('มข') || m.institution?.includes('มข'));
+  // Dynamic university resolution helper
+  const getMemberUniversity = (m) => {
+    if (m.university && m.university.trim()) return m.university.trim();
+    if (m.tag?.includes('มมส') || m.institution?.includes('มมส')) return 'มหาวิทยาลัยมหาสารคาม (มมส)';
+    if (m.tag?.includes('มข') || m.institution?.includes('มข')) return 'มหาวิทยาลัยขอนแก่น (มข)';
+    return m.institution || 'เครือข่ายสถาบันร่วมฝึกอบรม';
+  };
+
+  // Group team members dynamically
+  const groupedTeam = React.useMemo(() => {
+    const map = new Map();
+    (teamMembers || []).forEach(m => {
+      const uni = getMemberUniversity(m);
+      if (!map.has(uni)) {
+        map.set(uni, []);
+      }
+      map.get(uni).push(m);
+    });
+    return Array.from(map.entries()).map(([uniName, members]) => ({
+      name: uniName,
+      members
+    }));
+  }, [teamMembers]);
+
+  // Sort speakers by num
+  const sortedSpeakers = React.useMemo(() => {
+    return [...(speakers || [])].sort((a, b) => (Number(a.num) || 0) - (Number(b.num) || 0));
+  }, [speakers]);
 
   return (
     <div className="space-y-16 animate-in fade-in duration-300">
@@ -87,7 +113,7 @@ export default function HomeView({
             {myRegistration ? (
               <button
                 onClick={onNavigateRegister}
-                className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center gap-2 text-sm transition-all transform active:scale-95"
+                className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center gap-2 text-sm transition-all transform active:scale-95 cursor-pointer"
               >
                 <FileCheck2 className="w-4 h-4" />
                 ดูสถานะห้องนอน & กลุ่มฝึกของฉัน
@@ -95,7 +121,7 @@ export default function HomeView({
             ) : (
               <button
                 onClick={onNavigateRegister}
-                className="px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center gap-2.5 text-base transition-all duration-200 active:scale-95 group"
+                className="px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
               >
                 <span>สมัครเข้าร่วมโครงการ JRE 2027</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -104,7 +130,7 @@ export default function HomeView({
 
             <button
               onClick={onNavigateSchedule}
-              className="px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700/80 hover:border-slate-600 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95"
+              className="px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700/80 hover:border-slate-600 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
               <Calendar className="w-4 h-4 text-rescue-400" />
               <span>ดูกำหนดการ 2 วัน 1 คืน</span>
@@ -112,7 +138,7 @@ export default function HomeView({
 
             <button
               onClick={onNavigateMerchandise}
-              className="px-6 py-4 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/40 hover:border-orange-500/60 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95"
+              className="px-6 py-4 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/40 hover:border-orange-500/60 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
               <Shirt className="w-4 h-4 text-orange-400" />
               <span>สั่งซื้อเสื้อ & กางเกงกู้ภัย</span>
@@ -185,7 +211,7 @@ export default function HomeView({
                 href="https://www.facebook.com/share/v/18cdZwKepQ/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-xs font-bold text-rescue-400 hover:text-rescue-300 bg-rescue-500/10 hover:bg-rescue-500/20 px-3.5 py-2 rounded-xl border border-rescue-500/30 transition-all"
+                className="inline-flex items-center gap-2 text-xs font-bold text-rescue-400 hover:text-rescue-300 bg-rescue-500/10 hover:bg-rescue-500/20 px-3.5 py-2 rounded-xl border border-rescue-500/30 transition-all cursor-pointer"
               >
                 <span>เปิดดูวิดีโอบน Facebook</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -197,117 +223,111 @@ export default function HomeView({
         </div>
       </section>
 
-      {/* Team Section: 1 MSU, 2 MSU, 3 MSU & 4 KKU, 5 KKU, 6 KKU, 7 KKU */}
+      {/* Team Section: Dynamically grouped by University / Institution */}
       <section className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-800 pb-5">
           <div>
             <div className="flex items-center gap-2 text-rescue-400 text-xs font-bold uppercase tracking-wider mb-2">
               <Users className="w-4 h-4" />
-              Organizing Committee
+              Organizing Committee & Instructors
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-white">
-              ทีมงานผู้ดำเนินการฝึกอบรม
+              ทีมงานผู้ดำเนินการฝึกอบรม & คณะดำเนินงาน
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              ทีมประสานงานและคณะผู้รับผิดชอบการฝึกซ้อมภาคปฏิบัติการจาก มมส และ มข.
+              ทีมประสานงานและคณะผู้รับผิดชอบการฝึกซ้อมภาคปฏิบัติการจากสถาบันการศึกษาและเครือข่ายกู้ภัย
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1.5 text-yellow-400 font-semibold bg-yellow-400/10 px-3 py-1.5 rounded-lg border border-yellow-400/30">
-              <span className="w-2 h-2 rounded-full bg-yellow-400"></span> 3 มมส
-            </span>
-            <span className="flex items-center gap-1.5 text-orange-400 font-semibold bg-orange-400/10 px-3 py-1.5 rounded-lg border border-orange-400/30">
-              <span className="w-2 h-2 rounded-full bg-orange-400"></span> 4 มข
-            </span>
+          
+          {/* Institutional Badges */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {groupedTeam.map((group, idx) => {
+              const badgeColors = [
+                'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
+                'text-orange-400 bg-orange-400/10 border-orange-400/30',
+                'text-blue-400 bg-blue-400/10 border-blue-400/30',
+                'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+                'text-purple-400 bg-purple-400/10 border-purple-400/30'
+              ];
+              const badgeColor = badgeColors[idx % badgeColors.length];
+              return (
+                <span key={group.name} className={`flex items-center gap-1.5 font-semibold px-3 py-1.5 rounded-lg border ${badgeColor}`}>
+                  <span className="w-2 h-2 rounded-full bg-current"></span>
+                  <span>{group.members.length} {group.name.replace(/มหาวิทยาลัย/g, 'ม.').slice(0, 20)}</span>
+                </span>
+              );
+            })}
           </div>
         </div>
 
-        {/* MSU Group (1, 2, 3) */}
-        <div>
-          <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <span>🏛️ ทีมผู้ดำเนินการ มหาวิทยาลัยมหาสารคาม (1 - 3 มมส)</span>
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {msuTeam.map((member) => (
-              <div 
-                key={member.id}
-                className="bg-slate-900 border border-slate-800 hover:border-yellow-500/50 rounded-3xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img 
-                      src={member.photo} 
-                      alt={member.name}
-                      className="w-20 h-20 rounded-2xl object-cover border-2 border-yellow-500/40 group-hover:border-yellow-400 transition-colors shadow-md" 
-                    />
-                    <span className="absolute -top-2 -left-2 px-2 py-0.5 bg-yellow-500 text-slate-950 text-[10px] font-black rounded-full shadow">
-                      {member.tag || 'มมส'}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-white text-base truncate group-hover:text-yellow-300 transition-colors">
-                      {member.name}
-                    </h4>
-                    <p className="text-xs font-semibold text-rescue-400 mt-0.5 line-clamp-1">
-                      {member.role}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
-                      {member.institution}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Dynamic Groups */}
+        {groupedTeam.map((group, groupIdx) => {
+          const accentColors = [
+            { border: 'hover:border-yellow-500/50', text: 'text-yellow-400', tagBg: 'bg-yellow-500 text-slate-950', imgBorder: 'border-yellow-500/40 group-hover:border-yellow-400' },
+            { border: 'hover:border-orange-500/50', text: 'text-orange-400', tagBg: 'bg-orange-600 text-white', imgBorder: 'border-orange-500/40 group-hover:border-orange-400' },
+            { border: 'hover:border-blue-500/50', text: 'text-blue-400', tagBg: 'bg-blue-600 text-white', imgBorder: 'border-blue-500/40 group-hover:border-blue-400' },
+            { border: 'hover:border-emerald-500/50', text: 'text-emerald-400', tagBg: 'bg-emerald-600 text-white', imgBorder: 'border-emerald-500/40 group-hover:border-emerald-400' },
+            { border: 'hover:border-purple-500/50', text: 'text-purple-400', tagBg: 'bg-purple-600 text-white', imgBorder: 'border-purple-500/40 group-hover:border-purple-400' }
+          ];
+          const accent = accentColors[groupIdx % accentColors.length];
 
-        {/* KKU Group (4, 5, 6, 7) */}
-        <div className="pt-4">
-          <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <span>🚒 ทีมผู้ดำเนินการ มหาวิทยาลัยขอนแก่น (4 - 7 มข)</span>
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {kkuTeam.map((member) => (
-              <div 
-                key={member.id}
-                className="bg-slate-900 border border-slate-800 hover:border-orange-500/50 rounded-3xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group"
-              >
-                <div className="text-center">
-                  <div className="relative inline-block mx-auto mb-3">
-                    <img 
-                      src={member.photo} 
-                      alt={member.name}
-                      className="w-20 h-20 rounded-2xl object-cover border-2 border-orange-500/40 group-hover:border-orange-400 transition-colors shadow-md mx-auto" 
-                    />
-                    <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-orange-600 text-white text-[10px] font-black rounded-full shadow">
-                      {member.tag || 'มข'}
-                    </span>
+          return (
+            <div key={group.name} className="space-y-4">
+              <h3 className={`text-sm font-bold ${accent.text} uppercase tracking-wider flex items-center gap-2`}>
+                <span>🏛️ {group.name} ({group.members.length} ท่าน)</span>
+              </h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {group.members.map((member) => (
+                  <div 
+                    key={member.id || member.name}
+                    className={`bg-slate-900 border border-slate-800 ${accent.border} rounded-3xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group flex flex-col justify-between`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative shrink-0">
+                        <img 
+                          src={member.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`} 
+                          alt={member.name}
+                          className={`w-20 h-20 rounded-2xl object-cover border-2 ${accent.imgBorder} transition-colors shadow-md bg-slate-950`} 
+                          onError={(e) => {
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`;
+                          }}
+                        />
+                        {member.tag && (
+                          <span className={`absolute -top-2 -left-2 px-2 py-0.5 ${accent.tagBg} text-[10px] font-black rounded-full shadow`}>
+                            {member.tag}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-white text-sm sm:text-base truncate group-hover:text-white transition-colors">
+                          {member.name}
+                        </h4>
+                        <p className="text-xs font-semibold text-rescue-400 mt-0.5 line-clamp-2">
+                          {member.role}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                          {member.institution || group.name}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <h4 className="font-bold text-white text-sm truncate group-hover:text-orange-300 transition-colors">
-                    {member.name}
-                  </h4>
-                  <p className="text-xs font-medium text-orange-400 mt-0.5 truncate">
-                    {member.role}
-                  </p>
-                  <p className="text-[10px] text-slate-400 mt-1 truncate">
-                    {member.institution}
-                  </p>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </section>
 
-      {/* Speakers Section: 1, 2, 3, 4, 5, 6 */}
+      {/* Speakers Section: Dynamically rendered & ordered */}
       <section className="space-y-8 pt-4">
         <div className="border-b border-slate-800 pb-5">
           <div className="flex items-center gap-2 text-emergency-400 text-xs font-bold uppercase tracking-wider mb-2">
             <Award className="w-4 h-4" />
-            Distinguished Instructors & Doctors
+            Distinguished Instructors & Keynote Speakers
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white">
-            ข้อมูลวิทยากรประจำโครงการ (1 - 6)
+            ข้อมูลวิทยากรประจำโครงการ ({sortedSpeakers.length} ท่าน)
           </h2>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
             ผู้เชี่ยวชาญด้านเวชศาสตร์ฉุกเฉิน การกู้ภัยทางน้ำ การใช้เชือกกู้ภัยในที่สูง และการตัดถ่างยานพาหนะ
@@ -315,49 +335,55 @@ export default function HomeView({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {speakers.map((spk) => (
-            <div 
-              key={spk.id}
-              className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group"
-            >
-              <div>
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="relative shrink-0">
-                    <img 
-                      src={spk.photo} 
-                      alt={spk.name}
-                      className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg" 
-                    />
-                    <span className="absolute -bottom-2 -right-2 w-7 h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-xs font-black border-2 border-slate-900 shadow">
-                      {spk.num}
-                    </span>
+          {sortedSpeakers.map((spk, idx) => {
+            const displayNum = spk.num || idx + 1;
+            return (
+              <div 
+                key={spk.id || idx}
+                className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="relative shrink-0">
+                      <img 
+                        src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
+                        alt={spk.name}
+                        className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg bg-slate-950" 
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
+                        }}
+                      />
+                      <span className="absolute -bottom-2 -right-2 w-7 h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-xs font-black border-2 border-slate-900 shadow">
+                        {displayNum}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20">
+                        วิทยากรท่านที่ {displayNum}
+                      </span>
+                      <h3 className="font-bold text-white text-base mt-1.5 leading-snug">
+                        {spk.name}
+                      </h3>
+                      <p className="text-xs text-slate-300 font-medium mt-1">
+                        {spk.title}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20">
-                      วิทยากรท่านที่ {spk.num}
-                    </span>
-                    <h3 className="font-bold text-white text-base mt-1.5 leading-snug">
-                      {spk.name}
-                    </h3>
-                    <p className="text-xs text-slate-300 font-medium mt-1">
-                      {spk.title}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
-                  <div className="text-xs">
-                    <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
-                    <span className="text-slate-200 font-medium">{spk.org}</span>
-                  </div>
-                  <div className="text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                    <span className="text-amber-400 font-semibold block text-[11px] mb-0.5">หัวข้อฝึกอบรม:</span>
-                    <span className="text-slate-300">{spk.topic}</span>
+                  <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
+                    <div className="text-xs">
+                      <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
+                      <span className="text-slate-200 font-medium">{spk.org}</span>
+                    </div>
+                    <div className="text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                      <span className="text-amber-400 font-semibold block text-[11px] mb-0.5">หัวข้อฝึกอบรม:</span>
+                      <span className="text-slate-300">{spk.topic}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
