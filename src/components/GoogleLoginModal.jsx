@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, Lock } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, Info } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
 
 // Helper to decode Google JWT Identity Credential Token client-side safely
@@ -19,6 +19,10 @@ function decodeJwtResponse(token) {
     return null;
   }
 }
+
+// Module-level singletons to prevent multiple initialize() calls
+let isGsiInitialized = false;
+let activeLoginCallback = null;
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [tokenClient, setTokenClient] = useState(null);
@@ -51,6 +55,11 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     }
   };
 
+  // Always keep the active callback pointing to current props
+  useEffect(() => {
+    activeLoginCallback = handleUserLoginSuccess;
+  });
+
   useEffect(() => {
     if (!isOpen) return;
     setErrorMsg(null);
@@ -59,19 +68,19 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     const setupGoogleAuth = () => {
       if (!window.google?.accounts) return false;
 
-      // 1. Official Google Identity Services (GIS) Sign-In Button (Uses JWT)
-      if (window.google.accounts.id && GOOGLE_CLIENT_ID) {
+      // 1. Initialize Google Identity Services ONCE only
+      if (window.google.accounts.id && GOOGLE_CLIENT_ID && !isGsiInitialized) {
         try {
           window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: async (response) => {
-              if (response?.credential) {
+              if (response?.credential && activeLoginCallback) {
                 const payload = decodeJwtResponse(response.credential);
                 if (payload?.email) {
                   const cleanEmail = payload.email.trim().toLowerCase();
                   const cleanName = payload.name || cleanEmail.split('@')[0];
                   const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+                  await activeLoginCallback(cleanName, cleanEmail, avatar);
                 } else {
                   setErrorMsg('ไม่สามารถอ่านข้อมูลอีเมลจากบัญชี Google ได้');
                 }
@@ -81,33 +90,33 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             cancel_on_tap_outside: true,
             context: 'signin'
           });
-
-          if (googleBtnContainerRef.current) {
-            googleBtnContainerRef.current.innerHTML = '';
-            window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
-              theme: 'outline',
-              size: 'large',
-              type: 'standard',
-              text: 'continue_with',
-              shape: 'pill',
-              logo_alignment: 'left',
-              width: 300,
-              locale: 'th'
-            });
-          }
-
-          // Trigger One Tap if available
-          try {
-            window.google.accounts.id.prompt();
-          } catch (e) {}
-
-          if (!isCancelled) setIsGsiLoaded(true);
+          isGsiInitialized = true;
         } catch (e) {
-          console.warn('GIS initialize notice:', e);
+          console.warn('GIS initialize error:', e);
         }
       }
 
-      // 2. Google OAuth2 Token Client (Popup flow)
+      // 2. Render the official Google Sign-In button
+      if (window.google.accounts.id && googleBtnContainerRef.current) {
+        try {
+          googleBtnContainerRef.current.innerHTML = '';
+          window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+            theme: 'outline',
+            size: 'large',
+            type: 'standard',
+            text: 'continue_with',
+            shape: 'pill',
+            logo_alignment: 'left',
+            width: 320,
+            locale: 'th'
+          });
+          if (!isCancelled) setIsGsiLoaded(true);
+        } catch (e) {
+          console.warn('GIS renderButton error:', e);
+        }
+      }
+
+      // 3. Initialize Google OAuth2 Token Client (Popup flow for custom button)
       if (window.google.accounts.oauth2 && GOOGLE_CLIENT_ID) {
         try {
           const client = window.google.accounts.oauth2.initTokenClient({
@@ -117,7 +126,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             error_callback: (err) => {
               console.warn('OAuth popup error:', err);
               if (err?.type === 'popup_failed_to_open') {
-                setErrorMsg('เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณากดปุ่ม "ดำเนินการต่อด้วย Google" ด้านบน หรือกดอนุญาตป๊อปอัปสำหรับเว็บไซต์นี้');
+                setErrorMsg('เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณากดไอคอนป๊อปอัปที่มุมขวาของแถบ URL และเลือก "อนุญาตเสมอ"');
               } else if (err?.type !== 'popup_closed') {
                 setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือเกิดข้อผิดพลาด');
               }
@@ -136,11 +145,11 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
                   headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
                 });
                 const profile = await res.json();
-                if (profile?.email) {
+                if (profile?.email && activeLoginCallback) {
                   const cleanEmail = profile.email.trim().toLowerCase();
                   const cleanName = profile.name || cleanEmail.split('@')[0];
                   const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+                  await activeLoginCallback(cleanName, cleanEmail, avatar);
                 } else {
                   throw new Error('ไม่สามารถอ่านข้อมูลอีเมลจาก Google ได้');
                 }
@@ -166,8 +175,8 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         if (setupGoogleAuth()) {
           clearInterval(interval);
         }
-      }, 150);
-      const timer = setTimeout(() => clearInterval(interval), 6000);
+      }, 200);
+      const timer = setTimeout(() => clearInterval(interval), 5000);
       return () => {
         isCancelled = true;
         clearInterval(interval);
@@ -195,19 +204,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
       }
     }
 
-    if (window.google?.accounts?.id) {
-      try {
-        window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            setErrorMsg('กรุณาคลิกที่ปุ่ม "ดำเนินการต่อด้วย Google" ด้านบน เพื่อเข้าสู่ระบบ');
-            setIsLoading(false);
-          }
-        });
-        return;
-      } catch (e) {}
-    }
-
-    setErrorMsg('ระบบ Google กำลังเชื่อมต่อ กรุณารอสักครู่แล้วลองกดใหม่อีกครั้ง');
+    setErrorMsg('ระบบ Google กำลังเชื่อมต่อ กรุณารอสักครู่แล้วลองใหม่อีกครั้ง');
     setIsLoading(false);
   };
 
@@ -252,10 +249,10 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         )}
 
         <div className="space-y-4">
-          {/* 1. Official Google Identity Button (GIS Iframe - immune to popup blockers) */}
+          {/* 1. Official Google Identity Button (GIS Iframe) */}
           <div className="flex flex-col items-center justify-center p-3 bg-slate-950/60 rounded-2xl border border-slate-800/80">
             <p className="text-[11px] text-slate-400 mb-2 font-medium">
-              คลิกปุ่มของ Google เพื่อเข้าสู่ระบบทันที:
+              คลิกปุ่มของ Google เพื่อเข้าสู่ระบบ:
             </p>
             <div className="min-h-[46px] flex items-center justify-center">
               <div ref={googleBtnContainerRef} id="google-official-btn" className="flex justify-center" />
@@ -285,7 +282,15 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
           </button>
 
-          <div className="pt-2 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5 leading-relaxed">
+          {/* Popup helper notice */}
+          <div className="p-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2">
+            <Info className="w-3.5 h-3.5 text-rescue-400 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              หากคลิกแล้วหน้าต่างไม่เปิดขึ้น กรุณาตรวจสอบไอคอนป๊อปอัปที่มุมขวาของแถบที่อยู่เว็บ (URL) และเลือก <strong className="text-slate-200">"อนุญาตป๊อปอัปเสมอ"</strong>
+            </p>
+          </div>
+
+          <div className="pt-1 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5 leading-relaxed">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span>ความปลอดภัยมาตรฐาน Google Identity Services • ไม่ต้องตั้งรหัสผ่าน</span>
           </div>

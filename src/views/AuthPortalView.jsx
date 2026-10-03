@@ -102,10 +102,7 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
             });
           }
 
-          try {
-            window.google.accounts.id.prompt();
-          } catch (e) {}
-
+          // Button rendered cleanly without unprompted background popup
           if (!isCancelled) setIsGsiLoaded(true);
         } catch (e) {
           console.warn('GIS initialize notice in AuthPortal:', e);

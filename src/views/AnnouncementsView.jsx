@@ -21,7 +21,8 @@ import {
   Copy,
   Share2,
   Lock,
-  User
+  User,
+  Megaphone
 } from 'lucide-react';
 
 export default function AnnouncementsView({ 
