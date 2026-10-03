@@ -28,6 +28,7 @@ import {
 export default function AnnouncementsView({ 
   announcements, 
   user,
+  myRegistration,
   onOpenGoogleLogin,
   onNavigateRegister, 
   initialScope = 'all',
@@ -358,9 +359,9 @@ export default function AnnouncementsView({
               {onNavigateRegister && (
                 <button
                   onClick={onNavigateRegister}
-                  className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 transition-all text-xs sm:text-sm"
+                  className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 transition-all text-xs sm:text-sm cursor-pointer active:scale-95"
                 >
-                  ไปหน้าลงทะเบียนโครงการ
+                  {myRegistration ? 'ไปยังแดชบอร์ดผู้สมัครของฉัน' : 'สมัครเข้าร่วมโครงการ JRE 2027'}
                 </button>
               )}
             </div>

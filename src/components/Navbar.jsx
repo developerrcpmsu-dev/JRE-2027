@@ -97,19 +97,22 @@ export default function Navbar({
               กำหนดการ
             </button>
 
-            <button
-              onClick={() => handleNav('pr')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
-                currentTab === 'pr'
-                  ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-900'
-              }`}
-              title="URL ประชาสัมพันธ์รับสมัครสาธารณะ"
-            >
-              <Megaphone className="w-4 h-4 text-orange-400" />
-              <span>รับสมัคร</span>
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-            </button>
+            {/* PR Announcements / รับสมัคร: แสดงเฉพาะเมื่อยังไม่ได้สมัครเข้าร่วมโครงการ */}
+            {!myRegistration && (
+              <button
+                onClick={() => handleNav('pr')}
+                className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  currentTab === 'pr' || (currentTab === 'announcements' && currentSubRoute === 'public')
+                    ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-900'
+                }`}
+                title="ประชาสัมพันธ์ข้อมูลและเงื่อนไขการรับสมัคร"
+              >
+                <Megaphone className="w-4 h-4 text-orange-400" />
+                <span>รับสมัคร</span>
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+              </button>
+            )}
 
             <button
               onClick={() => handleNav('orders')}
@@ -139,9 +142,9 @@ export default function Navbar({
 
             {/* Applicant Dashboard / Register Link */}
             <button
-              onClick={() => handleNav('register')}
+              onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
               className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all duration-200 flex items-center gap-2 shadow-md active:scale-95 whitespace-nowrap cursor-pointer ${
-                currentTab === 'register'
+                currentTab === 'register' || currentTab === 'dashboard'
                   ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-xl shadow-orange-500/40 ring-2 ring-orange-400/80 -translate-y-0.5'
                   : myRegistration
                   ? 'bg-slate-900/90 text-emerald-400 border border-emerald-500/50 hover:bg-slate-850 hover:border-emerald-400 shadow-sm'
@@ -174,7 +177,7 @@ export default function Navbar({
               <div className="flex items-center gap-2 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1.5 pl-2.5 rounded-2xl shadow-xl shadow-black/30 backdrop-blur-md transition-all">
                 <button
                   type="button"
-                  onClick={() => handleNav('register')}
+                  onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
                   title="ดูประวัติบัญชี / ผลการจัดสรรกลุ่มและห้องนอน"
                   className="flex items-center gap-2.5 hover:opacity-90 transition-opacity text-left cursor-pointer"
                 >
@@ -273,7 +276,7 @@ export default function Navbar({
             <div className="flex items-center gap-3 p-3 bg-slate-800/80 rounded-xl mb-2">
               <button
                 type="button"
-                onClick={() => handleNav('register')}
+                onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
                 className="flex items-center gap-3 flex-1 text-left truncate"
               >
                 <img 
@@ -314,15 +317,18 @@ export default function Navbar({
             กำหนดการ 2 วัน 1 คืน
           </button>
 
-          <button
-            onClick={() => handleNav('pr')}
-            className={`w-full text-left px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 ${
-              currentTab === 'pr' ? 'bg-orange-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Megaphone className="w-5 h-5 text-orange-400" />
-            <span>ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
-          </button>
+          {/* PR Announcements / รับสมัคร: แสดงเฉพาะเมื่อยังไม่ได้สมัคร */}
+          {!myRegistration && (
+            <button
+              onClick={() => handleNav('pr')}
+              className={`w-full text-left px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 ${
+                currentTab === 'pr' ? 'bg-orange-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Megaphone className="w-5 h-5 text-orange-400" />
+              <span>ประชาสัมพันธ์รับสมัคร (สาธารณะ)</span>
+            </button>
+          )}
 
           <button
             onClick={() => handleNav('orders')}
@@ -345,9 +351,9 @@ export default function Navbar({
           </button>
 
           <button
-            onClick={() => handleNav('register')}
+            onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
             className={`w-full text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 ${
-              currentTab === 'register' 
+              currentTab === 'register' || currentTab === 'dashboard'
                 ? 'bg-orange-500 text-white' 
                 : myRegistration
                 ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30'

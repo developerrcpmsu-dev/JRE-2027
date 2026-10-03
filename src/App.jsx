@@ -358,7 +358,7 @@ export default function App() {
           <HomeView
             teamMembers={teamMembers}
             speakers={speakers}
-            onNavigateRegister={() => setCurrentTab('register')}
+            onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
             onNavigateSchedule={() => setCurrentTab('schedule')}
             onNavigateMerchandise={() => setCurrentTab('merchandise')}
             myRegistration={myRegistration}
@@ -390,8 +390,9 @@ export default function App() {
           <AnnouncementsView 
             announcements={announcements} 
             user={user}
+            myRegistration={myRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
-            onNavigateRegister={() => setCurrentTab('register')}
+            onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
             initialScope={currentSubRoute === 'public' || currentTab === 'pr' ? 'public' : currentSubRoute === 'members' || currentTab === 'orders' ? 'members' : 'all'}
             onScopeChange={(scope) => {
               if (scope === 'public') setCurrentTab('announcements', 'public');
