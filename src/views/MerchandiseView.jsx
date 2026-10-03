@@ -100,6 +100,7 @@ export default function MerchandiseView({
   };
 
   const filteredProducts = products.filter(p => {
+    if (p.enabled === false) return false;
     if (selectedCategory === 'all') return true;
     return p.category === selectedCategory;
   });
@@ -1092,6 +1093,10 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
   const [selectedSize, setSelectedSize] = useState(sizes[0] || { name: 'M', extra_price: 0 });
   const [selectedColor, setSelectedColor] = useState(colors[0]);
   const [activePhoto, setActivePhoto] = useState(product.image);
+
+  React.useEffect(() => {
+    setActivePhoto(product.image);
+  }, [product.image]);
 
   const currentPrice = product.base_price + (selectedSize.extra_price || 0);
 

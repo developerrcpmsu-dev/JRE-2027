@@ -44,7 +44,9 @@ import {
   Shirt,
   QrCode,
   PackageCheck,
-  Camera
+  Camera,
+  Star,
+  Check
 } from 'lucide-react';
 import { DataService } from '../supabase';
 import { DEFAULT_PAYMENT_CONFIG, DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
@@ -111,6 +113,9 @@ export default function AdminDashboardView({
   const [newSizeMeasurement, setNewSizeMeasurement] = useState('');
   const [newSizeExtra, setNewSizeExtra] = useState(0);
   const [previewMerchSlip, setPreviewMerchSlip] = useState(null);
+  const [newProductImageUrl, setNewProductImageUrl] = useState('');
+  const [isUploadingProductImg, setIsUploadingProductImg] = useState(false);
+  const [previewProductImageModal, setPreviewProductImageModal] = useState(null);
 
   React.useEffect(() => {
     if (merchandiseConfig) {
@@ -528,6 +533,105 @@ export default function AdminDashboardView({
       base_price: Number(newPrice) || 0
     };
     setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+  };
+
+  const handleToggleProductEnabled = (prodIdx) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const cur = { ...updatedProducts[prodIdx] };
+    cur.enabled = cur.enabled === false ? true : false;
+    updatedProducts[prodIdx] = cur;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    triggerToast(`${cur.enabled ? 'เปิดการแสดงผล' : 'ปิดการแสดงผล'} "${cur.name}" แล้ว`);
+  };
+
+  const handleUpdateProductField = (prodIdx, field, value) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    updatedProducts[prodIdx] = {
+      ...updatedProducts[prodIdx],
+      [field]: value
+    };
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+  };
+
+  const handleAddProductImageUrl = (prodIdx) => {
+    if (!newProductImageUrl.trim()) {
+      alert('กรุณากรอกลิงก์ URL รูปภาพสินค้า');
+      return;
+    }
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const cur = { ...updatedProducts[prodIdx] };
+    const images = Array.isArray(cur.images) ? [...cur.images] : (cur.image ? [cur.image] : []);
+    images.push(newProductImageUrl.trim());
+    cur.images = images;
+    if (!cur.image) {
+      cur.image = newProductImageUrl.trim();
+    }
+    updatedProducts[prodIdx] = cur;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    setNewProductImageUrl('');
+    triggerToast('เพิ่มรูปภาพตัวอย่างสินค้าแล้ว (อย่าลืมกดบันทึกการตั้งค่า)');
+  };
+
+  const handleUploadProductImageFile = async (e, prodIdx) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingProductImg(true);
+    try {
+      const res = await DataService.uploadFile(file, 'merchandise');
+      if (res && res.url) {
+        const updatedProducts = [...(localMerchConfig.products || [])];
+        const cur = { ...updatedProducts[prodIdx] };
+        const images = Array.isArray(cur.images) ? [...cur.images] : (cur.image ? [cur.image] : []);
+        images.push(res.url);
+        cur.images = images;
+        if (!cur.image) {
+          cur.image = res.url;
+        }
+        updatedProducts[prodIdx] = cur;
+        setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+        triggerToast('อัปโหลดรูปภาพสินค้าสำเร็จ');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+    } finally {
+      setIsUploadingProductImg(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveProductImage = (prodIdx, imgIdx) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const cur = { ...updatedProducts[prodIdx] };
+    const images = Array.isArray(cur.images) ? [...cur.images] : [];
+    const removedUrl = images[imgIdx];
+    images.splice(imgIdx, 1);
+    cur.images = images;
+    if (cur.image === removedUrl) {
+      cur.image = images[0] || '';
+    }
+    updatedProducts[prodIdx] = cur;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    triggerToast('ลบรูปภาพแล้ว');
+  };
+
+  const handleSetCoverProductImage = (prodIdx, imgUrl) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const cur = { ...updatedProducts[prodIdx] };
+    cur.image = imgUrl;
+    updatedProducts[prodIdx] = cur;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    triggerToast('ตั้งเป็นรูปภาพหน้าปกสินค้าแล้ว');
+  };
+
+  const handleUpdateMerchPaymentField = (field, value) => {
+    setLocalMerchConfig(prev => ({
+      ...prev,
+      payment: {
+        ...(prev.payment || {}),
+        [field]: value
+      }
+    }));
   };
 
   // --- Handlers for Announcements ---
@@ -2802,6 +2906,26 @@ export default function AdminDashboardView({
               });
 
               if (filteredOrders.length === 0) {
+                if (merchandiseOrders.length === 0) {
+                  return (
+                    <div className="p-10 sm:p-14 text-center bg-slate-950/70 border border-slate-800 rounded-3xl space-y-4">
+                      <div className="w-16 h-16 bg-slate-900 border border-slate-700/80 rounded-2xl mx-auto flex items-center justify-center text-slate-400 shadow-inner">
+                        <PackageCheck className="w-8 h-8 text-rescue-500" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-base sm:text-lg font-bold text-white">ยังไม่มีรายการคำสั่งซื้อจากสมาชิกหรือผู้เข้าร่วมโครงการในระบบ</h4>
+                        <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+                          ระบบเชื่อมต่อฐานข้อมูลคำสั่งซื้อจริง (Real Database) โดยไม่มีข้อมูลจำลอง (Mock Data) เมื่อมีสมาชิกสั่งซื้อเสื้อหรือกางเกงผ่านระบบ รายการคำสั่งซื้อ สลิปโอนเงิน และรหัส QR รับของจะแสดงขึ้นที่นี่ทันที
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        เชื่อมต่อฐานข้อมูลคำสั่งซื้อจริงเรียบร้อยแล้ว (Live System)
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="p-12 text-center bg-slate-950/60 border border-slate-800 rounded-2xl space-y-2">
                     <PackageCheck className="w-10 h-10 text-slate-600 mx-auto" />
@@ -3007,7 +3131,82 @@ export default function AdminDashboardView({
               </button>
             </div>
 
-            {/* Google Form Backup Configuration */}
+            {/* 1. BANK ACCOUNT & PAYMENT CONFIGURATION */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-rescue-400" />
+                    <span>ข้อมูลธนาคาร & ช่องทางรับโอนเงินค่าสินค้า (Bank & Payment Settings)</span>
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    กำหนดชื่อธนาคาร เลขที่บัญชี ชื่อบัญชี และพร้อมเพย์สำหรับให้ผู้สั่งซื้อโอนเงินในหน้าสั่งซื้อสินค้า
+                  </p>
+                </div>
+                <span className="text-[11px] px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-full font-bold self-start sm:self-auto">
+                  แสดงผลอัตโนมัติในหน้าสั่งซื้อ
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-300">ชื่อธนาคาร (Bank Name):</label>
+                  <input
+                    type="text"
+                    value={localMerchConfig.payment?.bank_name || ''}
+                    onChange={(e) => handleUpdateMerchPaymentField('bank_name', e.target.value)}
+                    placeholder="เช่น ธนาคารกรุงไทย"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300">เลขที่บัญชีธนาคาร (Account Number):</label>
+                  <input
+                    type="text"
+                    value={localMerchConfig.payment?.account_number || ''}
+                    onChange={(e) => handleUpdateMerchPaymentField('account_number', e.target.value)}
+                    placeholder="เช่น 984-0-12345-6"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-rescue-400 focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300">ชื่อบัญชีรับโอนเงิน (Account Name):</label>
+                  <input
+                    type="text"
+                    value={localMerchConfig.payment?.account_name || ''}
+                    onChange={(e) => handleUpdateMerchPaymentField('account_name', e.target.value)}
+                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300">เบอร์พร้อมเพย์ (PromptPay):</label>
+                  <input
+                    type="text"
+                    value={localMerchConfig.payment?.promptpay || ''}
+                    onChange={(e) => handleUpdateMerchPaymentField('promptpay', e.target.value)}
+                    placeholder="เช่น 098-765-4321 หรือเลขประจำตัวผู้เสียภาษี"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-300">คำแนะนำ / หมายเหตุการโอนเงิน (Payment Note):</label>
+                  <input
+                    type="text"
+                    value={localMerchConfig.payment?.note || ''}
+                    onChange={(e) => handleUpdateMerchPaymentField('note', e.target.value)}
+                    placeholder="เช่น กรุณาโอนเงินตามยอดที่ระบุและแนบหลักฐานสลิปโอนเงินทุกครั้ง"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-rescue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Google Form Backup Configuration */}
             <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -3083,53 +3282,284 @@ export default function AdminDashboardView({
               </div>
             </div>
 
-            {/* Products & Sizes Configuration */}
-            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+            {/* 3. Products & Sizes Configuration (Toggle Visibility, Edit Title, Photos Gallery & Sizes) */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-5">
               
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Shirt className="w-4 h-4 text-rescue-500" />
+                    <span>จัดการสินค้า (เปิด/ปิดแสดงผล, แก้ไขชื่อ, จัดการรูปตัวอย่าง & ไซต์)</span>
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    เลือกสินค้าด้านล่างเพื่อเปิด/ปิดจำหน่าย แก้ไขชื่อและรายละเอียด จัดการคลังรูปภาพ และตั้งราคาไซต์
+                  </p>
+                </div>
+                <div className="text-xs font-bold text-slate-400">
+                  สินค้าทั้งหมด: <span className="text-white">{(localMerchConfig.products || []).length}</span> รายการ
+                </div>
+              </div>
+
               {/* Product Selector Tabs */}
               <div className="flex gap-2 overflow-x-auto pb-1">
-                {(localMerchConfig.products || []).map((prod, idx) => (
-                  <button
-                    key={prod.id}
-                    type="button"
-                    onClick={() => setSelectedProductIndex(idx)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                      selectedProductIndex === idx
-                        ? 'bg-rescue-600 text-white shadow-md'
-                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
-                    }`}
-                  >
-                    {prod.name}
-                  </button>
-                ))}
+                {(localMerchConfig.products || []).map((prod, idx) => {
+                  const isEnabled = prod.enabled !== false;
+                  return (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      onClick={() => setSelectedProductIndex(idx)}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                        selectedProductIndex === idx
+                          ? 'bg-rescue-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-emerald-400' : 'bg-rose-500'}`}></span>
+                      <span className="max-w-[200px] truncate">{prod.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                        selectedProductIndex === idx ? 'bg-rescue-700/80 text-white' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {isEnabled ? 'เปิดอยู่' : 'ปิด'}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Selected Product Editor */}
               {localMerchConfig.products?.[selectedProductIndex] && (() => {
                 const curProd = localMerchConfig.products[selectedProductIndex];
+                const isEnabled = curProd.enabled !== false;
+                const imagesList = Array.isArray(curProd.images) && curProd.images.length > 0
+                  ? curProd.images
+                  : (curProd.image ? [curProd.image] : []);
 
                 return (
-                  <div className="space-y-4 pt-2">
+                  <div className="space-y-6 pt-2">
                     
-                    {/* Base Price Editor */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+                    {/* Status & Visibility Banner */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900 rounded-2xl border border-slate-800">
                       <div>
-                        <h4 className="text-sm font-bold text-white">{curProd.name}</h4>
-                        <p className="text-xs text-slate-400">{curProd.description}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-slate-400">รหัสสินค้า: {curProd.id}</span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                            isEnabled 
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            {isEnabled ? '✓ กำลังเปิดแสดงหน้าร้าน' : '✕ ปิดการแสดงผล (ซ่อนจากหน้าร้าน)'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {isEnabled 
+                            ? 'สินค้านี้กำลังเปิดจำหน่ายและแสดงให้สมาชิกสั่งซื้อได้ตามปกติ' 
+                            : 'สินค้านี้ถูกปิดการแสดงผลชั่วคราว ผู้ใช้งานจะไม่เห็นสินค้านี้ในหน้าร้าน'}
+                        </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-slate-300 whitespace-nowrap">
-                          ราคาฐาน (Base Price):
-                        </label>
-                        <div className="relative w-28">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleProductEnabled(selectedProductIndex)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm shrink-0 active:scale-95 cursor-pointer ${
+                          isEnabled
+                            ? 'bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-emerald-600/30'
+                        }`}
+                      >
+                        {isEnabled ? (
+                          <>
+                            <X className="w-3.5 h-3.5" />
+                            <span>คลิกเพื่อปิดการแสดงผล</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>คลิกเพื่อเปิดจำหน่าย</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Product Basic Info Editor (Name, Category, Base Price, Description) */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-slate-900/70 rounded-2xl border border-slate-800">
+                      <div className="md:col-span-6">
+                        <label className="text-xs font-bold text-slate-300">ชื่อสินค้า (Product Name):</label>
+                        <input
+                          type="text"
+                          value={curProd.name || ''}
+                          onChange={(e) => handleUpdateProductField(selectedProductIndex, 'name', e.target.value)}
+                          placeholder="ระบุชื่อสินค้า..."
+                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-rescue-500"
+                        />
+                      </div>
+
+                      <div className="md:col-span-3">
+                        <label className="text-xs font-bold text-slate-300">หมวดหมู่สินค้า:</label>
+                        <select
+                          value={curProd.category || 'shirt'}
+                          onChange={(e) => handleUpdateProductField(selectedProductIndex, 'category', e.target.value)}
+                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                        >
+                          <option value="shirt">เสื้อ (Shirt / Polo)</option>
+                          <option value="pants">กางเกง (Pants / Shorts)</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-3">
+                        <label className="text-xs font-bold text-slate-300">ราคาฐานเริ่มต้น (Base Price):</label>
+                        <div className="relative mt-1.5">
                           <input
                             type="number"
-                            value={curProd.base_price}
+                            min={0}
+                            value={curProd.base_price || 0}
                             onChange={(e) => handleUpdateProductBasePrice(e.target.value)}
-                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-bold text-rescue-400 focus:outline-none focus:border-rescue-500"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-black text-rescue-400 focus:outline-none focus:border-rescue-500"
                           />
-                          <span className="absolute right-2.5 top-2 text-[10px] text-slate-400">บ.</span>
+                          <span className="absolute right-3 top-2 text-xs text-slate-400">บาท</span>
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-12">
+                        <label className="text-xs font-bold text-slate-300">คำอธิบายรายละเอียดสินค้า (Description):</label>
+                        <textarea
+                          rows={2}
+                          value={curProd.description || ''}
+                          onChange={(e) => handleUpdateProductField(selectedProductIndex, 'description', e.target.value)}
+                          placeholder="รายละเอียดเนื้อผ้า คุณสมบัติ และประโยชน์การใช้งาน..."
+                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-rescue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* PREVIEW IMAGES GALLERY MANAGER (Add, Upload, Delete, Set Cover) */}
+                    <div className="p-4 bg-slate-900/70 rounded-2xl border border-slate-800 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                            <ImageIcon className="w-4 h-4 text-rescue-400" />
+                            <span>จัดการรูปภาพตัวอย่างสินค้า ({imagesList.length} รูป)</span>
+                          </h5>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            สามารถเพิ่มรูปจาก URL หรืออัปโหลดจากเครื่อง ตั้งรูปหน้าปกหลัก และลบรูปที่ไม่ต้องการได้
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Image Thumbnails Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {imagesList.map((imgUrl, imgIdx) => {
+                          const isCover = curProd.image === imgUrl || (!curProd.image && imgIdx === 0);
+
+                          return (
+                            <div
+                              key={imgIdx}
+                              className={`relative group rounded-2xl overflow-hidden border-2 bg-slate-950 transition-all ${
+                                isCover ? 'border-rescue-500 ring-2 ring-rescue-500/20' : 'border-slate-800 hover:border-slate-700'
+                              }`}
+                            >
+                              <div className="aspect-square w-full overflow-hidden bg-slate-950">
+                                <img
+                                  src={imgUrl}
+                                  alt={`Product ${imgIdx + 1}`}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                />
+                              </div>
+
+                              {/* Badges & Actions Overlay */}
+                              {isCover && (
+                                <div className="absolute top-2 left-2 px-2 py-0.5 bg-rescue-600/90 text-white text-[10px] font-black rounded-md flex items-center gap-1 shadow">
+                                  <Star className="w-3 h-3 fill-white" />
+                                  <span>รูปหน้าปก</span>
+                                </div>
+                              )}
+
+                              <div className="p-2 bg-slate-900 border-t border-slate-800 space-y-1.5">
+                                {!isCover && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCoverProductImage(selectedProductIndex, imgUrl)}
+                                    className="w-full py-1 text-[11px] font-bold bg-slate-800 hover:bg-rescue-600/20 hover:text-rescue-400 text-slate-300 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                  >
+                                    <Star className="w-3 h-3" />
+                                    <span>ตั้งเป็นหน้าปก</span>
+                                  </button>
+                                )}
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewProductImageModal(imgUrl)}
+                                    className="flex-1 py-1 text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                    title="ดูรูปขยาย"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>ดูรูป</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveProductImage(selectedProductIndex, imgIdx)}
+                                    className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                                    title="ลบรูปนี้"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Add Image Inputs: URL & File Upload */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2 border-t border-slate-800/80">
+                        {/* Add from URL */}
+                        <div className="sm:col-span-7 flex gap-2">
+                          <input
+                            type="url"
+                            value={newProductImageUrl}
+                            onChange={(e) => setNewProductImageUrl(e.target.value)}
+                            placeholder="วางลิงก์ URL รูปภาพ เช่น https://..."
+                            className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddProductImageUrl(selectedProductIndex)}
+                            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer"
+                          >
+                            + เพิ่มจาก URL
+                          </button>
+                        </div>
+
+                        {/* Upload from Device */}
+                        <div className="sm:col-span-5">
+                          <input
+                            type="file"
+                            id="upload-product-img-input"
+                            accept="image/*"
+                            disabled={isUploadingProductImg}
+                            onChange={(e) => handleUploadProductImageFile(e, selectedProductIndex)}
+                            className="hidden"
+                          />
+                          <label
+                            htmlFor="upload-product-img-input"
+                            className={`w-full py-1.5 px-3 bg-gradient-to-r from-purple-600/30 to-indigo-600/30 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                              isUploadingProductImg ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
+                            }`}
+                          >
+                            {isUploadingProductImg ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>กำลังอัปโหลด...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>📁 อัปโหลดรูปจากเครื่อง</span>
+                              </>
+                            )}
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -3158,7 +3588,7 @@ export default function AdminDashboardView({
                           </thead>
                           <tbody className="divide-y divide-slate-800/60">
                             {curProd.sizes?.map((sz, szIdx) => {
-                              const sizeTotal = curProd.base_price + (sz.extra_price || 0);
+                              const sizeTotal = (curProd.base_price || 0) + (sz.extra_price || 0);
 
                               return (
                                 <tr key={szIdx} className="hover:bg-slate-900/50">
@@ -3188,7 +3618,7 @@ export default function AdminDashboardView({
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveSizeFromProduct(szIdx)}
-                                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
+                                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
                                       title="ลบไซส์นี้"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -3238,7 +3668,7 @@ export default function AdminDashboardView({
                         <button
                           type="button"
                           onClick={handleAddSizeToProduct}
-                          className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition-all border border-slate-700 active:scale-95"
+                          className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition-all border border-slate-700 active:scale-95 cursor-pointer"
                         >
                           + เพิ่มไซส์
                         </button>
@@ -3294,7 +3724,29 @@ export default function AdminDashboardView({
             />
             <button
               onClick={() => setPreviewMerchSlip(null)}
-              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full"
+              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MERCHANDISE PRODUCT IMAGE PREVIEW MODAL */}
+      {previewProductImageModal && (
+        <div 
+          onClick={() => setPreviewProductImageModal(null)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div className="relative max-w-2xl max-h-[85vh]">
+            <img
+              src={previewProductImageModal}
+              alt="Product Preview"
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl"
+            />
+            <button
+              onClick={() => setPreviewProductImageModal(null)}
+              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

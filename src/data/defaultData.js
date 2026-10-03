@@ -375,6 +375,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
     {
       id: 'prod_tshirt',
       name: 'เสื้อยืดที่ระลึก JRE 2027 (Official Rescue T-Shirt)',
+      enabled: true,
       category: 'shirt',
       base_price: 250,
       description: 'เสื้อยืดสกรีนลายสัญลักษณ์ JRE 2027 และชมรมกู้ภัยราชพฤกษ์ มมส เนื้อผ้า Micro Polyester เกรดพรีเมียม แห้งไว ระบายอากาศยอดเยี่ยม เหมาะสำหรับฝึกภาคสนามและสวมใส่ทำกิจกรรม',
@@ -399,6 +400,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
     {
       id: 'prod_polo',
       name: 'เสื้อโปโลปฏิบัติการกู้ภัย JRE 2027 (Rescue Polo Shirt)',
+      enabled: true,
       category: 'shirt',
       base_price: 350,
       description: 'เสื้อโปโลปกทอ ปักตราสัญลักษณ์กู้ภัยราชพฤกษ์อกซ้าย แขนติดแถบสะท้อนแสง 3M เพิ่มความปลอดภัยในเวลากลางคืน เนื้อผ้าทนทาน นุ่มใส่สบาย ระบายเหงื่อดีเยี่ยม',
@@ -421,6 +423,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
     {
       id: 'prod_pants_tactical',
       name: 'กางเกงฝึกยุทธวิธีกู้ภัย JRE Tactical Rescue Pants',
+      enabled: true,
       category: 'pants',
       base_price: 490,
       description: 'กางเกงขายาวผ้าตาราง Ripstop กันละอองน้ำ กระเป๋าข้างยุทธวิธี 6 ช่อง เสริมความแข็งแรงบริเวณหัวเข่าและเป้ากางเกง ออกแบบเพื่อความคล่องตัวในการฝึกซ้อมกู้ภัย ลุยน้ำ ลุยป่า',
@@ -443,6 +446,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
     {
       id: 'prod_shorts_training',
       name: 'กางเกงขาสั้นฝึกภาคสนาม JRE Training Shorts',
+      enabled: true,
       category: 'pants',
       base_price: 250,
       description: 'กางเกงขาสั้นผ้าร่มระบายอากาศ มีกระเป๋าซิปข้าง 2 ฝั่ง และสายผูกเอว สำหรับการฝึกกิจกรรมทางน้ำ ปฐมพยาบาล หรือวิ่งออกกำลังกาย',
@@ -463,73 +467,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
   ]
 };
 
-export const DEFAULT_MERCHANDISE_ORDERS = [
-  {
-    id: 'order_jre_01',
-    order_number: 'JRE-SHIRT-78210',
-    user_email: 'thanakorn.k@msu.ac.th',
-    customer_name: 'ธนากรณ์ เกียรติอนันต์',
-    customer_phone: '0812345678',
-    pickup_method: 'pickup',
-    shipping_address: '',
-    items: [
-      {
-        product_id: 'prod_tshirt',
-        product_name: 'เสื้อยืดที่ระลึก JRE 2027 (Official Rescue T-Shirt)',
-        size: '2XL',
-        color: 'สีกรมท่า (Navy Blue)',
-        unit_price: 280,
-        extra_price: 30,
-        quantity: 1
-      },
-      {
-        product_id: 'prod_shorts_training',
-        product_name: 'กางเกงขาสั้นฝึกภาคสนาม JRE Training Shorts',
-        size: 'L',
-        color: 'สีดำขอบส้ม',
-        unit_price: 250,
-        extra_price: 0,
-        quantity: 1
-      }
-    ],
-    total_amount: 530,
-    payment_status: 'paid_verified',
-    slip_url: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
-    slip_uploaded_at: '2026-10-02T16:30:00Z',
-    slip_admin_notes: 'ตรวจสอบยอดเงิน 530 บาท เข้าบัญชีกรุงไทยแล้ว',
-    pickup_status: 'ready',
-    pickup_at: null,
-    pickup_by_admin: null,
-    created_at: '2026-10-02T16:20:00Z'
-  },
-  {
-    id: 'order_jre_02',
-    order_number: 'JRE-SHIRT-78211',
-    user_email: 'chutima.p@msu.ac.th',
-    customer_name: 'ชุติมา พรประสิทธิ์',
-    customer_phone: '0898765432',
-    pickup_method: 'pickup',
-    shipping_address: '',
-    items: [
-      {
-        product_id: 'prod_polo',
-        product_name: 'เสื้อโปโลปฏิบัติการกู้ภัย JRE 2027 (Rescue Polo Shirt)',
-        size: 'M',
-        color: 'สีกรมท่าปักทอง',
-        unit_price: 350,
-        extra_price: 0,
-        quantity: 1
-      }
-    ],
-    total_amount: 350,
-    payment_status: 'pending_verification',
-    slip_url: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
-    slip_uploaded_at: '2026-10-02T17:15:00Z',
-    slip_admin_notes: '',
-    pickup_status: 'pending',
-    pickup_at: null,
-    pickup_by_admin: null,
-    created_at: '2026-10-02T17:05:00Z'
-  }
-];
+// Start with empty real merchandise orders (No mock data)
+export const DEFAULT_MERCHANDISE_ORDERS = [];
+
 

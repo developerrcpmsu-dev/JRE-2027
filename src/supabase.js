@@ -57,8 +57,22 @@ function initializeLocalStorage() {
   if (!localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG)) {
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
   }
-  if (!localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS)) {
-    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(DEFAULT_MERCHANDISE_ORDERS));
+  // Start with empty real merchandise orders & purge any legacy mock orders
+  const existingOrders = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS);
+  if (existingOrders) {
+    try {
+      const parsed = JSON.parse(existingOrders);
+      if (Array.isArray(parsed)) {
+        const filteredReal = parsed.filter(o => o.id !== 'order_jre_01' && o.id !== 'order_jre_02');
+        localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(filteredReal));
+      } else {
+        localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
+      }
+    } catch (e) {
+      localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
+    }
+  } else {
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEAM)) {
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
@@ -482,7 +496,7 @@ export const DataService = {
     return config;
   },
 
-  // MERCHANDISE ORDERS (Synced via project_settings to guarantee zero 404 errors)
+  // MERCHANDISE ORDERS (Synced via project_settings with zero mock data)
   async getMerchandiseOrders() {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -492,15 +506,22 @@ export const DataService = {
           .eq('key', 'merchandise_orders')
           .maybeSingle();
         if (!error && data?.value && Array.isArray(data.value)) {
-          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(data.value));
-          return data.value;
+          const realOrders = data.value.filter(o => o.id !== 'order_jre_01' && o.id !== 'order_jre_02');
+          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(realOrders));
+          return realOrders;
         }
       } catch (e) {
         console.warn('Supabase merchandise_orders query notice, fallback to local', e);
       }
     }
     const raw = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS);
-    return raw ? JSON.parse(raw) : DEFAULT_MERCHANDISE_ORDERS;
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(o => o.id !== 'order_jre_01' && o.id !== 'order_jre_02') : [];
+    } catch (e) {
+      return [];
+    }
   },
 
   async saveMerchandiseOrder(orderData) {
