@@ -95,7 +95,7 @@ export default function HomeView({
             ) : (
               <button
                 onClick={onNavigateRegister}
-                className="px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-bold rounded-2xl shadow-xl shadow-rescue-600/30 flex items-center gap-2 text-base transition-all transform active:scale-95 group"
+                className="px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center gap-2.5 text-base transition-all duration-200 active:scale-95 group"
               >
                 <span>สมัครเข้าร่วมโครงการ JRE 2027</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -104,18 +104,18 @@ export default function HomeView({
 
             <button
               onClick={onNavigateSchedule}
-              className="px-6 py-4 bg-slate-800/80 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold rounded-2xl border border-slate-700 flex items-center gap-2 text-sm transition-all"
+              className="px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700/80 hover:border-slate-600 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95"
             >
               <Calendar className="w-4 h-4 text-rescue-400" />
-              ดูกำหนดการ 2 วัน 1 คืน
+              <span>ดูกำหนดการ 2 วัน 1 คืน</span>
             </button>
 
             <button
               onClick={onNavigateMerchandise}
-              className="px-6 py-4 bg-gradient-to-r from-orange-600/30 to-amber-600/30 hover:from-orange-600/50 hover:to-amber-600/50 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/50 flex items-center gap-2 text-sm transition-all shadow-md"
+              className="px-6 py-4 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/40 hover:border-orange-500/60 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95"
             >
               <Shirt className="w-4 h-4 text-orange-400" />
-              สั่งซื้อเสื้อ & กางเกงกู้ภัย
+              <span>สั่งซื้อเสื้อ & กางเกงกู้ภัย</span>
             </button>
           </div>
 

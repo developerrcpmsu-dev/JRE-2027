@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, Info } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Lock, Sparkles } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
 
 // Helper to decode Google JWT Identity Credential Token client-side safely
@@ -20,12 +20,11 @@ function decodeJwtResponse(token) {
   }
 }
 
-// Module-level singletons to prevent multiple initialize() calls
+// Module-level singletons to prevent duplicate initialize() calls
 let isGsiInitialized = false;
 let activeLoginCallback = null;
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
-  const [tokenClient, setTokenClient] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGsiLoaded, setIsGsiLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -66,10 +65,10 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     let isCancelled = false;
 
     const setupGoogleAuth = () => {
-      if (!window.google?.accounts) return false;
+      if (!window.google?.accounts?.id || !GOOGLE_CLIENT_ID) return false;
 
       // 1. Initialize Google Identity Services ONCE only
-      if (window.google.accounts.id && GOOGLE_CLIENT_ID && !isGsiInitialized) {
+      if (!isGsiInitialized) {
         try {
           window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
@@ -97,7 +96,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
       }
 
       // 2. Render the official Google Sign-In button
-      if (window.google.accounts.id && googleBtnContainerRef.current) {
+      if (googleBtnContainerRef.current) {
         try {
           googleBtnContainerRef.current.innerHTML = '';
           window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
@@ -116,57 +115,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         }
       }
 
-      // 3. Initialize Google OAuth2 Token Client (Popup flow for custom button)
-      if (window.google.accounts.oauth2 && GOOGLE_CLIENT_ID) {
-        try {
-          const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'openid email profile',
-            prompt: 'select_account',
-            error_callback: (err) => {
-              console.warn('OAuth popup error:', err);
-              if (err?.type === 'popup_failed_to_open') {
-                setErrorMsg('เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณากดไอคอนป๊อปอัปที่มุมขวาของแถบ URL และเลือก "อนุญาตเสมอ"');
-              } else if (err?.type !== 'popup_closed') {
-                setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือเกิดข้อผิดพลาด');
-              }
-              setIsLoading(false);
-            },
-            callback: async (tokenResponse) => {
-              if (tokenResponse?.error) {
-                setErrorMsg('การเข้าสู่ระบบถูกยกเลิก หรือเกิดข้อผิดพลาดจาก Google');
-                setIsLoading(false);
-                return;
-              }
-
-              setIsLoading(true);
-              try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                });
-                const profile = await res.json();
-                if (profile?.email && activeLoginCallback) {
-                  const cleanEmail = profile.email.trim().toLowerCase();
-                  const cleanName = profile.name || cleanEmail.split('@')[0];
-                  const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await activeLoginCallback(cleanName, cleanEmail, avatar);
-                } else {
-                  throw new Error('ไม่สามารถอ่านข้อมูลอีเมลจาก Google ได้');
-                }
-              } catch (e) {
-                console.error('Fetch userinfo error:', e);
-                setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
-                setIsLoading(false);
-              }
-            }
-          });
-
-          if (!isCancelled) setTokenClient(client);
-        } catch (e) {
-          console.warn('OAuth2 client init notice:', e);
-        }
-      }
-
       return true;
     };
 
@@ -175,7 +123,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         if (setupGoogleAuth()) {
           clearInterval(interval);
         }
-      }, 200);
+      }, 150);
       const timer = setTimeout(() => clearInterval(interval), 5000);
       return () => {
         isCancelled = true;
@@ -191,39 +139,26 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   if (!isOpen) return null;
 
-  const handleCustomPopupClick = () => {
-    setIsLoading(true);
-    setErrorMsg(null);
-
-    if (tokenClient) {
-      try {
-        tokenClient.requestAccessToken({ prompt: 'select_account' });
-        return;
-      } catch (e) {
-        console.warn('tokenClient.requestAccessToken error:', e);
-      }
-    }
-
-    setErrorMsg('ระบบ Google กำลังเชื่อมต่อ กรุณารอสักครู่แล้วลองใหม่อีกครั้ง');
-    setIsLoading(false);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+      <div className="bg-slate-900 border border-slate-700/80 w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl shadow-orange-500/10 relative overflow-hidden">
         
+        {/* Glow Ambient Effects */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition-colors"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-slate-800 transition-colors z-10"
           title="ปิดหน้าต่าง"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Brand Header */}
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-white rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-white/10 mb-3 p-2.5">
+        <div className="text-center mb-6 relative z-10">
+          <div className="w-16 h-16 bg-white rounded-3xl mx-auto flex items-center justify-center shadow-xl shadow-blue-500/10 mb-4 p-3.5 border border-slate-200/50">
             <svg className="w-full h-full" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -231,13 +166,17 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
           </div>
-          <h3 className="text-xl font-black text-white">เข้าสู่ระบบด้วยบัญชี Google</h3>
-          <p className="text-slate-400 text-xs mt-0.5">
+          
+          <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            เข้าสู่ระบบด้วยบัญชี Google
+          </h3>
+          <p className="text-slate-400 text-xs mt-1">
             โครงการ JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม
           </p>
+
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-semibold">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>ดึงชื่อ อีเมล และรูปโปรไฟล์จาก Google อัตโนมัติ 100%</span>
+            <span>ยืนยันตัวตนอัตโนมัติ ไม่ต้องตั้งหรือจำรหัสผ่าน</span>
           </div>
         </div>
 
@@ -248,51 +187,36 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
           </div>
         )}
 
-        <div className="space-y-4">
-          {/* 1. Official Google Identity Button (GIS Iframe) */}
-          <div className="flex flex-col items-center justify-center p-3 bg-slate-950/60 rounded-2xl border border-slate-800/80">
-            <p className="text-[11px] text-slate-400 mb-2 font-medium">
-              คลิกปุ่มของ Google เพื่อเข้าสู่ระบบ:
+        {/* The Star of the Modal: The Official Google Button Container */}
+        <div className="relative z-10 space-y-4">
+          <div className="p-6 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-inner flex flex-col items-center justify-center gap-3">
+            <p className="text-xs text-slate-300 font-medium text-center">
+              คลิกปุ่มทางการของ Google ด้านล่าง เพื่อยืนยันตัวตน:
             </p>
-            <div className="min-h-[46px] flex items-center justify-center">
-              <div ref={googleBtnContainerRef} id="google-official-btn" className="flex justify-center" />
+
+            <div className="min-h-[46px] w-full flex justify-center items-center py-1">
+              <div 
+                ref={googleBtnContainerRef} 
+                id="google-official-btn" 
+                className="flex justify-center transition-all duration-300 hover:scale-[1.02]" 
+              />
             </div>
+
             {!isGsiLoaded && (
-              <div className="flex items-center gap-2 text-xs text-slate-400 py-1">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-rescue-500" />
-                <span>กำลังโหลดระบบ Google Sign-In...</span>
+              <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-rescue-500" />
+                <span>กำลังเชื่อมต่อความปลอดภัย Google...</span>
               </div>
             )}
-          </div>
 
-          {/* 2. Direct Popup Account Chooser Button */}
-          <button
-            type="button"
-            onClick={handleCustomPopupClick}
-            disabled={isLoading}
-            className="w-full py-3.5 px-5 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 text-sm group active:scale-[0.98] border border-slate-200"
-          >
-            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
-            <span>{isLoading ? 'กำลังเชื่อมต่อ Google...' : 'เปิดหน้าต่างเลือกบัญชี Google (Popup)'}</span>
-            <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
-          </button>
-
-          {/* Popup helper notice */}
-          <div className="p-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2">
-            <Info className="w-3.5 h-3.5 text-rescue-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              หากคลิกแล้วหน้าต่างไม่เปิดขึ้น กรุณาตรวจสอบไอคอนป๊อปอัปที่มุมขวาของแถบที่อยู่เว็บ (URL) และเลือก <strong className="text-slate-200">"อนุญาตป๊อปอัปเสมอ"</strong>
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed max-w-xs pt-1">
+              ระบบจะดึงชื่อ-นามสกุล อีเมล และรูปโปรไฟล์จาก Google มาสร้างบัญชีผู้เข้าร่วมโครงการให้อัตโนมัติ 100%
             </p>
           </div>
 
-          <div className="pt-1 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5 leading-relaxed">
+          <div className="pt-2 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5 leading-relaxed">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span>ความปลอดภัยมาตรฐาน Google Identity Services • ไม่ต้องตั้งรหัสผ่าน</span>
+            <span>ความปลอดภัยมาตรฐาน Google Identity Services • เข้ารหัสข้อมูลสากล</span>
           </div>
         </div>
 
