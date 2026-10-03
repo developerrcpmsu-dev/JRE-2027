@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Lock, Sparkles } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Info, UserCheck, Users, ExternalLink } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
 
 // Helper to decode Google JWT Identity Credential Token client-side safely
@@ -20,14 +20,16 @@ function decodeJwtResponse(token) {
   }
 }
 
-// Module-level singletons to prevent duplicate initialize() calls
+// Module-level singletons
 let isGsiInitialized = false;
 let activeLoginCallback = null;
+let activeTokenClient = null;
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isGsiLoaded, setIsGsiLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [showPopupTip, setShowPopupTip] = useState(false);
   const googleBtnContainerRef = useRef(null);
 
   // Sync logged-in user profile with Supabase and localStorage
@@ -54,7 +56,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     }
   };
 
-  // Always keep the active callback pointing to current props
   useEffect(() => {
     activeLoginCallback = handleUserLoginSuccess;
   });
@@ -62,13 +63,21 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   useEffect(() => {
     if (!isOpen) return;
     setErrorMsg(null);
+    setShowPopupTip(false);
     let isCancelled = false;
 
     const setupGoogleAuth = () => {
-      if (!window.google?.accounts?.id || !GOOGLE_CLIENT_ID) return false;
+      if (!window.google?.accounts || !GOOGLE_CLIENT_ID) return false;
 
-      // 1. Initialize Google Identity Services ONCE only
-      if (!isGsiInitialized) {
+      // 1. Disable Auto Select so Google NEVER locks to a single account!
+      try {
+        if (window.google.accounts.id?.disableAutoSelect) {
+          window.google.accounts.id.disableAutoSelect();
+        }
+      } catch (e) {}
+
+      // 2. Initialize Google Identity Services ONCE only
+      if (window.google.accounts.id && !isGsiInitialized) {
         try {
           window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
@@ -95,15 +104,15 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         }
       }
 
-      // 2. Render the official Google Sign-In button
-      if (googleBtnContainerRef.current) {
+      // 3. Render Google Sign-In Button with 'signin_with' to allow selecting ANY account
+      if (window.google.accounts.id && googleBtnContainerRef.current) {
         try {
           googleBtnContainerRef.current.innerHTML = '';
           window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
             theme: 'outline',
             size: 'large',
             type: 'standard',
-            text: 'continue_with',
+            text: 'signin_with', // Renders "ลงชื่อเข้าใช้ด้วย Google" (Universal, not locked to 1 email)
             shape: 'pill',
             logo_alignment: 'left',
             width: 320,
@@ -113,6 +122,49 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         } catch (e) {
           console.warn('GIS renderButton error:', e);
         }
+      }
+
+      // 4. Initialize Token Client for explicit Account Chooser prompt
+      if (window.google.accounts.oauth2 && !activeTokenClient) {
+        try {
+          activeTokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'openid email profile',
+            prompt: 'select_account',
+            error_callback: (err) => {
+              console.warn('OAuth popup error:', err);
+              if (err?.type === 'popup_failed_to_open') {
+                setShowPopupTip(true);
+              }
+              setIsLoading(false);
+            },
+            callback: async (tokenResponse) => {
+              if (tokenResponse?.error) {
+                setErrorMsg('การเข้าสู่ระบบถูกยกเลิก');
+                setIsLoading(false);
+                return;
+              }
+              setIsLoading(true);
+              try {
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                });
+                const profile = await res.json();
+                if (profile?.email && activeLoginCallback) {
+                  const cleanEmail = profile.email.trim().toLowerCase();
+                  const cleanName = profile.name || cleanEmail.split('@')[0];
+                  const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+                  await activeLoginCallback(cleanName, cleanEmail, avatar);
+                } else {
+                  throw new Error('ไม่พบข้อมูลอีเมล');
+                }
+              } catch (e) {
+                setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
+                setIsLoading(false);
+              }
+            }
+          });
+        } catch (e) {}
       }
 
       return true;
@@ -138,6 +190,21 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleOpenAccountChooser = () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    if (activeTokenClient) {
+      try {
+        activeTokenClient.requestAccessToken({ prompt: 'select_account' });
+        return;
+      } catch (e) {
+        console.warn('Token client request failed:', e);
+      }
+    }
+    setErrorMsg('กรุณาคลิกที่ปุ่ม Google ด้านบนเพื่อเข้าสู่ระบบ');
+    setIsLoading(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -176,7 +243,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-semibold">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>ยืนยันตัวตนอัตโนมัติ ไม่ต้องตั้งหรือจำรหัสผ่าน</span>
+            <span>เลือกบัญชี Gmail ใดก็ได้ ยืนยันตัวตนอัตโนมัติ</span>
           </div>
         </div>
 
@@ -187,11 +254,24 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
           </div>
         )}
 
-        {/* The Star of the Modal: The Official Google Button Container */}
-        <div className="relative z-10 space-y-4">
-          <div className="p-6 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-inner flex flex-col items-center justify-center gap-3">
+        {/* Popup Blocked Warning Box with Clear Actionable Steps */}
+        {showPopupTip && (
+          <div className="mb-4 p-3.5 bg-amber-950/50 border border-amber-500/50 rounded-2xl text-amber-200 text-xs space-y-1.5 animate-in fade-in">
+            <div className="flex items-center gap-2 font-bold text-white">
+              <Info className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>เบราว์เซอร์บล็อกหน้าต่างเลือกบัญชี:</span>
+            </div>
+            <p className="text-[11px] text-amber-200/90 leading-relaxed pl-6">
+              ให้มองที่<b>มุมขวาของแถบที่อยู่เว็บ (URL ด้านบน)</b> จะมีไอคอนป๊อปอัปกากบาทสีแดง ให้คลิกแล้วเลือก <b>"อนุญาตป๊อปอัปและการเปลี่ยนเส้นทางเสมอ"</b> แล้วกดลองใหม่อีกครั้ง
+            </p>
+          </div>
+        )}
+
+        <div className="relative z-10 space-y-3.5">
+          {/* Main Official Google Button Container */}
+          <div className="p-5 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-inner flex flex-col items-center justify-center gap-3">
             <p className="text-xs text-slate-300 font-medium text-center">
-              คลิกปุ่มทางการของ Google ด้านล่าง เพื่อยืนยันตัวตน:
+              คลิกเพื่อเข้าสู่ระบบและเลือกบัญชี Google:
             </p>
 
             <div className="min-h-[46px] w-full flex justify-center items-center py-1">
@@ -203,20 +283,27 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
 
             {!isGsiLoaded && (
-              <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-rescue-500" />
-                <span>กำลังเชื่อมต่อความปลอดภัย Google...</span>
+              <div className="flex items-center gap-2 text-xs text-slate-400 py-1">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-rescue-500" />
+                <span>กำลังโหลดระบบ Google Sign-In...</span>
               </div>
             )}
-
-            <p className="text-[11px] text-slate-400 text-center leading-relaxed max-w-xs pt-1">
-              ระบบจะดึงชื่อ-นามสกุล อีเมล และรูปโปรไฟล์จาก Google มาสร้างบัญชีผู้เข้าร่วมโครงการให้อัตโนมัติ 100%
-            </p>
           </div>
+
+          {/* Account Chooser Switcher Button (Allows picking ANY account explicitly) */}
+          <button
+            type="button"
+            onClick={handleOpenAccountChooser}
+            disabled={isLoading}
+            className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700 hover:border-slate-600 transition-all flex items-center justify-center gap-2.5 text-xs active:scale-[0.98] shadow-md"
+          >
+            <Users className="w-4 h-4 text-orange-400" />
+            <span>{isLoading ? 'กำลังเปิดหน้าต่างเลือกบัญชี...' : 'เลือกบัญชี Google อื่น / สลับบัญชี Gmail'}</span>
+          </button>
 
           <div className="pt-2 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5 leading-relaxed">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span>ความปลอดภัยมาตรฐาน Google Identity Services • เข้ารหัสข้อมูลสากล</span>
+            <span>ความปลอดภัยมาตรฐาน Google Identity Services • ไม่ล็อกบัญชี</span>
           </div>
         </div>
 

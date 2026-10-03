@@ -68,6 +68,9 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
       // 1. Official Google Identity Services (GIS) Sign-In Button (Uses JWT)
       if (window.google.accounts.id && GOOGLE_CLIENT_ID) {
         try {
+          if (window.google.accounts.id?.disableAutoSelect) {
+            window.google.accounts.id.disableAutoSelect();
+          }
           window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: async (response) => {
@@ -94,7 +97,7 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
               theme: 'outline',
               size: 'large',
               type: 'standard',
-              text: 'continue_with',
+              text: 'signin_with',
               shape: 'pill',
               logo_alignment: 'left',
               width: 300,
