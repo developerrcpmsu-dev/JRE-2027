@@ -38,9 +38,26 @@ export default function MerchandiseView({
   merchandiseConfig,
   orders = [],
   onSaveOrder,
-  onOpenGoogleLogin
+  onOpenGoogleLogin,
+  initialTab = 'catalog',
+  onTabChange
 }) {
-  const [activeTab, setActiveTab] = useState('catalog'); // 'catalog' | 'cart' | 'my_orders'
+  const [activeTab, setActiveTab] = useState(initialTab || 'catalog'); // 'catalog' | 'cart' | 'my_orders'
+
+  // Sync activeTab when initialTab changes from URL
+  useEffect(() => {
+    if (initialTab && initialTab !== activeTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
+
   const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' | 'shirt' | 'pants'
   const [cart, setCart] = useState([]);
   const [activePickupOrder, setActivePickupOrder] = useState(null);
@@ -134,7 +151,7 @@ export default function MerchandiseView({
   // Buy Now (Add to cart & jump to checkout tab)
   const handleBuyNow = (product, sizeObj, color) => {
     handleAddToCart(product, sizeObj, color);
-    setActiveTab('cart');
+    handleTabChange('cart');
   };
 
   const handleUpdateQuantity = (index, delta) => {
@@ -295,8 +312,8 @@ export default function MerchandiseView({
           {/* Quick Stats or Actions */}
           <div className="flex items-center gap-2 self-start md:self-auto">
             <button
-              onClick={() => setActiveTab('cart')}
-              className="relative px-4 py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95"
+              onClick={() => handleTabChange('cart')}
+              className="relative px-4 py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer"
             >
               <ShoppingBag className="w-4 h-4" />
               <span>ตะกร้าสินค้า</span>
@@ -308,8 +325,8 @@ export default function MerchandiseView({
             </button>
 
             <button
-              onClick={() => setActiveTab('my_orders')}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95"
+              onClick={() => handleTabChange('my_orders')}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95 cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-rescue-400" />
               <span>ออเดอร์ & QR รับของ</span>
@@ -355,8 +372,8 @@ export default function MerchandiseView({
       {/* NAVIGATION TABS */}
       <div className="flex border-b border-slate-800 space-x-2 sm:space-x-4">
         <button
-          onClick={() => setActiveTab('catalog')}
-          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+          onClick={() => handleTabChange('catalog')}
+          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
             activeTab === 'catalog'
               ? 'border-rescue-500 text-rescue-400'
               : 'border-transparent text-slate-400 hover:text-white'
@@ -367,8 +384,8 @@ export default function MerchandiseView({
         </button>
 
         <button
-          onClick={() => setActiveTab('cart')}
-          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all relative ${
+          onClick={() => handleTabChange('cart')}
+          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all relative cursor-pointer ${
             activeTab === 'cart'
               ? 'border-rescue-500 text-rescue-400'
               : 'border-transparent text-slate-400 hover:text-white'
@@ -384,8 +401,8 @@ export default function MerchandiseView({
         </button>
 
         <button
-          onClick={() => setActiveTab('my_orders')}
-          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+          onClick={() => handleTabChange('my_orders')}
+          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
             activeTab === 'my_orders'
               ? 'border-rescue-500 text-rescue-400'
               : 'border-transparent text-slate-400 hover:text-white'
@@ -483,8 +500,8 @@ export default function MerchandiseView({
                     กรุณาเลือกเสื้อหรือกางเกงที่คุณต้องการสั่งซื้อจากหน้ารายการสินค้า
                   </p>
                   <button
-                    onClick={() => setActiveTab('catalog')}
-                    className="px-5 py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white rounded-xl text-xs font-bold transition-all"
+                    onClick={() => handleTabChange('catalog')}
+                    className="px-5 py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
                   >
                     ไปเลือกดูสินค้า
                   </button>

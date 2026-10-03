@@ -273,7 +273,7 @@ Joint Response Exercise (JRE 2027)
 “เรียนรู้จริง • ฝึกจริง • ทำงานร่วมกันจริง”`,
     category: 'pr',
     pinned: true,
-    action_url: 'https://jre-2027.vercel.app/?tab=register',
+    action_url: 'https://jre-2027.vercel.app/register',
     action_label: 'สมัครเข้าร่วมโครงการ JRE 2027',
     created_at: '2026-10-02T21:00:00Z',
     images: [],

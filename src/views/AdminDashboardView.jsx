@@ -52,6 +52,8 @@ import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
 
 export default function AdminDashboardView({
+  initialTab = 'applicants',
+  onTabChange,
   registrations,
   onUpdateAllocation,
   onDeleteRegistration,
@@ -73,7 +75,28 @@ export default function AdminDashboardView({
   onVerifyOrderPayment,
   onMarkOrderReceived
 }) {
-  const [activeTab, setActiveTab] = useState('applicants'); // 'applicants', 'payment_settings', 'forms', 'announcements', 'merchandise'
+  const resolveInitialTab = (tab) => {
+    if (tab === 'payment') return 'payment_settings';
+    return tab || 'applicants';
+  };
+
+  const [activeTab, setActiveTab] = useState(() => resolveInitialTab(initialTab));
+
+  React.useEffect(() => {
+    if (initialTab) {
+      const resolved = resolveInitialTab(initialTab);
+      if (resolved !== activeTab) {
+        setActiveTab(resolved);
+      }
+    }
+  }, [initialTab]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (onTabChange) {
+      onTabChange(tab === 'payment_settings' ? 'payment' : tab);
+    }
+  };
 
   // Merchandise State
   const [localMerchConfig, setLocalMerchConfig] = useState(() => {
@@ -709,8 +732,8 @@ export default function AdminDashboardView({
       {/* Admin Tabs */}
       <div className="flex border-b border-slate-800 gap-2 overflow-x-auto pb-1">
         <button
-          onClick={() => setActiveTab('applicants')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          onClick={() => handleTabChange('applicants')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'applicants'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -721,8 +744,8 @@ export default function AdminDashboardView({
         </button>
 
         <button
-          onClick={() => setActiveTab('payment_settings')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          onClick={() => handleTabChange('payment_settings')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'payment_settings'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -733,8 +756,8 @@ export default function AdminDashboardView({
         </button>
 
         <button
-          onClick={() => setActiveTab('forms')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          onClick={() => handleTabChange('forms')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'forms'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -745,8 +768,8 @@ export default function AdminDashboardView({
         </button>
 
         <button
-          onClick={() => setActiveTab('announcements')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          onClick={() => handleTabChange('announcements')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'announcements'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -757,8 +780,8 @@ export default function AdminDashboardView({
         </button>
 
         <button
-          onClick={() => setActiveTab('merchandise')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          onClick={() => handleTabChange('merchandise')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'merchandise'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-900'

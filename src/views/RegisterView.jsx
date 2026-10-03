@@ -52,10 +52,20 @@ export default function RegisterView({
   onUpdateRegistration,
   onOpenGoogleLogin,
   formsConfig,
-  paymentConfig 
+  paymentConfig,
+  subRoute,
+  onSubRouteChange
 }) {
   const effectivePaymentConfig = paymentConfig || DEFAULT_PAYMENT_CONFIG;
   const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (subRoute === 'dashboard') {
+      setIsEditing(false);
+    } else if (subRoute === 'form' && myRegistration) {
+      setIsEditing(true);
+    }
+  }, [subRoute, myRegistration]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -266,6 +276,7 @@ export default function RegisterView({
     try {
       await onSaveRegistration(payload);
       setIsEditing(false);
+      if (onSubRouteChange) onSubRouteChange('dashboard');
       setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลประวัติผู้สมัครเรียบร้อยแล้ว!' });
       triggerToast('บันทึกข้อมูลใบสมัคร JRE 2027 เรียบร้อยแล้ว', 'success');
       
@@ -545,8 +556,11 @@ export default function RegisterView({
             </div>
 
             <button
-              onClick={() => setIsEditing(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
+              onClick={() => {
+                setIsEditing(true);
+                if (onSubRouteChange) onSubRouteChange('form');
+              }}
+              className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer"
             >
               <Edit className="w-3.5 h-3.5" />
               <span>แก้ไขข้อมูลประวัติของฉัน</span>
@@ -2039,8 +2053,11 @@ export default function RegisterView({
           {isEditing && (
             <button
               type="button"
-              onClick={() => setIsEditing(false)}
-              className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm"
+              onClick={() => {
+                setIsEditing(false);
+                if (onSubRouteChange) onSubRouteChange('dashboard');
+              }}
+              className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95"
             >
               ยกเลิก
             </button>

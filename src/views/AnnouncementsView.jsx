@@ -30,18 +30,23 @@ export default function AnnouncementsView({
   user,
   onOpenGoogleLogin,
   onNavigateRegister, 
-  initialScope = 'all' 
+  initialScope = 'all',
+  onScopeChange
 }) {
   const getInitialScope = () => {
     try {
       const url = new URL(window.location.href);
+      const path = url.pathname.toLowerCase();
+      if (path.includes('/announcements/pr') || path.endsWith('/pr')) return 'public';
+      if (path.includes('/announcements/orders') || path.endsWith('/orders')) return 'members';
+
       const tabParam = url.searchParams.get('tab');
       const typeParam = url.searchParams.get('type') || url.searchParams.get('view');
       if (tabParam === 'pr' || typeParam === 'public') return 'public';
       if (tabParam === 'orders' || typeParam === 'members') return 'members';
       if (initialScope === 'public' || initialScope === 'members') return initialScope;
     } catch (e) {}
-    return 'all';
+    return initialScope || 'all';
   };
 
   const [activeScope, setActiveScope] = useState(getInitialScope);
@@ -49,6 +54,33 @@ export default function AnnouncementsView({
   const [copiedPageUrl, setCopiedPageUrl] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Sync active scope when initialScope changes from route navigation
+  React.useEffect(() => {
+    if (initialScope) {
+      setActiveScope(initialScope);
+    }
+  }, [initialScope]);
+
+  // Auto-scroll to target announcement when shared link with ?id= or ?annId= is opened
+  React.useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const targetId = url.searchParams.get('id') || url.searchParams.get('annId');
+      if (targetId && announcements.length > 0) {
+        setTimeout(() => {
+          const el = document.getElementById(`ann-${targetId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('ring-2', 'ring-rescue-500', 'shadow-2xl');
+            setTimeout(() => {
+              el.classList.remove('ring-2', 'ring-rescue-500', 'shadow-2xl');
+            }, 3500);
+          }
+        }, 400);
+      }
+    } catch (e) {}
+  }, [announcements]);
 
   // Lightbox Modal State
   const [lightboxImages, setLightboxImages] = useState(null); // Array of images
@@ -59,23 +91,12 @@ export default function AnnouncementsView({
 
   const handleScopeChange = (newScope) => {
     setActiveScope(newScope);
-    try {
-      const url = new URL(window.location.href);
-      if (newScope === 'public') {
-        url.searchParams.set('tab', 'pr');
-        url.searchParams.delete('type');
-        url.searchParams.delete('view');
-      } else if (newScope === 'members') {
-        url.searchParams.set('tab', 'orders');
-        url.searchParams.delete('type');
-        url.searchParams.delete('view');
-      } else {
-        url.searchParams.set('tab', 'announcements');
-        url.searchParams.delete('type');
-        url.searchParams.delete('view');
-      }
-      window.history.replaceState({}, '', url.toString());
-    } catch (e) {}
+    if (onScopeChange) {
+      onScopeChange(newScope);
+    } else {
+      const cleanPath = newScope === 'public' ? '/announcements/pr' : newScope === 'members' ? '/announcements/orders' : '/announcements';
+      window.history.pushState({}, '', cleanPath);
+    }
   };
 
   const categories = [
@@ -107,10 +128,10 @@ export default function AnnouncementsView({
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://jre-2027.vercel.app';
   const currentShareUrl = activeScope === 'public'
-    ? `${currentOrigin}/?tab=pr`
+    ? `${currentOrigin}/announcements/pr`
     : activeScope === 'members'
-    ? `${currentOrigin}/?tab=orders`
-    : `${currentOrigin}/?tab=announcements`;
+    ? `${currentOrigin}/announcements/orders`
+    : `${currentOrigin}/announcements`;
 
   const shareTitle = activeScope === 'public'
     ? 'ลิงก์ URL หน้าประชาสัมพันธ์รับสมัครทางการ (Public PR)'
@@ -357,7 +378,8 @@ export default function AnnouncementsView({
             return (
               <article
                 key={item.id}
-                className={`bg-slate-900 border rounded-3xl p-6 sm:p-7 transition-all shadow-xl ${
+                id={`ann-${item.id}`}
+                className={`bg-slate-900 border rounded-3xl p-6 sm:p-7 transition-all duration-300 shadow-xl scroll-mt-28 ${
                   item.pinned 
                     ? 'border-rescue-500/50 bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/20' 
                     : 'border-slate-800 hover:border-slate-700'
@@ -377,12 +399,13 @@ export default function AnnouncementsView({
                     <button
                       type="button"
                       onClick={() => {
-                        const url = `https://jre-2027.vercel.app/?tab=announcements&annId=${item.id}`;
+                        const scopePath = item.category === 'pr' ? '/announcements/pr' : '/announcements/orders';
+                        const url = `${currentOrigin}${scopePath}?id=${item.id}`;
                         navigator.clipboard.writeText(url);
                         setCopiedId(item.id);
                         setTimeout(() => setCopiedId(null), 2000);
                       }}
-                      className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors border border-slate-700"
+                      className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors border border-slate-700 cursor-pointer active:scale-95"
                     >
                       {copiedId === item.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3 text-rescue-400" />}
                       <span>{copiedId === item.id ? 'คัดลอกแล้ว' : 'แชร์โพสต์นี้'}</span>

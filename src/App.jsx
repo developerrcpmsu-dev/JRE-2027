@@ -14,38 +14,49 @@ import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
 
+import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/router';
+
 export default function App() {
-  const getInitialTab = () => {
-    try {
-      const url = new URL(window.location.href);
-      const tabParam = url.searchParams.get('tab') || window.location.hash.replace('#', '');
-      const validTabs = ['home', 'register', 'announcements', 'schedule', 'team', 'forms', 'profile', 'admin', 'pr', 'orders', 'merchandise', 'shop', 'store'];
-      if (validTabs.includes(tabParam)) return tabParam;
-    } catch (e) {}
-    return 'home';
-  };
+  const [route, setRoute] = useState(parseCurrentRoute);
 
-  const [currentTab, setCurrentTabState] = useState(getInitialTab);
+  const currentTab = route.mainTab;
+  const currentSubRoute = route.subRoute;
 
-  const setCurrentTab = (newTab) => {
-    setCurrentTabState(newTab);
-    try {
-      const url = new URL(window.location.href);
-      if (newTab === 'home') {
-        url.searchParams.delete('tab');
-      } else {
-        url.searchParams.set('tab', newTab);
-      }
-      window.history.pushState({ tab: newTab }, '', url.toString());
-    } catch (e) {}
+  const setCurrentTab = (newTab, newSubRoute = null) => {
+    let main = newTab;
+    let sub = newSubRoute;
+
+    if (newTab === 'pr') {
+      main = 'announcements';
+      sub = 'public';
+    } else if (newTab === 'orders') {
+      main = 'announcements';
+      sub = 'members';
+    } else if (newTab === 'dashboard') {
+      main = 'register';
+      sub = 'dashboard';
+    } else if (newTab === 'shop' || newTab === 'store') {
+      main = 'merchandise';
+      sub = 'catalog';
+    }
+
+    syncUrlToRoute(main, sub);
+    setRoute({ mainTab: main, subRoute: sub, canonicalPath: getPathForRoute(main, sub) });
   };
 
   // Sync browser back/forward buttons and hash navigation
   useEffect(() => {
+    // If user arrived with legacy ?tab= or hash, normalize immediately to clean path
+    const initial = parseCurrentRoute();
+    if (window.location.search.includes('tab=') || window.location.hash) {
+      syncUrlToRoute(initial.mainTab, initial.subRoute, true);
+    }
+
     const handleLocationChange = () => {
-      const tab = getInitialTab();
-      setCurrentTabState(tab);
+      const parsed = parseCurrentRoute();
+      setRoute(parsed);
     };
+
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('hashchange', handleLocationChange);
     return () => {
@@ -368,6 +379,10 @@ export default function App() {
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             formsConfig={formsConfig}
             paymentConfig={paymentConfig}
+            subRoute={currentSubRoute}
+            onSubRouteChange={(sub) => {
+              setCurrentTab('register', sub);
+            }}
           />
         )}
 
@@ -377,7 +392,12 @@ export default function App() {
             user={user}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             onNavigateRegister={() => setCurrentTab('register')}
-            initialScope={currentTab === 'pr' ? 'public' : currentTab === 'orders' ? 'members' : 'all'}
+            initialScope={currentSubRoute === 'public' || currentTab === 'pr' ? 'public' : currentSubRoute === 'members' || currentTab === 'orders' ? 'members' : 'all'}
+            onScopeChange={(scope) => {
+              if (scope === 'public') setCurrentTab('announcements', 'public');
+              else if (scope === 'members') setCurrentTab('announcements', 'members');
+              else setCurrentTab('announcements', 'all');
+            }}
           />
         )}
 
@@ -388,11 +408,21 @@ export default function App() {
             orders={merchandiseOrders}
             onSaveOrder={handleSaveMerchandiseOrder}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+            initialTab={currentSubRoute === 'my_orders' ? 'my_orders' : currentSubRoute === 'cart' ? 'cart' : 'catalog'}
+            onTabChange={(tab) => {
+              if (tab === 'my_orders') setCurrentTab('merchandise', 'my_orders');
+              else if (tab === 'cart') setCurrentTab('merchandise', 'cart');
+              else setCurrentTab('merchandise', 'catalog');
+            }}
           />
         )}
 
         {currentTab === 'admin' && isAdmin && (
           <AdminDashboardView
+            initialTab={currentSubRoute || 'applicants'}
+            onTabChange={(tab) => {
+              setCurrentTab('admin', tab);
+            }}
             registrations={registrations}
             onUpdateAllocation={handleUpdateAllocation}
             onDeleteRegistration={handleDeleteRegistration}
