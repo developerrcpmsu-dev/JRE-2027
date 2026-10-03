@@ -84,6 +84,17 @@ export default function App() {
   const [speakers, setSpeakers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Helper to match registration robustly (by user_id or case-insensitive email)
+  const matchRegistration = (userTarget, regList) => {
+    if (!userTarget || !Array.isArray(regList) || regList.length === 0) return null;
+    const targetEmail = userTarget.email?.toLowerCase().trim();
+    const targetId = userTarget.id;
+    return regList.find(r => 
+      (targetId && (r.user_id === targetId || r.id === targetId)) ||
+      (targetEmail && r.user_email?.toLowerCase().trim() === targetEmail)
+    ) || null;
+  };
+
   // Load Initial Data & Sessions
   useEffect(() => {
     async function loadData() {
@@ -130,7 +141,7 @@ export default function App() {
                 });
                 localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
                 setUser(userObj);
-                const found = regs.find(r => r.user_id === userObj.id || r.user_email === userObj.email);
+                const found = matchRegistration(userObj, regs);
                 if (found) setMyRegistration(found);
               }
             }
@@ -144,7 +155,7 @@ export default function App() {
         if (storedUser) {
           const parsed = JSON.parse(storedUser);
           setUser(parsed);
-          const found = regs.find(r => r.user_id === parsed.id || r.user_email === parsed.email);
+          const found = matchRegistration(parsed, regs);
           if (found) setMyRegistration(found);
         }
 
@@ -165,7 +176,7 @@ export default function App() {
               provider: 'google'
             };
             setUser(u);
-            const found = regs.find(r => r.user_id === u.id || r.user_email === u.email);
+            const found = matchRegistration(u, regs);
             if (found) setMyRegistration(found);
           }
 
@@ -198,7 +209,7 @@ export default function App() {
   // Update myRegistration when registrations or user changes
   useEffect(() => {
     if (user && registrations.length > 0) {
-      const found = registrations.find(r => r.user_id === user.id || r.user_email === user.email);
+      const found = matchRegistration(user, registrations);
       setMyRegistration(found || null);
     } else {
       setMyRegistration(null);
@@ -210,7 +221,7 @@ export default function App() {
     setUser(userObj);
     setIsAdmin(false);
     localStorage.removeItem('jre2027_is_admin');
-    const found = registrations.find(r => r.user_id === userObj.id || r.user_email === userObj.email);
+    const found = matchRegistration(userObj, registrations);
     if (found) setMyRegistration(found);
   };
 
@@ -339,6 +350,7 @@ export default function App() {
       {/* Navigation Bar */}
       <Navbar
         currentTab={currentTab}
+        currentSubRoute={currentSubRoute}
         setCurrentTab={setCurrentTab}
         user={user}
         isAdmin={isAdmin}
