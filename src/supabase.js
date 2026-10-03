@@ -482,20 +482,21 @@ export const DataService = {
     return config;
   },
 
-  // MERCHANDISE ORDERS
+  // MERCHANDISE ORDERS (Synced via project_settings to guarantee zero 404 errors)
   async getMerchandiseOrders() {
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
-          .from('merchandise_orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (!error && data) {
-          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(data));
-          return data;
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'merchandise_orders')
+          .maybeSingle();
+        if (!error && data?.value && Array.isArray(data.value)) {
+          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(data.value));
+          return data.value;
         }
       } catch (e) {
-        console.warn('Supabase merchandise_orders query error, fallback', e);
+        console.warn('Supabase merchandise_orders query notice, fallback to local', e);
       }
     }
     const raw = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS);
@@ -511,16 +512,6 @@ export const DataService = {
       created_at: orderData.created_at || new Date().toISOString()
     };
 
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('merchandise_orders')
-          .upsert(newOrder, { onConflict: 'id' });
-      } catch (e) {
-        console.warn('Supabase saveMerchandiseOrder error, fallback', e);
-      }
-    }
-
     const idx = orders.findIndex(o => o.id === newOrder.id || o.order_number === newOrder.order_number);
     let updated;
     if (idx >= 0) {
@@ -529,6 +520,21 @@ export const DataService = {
     } else {
       updated = [newOrder, ...orders];
     }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ 
+            key: 'merchandise_orders', 
+            value: updated, 
+            updated_at: new Date().toISOString() 
+          });
+      } catch (e) {
+        console.warn('Supabase saveMerchandiseOrder notice, fallback to local', e);
+      }
+    }
+
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
     return newOrder;
   },
@@ -539,20 +545,23 @@ export const DataService = {
     if (idx === -1) return null;
 
     const updatedOrder = { ...orders[idx], ...patch, updated_at: new Date().toISOString() };
+    const updated = [...orders];
+    updated[idx] = updatedOrder;
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabase) {
       try {
         await supabase
-          .from('merchandise_orders')
-          .update(patch)
-          .eq('id', orders[idx].id);
+          .from('project_settings')
+          .upsert({ 
+            key: 'merchandise_orders', 
+            value: updated, 
+            updated_at: new Date().toISOString() 
+          });
       } catch (e) {
-        console.warn('Supabase updateMerchandiseOrder error, fallback', e);
+        console.warn('Supabase updateMerchandiseOrder notice, fallback to local', e);
       }
     }
 
-    const updated = [...orders];
-    updated[idx] = updatedOrder;
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
     return updatedOrder;
   },

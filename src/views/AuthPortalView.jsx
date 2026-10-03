@@ -11,23 +11,12 @@ import {
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 
-// Helper to decode Google JWT Identity Credential Token client-side safely
-function decodeJwtResponse(token) {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      window.atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    console.error('Failed to decode Google JWT token:', e);
-    return null;
-  }
-}
+import { 
+  initGoogleIdentityServices, 
+  renderGoogleButton, 
+  getGoogleTokenClient, 
+  decodeJwtResponse 
+} from '../utils/googleAuth';
 
 export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
   const [tokenClient, setTokenClient] = useState(null);
@@ -63,106 +52,74 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
     let isCancelled = false;
 
     const setupGoogleAuth = () => {
-      if (!window.google?.accounts) return false;
+      if (!window.google?.accounts || !GOOGLE_CLIENT_ID) return false;
 
-      // 1. Official Google Identity Services (GIS) Sign-In Button (Uses JWT)
-      if (window.google.accounts.id && GOOGLE_CLIENT_ID) {
-        try {
-          if (window.google.accounts.id?.disableAutoSelect) {
-            window.google.accounts.id.disableAutoSelect();
+      // 1. Official Google Identity Services (GIS) Sign-In Button
+      initGoogleIdentityServices(GOOGLE_CLIENT_ID, async (response) => {
+        if (response?.credential) {
+          const payload = decodeJwtResponse(response.credential);
+          if (payload?.email) {
+            const cleanEmail = payload.email.trim().toLowerCase();
+            const cleanName = payload.name || cleanEmail.split('@')[0];
+            const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+            await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+          } else {
+            setErrorMsg('ไม่สามารถอ่านข้อมูลอีเมลจากบัญชี Google ได้');
           }
-          window.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: async (response) => {
-              if (response?.credential) {
-                const payload = decodeJwtResponse(response.credential);
-                if (payload?.email) {
-                  const cleanEmail = payload.email.trim().toLowerCase();
-                  const cleanName = payload.name || cleanEmail.split('@')[0];
-                  const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
-                } else {
-                  setErrorMsg('ไม่สามารถอ่านข้อมูลอีเมลจากบัญชี Google ได้');
-                }
-              }
-            },
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            context: 'signin'
-          });
-
-          if (googleBtnContainerRef.current) {
-            googleBtnContainerRef.current.innerHTML = '';
-            window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
-              theme: 'outline',
-              size: 'large',
-              type: 'standard',
-              text: 'signin_with',
-              shape: 'pill',
-              logo_alignment: 'left',
-              width: 300,
-              locale: 'th'
-            });
-          }
-
-          // Button rendered cleanly without unprompted background popup
-          if (!isCancelled) setIsGsiLoaded(true);
-        } catch (e) {
-          console.warn('GIS initialize notice in AuthPortal:', e);
         }
+      });
+
+      if (googleBtnContainerRef.current) {
+        const rendered = renderGoogleButton(googleBtnContainerRef.current, {
+          width: 300,
+          theme: 'outline',
+          text: 'signin_with'
+        });
+        if (rendered && !isCancelled) setIsGsiLoaded(true);
       }
 
       // 2. Google OAuth2 Token Client (Popup flow)
-      if (window.google.accounts.oauth2 && GOOGLE_CLIENT_ID) {
-        try {
-          const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'openid email profile',
-            prompt: 'select_account',
-            error_callback: (err) => {
-              console.warn('OAuth popup error:', err);
-              if (err?.type === 'popup_failed_to_open') {
-                setErrorMsg('เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณากดปุ่ม "ดำเนินการต่อด้วย Google" ด้านบน หรือกดอนุญาตป๊อปอัปสำหรับเว็บไซต์นี้');
-              } else if (err?.type !== 'popup_closed') {
-                setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือเกิดข้อผิดพลาด');
-              }
-              setIsLoading(false);
-            },
-            callback: async (tokenResponse) => {
-              if (tokenResponse?.error) {
-                setErrorMsg('การเข้าสู่ระบบถูกยกเลิก หรือเกิดข้อผิดพลาดจาก Google');
-                setIsLoading(false);
-                return;
-              }
+      const client = getGoogleTokenClient(
+        GOOGLE_CLIENT_ID,
+        async (tokenResponse) => {
+          if (tokenResponse?.error) {
+            setErrorMsg('การเข้าสู่ระบบถูกยกเลิก หรือเกิดข้อผิดพลาดจาก Google');
+            setIsLoading(false);
+            return;
+          }
 
-              setIsLoading(true);
-              try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                });
-                const profile = await res.json();
-                if (profile?.email) {
-                  const cleanEmail = profile.email.trim().toLowerCase();
-                  const cleanName = profile.name || cleanEmail.split('@')[0];
-                  const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
-                } else {
-                  throw new Error('ไม่สามารถอ่านข้อมูลอีเมลจาก Google ได้');
-                }
-              } catch (e) {
-                console.error('Fetch userinfo error:', e);
-                setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
-                setIsLoading(false);
-              }
+          setIsLoading(true);
+          try {
+            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+            });
+            const profile = await res.json();
+            if (profile?.email) {
+              const cleanEmail = profile.email.trim().toLowerCase();
+              const cleanName = profile.name || cleanEmail.split('@')[0];
+              const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+              await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+            } else {
+              throw new Error('ไม่สามารถอ่านข้อมูลอีเมลจาก Google ได้');
             }
-          });
-
-          if (!isCancelled) setTokenClient(client);
-        } catch (e) {
-          console.warn('OAuth2 client init notice:', e);
+          } catch (e) {
+            console.error('Fetch userinfo error:', e);
+            setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
+            setIsLoading(false);
+          }
+        },
+        (err) => {
+          console.warn('OAuth popup error:', err);
+          if (err?.type === 'popup_failed_to_open') {
+            setErrorMsg('เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณากดปุ่ม "ลงชื่อเข้าใช้ด้วย Google" ด้านบน หรือกดอนุญาตป๊อปอัปสำหรับเว็บไซต์นี้');
+          } else if (err?.type !== 'popup_closed') {
+            setErrorMsg('หน้าต่างเลือกบัญชี Google ถูกปิด หรือเกิดข้อผิดพลาด');
+          }
+          setIsLoading(false);
         }
-      }
+      );
 
+      if (!isCancelled && client) setTokenClient(client);
       return true;
     };
 
@@ -172,7 +129,7 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
           clearInterval(interval);
         }
       }, 150);
-      const timer = setTimeout(() => clearInterval(interval), 6000);
+      const timer = setTimeout(() => clearInterval(interval), 5000);
       return () => {
         isCancelled = true;
         clearInterval(interval);
@@ -198,19 +155,7 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
       }
     }
 
-    if (window.google?.accounts?.id) {
-      try {
-        window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            setErrorMsg('กรุณาคลิกที่ปุ่ม "ดำเนินการต่อด้วย Google" ด้านบน เพื่อเข้าสู่ระบบ');
-            setIsLoading(false);
-          }
-        });
-        return;
-      } catch (e) {}
-    }
-
-    setErrorMsg('ระบบ Google กำลังเชื่อมต่อ กรุณารอสักครู่แล้วลองกดใหม่อีกครั้ง');
+    setErrorMsg('ระบบ Google กำลังเชื่อมต่อ กรุณากดปุ่ม "ลงชื่อเข้าใช้ด้วย Google" ด้านบน');
     setIsLoading(false);
   };
 

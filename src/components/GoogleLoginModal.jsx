@@ -1,29 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Info, UserCheck, Users, ExternalLink } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Info, Users, ExternalLink } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
-
-// Helper to decode Google JWT Identity Credential Token client-side safely
-function decodeJwtResponse(token) {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      window.atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    console.error('Failed to decode Google JWT token:', e);
-    return null;
-  }
-}
-
-// Module-level singletons
-let isGsiInitialized = false;
-let activeLoginCallback = null;
-let activeTokenClient = null;
+import { 
+  initGoogleIdentityServices, 
+  renderGoogleButton, 
+  getGoogleTokenClient, 
+  decodeJwtResponse 
+} from '../utils/googleAuth';
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -57,10 +40,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   };
 
   useEffect(() => {
-    activeLoginCallback = handleUserLoginSuccess;
-  });
-
-  useEffect(() => {
     if (!isOpen) return;
     setErrorMsg(null);
     setShowPopupTip(false);
@@ -69,103 +48,70 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     const setupGoogleAuth = () => {
       if (!window.google?.accounts || !GOOGLE_CLIENT_ID) return false;
 
-      // 1. Disable Auto Select so Google NEVER locks to a single account!
-      try {
-        if (window.google.accounts.id?.disableAutoSelect) {
-          window.google.accounts.id.disableAutoSelect();
+      // 1. Initialize Google Identity Services (GIS) safely with singleton protection
+      initGoogleIdentityServices(GOOGLE_CLIENT_ID, async (response) => {
+        if (response?.credential) {
+          const payload = decodeJwtResponse(response.credential);
+          if (payload?.email) {
+            const cleanEmail = payload.email.trim().toLowerCase();
+            const cleanName = payload.name || cleanEmail.split('@')[0];
+            const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+            await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+          } else {
+            setErrorMsg('ไม่สามารถอ่านข้อมูลอีเมลจากบัญชี Google ได้');
+          }
         }
-      } catch (e) {}
+      });
 
-      // 2. Initialize Google Identity Services ONCE only
-      if (window.google.accounts.id && !isGsiInitialized) {
-        try {
-          window.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: async (response) => {
-              if (response?.credential && activeLoginCallback) {
-                const payload = decodeJwtResponse(response.credential);
-                if (payload?.email) {
-                  const cleanEmail = payload.email.trim().toLowerCase();
-                  const cleanName = payload.name || cleanEmail.split('@')[0];
-                  const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await activeLoginCallback(cleanName, cleanEmail, avatar);
-                } else {
-                  setErrorMsg('ไม่สามารถอ่านข้อมูลอีเมลจากบัญชี Google ได้');
-                }
-              }
-            },
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            context: 'signin'
-          });
-          isGsiInitialized = true;
-        } catch (e) {
-          console.warn('GIS initialize error:', e);
+      // 2. Render Google Sign-In Button with 'signin_with' to allow selecting ANY account
+      if (googleBtnContainerRef.current) {
+        const rendered = renderGoogleButton(googleBtnContainerRef.current, {
+          width: 320,
+          theme: 'outline',
+          text: 'signin_with'
+        });
+        if (rendered && !isCancelled) {
+          setIsGsiLoaded(true);
         }
       }
 
-      // 3. Render Google Sign-In Button with 'signin_with' to allow selecting ANY account
-      if (window.google.accounts.id && googleBtnContainerRef.current) {
-        try {
-          googleBtnContainerRef.current.innerHTML = '';
-          window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
-            theme: 'outline',
-            size: 'large',
-            type: 'standard',
-            text: 'signin_with', // Renders "ลงชื่อเข้าใช้ด้วย Google" (Universal, not locked to 1 email)
-            shape: 'pill',
-            logo_alignment: 'left',
-            width: 320,
-            locale: 'th'
-          });
-          if (!isCancelled) setIsGsiLoaded(true);
-        } catch (e) {
-          console.warn('GIS renderButton error:', e);
-        }
-      }
-
-      // 4. Initialize Token Client for explicit Account Chooser prompt
-      if (window.google.accounts.oauth2 && !activeTokenClient) {
-        try {
-          activeTokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'openid email profile',
-            prompt: 'select_account',
-            error_callback: (err) => {
-              console.warn('OAuth popup error:', err);
-              if (err?.type === 'popup_failed_to_open') {
-                setShowPopupTip(true);
-              }
-              setIsLoading(false);
-            },
-            callback: async (tokenResponse) => {
-              if (tokenResponse?.error) {
-                setErrorMsg('การเข้าสู่ระบบถูกยกเลิก');
-                setIsLoading(false);
-                return;
-              }
-              setIsLoading(true);
-              try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                });
-                const profile = await res.json();
-                if (profile?.email && activeLoginCallback) {
-                  const cleanEmail = profile.email.trim().toLowerCase();
-                  const cleanName = profile.name || cleanEmail.split('@')[0];
-                  const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                  await activeLoginCallback(cleanName, cleanEmail, avatar);
-                } else {
-                  throw new Error('ไม่พบข้อมูลอีเมล');
-                }
-              } catch (e) {
-                setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
-                setIsLoading(false);
-              }
+      // 3. Pre-initialize OAuth token client for manual account switcher
+      getGoogleTokenClient(
+        GOOGLE_CLIENT_ID,
+        async (tokenResponse) => {
+          if (tokenResponse?.error) {
+            setErrorMsg('การเลือกบัญชีถูกยกเลิก หรือเกิดข้อผิดพลาด');
+            setIsLoading(false);
+            return;
+          }
+          setIsLoading(true);
+          try {
+            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+            });
+            const profile = await res.json();
+            if (profile?.email) {
+              const cleanEmail = profile.email.trim().toLowerCase();
+              const cleanName = profile.name || cleanEmail.split('@')[0];
+              const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+              await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+            } else {
+              throw new Error('ไม่พบข้อมูลอีเมล');
             }
-          });
-        } catch (e) {}
-      }
+          } catch (e) {
+            console.error('Fetch userinfo error:', e);
+            setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
+            setIsLoading(false);
+          }
+        },
+        (err) => {
+          console.warn('OAuth popup error:', err);
+          if (err?.type === 'popup_failed_to_open') {
+            setShowPopupTip(true);
+          }
+          setIsLoading(false);
+        }
+      );
 
       return true;
     };
@@ -194,15 +140,54 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const handleOpenAccountChooser = () => {
     setIsLoading(true);
     setErrorMsg(null);
-    if (activeTokenClient) {
+    setShowPopupTip(false);
+
+    const tokenClient = getGoogleTokenClient(
+      GOOGLE_CLIENT_ID,
+      async (tokenResponse) => {
+        if (tokenResponse?.error) {
+          setErrorMsg('การเลือกบัญชีถูกยกเลิก');
+          setIsLoading(false);
+          return;
+        }
+        setIsLoading(true);
+        try {
+          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+          });
+          const profile = await res.json();
+          if (profile?.email) {
+            const cleanEmail = profile.email.trim().toLowerCase();
+            const cleanName = profile.name || cleanEmail.split('@')[0];
+            const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
+            await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+          } else {
+            throw new Error('ไม่พบข้อมูลอีเมล');
+          }
+        } catch (e) {
+          setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลบัญชี Google');
+          setIsLoading(false);
+        }
+      },
+      (err) => {
+        console.warn('OAuth popup error:', err);
+        if (err?.type === 'popup_failed_to_open') {
+          setShowPopupTip(true);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    if (tokenClient) {
       try {
-        activeTokenClient.requestAccessToken({ prompt: 'select_account' });
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
         return;
       } catch (e) {
         console.warn('Token client request failed:', e);
       }
     }
-    setErrorMsg('กรุณาคลิกที่ปุ่ม Google ด้านบนเพื่อเข้าสู่ระบบ');
+
+    setErrorMsg('ระบบกำลังเตรียมพร้อม กรุณากดปุ่ม "ลงชื่อเข้าใช้ด้วย Google" ด้านบน');
     setIsLoading(false);
   };
 
@@ -243,7 +228,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-semibold">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>เลือกบัญชี Gmail ใดก็ได้ ยืนยันตัวตนอัตโนมัติ</span>
+            <span>เลือกบัญชี Gmail ใดก็ได้ ระบบบันทึกอัตโนมัติ</span>
           </div>
         </div>
 
@@ -256,14 +241,37 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
         {/* Popup Blocked Warning Box with Clear Actionable Steps */}
         {showPopupTip && (
-          <div className="mb-4 p-3.5 bg-amber-950/50 border border-amber-500/50 rounded-2xl text-amber-200 text-xs space-y-1.5 animate-in fade-in">
-            <div className="flex items-center gap-2 font-bold text-white">
-              <Info className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>เบราว์เซอร์บล็อกหน้าต่างเลือกบัญชี:</span>
+          <div className="mb-4 p-4 bg-amber-950/70 border border-amber-500/60 rounded-2xl text-amber-200 text-xs space-y-2.5 animate-in fade-in shadow-lg">
+            <div className="flex items-center gap-2 font-bold text-white text-sm">
+              <Info className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป (Pop-up Blocked)</span>
             </div>
-            <p className="text-[11px] text-amber-200/90 leading-relaxed pl-6">
-              ให้มองที่<b>มุมขวาของแถบที่อยู่เว็บ (URL ด้านบน)</b> จะมีไอคอนป๊อปอัปกากบาทสีแดง ให้คลิกแล้วเลือก <b>"อนุญาตป๊อปอัปและการเปลี่ยนเส้นทางเสมอ"</b> แล้วกดลองใหม่อีกครั้ง
-            </p>
+            <div className="space-y-1.5 text-[11px] text-amber-200/95 leading-relaxed pl-1 sm:pl-2">
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 font-bold flex items-center justify-center shrink-0 text-[10px]">1</span>
+                <span>มองที่<b>มุมขวาสุดของช่องใส่ URL (Address Bar)</b> ด้านบนของเบราว์เซอร์</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 font-bold flex items-center justify-center shrink-0 text-[10px]">2</span>
+                <span>คลิกไอคอนป๊อปอัปสีแดง แล้วเลือก <b>"อนุญาตป๊อปอัปและการเปลี่ยนเส้นทางเสมอ"</b></span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 font-bold flex items-center justify-center shrink-0 text-[10px]">3</span>
+                <span>กดปุ่ม <b>"ลงชื่อเข้าใช้ด้วย Google"</b> ในกล่องด้านล่างได้ทันที</span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-amber-500/30 flex justify-between items-center">
+              <a
+                href="https://accounts.google.com/AccountChooser"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-amber-300 hover:text-white underline font-medium"
+              >
+                <span>เปิดหน้าสลับบัญชี Google ในแท็บใหม่</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
         )}
 
@@ -271,7 +279,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
           {/* Main Official Google Button Container */}
           <div className="p-5 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-inner flex flex-col items-center justify-center gap-3">
             <p className="text-xs text-slate-300 font-medium text-center">
-              คลิกเพื่อเข้าสู่ระบบและเลือกบัญชี Google:
+              คลิกปุ่มด้านล่างเพื่อเข้าสู่ระบบ (สามารถเลือกบัญชี Gmail ได้):
             </p>
 
             <div className="min-h-[46px] w-full flex justify-center items-center py-1">
@@ -295,7 +303,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             type="button"
             onClick={handleOpenAccountChooser}
             disabled={isLoading}
-            className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700 hover:border-slate-600 transition-all flex items-center justify-center gap-2.5 text-xs active:scale-[0.98] shadow-md"
+            className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700 hover:border-slate-600 transition-all flex items-center justify-center gap-2.5 text-xs active:scale-[0.98] shadow-md cursor-pointer"
           >
             <Users className="w-4 h-4 text-orange-400" />
             <span>{isLoading ? 'กำลังเปิดหน้าต่างเลือกบัญชี...' : 'เลือกบัญชี Google อื่น / สลับบัญชี Gmail'}</span>
