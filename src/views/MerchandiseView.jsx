@@ -39,6 +39,7 @@ export default function MerchandiseView({
   orders = [],
   onSaveOrder,
   onOpenGoogleLogin,
+  onNavigateRegister,
   initialTab = 'catalog',
   onTabChange
 }) {
@@ -378,6 +379,34 @@ export default function MerchandiseView({
           </a>
         </div>
       )}
+
+      {/* UNIFIED INTEGRATION NOTICE: Shirt Order is part of Project Registration */}
+      <div className="bg-gradient-to-r from-orange-950/80 via-slate-900 to-amber-950/80 border-2 border-orange-500/60 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-orange-500/20 text-orange-300 border border-orange-500/40">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+              <span>ระบบสั่งซื้อเสื้อและระบบสมัครเป็นระบบเดียวกัน</span>
+            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-black text-white">
+              👕 เสื้อฝึก Joint Response Exercise 2027 (คอเต่าซิป แขนสั้น เทา-ดำ)
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              การสั่งซื้อเสื้อรุ่นทางการนี้ <strong className="text-amber-300 font-bold">รวมอยู่ในขั้นตอนการสมัครเข้าร่วมโครงการ JRE 2027</strong> โดยจัดทำแบบพรีออเดอร์ ชำระค่าเสื้อจำนวน <strong className="text-white font-bold">400 บาท ในการชำระรอบที่ 1 พร้อมการสมัคร</strong> (ระบบให้เลือกไซส์ S–5XL ในขั้นตอนที่ 2 ของใบสมัคร)
+            </p>
+          </div>
+
+          <button
+            onClick={() => onNavigateRegister && onNavigateRegister()}
+            className="px-6 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all active:scale-95 shrink-0 cursor-pointer border border-amber-400/40"
+          >
+            <Shirt className="w-5 h-5" />
+            <span>สั่งซื้อเสื้อพร้อมสมัครเข้าร่วมโครงการ (ไปที่หน้าสมัคร)</span>
+            <ExternalLink className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
       {/* NAVIGATION TABS */}
       <div className="flex border-b border-slate-800 space-x-2 sm:space-x-4">

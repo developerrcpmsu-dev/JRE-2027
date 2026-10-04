@@ -62,6 +62,7 @@ import {
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
+import * as XLSX from 'xlsx';
 
 export default function AdminDashboardView({
   initialTab = 'applicants',
@@ -746,6 +747,179 @@ export default function AdminDashboardView({
     return matchSearch && matchBlood && matchFilter;
   });
 
+  // Export Excel (.xlsx) with all fields, dates, statuses, slips, photos, and remarks
+  const handleExportExcel = () => {
+    if (!registrations || registrations.length === 0) {
+      triggerToast('ยังไม่มีข้อมูลผู้สมัครในระบบ');
+      return;
+    }
+
+    const headers = [
+      'ลำดับ',
+      'วันเวลาที่สมัคร (Submitted Date)',
+      'รหัสอ้างอิงผู้สมัคร (Applicant ID)',
+      'อีเมล Google (Email)',
+      'คำนำหน้า ชื่อ-สกุล (สถาบัน) ไทย/อังกฤษ (Full Name & Affiliation)',
+      'ชื่อจริง (First Name)',
+      'นามสกุล (Last Name)',
+      'ชื่อเล่น ไทย/อังกฤษ (Nickname)',
+      'รหัสนามเรียกขานประจำหน่วย (Callsign)',
+      'สังกัด / มหาวิทยาลัย / ชมรม (Institution)',
+      'ประเภทสถาบัน (Institution Tier)',
+      'ยอดค่าสมัครรวม (Total Fee)',
+      'ไซส์เสื้อฝึก JRE 2027 (Shirt Size)',
+      'รูปแบบเสื้อ (Shirt Type)',
+      'วันเดือนปีเกิด พ.ศ. (Date of Birth)',
+      'อายุคำนวณได้ (ปี)',
+      'อายุคำนวณได้ (เดือน)',
+      'อายุคำนวณได้ (วัน)',
+      'อายุสรุป (Full Age)',
+      'กรุ๊ปเลือด (Blood Group)',
+      'เบอร์โทรติดต่อ (Phone Number)',
+      'ผู้ติดต่อกรณีฉุกเฉิน (Emergency Contact)',
+      'เบอร์โทรผู้ติดต่อฉุกเฉิน (Emergency Phone)',
+      'ความสัมพันธ์ (Relation)',
+      'โรคประจำตัว / ข้อจำกัดทางกาย (Medical History)',
+      'ประวัติแพ้อาหาร / ยา (Food / Drug Allergy)',
+      'ประวัติการฝึกอบรมกู้ภัยที่ผ่านมา (Previous Training)',
+      'ลิงก์รูปถ่ายสำหรับทำ ID Card (ID Card Photo URL)',
+      'ลิงก์รูป Avatar Google (Avatar URL)',
+      'แผนการชำระเงิน (Payment Plan)',
+      'สถานะการชำระเงินรวม (Overall Payment Status)',
+      'ยอดเงินรวมที่ต้องชำระ (Total Fee Amount)',
+      'ยอดเงินที่อนุมัติแล้ว (Approved Paid Amount)',
+      'ยอดเงินค้างชำระ (Pending Remaining Amount)',
+      'งวดที่ 1: จำนวนเงิน (Round 1 Amount)',
+      'งวดที่ 1: สถานะ (Round 1 Status)',
+      'งวดที่ 1: วันเวลาที่ส่งสลิป (Round 1 Slip Date)',
+      'งวดที่ 1: ลิงก์สลิปโอนเงิน (Round 1 Slip URL)',
+      'งวดที่ 1: หมายเหตุจากผู้ดูแล (Round 1 Notes)',
+      'งวดที่ 2: จำนวนเงิน (Round 2 Amount)',
+      'งวดที่ 2: สถานะ (Round 2 Status)',
+      'งวดที่ 2: วันเวลาที่ส่งสลิป (Round 2 Slip Date)',
+      'งวดที่ 2: ลิงก์สลิปโอนเงิน (Round 2 Slip URL)',
+      'งวดที่ 2: หมายเหตุจากผู้ดูแล (Round 2 Notes)',
+      'ชำระเต็มจำนวน: วันเวลาที่ส่งสลิป (Full Slip Date)',
+      'ชำระเต็มจำนวน: ลิงก์สลิปโอนเงิน (Full Slip URL)',
+      'รายการเอกสารที่แนบและสถานะ (Submitted Documents)',
+      'กลุ่มฝึกที่ได้รับจัดสรร (Assigned Group)',
+      'ห้องนอนหอพักกุดรังที่ได้รับจัดสรร (Assigned Room)',
+      'สิทธิการดูแลพิเศษ (Special Care)',
+      'หมายเหตุการดูแลพิเศษ (Special Care Notes)',
+      'ข้อความแจ้งเตือนจากผู้ดูแลระบบ (Admin Messages)'
+    ];
+
+    const dataRows = registrations.map((r, index) => {
+      const isMsu = isMsuInstitution(r.institution);
+      const totalFee = isMsu ? 650 : 850;
+      const round1Amount = 400;
+      const round2Amount = isMsu ? 250 : 450;
+      
+      let paidAmount = 0;
+      if (r.payment_plan === 'installment') {
+        if (r.installment_1_status === 'paid') paidAmount += round1Amount;
+        if (r.installment_2_status === 'paid') paidAmount += round2Amount;
+      } else {
+        if (r.payment_status === 'paid') paidAmount = totalFee;
+      }
+      const remainingAmount = Math.max(0, totalFee - paidAmount);
+
+      const docsSummary = Array.isArray(r.requested_docs) && r.requested_docs.length > 0
+        ? r.requested_docs.map(d => `${d.title}: [${d.status}] ${d.file_url || 'ยังไม่แนบ'}`).join(' | ')
+        : 'ไม่มีคำขอเอกสารเพิ่มเติม';
+
+      const messagesSummary = Array.isArray(r.admin_messages) && r.admin_messages.length > 0
+        ? r.admin_messages.map(m => `[${m.created_at || ''}] ${m.text}`).join(' | ')
+        : 'ไม่มีข้อความ';
+
+      const paymentStatusText = r.payment_status === 'paid' 
+        ? 'ชำระครบถ้วนแล้ว' 
+        : r.payment_status === 'pending_review' 
+        ? 'รอตรวจสอบสลิป' 
+        : 'ค้างชำระ';
+
+      const round1StatusText = r.installment_1_status === 'paid'
+        ? 'ชำระแล้ว'
+        : r.installment_1_status === 'pending_review'
+        ? 'รอตรวจสอบสลิป'
+        : 'ค้างชำระ';
+
+      const round2StatusText = r.installment_2_status === 'paid'
+        ? 'ชำระแล้ว'
+        : r.installment_2_status === 'pending_review'
+        ? 'รอตรวจสอบสลิป'
+        : 'ค้างชำระ';
+
+      return [
+        index + 1,
+        r.created_at ? new Date(r.created_at).toLocaleString('th-TH') : '-',
+        `JRE27-${(r.id || r.user_id || '').slice(0, 6).toUpperCase()}`,
+        r.user_email || '-',
+        r.full_name_affiliation || `${r.first_name || ''} ${r.last_name || ''}`,
+        r.first_name || '',
+        r.last_name || '',
+        r.nickname || '-',
+        r.callsign || '-',
+        r.institution || '-',
+        isMsu ? 'นิสิตมหาวิทยาลัยมหาสารคาม (มมส)' : 'สถาบันภายนอก / ต่างมหาวิทยาลัย',
+        totalFee,
+        r.shirt_size || 'L',
+        'เสื้อคอเต่าซิป แขนสั้น โทนสีเทา–ดำ (พรีออเดอร์)',
+        r.dob || '-',
+        r.age_years || 0,
+        r.age_months || 0,
+        r.age_days || 0,
+        `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,
+        r.blood_group || '-',
+        r.phone || '-',
+        r.emergency_name || '-',
+        r.emergency_phone || '-',
+        r.emergency_relation || '-',
+        r.medical_history || 'ไม่มี',
+        r.food_allergy || 'ไม่มี',
+        r.previous_training || 'ไม่มี',
+        r.id_card_photo || '',
+        r.user_avatar || '',
+        r.payment_plan === 'installment' ? 'แบ่งชำระ 2 งวด' : 'ชำระเต็มจำนวน',
+        paymentStatusText,
+        totalFee,
+        paidAmount,
+        remainingAmount,
+        round1Amount,
+        round1StatusText,
+        r.installment_1_slip_date ? new Date(r.installment_1_slip_date).toLocaleString('th-TH') : '-',
+        r.installment_1_slip_url || '',
+        r.installment_1_notes || '',
+        round2Amount,
+        round2StatusText,
+        r.installment_2_slip_date ? new Date(r.installment_2_slip_date).toLocaleString('th-TH') : '-',
+        r.installment_2_slip_url || '',
+        r.installment_2_notes || '',
+        r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
+        r.payment_slip_url || '',
+        docsSummary,
+        r.group_assigned || 'ยังไม่จัดสรร',
+        r.room_assigned || 'ยังไม่จัดสรร',
+        r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ',
+        r.special_notes || '',
+        messagesSummary
+      ];
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+
+    // Set column widths
+    const colWidths = headers.map(h => ({ wch: Math.max(h.length * 2, 16) }));
+    worksheet['!cols'] = colWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'ผู้สมัคร JRE 2027');
+
+    const fileName = `JRE2027_รายชื่อผู้สมัครทุกคน_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+    triggerToast(`ส่งออกไฟล์ Excel สำเร็จ: ${fileName}`);
+  };
+
   // Export CSV
   const handleExportCSV = () => {
     const headers = [
@@ -1160,13 +1334,23 @@ export default function AdminDashboardView({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={handleExportExcel}
+              className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer"
+              title="ส่งออกข้อมูลผู้สมัครทุกคน ทุกฟิลด์ ทุกสเต็ป ทุกสลิป เป็นตาราง Excel (.xlsx)"
+            >
+              <FileDown className="w-4 h-4 text-emerald-100" />
+              <span>ส่งออกข้อมูลทุกคนเป็น Excel (.xlsx)</span>
+            </button>
+
             <button
               onClick={handleExportCSV}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors"
+              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="ดาวน์โหลดไฟล์ CSV สำรอง"
             >
-              <Download className="w-4 h-4 text-emerald-400" />
-              ดาวน์โหลด CSV รายชื่อทั้งหมด
+              <Download className="w-4 h-4 text-slate-400" />
+              <span>ดาวน์โหลด CSV</span>
             </button>
           </div>
         </div>

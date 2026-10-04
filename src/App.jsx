@@ -431,6 +431,7 @@ export default function App() {
             orders={merchandiseOrders}
             onSaveOrder={handleSaveMerchandiseOrder}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+            onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
             initialTab={currentSubRoute === 'my_orders' ? 'my_orders' : currentSubRoute === 'cart' ? 'cart' : 'catalog'}
             onTabChange={(tab) => {
               if (tab === 'my_orders') setCurrentTab('merchandise', 'my_orders');
