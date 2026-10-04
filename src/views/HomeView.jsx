@@ -14,6 +14,7 @@ import {
   HeartHandshake,
   Shirt
 } from 'lucide-react';
+import CurriculumSection from '../components/CurriculumSection';
 
 export default function HomeView({ 
   teamMembers, 
@@ -241,6 +242,9 @@ export default function HomeView({
 
         </div>
       </section>
+
+      {/* Curriculum & Training Stations Section */}
+      <CurriculumSection />
 
       {/* Team Section: Dynamically grouped by University / Institution */}
       <section className="space-y-8">

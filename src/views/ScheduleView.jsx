@@ -20,6 +20,7 @@ import {
   Users
 } from 'lucide-react';
 import { SCHEDULE_DAYS } from '../data/defaultData';
+import CurriculumSection from '../components/CurriculumSection';
 
 export default function ScheduleView() {
   const [selectedDay, setSelectedDay] = useState(1);
@@ -262,6 +263,9 @@ export default function ScheduleView() {
 
         </div>
       ))}
+
+      {/* Curriculum & Training Stations Section */}
+      <CurriculumSection />
 
       {/* Location Details Summary Box */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8">

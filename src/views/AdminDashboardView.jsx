@@ -2427,12 +2427,12 @@ export default function AdminDashboardView({
                   <input
                     type="number"
                     required
-                    value={localPayment.fee_total ?? 650}
+                    value={localPayment.fee_total ?? 850}
                     onChange={e => setLocalPayment(prev => ({ ...prev, fee_total: Number(e.target.value) || 0 }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder="เช่น 650"
+                    placeholder="เช่น 850"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">ยอดรวมทั้งหมดสำหรับผู้ที่ชำระครั้งเดียวเต็มจำนวน</p>
+                  <p className="text-[11px] text-slate-500 mt-1">ยอดรวมทั้งหมดสำหรับผู้ที่ชำระครั้งเดียวเต็มจำนวน (850 บาท)</p>
                 </div>
 
                 <div>
@@ -2528,7 +2528,7 @@ export default function AdminDashboardView({
                         <span className="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 font-bold text-xs rounded-lg border border-indigo-500/30">
                           งวดที่ 1 (รอบแรก)
                         </span>
-                        <span className="text-[11px] text-slate-400 font-mono">วันเปิดรับสมัคร</span>
+                        <span className="text-[11px] text-slate-400 font-mono">15 ต.ค. 2569</span>
                       </div>
 
                       <div>
@@ -2538,10 +2538,10 @@ export default function AdminDashboardView({
                         <input
                           type="number"
                           required
-                          value={localPayment.installment_round1_amount ?? 350}
+                          value={localPayment.installment_round1_amount ?? 400}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round1_amount: Number(e.target.value) || 0 }))}
                           className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                          placeholder="350"
+                          placeholder="400"
                         />
                       </div>
 
@@ -2566,7 +2566,7 @@ export default function AdminDashboardView({
                         <span className="px-2.5 py-1 bg-purple-500/20 text-purple-300 font-bold text-xs rounded-lg border border-purple-500/30">
                           งวดที่ 2 (รอบสอง)
                         </span>
-                        <span className="text-[11px] text-slate-400 font-mono">1 หรือ 5 พ.ย.</span>
+                        <span className="text-[11px] text-slate-400 font-mono">5 พ.ย. 2569</span>
                       </div>
 
                       <div>
@@ -2576,10 +2576,10 @@ export default function AdminDashboardView({
                         <input
                           type="number"
                           required
-                          value={localPayment.installment_round2_amount ?? 300}
+                          value={localPayment.installment_round2_amount ?? 450}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round2_amount: Number(e.target.value) || 0 }))}
                           className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                          placeholder="300"
+                          placeholder="450"
                         />
                       </div>
 
@@ -2593,7 +2593,7 @@ export default function AdminDashboardView({
                           value={localPayment.installment_round2_due ?? ''}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round2_due: e.target.value }))}
                           className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none"
-                          placeholder="เช่น 1 หรือ 5 พฤศจิกายน 2569"
+                          placeholder="เช่น 5 พฤศจิกายน 2569"
                         />
                       </div>
                     </div>
