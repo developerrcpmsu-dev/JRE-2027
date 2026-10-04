@@ -99,6 +99,11 @@ export default function MerchandiseView({
     promptpay: '098-765-4321'
   };
 
+  // Filter products by visibility (enabled !== false) and category
+  const enabledProducts = products.filter(p => p.enabled !== false);
+  const enabledShirts = products.filter(p => p.enabled !== false && p.category === 'shirt');
+  const enabledPants = products.filter(p => p.enabled !== false && p.category === 'pants');
+
   const filteredProducts = products.filter(p => {
     if (p.enabled === false) return false;
     if (selectedCategory === 'all') return true;
@@ -122,6 +127,10 @@ export default function MerchandiseView({
 
   // Add Item to Cart
   const handleAddToCart = (product, sizeObj, color) => {
+    if (product.allow_order === false) {
+      alert('ขออภัย รายการสินค้านี้ปิดรับการสั่งซื้อชั่วคราวตามประกาศของผู้ดูแลระบบ');
+      return;
+    }
     const unitPrice = product.base_price + (sizeObj.extra_price || 0);
     const existingIndex = cart.findIndex(
       item => item.product_id === product.id && item.size === sizeObj.name && item.color === color
@@ -417,55 +426,101 @@ export default function MerchandiseView({
       {/* TAB 1: PRODUCT CATALOG */}
       {activeTab === 'catalog' && (
         <div className="space-y-6">
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {/* Category Filter Pills & Size Chart Quick Button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                  selectedCategory === 'all'
+                    ? 'bg-rescue-600 text-white shadow-md shadow-rescue-600/30'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                ทั้งหมด ({enabledProducts.length})
+              </button>
+              <button
+                onClick={() => setSelectedCategory('shirt')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  selectedCategory === 'shirt'
+                    ? 'bg-rescue-600 text-white shadow-md shadow-rescue-600/30'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                <Shirt className="w-3.5 h-3.5" />
+                <span>เสื้อโครงการ & โปโล ({enabledShirts.length})</span>
+              </button>
+              <button
+                onClick={() => setSelectedCategory('pants')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  selectedCategory === 'pants'
+                    ? 'bg-rescue-600 text-white shadow-md shadow-rescue-600/30'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span>กางเกงฝึกยุทธวิธี & ขาสั้น ({enabledPants.length})</span>
+                {enabledPants.length === 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 bg-amber-500/20 text-amber-400 rounded-full font-bold">
+                    เร็วๆ นี้
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Direct Official Size Chart Button */}
             <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                selectedCategory === 'all'
-                  ? 'bg-rescue-600 text-white shadow-md shadow-rescue-600/30'
-                  : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
-              }`}
+              onClick={() => setSizeChartModal(products[0] || true)}
+              className="px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-rescue-950/60 hover:to-slate-900 text-rescue-400 hover:text-rescue-300 border border-rescue-500/40 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all shrink-0 cursor-pointer self-start sm:self-auto active:scale-95"
             >
-              ทั้งหมด ({products.length})
-            </button>
-            <button
-              onClick={() => setSelectedCategory('shirt')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                selectedCategory === 'shirt'
-                  ? 'bg-rescue-600 text-white shadow-md shadow-rescue-600/30'
-                  : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
-              }`}
-            >
-              <Shirt className="w-3.5 h-3.5" />
-              <span>เสื้อโครงการ & โปโล</span>
-            </button>
-            <button
-              onClick={() => setSelectedCategory('pants')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                selectedCategory === 'pants'
-                  ? 'bg-rescue-600 text-white shadow-md shadow-rescue-600/30'
-                  : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
-              }`}
-            >
-              <Tag className="w-3.5 h-3.5" />
-              <span>กางเกงฝึกยุทธวิธี & ขาสั้น</span>
+              <span>📐 ตารางไซส์เสื้อ (Size Chart S-10XL)</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-                onBuyNow={handleBuyNow}
-                onPreviewImage={setPreviewImage}
-                onOpenSizeChart={() => setSizeChartModal(product)}
-              />
-            ))}
-          </div>
+          {/* Products Grid or Empty Category State */}
+          {filteredProducts.length === 0 ? (
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xl">
+              <div className="w-16 h-16 rounded-2xl bg-slate-800/80 text-amber-400 border border-slate-700/80 flex items-center justify-center mx-auto shadow-inner">
+                {selectedCategory === 'pants' ? <Tag className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
+              </div>
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <span className="px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-xs font-black inline-block">
+                  🔒 สินค้าหมวดนี้ยังไม่เปิดจำหน่าย
+                </span>
+                <h3 className="text-lg font-black text-white">
+                  {selectedCategory === 'pants' 
+                    ? 'สินค้าหมวดกางเกงยังไม่เปิดจำหน่ายในรอบนี้' 
+                    : 'ไม่พบรายการสินค้าในหมวดหมู่นี้'}
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {selectedCategory === 'pants'
+                    ? 'ทางคณะทำงานโครงการ JRE 2027 อยู่ระหว่างเตรียมความพร้อมของเครื่องแบบกางเกงฝึกยุทธวิธี โดยขณะนี้เปิดจำหน่ายเสื้อปฏิบัติการกู้ภัยเป็นหลัก'
+                    : 'ระบบกำลังปรับปรุงข้อมูลสินค้า กรุณาลองใหม่อีกครั้งในภายหลัง'}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedCategory('shirt')}
+                className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <Shirt className="w-4 h-4" />
+                <span>ไปเลือกดูเสื้อปฏิบัติการกู้ภัย</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                  onBuyNow={handleBuyNow}
+                  onPreviewImage={setPreviewImage}
+                  onOpenSizeChart={() => setSizeChartModal(product)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -973,76 +1028,164 @@ export default function MerchandiseView({
       {/* PRODUCT CARD COMPONENT (Internal) */}
       {/* SIZE CHART MODAL */}
       {sizeChartModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 max-w-2xl w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative my-auto max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => setSizeChartModal(null)}
-              className="absolute top-4 right-4 p-2 bg-slate-800 text-slate-400 hover:text-white rounded-full"
+              className="absolute top-4 right-4 p-2 bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-lg font-black text-white flex items-center gap-2">
-              <Shirt className="w-5 h-5 text-rescue-500" />
-              <span>ตารางเทียบไซส์: {sizeChartModal.name}</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              ตารางขนาดมาตรฐานสำหรับการสั่งซื้อเสื้อและกางเกงโครงการ JRE 2027
-            </p>
-
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800/80 text-slate-300">
-                    <th className="py-2.5 px-3 font-bold">ไซส์ (Size)</th>
-                    {sizeChartModal.category === 'shirt' ? (
-                      <>
-                        <th className="py-2.5 px-3 font-bold">รอบอก</th>
-                        <th className="py-2.5 px-3 font-bold">ความยาว</th>
-                      </>
-                    ) : (
-                      <>
-                        <th className="py-2.5 px-3 font-bold">รอบเอว</th>
-                        <th className="py-2.5 px-3 font-bold">ความยาวกางเกง</th>
-                      </>
-                    )}
-                    <th className="py-2.5 px-3 font-bold">ราคาพิเศษ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-300">
-                  {sizeChartModal.sizes?.map((sz, i) => (
-                    <tr key={i} className="hover:bg-slate-800/40">
-                      <td className="py-2.5 px-3 font-black text-rescue-400">{sz.name}</td>
-                      {sizeChartModal.category === 'shirt' ? (
-                        <>
-                          <td className="py-2.5 px-3">{sz.chest || '-'}</td>
-                          <td className="py-2.5 px-3">{sz.length || '-'}</td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-2.5 px-3">{sz.waist || '-'}</td>
-                          <td className="py-2.5 px-3">{sz.length || '-'}</td>
-                        </>
-                      )}
-                      <td className="py-2.5 px-3">
-                        {sz.extra_price > 0 ? (
-                          <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold text-[11px]">
-                            +{sz.extra_price} บ.
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">ราคาปกติ</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Modal Header */}
+            <div className="space-y-1 pr-8">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rescue-500/20 text-rescue-400 border border-rescue-500/40">
+                <Shirt className="w-3 h-3" />
+                <span>OFFICIAL SIZE CHART • JRE 2027</span>
+              </div>
+              <h3 className="text-base sm:text-xl font-black text-white flex items-center gap-2">
+                <span>ตารางไซส์เสื้อ Joint Response Exercise (JRE 2027)</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                “ใส่สบาย เคลื่อนไหวคล่องตัว พร้อมลุยทุกภารกิจ” • ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม
+              </p>
             </div>
 
-            <div className="mt-5 text-right">
+            {/* Image Preview Banner */}
+            <div className="mt-4 relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 group">
+              <img
+                src="/images/merchandise/jre_shirt_size_chart.jpg"
+                alt="ตารางไซส์เสื้อ JRE 2027"
+                className="w-full h-auto object-contain max-h-64 sm:max-h-80 mx-auto group-hover:scale-[1.02] transition-transform duration-300"
+              />
               <button
+                type="button"
+                onClick={() => setPreviewImage('/images/merchandise/jre_shirt_size_chart.jpg')}
+                className="absolute bottom-3 right-3 px-3 py-1.5 bg-slate-900/90 hover:bg-rescue-600 text-white rounded-xl text-xs font-bold backdrop-blur-sm transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>คลิกดูภาพขยายใหญ่</span>
+              </button>
+            </div>
+
+            {/* Structured Tables (Standard S-5XL & Special 6XL-10XL) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs">
+              
+              {/* Table 1: Standard S - 5XL */}
+              <div className="bg-slate-950 rounded-2xl border border-slate-800 p-3.5 space-y-2">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="font-black text-rescue-400 text-xs flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rescue-500"></span>
+                    <span>ไซส์มาตรฐาน (S - 5XL)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">หน่วย: นิ้ว</span>
+                </div>
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="text-slate-400 border-b border-slate-800/80 text-[11px]">
+                      <th className="py-1 px-1.5">ไซส์</th>
+                      <th className="py-1 px-1.5 text-center">รอบอก</th>
+                      <th className="py-1 px-1.5 text-center">ยาว</th>
+                      <th className="py-1 px-1.5 text-right">ราคา</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                    {[
+                      { s: 'S', c: '36"', l: '26"', p: 'ปกติ (350.-)' },
+                      { s: 'M', c: '38"', l: '27"', p: 'ปกติ (350.-)' },
+                      { s: 'L', c: '40"', l: '28"', p: 'ปกติ (350.-)' },
+                      { s: 'XL', c: '42"', l: '29"', p: 'ปกติ (350.-)' },
+                      { s: '2XL', c: '44"', l: '30"', p: 'ปกติ (350.-)' },
+                      { s: '3XL', c: '46"', l: '31"', p: '+30.- (380.-)' },
+                      { s: '4XL', c: '48"', l: '32"', p: '+50.- (400.-)' },
+                      { s: '5XL', c: '50"', l: '33"', p: '+70.- (420.-)' },
+                    ].map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-900/60">
+                        <td className="py-1.5 px-1.5 font-black text-white">{row.s}</td>
+                        <td className="py-1.5 px-1.5 text-center font-mono">{row.c}</td>
+                        <td className="py-1.5 px-1.5 text-center font-mono">{row.l}</td>
+                        <td className={`py-1.5 px-1.5 text-right font-bold text-[11px] ${
+                          row.p.includes('+') ? 'text-amber-400' : 'text-slate-400'
+                        }`}>
+                          {row.p}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table 2: Special Sizes 6XL - 10XL */}
+              <div className="bg-slate-950 rounded-2xl border border-slate-800 p-3.5 space-y-2">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="font-black text-amber-400 text-xs flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span>ไซส์พิเศษ (6XL - 10XL)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">หน่วย: นิ้ว</span>
+                </div>
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="text-slate-400 border-b border-slate-800/80 text-[11px]">
+                      <th className="py-1 px-1.5">ไซส์</th>
+                      <th className="py-1 px-1.5 text-center">รอบอก</th>
+                      <th className="py-1 px-1.5 text-center">ยาว</th>
+                      <th className="py-1 px-1.5 text-right">ราคา</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                    {[
+                      { s: '6XL', c: '52"', l: '34"', p: '+100.- (450.-)' },
+                      { s: '7XL', c: '54"', l: '35"', p: '+120.- (470.-)' },
+                      { s: '8XL', c: '56"', l: '36"', p: '+140.- (490.-)' },
+                      { s: '9XL', c: '58"', l: '37"', p: '+160.- (510.-)' },
+                      { s: '10XL', c: '60"', l: '38"', p: '+180.- (530.-)' },
+                    ].map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-900/60">
+                        <td className="py-1.5 px-1.5 font-black text-amber-300">{row.s}</td>
+                        <td className="py-1.5 px-1.5 text-center font-mono">{row.c}</td>
+                        <td className="py-1.5 px-1.5 text-center font-mono">{row.l}</td>
+                        <td className="py-1.5 px-1.5 text-right font-bold text-amber-400 text-[11px]">
+                          {row.p}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Info Note inside special sizes */}
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300 space-y-0.5 mt-2">
+                  <p className="font-bold flex items-center gap-1">
+                    <span>📢 ไซส์พิเศษ 3XL ขึ้นไป</span>
+                  </p>
+                  <p className="text-slate-400">ราคาบวกเพิ่มตามขนาดรอบอกและเนื้อผ้าพิเศษ</p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Measuring Advice Callout */}
+            <div className="mt-3.5 p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs space-y-1">
+              <span className="font-bold text-white flex items-center gap-1.5 text-[11px]">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>เช็กก่อนสั่งซื้อ! คำแนะนำการวัดไซส์:</span>
+              </span>
+              <ul className="text-[11px] text-slate-400 space-y-0.5 list-disc list-inside">
+                <li>หน่วยวัดเป็น <span className="text-white font-bold">“นิ้ว” (Inches)</span></li>
+                <li>ขนาดอาจคลาดเคลื่อนเล็กน้อย (±1 นิ้ว) จากขั้นตอนการตัดเย็บ</li>
+                <li>แนะนำวัดรอบอกจริงของตัวเอง และเปรียบเทียบกับตารางก่อนกดยืนยันการสั่งซื้อ</li>
+              </ul>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-800">
+              <span className="text-[11px] text-slate-500 italic hidden sm:inline">
+                “ร่วมเป็นส่วนหนึ่งของภารกิจเพื่อช่วยเหลือสังคม • JRE 2027”
+              </span>
+              <button
+                type="button"
                 onClick={() => setSizeChartModal(null)}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
+                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all ml-auto cursor-pointer active:scale-95"
               >
                 ปิดหน้าต่าง
               </button>
@@ -1089,6 +1232,7 @@ export default function MerchandiseView({
 function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSizeChart }) {
   const sizes = product.sizes || [];
   const colors = product.colors || ['สีกรมท่ามาตรฐาน'];
+  const isOrderAllowed = product.allow_order !== false;
 
   const [selectedSize, setSelectedSize] = useState(sizes[0] || { name: 'M', extra_price: 0 });
   const [selectedColor, setSelectedColor] = useState(colors[0]);
@@ -1113,14 +1257,21 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
           />
           <button
             onClick={() => onPreviewImage(activePhoto || product.image)}
-            className="absolute bottom-3 right-3 p-2 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl backdrop-blur-sm transition-colors shadow"
+            className="absolute bottom-3 right-3 p-2 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl backdrop-blur-sm transition-colors shadow cursor-pointer"
             title="ดูรูปขยายใหญ่"
           >
             <Maximize2 className="w-4 h-4" />
           </button>
           
-          <div className="absolute top-3 left-3 px-3 py-1 bg-slate-900/85 backdrop-blur-sm rounded-full border border-slate-700/80 text-[11px] font-black text-rescue-400">
-            {product.category === 'shirt' ? 'เสื้อโครงการ' : 'กางเกงกู้ภัย'}
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
+            <span className="px-3 py-1 bg-slate-900/85 backdrop-blur-sm rounded-full border border-slate-700/80 text-[11px] font-black text-rescue-400">
+              {product.category === 'shirt' ? 'เสื้อปฏิบัติการกู้ภัย' : 'กางเกงกู้ภัย'}
+            </span>
+            {!isOrderAllowed && (
+              <span className="px-2.5 py-1 bg-amber-950/80 backdrop-blur-sm rounded-full border border-amber-500/40 text-[10px] font-black text-amber-300 flex items-center gap-1 shadow">
+                <span>🔒 ปิดรับสั่ง</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -1130,8 +1281,9 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
             {product.images.map((img, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => setActivePhoto(img)}
-                className={`w-12 h-12 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${
+                className={`w-12 h-12 rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
                   activePhoto === img ? 'border-rescue-500 scale-105' : 'border-slate-800 opacity-60 hover:opacity-100'
                 }`}
               >
@@ -1155,6 +1307,19 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
           </p>
         </div>
 
+        {/* Notice when order is paused/closed */}
+        {!isOrderAllowed && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center gap-2.5 text-amber-300">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <div className="text-[11px] leading-tight">
+              <p className="font-bold">🔒 ปิดรับการสั่งซื้อชั่วคราว</p>
+              <p className="text-slate-400 text-[10px] mt-0.5">
+                ผู้ดูแลระบบปิดรับคำสั่งซื้อสินค้านี้ชั่วคราว สมาชิกสามารถตรวจสอบแบบเสื้อและตารางไซส์เพื่อเตรียมความพร้อมได้
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Color Options if available */}
         {colors.length > 1 && (
           <div className="space-y-1.5">
@@ -1163,8 +1328,9 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
               {colors.map((c, i) => (
                 <button
                   key={i}
+                  type="button"
                   onClick={() => setSelectedColor(c)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                     selectedColor === c
                       ? 'bg-rescue-600/30 border-rescue-500 text-white'
                       : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
@@ -1184,10 +1350,11 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
               เลือกขนาดไซส์ (Size):
             </label>
             <button
+              type="button"
               onClick={onOpenSizeChart}
-              className="text-[11px] font-bold text-rescue-400 hover:underline flex items-center gap-1"
+              className="text-[11px] font-bold text-rescue-400 hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <span>ดูตารางขนาด</span>
+              <span>📐 ดูตารางขนาด (S-10XL)</span>
               <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -1198,8 +1365,9 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
               return (
                 <button
                   key={i}
+                  type="button"
                   onClick={() => setSelectedSize(sz)}
-                  className={`p-2 rounded-xl border text-center transition-all ${
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-rescue-950/50 border-rescue-500 text-white ring-1 ring-rescue-500'
                       : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white'
@@ -1221,23 +1389,37 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
       </div>
 
       {/* Bottom Buttons */}
-      <div className="flex gap-2 pt-2 border-t border-slate-800/80">
-        <button
-          onClick={() => onAddToCart(product, selectedSize, selectedColor)}
-          className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 border border-slate-700"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>เพิ่มลงตะกร้า</span>
-        </button>
+      {isOrderAllowed ? (
+        <div className="flex gap-2 pt-2 border-t border-slate-800/80">
+          <button
+            type="button"
+            onClick={() => onAddToCart(product, selectedSize, selectedColor)}
+            className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 border border-slate-700 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>เพิ่มลงตะกร้า</span>
+          </button>
 
-        <button
-          onClick={() => onBuyNow(product, selectedSize, selectedColor)}
-          className="flex-1 py-2.5 px-3 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-rescue-600/20"
-        >
-          <ShoppingBag className="w-3.5 h-3.5" />
-          <span>สั่งซื้อทันที</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => onBuyNow(product, selectedSize, selectedColor)}
+            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-rescue-600/20 cursor-pointer"
+          >
+            <ShoppingBag className="w-3.5 h-3.5" />
+            <span>สั่งซื้อทันที</span>
+          </button>
+        </div>
+      ) : (
+        <div className="pt-2 border-t border-slate-800/80">
+          <button
+            type="button"
+            disabled
+            className="w-full py-2.5 px-3 bg-slate-950/80 text-slate-500 border border-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-not-allowed"
+          >
+            <span>🔒 ปิดรับการสั่งซื้อชั่วคราว</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

@@ -471,83 +471,86 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
   },
   products: [
     {
+      id: 'prod_official_shirt',
+      name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027 (Official Rescue Tactical Polo Shirt)',
+      enabled: true,
+      allow_order: true,
+      category: 'shirt',
+      base_price: 350,
+      description: 'เสื้อโปโลปฏิบัติการกู้ภัย JRE 2027 คอซิป ทรงสปอร์ตตัดต่อ สีเทาตัดดำ แขนสโลปสีดำ ปักตรา RCPMSU อกขวา และตราสัญลักษณ์ USVN อกซ้าย พร้อมตราภาคีเครือข่ายด้านหลัง เนื้อผ้าคุณภาพสูง ใส่สบาย เคลื่อนไหวคล่องตัว ระบายอากาศได้ดี พร้อมลุยทุกภารกิจ',
+      image: '/images/merchandise/jre_shirt_official.jpg',
+      size_chart_image: '/images/merchandise/jre_shirt_size_chart.jpg',
+      images: [
+        '/images/merchandise/jre_shirt_official.jpg',
+        '/images/merchandise/jre_shirt_size_chart.jpg'
+      ],
+      colors: ['สีเทาตัดดำ (Official Tactical Gray-Black)'],
+      sizes: [
+        { name: 'S', chest: '36 นิ้ว', length: '26 นิ้ว', extra_price: 0, is_special: false },
+        { name: 'M', chest: '38 นิ้ว', length: '27 นิ้ว', extra_price: 0, is_special: false },
+        { name: 'L', chest: '40 นิ้ว', length: '28 นิ้ว', extra_price: 0, is_special: false },
+        { name: 'XL', chest: '42 นิ้ว', length: '29 นิ้ว', extra_price: 0, is_special: false },
+        { name: '2XL', chest: '44 นิ้ว', length: '30 นิ้ว', extra_price: 0, is_special: false },
+        { name: '3XL', chest: '46 นิ้ว', length: '31 นิ้ว', extra_price: 30, is_special: true },
+        { name: '4XL', chest: '48 นิ้ว', length: '32 นิ้ว', extra_price: 50, is_special: true },
+        { name: '5XL', chest: '50 นิ้ว', length: '33 นิ้ว', extra_price: 70, is_special: true },
+        { name: '6XL', chest: '52 นิ้ว', length: '34 นิ้ว', extra_price: 100, is_special: true },
+        { name: '7XL', chest: '54 นิ้ว', length: '35 นิ้ว', extra_price: 120, is_special: true },
+        { name: '8XL', chest: '56 นิ้ว', length: '36 นิ้ว', extra_price: 140, is_special: true },
+        { name: '9XL', chest: '58 นิ้ว', length: '37 นิ้ว', extra_price: 160, is_special: true },
+        { name: '10XL', chest: '60 นิ้ว', length: '38 นิ้ว', extra_price: 180, is_special: true }
+      ]
+    },
+    {
       id: 'prod_tshirt',
       name: 'เสื้อยืดที่ระลึก JRE 2027 (Official Rescue T-Shirt)',
-      enabled: true,
+      enabled: false,
+      allow_order: false,
       category: 'shirt',
       base_price: 250,
-      description: 'เสื้อยืดสกรีนลายสัญลักษณ์ JRE 2027 และชมรมกู้ภัยราชพฤกษ์ มมส เนื้อผ้า Micro Polyester เกรดพรีเมียม แห้งไว ระบายอากาศยอดเยี่ยม เหมาะสำหรับฝึกภาคสนามและสวมใส่ทำกิจกรรม',
+      description: 'เสื้อยืดสกรีนลายสัญลักษณ์ JRE 2027 และชมรมกู้ภัยราชพฤกษ์ มมส เนื้อผ้า Micro Polyester เกรดพรีเมียม แห้งไว ระบายอากาศยอดเยี่ยม เหมาะสำหรับฝึกภาคสนามและสวมใส่ทำกิจกรรม (ยังไม่เปิดจำหน่าย)',
       image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
       images: [
-        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
-        'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80',
-        'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?auto=format&fit=crop&w=800&q=80'
+        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80'
       ],
-      colors: ['สีกรมท่า (Navy Blue)', 'สีดำเข้ม (Midnight Black)', 'สีส้มกู้ภัย (Rescue Orange)'],
+      colors: ['สีกรมท่า (Navy Blue)', 'สีดำเข้ม (Midnight Black)'],
       sizes: [
         { name: 'S', chest: '36 นิ้ว', length: '26 นิ้ว', extra_price: 0 },
         { name: 'M', chest: '38 นิ้ว', length: '27 นิ้ว', extra_price: 0 },
         { name: 'L', chest: '40 นิ้ว', length: '28 นิ้ว', extra_price: 0 },
         { name: 'XL', chest: '42 นิ้ว', length: '29 นิ้ว', extra_price: 0 },
-        { name: '2XL', chest: '44 นิ้ว', length: '30 นิ้ว', extra_price: 30, is_special: true },
-        { name: '3XL', chest: '46 นิ้ว', length: '31 นิ้ว', extra_price: 50, is_special: true },
-        { name: '4XL', chest: '48 นิ้ว', length: '32 นิ้ว', extra_price: 70, is_special: true },
-        { name: '5XL', chest: '52 นิ้ว', length: '33 นิ้ว', extra_price: 100, is_special: true }
-      ]
-    },
-    {
-      id: 'prod_polo',
-      name: 'เสื้อโปโลปฏิบัติการกู้ภัย JRE 2027 (Rescue Polo Shirt)',
-      enabled: true,
-      category: 'shirt',
-      base_price: 350,
-      description: 'เสื้อโปโลปกทอ ปักตราสัญลักษณ์กู้ภัยราชพฤกษ์อกซ้าย แขนติดแถบสะท้อนแสง 3M เพิ่มความปลอดภัยในเวลากลางคืน เนื้อผ้าทนทาน นุ่มใส่สบาย ระบายเหงื่อดีเยี่ยม',
-      image: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=800&q=80',
-      images: [
-        'https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=800&q=80',
-        'https://images.unsplash.com/photo-1586363104862-3a5e2ab60d99?auto=format&fit=crop&w=800&q=80'
-      ],
-      colors: ['สีกรมท่าปักทอง', 'สีดำปักเงิน'],
-      sizes: [
-        { name: 'S', chest: '38 นิ้ว', length: '26 นิ้ว', extra_price: 0 },
-        { name: 'M', chest: '40 นิ้ว', length: '27 นิ้ว', extra_price: 0 },
-        { name: 'L', chest: '42 นิ้ว', length: '28 นิ้ว', extra_price: 0 },
-        { name: 'XL', chest: '44 นิ้ว', length: '29 นิ้ว', extra_price: 0 },
-        { name: '2XL', chest: '46 นิ้ว', length: '30 นิ้ว', extra_price: 30, is_special: true },
-        { name: '3XL', chest: '48 นิ้ว', length: '31 นิ้ว', extra_price: 50, is_special: true },
-        { name: '4XL', chest: '50 นิ้ว', length: '32 นิ้ว', extra_price: 70, is_special: true }
+        { name: '2XL', chest: '44 นิ้ว', length: '30 นิ้ว', extra_price: 30, is_special: true }
       ]
     },
     {
       id: 'prod_pants_tactical',
       name: 'กางเกงฝึกยุทธวิธีกู้ภัย JRE Tactical Rescue Pants',
-      enabled: true,
+      enabled: false,
+      allow_order: false,
       category: 'pants',
       base_price: 490,
-      description: 'กางเกงขายาวผ้าตาราง Ripstop กันละอองน้ำ กระเป๋าข้างยุทธวิธี 6 ช่อง เสริมความแข็งแรงบริเวณหัวเข่าและเป้ากางเกง ออกแบบเพื่อความคล่องตัวในการฝึกซ้อมกู้ภัย ลุยน้ำ ลุยป่า',
+      description: 'กางเกงขายาวผ้าตาราง Ripstop กันละอองน้ำ กระเป๋าข้างยุทธวิธี 6 ช่อง เสริมความแข็งแรงบริเวณหัวเข่าและเป้ากางเกง ออกแบบเพื่อความคล่องตัวในการฝึกซ้อมกู้ภัย ลุยน้ำ ลุยป่า (ยังไม่เปิดจำหน่าย)',
       image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=800&q=80',
       images: [
-        'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=800&q=80',
-        'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=800&q=80'
+        'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=800&q=80'
       ],
-      colors: ['สีดำยุทธวิธี (Tactical Black)', 'สีกรมท่ากู้ภัย (Rescue Navy)', 'สีกากี (Khaki)'],
+      colors: ['สีดำยุทธวิธี (Tactical Black)', 'สีกรมท่ากู้ภัย (Rescue Navy)'],
       sizes: [
         { name: 'S', waist: '28-30 นิ้ว', length: '39 นิ้ว', extra_price: 0 },
         { name: 'M', waist: '31-33 นิ้ว', length: '40 นิ้ว', extra_price: 0 },
         { name: 'L', waist: '34-36 นิ้ว', length: '41 นิ้ว', extra_price: 0 },
         { name: 'XL', waist: '37-39 นิ้ว', length: '42 นิ้ว', extra_price: 0 },
-        { name: '2XL', waist: '40-42 นิ้ว', length: '43 นิ้ว', extra_price: 40, is_special: true },
-        { name: '3XL', waist: '43-45 นิ้ว', length: '44 นิ้ว', extra_price: 60, is_special: true },
-        { name: '4XL', waist: '46-48 นิ้ว', length: '45 นิ้ว', extra_price: 80, is_special: true }
+        { name: '2XL', waist: '40-42 นิ้ว', length: '43 นิ้ว', extra_price: 40, is_special: true }
       ]
     },
     {
       id: 'prod_shorts_training',
       name: 'กางเกงขาสั้นฝึกภาคสนาม JRE Training Shorts',
-      enabled: true,
+      enabled: false,
+      allow_order: false,
       category: 'pants',
       base_price: 250,
-      description: 'กางเกงขาสั้นผ้าร่มระบายอากาศ มีกระเป๋าซิปข้าง 2 ฝั่ง และสายผูกเอว สำหรับการฝึกกิจกรรมทางน้ำ ปฐมพยาบาล หรือวิ่งออกกำลังกาย',
+      description: 'กางเกงขาสั้นผ้าร่มระบายอากาศ มีกระเป๋าซิปข้าง 2 ฝั่ง และสายผูกเอว สำหรับการฝึกกิจกรรมทางน้ำ ปฐมพยาบาล หรือวิ่งออกกำลังกาย (ยังไม่เปิดจำหน่าย)',
       image: 'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?auto=format&fit=crop&w=800&q=80',
       images: [
         'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?auto=format&fit=crop&w=800&q=80'
@@ -557,9 +560,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
         { name: 'S', waist: '26-29 นิ้ว', extra_price: 0 },
         { name: 'M', waist: '30-32 นิ้ว', extra_price: 0 },
         { name: 'L', waist: '33-35 นิ้ว', extra_price: 0 },
-        { name: 'XL', waist: '36-38 นิ้ว', extra_price: 0 },
-        { name: '2XL', waist: '39-42 นิ้ว', extra_price: 30, is_special: true },
-        { name: '3XL', waist: '43-46 นิ้ว', extra_price: 50, is_special: true }
+        { name: 'XL', waist: '36-38 นิ้ว', extra_price: 0 }
       ]
     }
   ]

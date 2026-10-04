@@ -866,7 +866,31 @@ export default function AdminDashboardView({
     cur.enabled = cur.enabled === false ? true : false;
     updatedProducts[prodIdx] = cur;
     setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
-    triggerToast(`${cur.enabled ? 'เปิดการแสดงผล' : 'ปิดการแสดงผล'} "${cur.name}" แล้ว`);
+    triggerToast(`${cur.enabled ? 'เปิดการแสดงผล' : 'ปิดการแสดงผล'} "${cur.name}" แล้ว (อย่าลืมกดบันทึก)`);
+  };
+
+  const handleToggleProductAllowOrder = (prodIdx) => {
+    const updatedProducts = [...(localMerchConfig.products || [])];
+    const cur = { ...updatedProducts[prodIdx] };
+    cur.allow_order = cur.allow_order === false ? true : false;
+    updatedProducts[prodIdx] = cur;
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    triggerToast(`${cur.allow_order ? 'เปิดรับคำสั่งซื้อ' : 'ปิดรับสั่งซื้อชั่วคราว'} "${cur.name}" แล้ว (อย่าลืมกดบันทึก)`);
+  };
+
+  const handleBatchToggleCategory = (category, field, value) => {
+    const updatedProducts = (localMerchConfig.products || []).map(p => {
+      if (p.category === category) {
+        return { ...p, [field]: value };
+      }
+      return p;
+    });
+    setLocalMerchConfig({ ...localMerchConfig, products: updatedProducts });
+    const catName = category === 'shirt' ? 'เสื้อ' : 'กางเกง';
+    const fieldName = field === 'enabled' 
+      ? (value ? 'เปิดแสดงผล' : 'ปิดการแสดงผล') 
+      : (value ? 'เปิดรับคำสั่งซื้อ' : 'ปิดรับคำสั่งซื้อ');
+    triggerToast(`ปรับสถานะหมวด${catName}: ${fieldName} ทั้งหมดแล้ว (อย่าลืมกดบันทึก)`);
   };
 
   const handleUpdateProductField = (prodIdx, field, value) => {
@@ -3649,27 +3673,122 @@ export default function AdminDashboardView({
                 </div>
               </div>
 
+              {/* Quick Category Master Actions */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-slate-900/60 rounded-2xl border border-slate-800">
+                {/* หมวดเสื้อ */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-rescue-500/20 text-rescue-400 flex items-center justify-center shrink-0">
+                      <Shirt className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white">หมวดหมู่เสื้อ (Shirts)</span>
+                      <p className="text-[10px] text-slate-400">ควบคุมเปิด/ปิดแสดงผล และการสั่งซื้อเสื้อทั้งหมด</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('shirt', 'enabled', true)}
+                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      👁️ เปิดแสดง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('shirt', 'enabled', false)}
+                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      ซ่อน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('shirt', 'allow_order', true)}
+                      className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      🛒 เปิดสั่ง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('shirt', 'allow_order', false)}
+                      className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      🔒 ปิดสั่ง
+                    </button>
+                  </div>
+                </div>
+
+                {/* หมวดกางเกง */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white">หมวดหมู่กางเกง (Pants)</span>
+                      <p className="text-[10px] text-slate-400">ควบคุมเปิด/ปิดแสดงผล และการสั่งซื้อกางเกงทั้งหมด</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('pants', 'enabled', true)}
+                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      👁️ เปิดแสดง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('pants', 'enabled', false)}
+                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      ซ่อน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('pants', 'allow_order', true)}
+                      className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      🛒 เปิดสั่ง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchToggleCategory('pants', 'allow_order', false)}
+                      className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      🔒 ปิดสั่ง
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Product Selector Tabs */}
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {(localMerchConfig.products || []).map((prod, idx) => {
                   const isEnabled = prod.enabled !== false;
+                  const isAllowOrder = prod.allow_order !== false;
                   return (
                     <button
                       key={prod.id}
                       type="button"
                       onClick={() => setSelectedProductIndex(idx)}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                         selectedProductIndex === idx
                           ? 'bg-rescue-600 text-white shadow-md'
                           : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-emerald-400' : 'bg-rose-500'}`}></span>
-                      <span className="max-w-[200px] truncate">{prod.name}</span>
+                      <span className="max-w-[180px] truncate">{prod.name}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                        selectedProductIndex === idx ? 'bg-rescue-700/80 text-white' : 'bg-slate-800 text-slate-400'
+                        isEnabled ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                       }`}>
-                        {isEnabled ? 'เปิดอยู่' : 'ปิด'}
+                        {isEnabled ? '👁️ แสดง' : 'ซ่อน'}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                        isAllowOrder ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {isAllowOrder ? '🛒 เปิดสั่ง' : '🔒 ปิดสั่ง'}
                       </span>
                     </button>
                   );
@@ -3680,6 +3799,7 @@ export default function AdminDashboardView({
               {localMerchConfig.products?.[selectedProductIndex] && (() => {
                 const curProd = localMerchConfig.products[selectedProductIndex];
                 const isEnabled = curProd.enabled !== false;
+                const isAllowOrder = curProd.allow_order !== false;
                 const imagesList = Array.isArray(curProd.images) && curProd.images.length > 0
                   ? curProd.images
                   : (curProd.image ? [curProd.image] : []);
@@ -3687,47 +3807,103 @@ export default function AdminDashboardView({
                 return (
                   <div className="space-y-6 pt-2">
                     
-                    {/* Status & Visibility Banner */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900 rounded-2xl border border-slate-800">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-slate-400">รหัสสินค้า: {curProd.id}</span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
-                            isEnabled 
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                          }`}>
-                            {isEnabled ? '✓ กำลังเปิดแสดงหน้าร้าน' : '✕ ปิดการแสดงผล (ซ่อนจากหน้าร้าน)'}
-                          </span>
+                    {/* DUAL STATUS & CONTROL BANNERS (Visibility + Ordering) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      
+                      {/* 1. Visibility Control (เปิด/ปิด แสดงผลหน้าร้าน) */}
+                      <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-mono font-bold text-slate-400">รหัส: {curProd.id}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                              isEnabled 
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}>
+                              {isEnabled ? '✓ กำลังเปิดแสดงหน้าร้าน' : '✕ ปิดการแสดงผล (ซ่อน)'}
+                            </span>
+                          </div>
+                          <h5 className="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                            <Eye className="w-4 h-4 text-emerald-400" />
+                            <span>1. การแสดงผลในร้านค้า (Visibility)</span>
+                          </h5>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {isEnabled 
+                              ? 'สินค้านี้ปรากฏอยู่ในหน้าเลือกซื้อ สมาชิกทุกคนสามารถมองเห็นได้' 
+                              : 'สินค้านี้ถูกซ่อนจากหน้าร้าน สมาชิกทั่วไปจะไม่เห็นสินค้านี้'}
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {isEnabled 
-                            ? 'สินค้านี้กำลังเปิดจำหน่ายและแสดงให้สมาชิกสั่งซื้อได้ตามปกติ' 
-                            : 'สินค้านี้ถูกปิดการแสดงผลชั่วคราว ผู้ใช้งานจะไม่เห็นสินค้านี้ในหน้าร้าน'}
-                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleProductEnabled(selectedProductIndex)}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-95 ${
+                            isEnabled
+                              ? 'bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-emerald-600/30'
+                          }`}
+                        >
+                          {isEnabled ? (
+                            <>
+                              <X className="w-3.5 h-3.5" />
+                              <span>คลิกเพื่อซ่อนจากหน้าร้าน</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>คลิกเพื่อเปิดแสดงหน้าร้าน</span>
+                            </>
+                          )}
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleToggleProductEnabled(selectedProductIndex)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm shrink-0 active:scale-95 cursor-pointer ${
-                          isEnabled
-                            ? 'bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40'
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-emerald-600/30'
-                        }`}
-                      >
-                        {isEnabled ? (
-                          <>
-                            <X className="w-3.5 h-3.5" />
-                            <span>คลิกเพื่อปิดการแสดงผล</span>
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>คลิกเพื่อเปิดจำหน่าย</span>
-                          </>
-                        )}
-                      </button>
+                      {/* 2. Order Acceptance Control (เปิด/ปิด รับคำสั่งซื้อ) */}
+                      <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-400">หมวด: {curProd.category === 'shirt' ? 'เสื้อ' : 'กางเกง'}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                              isAllowOrder 
+                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            }`}>
+                              {isAllowOrder ? '✓ เปิดรับคำสั่งซื้อ' : '🔒 ปิดรับสั่งซื้อชั่วคราว'}
+                            </span>
+                          </div>
+                          <h5 className="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                            <ShoppingBag className="w-4 h-4 text-blue-400" />
+                            <span>2. การรับคำสั่งซื้อ (Allow Orders)</span>
+                          </h5>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {isAllowOrder 
+                              ? 'สมาชิกสามารถเลือกไซส์ หยิบใส่ตะกร้า และสั่งซื้อได้ตามปกติ' 
+                              : 'สมาชิกสามารถดูแบบเสื้อและตารางไซส์ได้ แต่ปุ่มสั่งซื้อจะถูกล็อค'}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleProductAllowOrder(selectedProductIndex)}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-95 ${
+                            isAllowOrder
+                              ? 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                              : 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 shadow-blue-600/30'
+                          }`}
+                        >
+                          {isAllowOrder ? (
+                            <>
+                              <X className="w-3.5 h-3.5" />
+                              <span>คลิกเพื่อปิดรับสั่งซื้อชั่วคราว</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>คลิกเพื่อเปิดรับคำสั่งซื้อ</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
                     </div>
 
                     {/* Product Basic Info Editor (Name, Category, Base Price, Description) */}
