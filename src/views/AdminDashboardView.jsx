@@ -3007,7 +3007,7 @@ export default function AdminDashboardView({
                       <input
                         type="file"
                         multiple
-                        accept="image/*"
+                        accept="image/*,.heic,.heif"
                         onChange={handleImagesUpload}
                         className="hidden"
                       />
@@ -3886,7 +3886,7 @@ export default function AdminDashboardView({
                           <input
                             type="file"
                             id="upload-product-img-input"
-                            accept="image/*"
+                            accept="image/*,.heic,.heif"
                             disabled={isUploadingProductImg}
                             onChange={(e) => handleUploadProductImageFile(e, selectedProductIndex)}
                             className="hidden"
@@ -4502,7 +4502,7 @@ export default function AdminDashboardView({
                         <span>{isUploadingSpeakerPhoto ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ภาพจากเครื่อง'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,.heic,.heif"
                           onChange={handleSpeakerPhotoUpload}
                           disabled={isUploadingSpeakerPhoto}
                           className="hidden"
@@ -4701,7 +4701,7 @@ export default function AdminDashboardView({
                         <span>{isUploadingTeamPhoto ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ภาพจากเครื่อง'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,.heic,.heif"
                           onChange={handleTeamPhotoUpload}
                           disabled={isUploadingTeamPhoto}
                           className="hidden"

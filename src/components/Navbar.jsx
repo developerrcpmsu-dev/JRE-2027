@@ -40,8 +40,8 @@ export default function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 w-full">
         <div className="flex items-center justify-between h-18 lg:h-20 gap-2">
           
           {/* Logo & Brand */}
@@ -69,7 +69,7 @@ export default function Navbar({
               <p className="text-[11px] text-slate-400 font-medium hidden xl:block whitespace-nowrap">
                 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม
               </p>
-              <p className="text-[10px] text-slate-400 font-medium block xl:hidden whitespace-nowrap">
+              <p className="text-[10px] text-slate-400 font-medium hidden sm:block xl:hidden whitespace-nowrap">
                 ชมรมกู้ภัยราชพฤกษ์ มมส
               </p>
             </div>

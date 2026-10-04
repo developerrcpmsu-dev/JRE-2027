@@ -355,7 +355,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rescue-500 selection:text-white">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rescue-500 selection:text-white">
       
       {/* Navigation Bar */}
       <Navbar
@@ -375,7 +375,7 @@ export default function App() {
       {user && <FormsBanner formsConfig={formsConfig} user={user} />}
 
       {/* Main Content Pages */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12 overflow-x-hidden">
         {currentTab === 'home' && (
           <HomeView
             teamMembers={teamMembers}

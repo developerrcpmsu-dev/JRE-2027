@@ -8,6 +8,7 @@ import {
   DEFAULT_MERCHANDISE_CONFIG,
   DEFAULT_MERCHANDISE_ORDERS
 } from './data/defaultData';
+import { processImageFile } from './utils/imageUtils';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -340,19 +341,28 @@ export const DataService = {
     return true;
   },
 
-  // FILE UPLOAD SERVICE (Supports Supabase Storage bucket 'announcements' with Base64 fallback)
+  // FILE UPLOAD SERVICE (Supports Supabase Storage bucket 'announcements' with Base64 fallback, auto HEIC conversion & compression)
   async uploadFile(file, folder = 'images') {
     if (!file) throw new Error('No file provided');
+
+    // Automatically optimize images (convert HEIC/HEIF to JPEG, downscale to max 800x800, quality 85%)
+    let processedFile = file;
+    try {
+      processedFile = await processImageFile(file);
+    } catch (err) {
+      console.warn('Image processing notice:', err);
+      processedFile = file;
+    }
 
     // 1. Try Supabase Storage
     if (isSupabaseConfigured && supabase) {
       try {
-        const cleanName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const cleanName = (processedFile.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
         const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${cleanName}`;
         
         const { data, error } = await supabase.storage
           .from('announcements')
-          .upload(filePath, file, {
+          .upload(filePath, processedFile, {
             cacheControl: '3600',
             upsert: true
           });
@@ -365,9 +375,9 @@ export const DataService = {
           if (urlData?.publicUrl) {
             return {
               url: urlData.publicUrl,
-              name: file.name,
-              size: file.size,
-              type: file.type
+              name: processedFile.name,
+              size: processedFile.size,
+              type: processedFile.type
             };
           }
         } else {
@@ -384,13 +394,13 @@ export const DataService = {
       reader.onload = () => {
         resolve({
           url: reader.result,
-          name: file.name,
-          size: file.size,
-          type: file.type
+          name: processedFile.name,
+          size: processedFile.size,
+          type: processedFile.type
         });
       };
       reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(processedFile);
     });
   },
 

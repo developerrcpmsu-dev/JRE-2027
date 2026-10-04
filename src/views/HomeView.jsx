@@ -109,19 +109,19 @@ export default function HomeView({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
             {myRegistration ? (
               <button
                 onClick={onNavigateRegister}
-                className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center gap-2 text-sm transition-all transform active:scale-95 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-95 cursor-pointer"
               >
                 <FileCheck2 className="w-4 h-4" />
-                ดูสถานะห้องนอน & กลุ่มฝึกของฉัน
+                <span>ดูสถานะห้องนอน & กลุ่มฝึกของฉัน</span>
               </button>
             ) : (
               <button
                 onClick={onNavigateRegister}
-                className="px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
               >
                 <span>สมัครเข้าร่วมโครงการ JRE 2027</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -130,7 +130,7 @@ export default function HomeView({
 
             <button
               onClick={onNavigateSchedule}
-              className="px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700/80 hover:border-slate-600 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700/80 hover:border-slate-600 flex items-center justify-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
               <Calendar className="w-4 h-4 text-rescue-400" />
               <span>ดูกำหนดการ 2 วัน 1 คืน</span>
@@ -138,7 +138,7 @@ export default function HomeView({
 
             <button
               onClick={onNavigateMerchandise}
-              className="px-6 py-4 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/40 hover:border-orange-500/60 flex items-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/40 hover:border-orange-500/60 flex items-center justify-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
               <Shirt className="w-4 h-4 text-orange-400" />
               <span>สั่งซื้อเสื้อ & กางเกงกู้ภัย</span>
@@ -149,17 +149,17 @@ export default function HomeView({
       </section>
 
       {/* JRE 2026 Video Spotlight & Philosophy Card */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-950 to-orange-950/30 border border-orange-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
-        <div className="flex flex-col lg:flex-row items-center gap-8">
+      <section className="bg-gradient-to-br from-slate-900 via-slate-950 to-orange-950/30 border border-orange-500/30 rounded-3xl p-5 sm:p-10 shadow-2xl relative overflow-hidden max-w-full">
+        <div className="flex flex-col lg:flex-row items-center gap-8 max-w-full">
           
           {/* Left: Real Facebook Video Iframe */}
-          <div className="w-full lg:w-5/12 relative rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl shrink-0 bg-slate-950 flex items-center justify-center">
-            <div className="w-full overflow-hidden flex justify-center items-center">
+          <div className="w-full max-w-full lg:w-5/12 relative rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl bg-slate-950 flex items-center justify-center">
+            <div className="w-full max-w-full overflow-hidden flex justify-center items-center">
               <iframe 
                 src="https://www.facebook.com/plugins/video.php?height=314&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F3124397917947926%2F&show_text=true&width=560&t=0" 
                 width="100%" 
                 height="429" 
-                style={{ border: 'none', overflow: 'hidden', minHeight: '380px' }} 
+                style={{ border: 'none', overflow: 'hidden', minHeight: '320px', maxWidth: '100%' }} 
                 scrolling="no" 
                 frameBorder="0" 
                 allowFullScreen={true} 
@@ -167,6 +167,7 @@ export default function HomeView({
                 loading="lazy"
                 referrerPolicy="strict-origin-when-cross-origin"
                 title="JRE 2026 การเข้าระงับเหตุเพลิงไหม้นอกอาคาร"
+                className="w-full max-w-full"
               ></iframe>
             </div>
           </div>
@@ -343,28 +344,28 @@ export default function HomeView({
                 className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group"
               >
                 <div>
-                  <div className="flex items-start gap-4 mb-4">
+                  <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
                     <div className="relative shrink-0">
                       <img 
                         src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
                         alt={spk.name}
-                        className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg bg-slate-950" 
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg bg-slate-950 shrink-0" 
                         onError={(e) => {
                           e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
                         }}
                       />
-                      <span className="absolute -bottom-2 -right-2 w-7 h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-xs font-black border-2 border-slate-900 shadow">
+                      <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
                         {displayNum}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20 inline-block">
                         วิทยากรท่านที่ {displayNum}
                       </span>
-                      <h3 className="font-bold text-white text-base mt-1.5 leading-snug">
+                      <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words">
                         {spk.name}
                       </h3>
-                      <p className="text-xs text-slate-300 font-medium mt-1">
+                      <p className="text-xs text-slate-300 font-medium mt-1 break-words">
                         {spk.title}
                       </p>
                     </div>
@@ -373,11 +374,11 @@ export default function HomeView({
                   <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
                     <div className="text-xs">
                       <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
-                      <span className="text-slate-200 font-medium">{spk.org}</span>
+                      <span className="text-slate-200 font-medium break-words">{spk.org}</span>
                     </div>
                     <div className="text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
                       <span className="text-amber-400 font-semibold block text-[11px] mb-0.5">หัวข้อฝึกอบรม:</span>
-                      <span className="text-slate-300">{spk.topic}</span>
+                      <span className="text-slate-300 break-words">{spk.topic}</span>
                     </div>
                   </div>
                 </div>
