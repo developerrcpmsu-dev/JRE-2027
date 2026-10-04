@@ -54,7 +54,7 @@ export default function FormsBanner({ formsConfig, user }) {
                 className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-lg shadow-blue-600/25 hover:shadow-blue-500/45 border border-blue-400/30 hover:border-blue-300/60 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 flex items-center justify-center gap-2 group cursor-pointer whitespace-nowrap"
               >
                 <GraduationCap className="w-4 h-4 text-blue-200 group-hover:scale-110 transition-transform" />
-                <span>ทำแบบทดสอบก่อนเรียน (Pre-Test)</span>
+                <span>{formsConfig.pretest.title || 'ทำแบบทดสอบก่อนเรียน (Pre-Test)'}</span>
                 <ExternalLink className="w-3.5 h-3.5 text-blue-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </a>
             )}
@@ -67,7 +67,7 @@ export default function FormsBanner({ formsConfig, user }) {
                 className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 hover:from-rescue-500 hover:to-amber-500 text-white font-bold rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-lg shadow-orange-600/25 hover:shadow-orange-500/45 border border-orange-400/30 hover:border-orange-300/60 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 flex items-center justify-center gap-2 group cursor-pointer whitespace-nowrap"
               >
                 <Award className="w-4 h-4 text-orange-200 group-hover:scale-110 transition-transform" />
-                <span>ทำแบบทดสอบหลังเรียน (Post-Test)</span>
+                <span>{formsConfig.posttest.title || 'ทำแบบทดสอบหลังเรียน (Post-Test)'}</span>
                 <ExternalLink className="w-3.5 h-3.5 text-orange-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </a>
             )}
@@ -80,7 +80,7 @@ export default function FormsBanner({ formsConfig, user }) {
                 className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-lg shadow-emerald-600/25 hover:shadow-emerald-500/45 border border-emerald-400/30 hover:border-emerald-300/60 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 flex items-center justify-center gap-2 group cursor-pointer whitespace-nowrap"
               >
                 <Sparkles className="w-4 h-4 text-emerald-200 group-hover:scale-110 transition-transform" />
-                <span>แบบประเมินความพึงพอใจ</span>
+                <span>{formsConfig.evaluation.title || 'แบบประเมินความพึงพอใจ'}</span>
                 <ExternalLink className="w-3.5 h-3.5 text-emerald-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </a>
             )}

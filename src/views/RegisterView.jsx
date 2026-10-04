@@ -615,36 +615,50 @@ export default function RegisterView({
                 </span>
               </div>
 
-              {/* Buttons Grid - Bold, High-Visibility, Easy to Click */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 relative z-10">
+              {/* Assessment Cards Grid with Official Banners */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
                 {formsConfig.pretest?.enabled && (
                   <a
                     href={formsConfig.pretest.url || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:via-indigo-500 hover:to-blue-600 text-white font-bold shadow-lg hover:shadow-blue-500/30 transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 border border-blue-400/40"
+                    className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 text-white font-bold shadow-xl hover:shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 border border-blue-500/30 hover:border-blue-400"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <span className="px-2 py-0.5 bg-white/20 backdrop-blur-sm text-[11px] rounded-lg font-extrabold uppercase tracking-wider text-blue-100">
+                    {/* Official Banner Header */}
+                    <div className="relative w-full h-24 sm:h-28 overflow-hidden bg-slate-950 border-b border-blue-500/20">
+                      <img
+                        src={formsConfig.pretest.banner || '/images/banner/banner_pretest.png'}
+                        alt={formsConfig.pretest.title || 'Pre-Test'}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/20" />
+                      <div className="absolute top-2 left-2 px-2.5 py-0.5 bg-blue-600/90 backdrop-blur-md rounded-md text-[10px] font-black uppercase tracking-wider text-white shadow">
                         Pre-Test
-                      </span>
-                      <div className="p-1.5 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
-                        <ExternalLink className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-md text-white group-hover:scale-110 transition-transform">
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </div>
                     </div>
-                    <div>
-                      <div className="text-base sm:text-lg font-black text-white drop-shadow">
-                        ทำ Pre-Test JRE 2027
+
+                    <div className="p-4 flex flex-col justify-between flex-1">
+                      <div>
+                        <div className="text-sm sm:text-base font-black text-white group-hover:text-blue-300 transition-colors line-clamp-1">
+                          {formsConfig.pretest.title || 'แบบทดสอบก่อนเรียน (Pre-Test) 2027'}
+                        </div>
+                        <div className="text-xs text-slate-400 font-medium mt-1 line-clamp-2">
+                          {formsConfig.pretest.description || 'แบบทดสอบวัดความรู้พื้นฐานด้านการกู้ภัย การปฐมพยาบาล และระบบบัญชาการเหตุก่อนเข้ารับการฝึก'}
+                        </div>
                       </div>
-                      <div className="text-xs text-blue-100/90 font-medium mt-0.5">
-                        แบบทดสอบวัดความรู้ก่อนรับการฝึก
+
+                      <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-blue-400 font-bold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                          Google Forms
+                        </span>
+                        <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600/20 group-hover:bg-blue-600 text-blue-300 group-hover:text-white font-bold transition-all">
+                          เริ่มทำแบบทดสอบ <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        </span>
                       </div>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-blue-200 font-semibold">
-                      <span>Google Forms</span>
-                      <span className="flex items-center gap-1 text-white group-hover:underline">
-                        เริ่มทำแบบทดสอบ <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                      </span>
                     </div>
                   </a>
                 )}
@@ -654,29 +668,43 @@ export default function RegisterView({
                     href={formsConfig.posttest.url || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gradient-to-br from-orange-600 via-amber-600 to-rescue-600 hover:from-orange-500 hover:via-amber-500 hover:to-rescue-500 text-white font-bold shadow-lg hover:shadow-orange-500/30 transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 border border-orange-400/40"
+                    className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 text-white font-bold shadow-xl hover:shadow-orange-500/20 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 border border-orange-500/30 hover:border-orange-400"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <span className="px-2 py-0.5 bg-white/20 backdrop-blur-sm text-[11px] rounded-lg font-extrabold uppercase tracking-wider text-amber-100">
+                    {/* Official Banner Header */}
+                    <div className="relative w-full h-24 sm:h-28 overflow-hidden bg-slate-950 border-b border-orange-500/20">
+                      <img
+                        src={formsConfig.posttest.banner || '/images/banner/banner_posttest.png'}
+                        alt={formsConfig.posttest.title || 'Post-Test'}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/20" />
+                      <div className="absolute top-2 left-2 px-2.5 py-0.5 bg-orange-600/90 backdrop-blur-md rounded-md text-[10px] font-black uppercase tracking-wider text-white shadow">
                         Post-Test
-                      </span>
-                      <div className="p-1.5 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
-                        <ExternalLink className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-md text-white group-hover:scale-110 transition-transform">
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </div>
                     </div>
-                    <div>
-                      <div className="text-base sm:text-lg font-black text-white drop-shadow">
-                        ทำ Post-Test JRE 2027
+
+                    <div className="p-4 flex flex-col justify-between flex-1">
+                      <div>
+                        <div className="text-sm sm:text-base font-black text-white group-hover:text-orange-300 transition-colors line-clamp-1">
+                          {formsConfig.posttest.title || 'แบบทดสอบหลังเรียน (Post-Test)'}
+                        </div>
+                        <div className="text-xs text-slate-400 font-medium mt-1 line-clamp-2">
+                          {formsConfig.posttest.description || 'แบบทดสอบวัดผลสัมฤทธิ์และทักษะความรู้หลังเสร็จสิ้นการฝึกปฏิบัติการจริง'}
+                        </div>
                       </div>
-                      <div className="text-xs text-orange-100/90 font-medium mt-0.5">
-                        แบบทดสอบวัดผลสัมฤทธิ์หลังการฝึก
+
+                      <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-orange-400 font-bold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+                          Google Forms
+                        </span>
+                        <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-600/20 group-hover:bg-orange-600 text-orange-300 group-hover:text-white font-bold transition-all">
+                          เริ่มทำแบบทดสอบ <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        </span>
                       </div>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-orange-200 font-semibold">
-                      <span>Google Forms</span>
-                      <span className="flex items-center gap-1 text-white group-hover:underline">
-                        เริ่มทำแบบทดสอบ <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                      </span>
                     </div>
                   </a>
                 )}
@@ -686,29 +714,43 @@ export default function RegisterView({
                     href={formsConfig.evaluation.url || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:via-teal-500 hover:to-emerald-600 text-white font-bold shadow-lg hover:shadow-emerald-500/30 transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 border border-emerald-400/40"
+                    className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 text-white font-bold shadow-xl hover:shadow-emerald-500/20 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 border border-emerald-500/30 hover:border-emerald-400"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <span className="px-2 py-0.5 bg-white/20 backdrop-blur-sm text-[11px] rounded-lg font-extrabold uppercase tracking-wider text-emerald-100">
+                    {/* Official Banner Header */}
+                    <div className="relative w-full h-24 sm:h-28 overflow-hidden bg-slate-950 border-b border-emerald-500/20">
+                      <img
+                        src={formsConfig.evaluation.banner || '/images/banner/banner_evaluation.png'}
+                        alt={formsConfig.evaluation.title || 'Evaluation'}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/20" />
+                      <div className="absolute top-2 left-2 px-2.5 py-0.5 bg-emerald-600/90 backdrop-blur-md rounded-md text-[10px] font-black uppercase tracking-wider text-white shadow">
                         Evaluation
-                      </span>
-                      <div className="p-1.5 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
-                        <ExternalLink className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-md text-white group-hover:scale-110 transition-transform">
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </div>
                     </div>
-                    <div>
-                      <div className="text-base sm:text-lg font-black text-white drop-shadow">
-                        ทำแบบประเมินโครงการ
+
+                    <div className="p-4 flex flex-col justify-between flex-1">
+                      <div>
+                        <div className="text-sm sm:text-base font-black text-white group-hover:text-emerald-300 transition-colors line-clamp-1">
+                          {formsConfig.evaluation.title || 'แบบประเมินความพึงพอใจ (JRE 2027)'}
+                        </div>
+                        <div className="text-xs text-slate-400 font-medium mt-1 line-clamp-2">
+                          {formsConfig.evaluation.description || 'แบบประเมินผลความพึงพอใจและข้อเสนอแนะในการพัฒนาโครงการ JRE 2027'}
+                        </div>
                       </div>
-                      <div className="text-xs text-emerald-100/90 font-medium mt-0.5">
-                        ประเมินความพึงพอใจและข้อเสนอแนะ
+
+                      <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Google Forms
+                        </span>
+                        <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600/20 group-hover:bg-emerald-600 text-emerald-300 group-hover:text-white font-bold transition-all">
+                          ประเมินผลโครงการ <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        </span>
                       </div>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-emerald-200 font-semibold">
-                      <span>Google Forms</span>
-                      <span className="flex items-center gap-1 text-white group-hover:underline">
-                        ประเมินผลโครงการ <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                      </span>
                     </div>
                   </a>
                 )}

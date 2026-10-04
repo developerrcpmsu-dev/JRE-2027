@@ -192,11 +192,17 @@ export default function AdminDashboardView({
 
   // Forms Config State
   const [localForms, setLocalForms] = useState(formsConfig || {
-    pretest: { title: 'แบบทดสอบก่อนการฝึกอบรม (Pre-Test)', url: '', enabled: false },
-    posttest: { title: 'แบบทดสอบหลังการฝึกอบรม (Post-Test)', url: '', enabled: false },
-    evaluation: { title: 'แบบประเมินความพึงพอใจโครงการ (Evaluation)', url: '', enabled: false }
+    pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
+    posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
+    evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
   });
   const [formsSavedMsg, setFormsSavedMsg] = useState(false);
+
+  React.useEffect(() => {
+    if (formsConfig) {
+      setLocalForms(formsConfig);
+    }
+  }, [formsConfig]);
 
   // Payment Settings Config State
   const [localPayment, setLocalPayment] = useState(() => {
@@ -2666,12 +2672,12 @@ export default function AdminDashboardView({
           <div className="space-y-6">
             
             {/* 1. Pre-Test Form */}
-            <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-2xl space-y-3">
+            <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-blue-500"></span>
                   <h4 className="font-bold text-white text-sm">
-                    1. แบบทดสอบก่อนการฝึกอบรม (Pre-Test)
+                    1. แบบทดสอบก่อนเรียน (Pre-Test)
                   </h4>
                 </div>
                 <button
@@ -2686,6 +2692,48 @@ export default function AdminDashboardView({
                   {localForms.pretest?.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
                   <span>{localForms.pretest?.enabled ? 'เปิดให้ทำข้อสอบ (Active)' : 'ปิดระบบ (Disabled)'}</span>
                 </button>
+              </div>
+
+              {/* Banner Preview */}
+              <div className="rounded-xl overflow-hidden border border-blue-500/30 bg-slate-900 relative group">
+                <img
+                  src={localForms.pretest?.banner || '/images/banner/banner_pretest.png'}
+                  alt="Pre-Test Banner Preview"
+                  className="w-full h-24 sm:h-28 object-cover"
+                />
+                <div className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/75 backdrop-blur-md rounded-md text-[10px] text-blue-300 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                  <span>ป้ายหัวข้อ Pre-Test (Official Banner)</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">ชื่อหัวข้อแบบทดสอบ:</label>
+                  <input
+                    type="text"
+                    value={localForms.pretest?.title || ''}
+                    onChange={e => setLocalForms({
+                      ...localForms,
+                      pretest: { ...localForms.pretest, title: e.target.value }
+                    })}
+                    placeholder="แบบทดสอบก่อนเรียน (Pre-Test) 2027"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">คำอธิบายย่อ:</label>
+                  <input
+                    type="text"
+                    value={localForms.pretest?.description || ''}
+                    onChange={e => setLocalForms({
+                      ...localForms,
+                      pretest: { ...localForms.pretest, description: e.target.value }
+                    })}
+                    placeholder="คำอธิบายแบบทดสอบ..."
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
               </div>
 
               <div>
@@ -2717,12 +2765,12 @@ export default function AdminDashboardView({
             </div>
 
             {/* 2. Post-Test Form */}
-            <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-2xl space-y-3">
+            <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-orange-500"></span>
                   <h4 className="font-bold text-white text-sm">
-                    2. แบบทดสอบหลังการฝึกอบรม (Post-Test)
+                    2. แบบทดสอบหลังเรียน (Post-Test)
                   </h4>
                 </div>
                 <button
@@ -2737,6 +2785,48 @@ export default function AdminDashboardView({
                   {localForms.posttest?.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
                   <span>{localForms.posttest?.enabled ? 'เปิดให้ทำข้อสอบ (Active)' : 'ปิดระบบ (Disabled)'}</span>
                 </button>
+              </div>
+
+              {/* Banner Preview */}
+              <div className="rounded-xl overflow-hidden border border-orange-500/30 bg-slate-900 relative group">
+                <img
+                  src={localForms.posttest?.banner || '/images/banner/banner_posttest.png'}
+                  alt="Post-Test Banner Preview"
+                  className="w-full h-24 sm:h-28 object-cover"
+                />
+                <div className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/75 backdrop-blur-md rounded-md text-[10px] text-orange-300 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                  <span>ป้ายหัวข้อ Post-Test (Official Banner)</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">ชื่อหัวข้อแบบทดสอบ:</label>
+                  <input
+                    type="text"
+                    value={localForms.posttest?.title || ''}
+                    onChange={e => setLocalForms({
+                      ...localForms,
+                      posttest: { ...localForms.posttest, title: e.target.value }
+                    })}
+                    placeholder="แบบทดสอบหลังเรียน (Post-Test)"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">คำอธิบายย่อ:</label>
+                  <input
+                    type="text"
+                    value={localForms.posttest?.description || ''}
+                    onChange={e => setLocalForms({
+                      ...localForms,
+                      posttest: { ...localForms.posttest, description: e.target.value }
+                    })}
+                    placeholder="คำอธิบายแบบทดสอบหลังเรียน..."
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
               </div>
 
               <div>
@@ -2768,7 +2858,7 @@ export default function AdminDashboardView({
             </div>
 
             {/* 3. Evaluation Form */}
-            <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-2xl space-y-3">
+            <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
@@ -2788,6 +2878,48 @@ export default function AdminDashboardView({
                   {localForms.evaluation?.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
                   <span>{localForms.evaluation?.enabled ? 'เปิดให้ประเมิน (Active)' : 'ปิดระบบ (Disabled)'}</span>
                 </button>
+              </div>
+
+              {/* Banner Preview */}
+              <div className="rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-900 relative group">
+                <img
+                  src={localForms.evaluation?.banner || '/images/banner/banner_evaluation.png'}
+                  alt="Evaluation Banner Preview"
+                  className="w-full h-24 sm:h-28 object-cover"
+                />
+                <div className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/75 backdrop-blur-md rounded-md text-[10px] text-emerald-300 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>ป้ายหัวข้อแบบประเมินความพึงพอใจ (Official Banner)</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">ชื่อหัวข้อแบบประเมิน:</label>
+                  <input
+                    type="text"
+                    value={localForms.evaluation?.title || ''}
+                    onChange={e => setLocalForms({
+                      ...localForms,
+                      evaluation: { ...localForms.evaluation, title: e.target.value }
+                    })}
+                    placeholder="แบบประเมินความพึงพอใจ (JRE 2027)"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">คำอธิบายย่อ:</label>
+                  <input
+                    type="text"
+                    value={localForms.evaluation?.description || ''}
+                    onChange={e => setLocalForms({
+                      ...localForms,
+                      evaluation: { ...localForms.evaluation, description: e.target.value }
+                    })}
+                    placeholder="คำอธิบายแบบประเมิน..."
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
               </div>
 
               <div>

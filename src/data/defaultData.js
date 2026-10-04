@@ -422,22 +422,25 @@ Joint Response Exercise (JRE 2027)
 
 export const DEFAULT_FORMS_CONFIG = {
   pretest: {
-    title: 'แบบทดสอบก่อนการฝึกอบรม (Pre-Test JRE 2027)',
-    url: 'https://docs.google.com/forms',
-    enabled: false,
-    description: 'ประเมินความรู้พื้นฐานด้านการกู้ภัย การปฐมพยาบาล และระบบบัญชาการเหตุการณ์ก่อนเข้ารับการฝึก'
+    title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027',
+    url: 'https://docs.google.com/forms/d/e/1FAIpQLSeG8XzDhnXpWOySVmLCFfmMaHtuDW5rnaZB9qHkdbyLtCg-gQ/closedform',
+    banner: '/images/banner/banner_pretest.png',
+    enabled: true,
+    description: 'แบบทดสอบวัดความรู้พื้นฐานด้านการกู้ภัย การปฐมพยาบาล และระบบบัญชาการเหตุก่อนเข้ารับการฝึก'
   },
   posttest: {
-    title: 'แบบทดสอบหลังการฝึกอบรม (Post-Test JRE 2027)',
-    url: 'https://docs.google.com/forms',
-    enabled: false,
-    description: 'ทดสอบวัดผลสัมฤทธิ์และทักษะความรู้หลังเสร็จสิ้นการฝึกปฏิบัติการจริง'
+    title: 'แบบทดสอบหลังเรียน (Post-Test)',
+    url: 'https://docs.google.com/forms/d/e/1FAIpQLSeg27uayAmN3KSjFlpCf7g_RYQB-HhKSjqriVLOBNuNyH2D_Q/formResponse',
+    banner: '/images/banner/banner_posttest.png',
+    enabled: true,
+    description: 'แบบทดสอบวัดผลสัมฤทธิ์และทักษะความรู้หลังเสร็จสิ้นการฝึกปฏิบัติการจริง'
   },
   evaluation: {
-    title: 'แบบประเมินความพึงพอใจโครงการ JRE 2027',
-    url: 'https://docs.google.com/forms',
-    enabled: false,
-    description: 'โปรดร่วมให้คะแนนและข้อเสนอแนะเพื่อนำไปพัฒนาโครงการในรุ่นถัดไป'
+    title: 'แบบประเมินความพึงพอใจ (JRE 2027)',
+    url: 'https://docs.google.com/forms/d/e/1FAIpQLSeRvFFvOTmFqO8MXRagJyfX0FUQ9ws_NqLmxcYga7RFLClPeA/viewform',
+    banner: '/images/banner/banner_evaluation.png',
+    enabled: true,
+    description: 'แบบประเมินผลความพึงพอใจและข้อเสนอแนะในการพัฒนาโครงการ JRE 2027'
   }
 };
 
