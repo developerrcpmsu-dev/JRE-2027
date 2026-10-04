@@ -399,6 +399,17 @@ export default function RegisterView({
     return (
       <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
         
+        {/* Official Header Banner */}
+        <div className="flex justify-center">
+          <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+            <img
+              src="/images/logo/jre_header_banner.png"
+              alt="Joint Response Exercise (JRE 2027)"
+              className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+            />
+          </div>
+        </div>
+
         {/* Step Indicator Header */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="p-4 rounded-2xl bg-orange-500/10 border-2 border-rescue-500/50 flex items-center gap-3">
@@ -513,6 +524,17 @@ export default function RegisterView({
     return (
       <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
         
+        {/* Official Header Banner */}
+        <div className="flex justify-center">
+          <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+            <img
+              src="/images/logo/jre_header_banner.png"
+              alt="Joint Response Exercise (JRE 2027)"
+              className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+            />
+          </div>
+        </div>
+
         {/* Top Header Profile Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-slate-800 pb-6">
@@ -1418,6 +1440,17 @@ export default function RegisterView({
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
       
+      {/* Official Header Banner */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+          <img
+            src="/images/logo/jre_header_banner.png"
+            alt="Joint Response Exercise (JRE 2027)"
+            className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+          />
+        </div>
+      </div>
+
       <div className="text-center space-y-2 mb-4">
         <div className="inline-flex items-center gap-2 px-4 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
           <FileText className="w-4 h-4" />
@@ -1492,6 +1525,29 @@ export default function RegisterView({
 
       <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-8">
         
+        {/* Form Header Official Emblem Banner */}
+        <div className="flex flex-col items-center justify-center pb-6 border-b border-slate-800 text-center space-y-3">
+          <div className="w-full max-w-lg bg-white p-2 sm:p-3 rounded-2xl shadow-xl border border-slate-700/50 flex items-center justify-center">
+            <img
+              src="/images/logo/jre_header_banner.png"
+              alt="Joint Response Exercise (JRE 2027)"
+              className="w-full h-auto object-contain max-h-20 sm:max-h-24"
+            />
+          </div>
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rescue-500/10 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-black uppercase tracking-wider">
+              <FileText className="w-3.5 h-3.5" />
+              <span>ใบสมัครเข้าร่วมโครงการอย่างเป็นทางการ (Official Registration Form)</span>
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-white">
+              โครงการฝึกผสมภาคีเครือข่าย Joint Response Exercise (JRE 2027)
+            </h2>
+            <p className="text-xs text-slate-400">
+              วันที่ 14 – 15 พฤศจิกายน 2569 • ณ มหาวิทยาลัยมหาสารคาม
+            </p>
+          </div>
+        </div>
+
         {/* Section 1: ชื่อและสังกัด */}
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
