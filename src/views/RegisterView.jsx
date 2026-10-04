@@ -43,7 +43,7 @@ import { DataService } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
-import { DEFAULT_PAYMENT_CONFIG } from '../data/defaultData';
+import { DEFAULT_PAYMENT_CONFIG, OFFICIAL_NETWORK_INSTITUTIONS } from '../data/defaultData';
 
 export default function RegisterView({ 
   user, 
@@ -71,11 +71,24 @@ export default function RegisterView({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   
-  // Birth Date State (Buddhist Era friendly)
+  // Birth Date State (Buddhist Era friendly & Minimum 15 Years Old Enforced)
   const currentBE = new Date().getFullYear() + 543;
+  const MIN_REGISTRATION_AGE = 15;
+  const maxBirthYearBE = currentBE - MIN_REGISTRATION_AGE; // 2569 - 15 = 2554 BE
+  const minBirthYearBE = currentBE - 75; // 2569 - 75 = 2494 BE (up to 75 years old)
+
+  // Strictly only list years where applicant is at least 15 years old (eliminates 2555 to 2569)
+  const eligibleBirthYears = Array.from(
+    { length: maxBirthYearBE - minBirthYearBE + 1 },
+    (_, i) => maxBirthYearBE - i
+  );
+
   const [birthDay, setBirthDay] = useState('15');
   const [birthMonth, setBirthMonth] = useState('6');
-  const [birthYearBE, setBirthYearBE] = useState('2546'); // พ.ศ. 2546 (~20-21 years old)
+  const [birthYearBE, setBirthYearBE] = useState(() => {
+    const defaultYear = 2546; // ~23 years old
+    return defaultYear <= maxBirthYearBE ? defaultYear.toString() : maxBirthYearBE.toString();
+  });
 
   const [bloodGroup, setBloodGroup] = useState('B');
   const [phone, setPhone] = useState('');
@@ -194,6 +207,16 @@ export default function RegisterView({
     e.preventDefault();
     if (!user) {
       onOpenGoogleLogin();
+      return;
+    }
+
+    // Minimum 15 Years Old Enforcement
+    if (ageResult.years < 15) {
+      setStatusMessage({
+        type: 'error',
+        text: `ไม่อนุญาตให้ส่งใบสมัคร: ผู้เข้าร่วมโครงการฝึกอบรมเชิงปฏิบัติการกู้ภัย JRE 2027 ต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไป (ปัจจุบันคำนวณได้ ${ageResult.years} ปี ${ageResult.months} เดือน ยังไม่ถึงเกณฑ์ขั้นต่ำ)`
+      });
+      triggerToast('ผู้สมัครต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไปเท่านั้น', 'error');
       return;
     }
 
@@ -1660,48 +1683,79 @@ export default function RegisterView({
               <label className="block text-xs font-semibold text-slate-300">
                 สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) *
               </label>
-              <span className="text-[11px] text-rescue-400">
+              <span className="text-[11px] text-rescue-400 font-medium">
                 เปิดรับทุกมหาวิทยาลัยทั่วประเทศ
               </span>
             </div>
+
+            {/* Quick Dropdown Picker from 8 Official Network Institutions */}
+            <div className="mb-2">
+              <select
+                value={OFFICIAL_NETWORK_INSTITUTIONS.find(i => i.fullName === institution)?.fullName || ''}
+                onChange={e => {
+                  if (e.target.value) {
+                    setInstitution(e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium cursor-pointer"
+              >
+                <option value="">-- เลือกจาก 8 สถาบัน/ชมรมกู้ภัยเครือข่าย หรือพิมพ์ระบุเองด้านล่าง --</option>
+                {OFFICIAL_NETWORK_INSTITUTIONS.map(inst => (
+                  <option key={inst.id} value={inst.fullName}>
+                    {inst.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <input
               type="text"
               required
               value={institution}
               onChange={e => setInstitution(e.target.value)}
-              placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, อาสาสมัครกู้ภัย มข, ชุดเคลื่อนที่เร็ว มก, จุฬาฯ, มธ, มช, มอ ฯลฯ"
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm"
+              placeholder="ระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, อาสาสมัครกู้ภัย มข ฯลฯ"
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
             />
-            {/* Quick Suggestions Pills */}
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              <span className="text-[11px] text-slate-500 mr-1 self-center">เลือกด่วน:</span>
-              {[
-                'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
-                'อาสาสมัครกู้ภัย มหาวิทยาลัยขอนแก่น (มข)',
-                'ชุดเคลื่อนที่เร็ว มหาวิทยาลัยเกษตรศาสตร์ (มก)',
-                'เครือข่ายกู้ภัย มหาวิทยาลัยเชียงใหม่ (มช)',
-                'เครือข่ายกู้ภัย มหาวิทยาลัยสงขลานครินทร์ (มอ)',
-                'เครือข่ายกู้ภัย มหาวิทยาลัยบูรพา (มบ)'
-              ].map((uni, idx) => (
-                <button
-                  type="button"
-                  key={idx}
-                  onClick={() => setInstitution(uni)}
-                  className="px-2.5 py-1 bg-slate-950 hover:bg-slate-800 text-[10px] text-slate-300 hover:text-white rounded-lg border border-slate-800 transition-colors"
-                >
-                  + {uni.split(' ')[0]} {uni.split(' ')[1]}
-                </button>
-              ))}
+
+            {/* Quick Suggestions Pills (All 8 Official Network Institutions) */}
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              <span className="text-[11px] font-bold text-rescue-400 mr-1 self-center flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                เลือกด่วน (8 สถาบันเครือข่าย):
+              </span>
+              {OFFICIAL_NETWORK_INSTITUTIONS.map(inst => {
+                const isSelected = institution === inst.fullName;
+                return (
+                  <button
+                    type="button"
+                    key={inst.id}
+                    onClick={() => setInstitution(inst.fullName)}
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-rescue-500/25 text-orange-300 border-rescue-500 shadow-sm'
+                        : 'bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                    }`}
+                    title={inst.fullName}
+                  >
+                    • {inst.pillText}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Section 2: วันเดือนปี พ.ศ. เกิด และการคำนวณอายุ อัตโนมัติ */}
+        {/* Section 2: วันเดือนปี พ.ศ. เกิด และการคำนวณอายุ อัตโนมัติ (เกณฑ์ 15 ปีขึ้นไป) */}
         <div className="space-y-4">
-          <h3 className="text-sm font-bold text-rescue-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
-            <Calendar className="w-4 h-4" />
-            2. วันเดือนปี พ.ศ. เกิด & คำนวณอายุอัตโนมัติ
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
+            <h3 className="text-sm font-bold text-rescue-400 uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              2. วันเดือนปี พ.ศ. เกิด & คำนวณอายุอัตโนมัติ
+            </h3>
+            <span className="text-[11px] text-amber-400 font-medium">
+              * เกณฑ์อายุผู้เข้ารับการฝึกอบรม: 15 ปีบริบูรณ์ขึ้นไป (พ.ศ. {maxBirthYearBE} ลงไป)
+            </span>
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -1711,7 +1765,7 @@ export default function RegisterView({
               <select
                 value={birthDay}
                 onChange={e => setBirthDay(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
               >
                 {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                   <option key={d} value={d.toString()}>{d}</option>
@@ -1726,7 +1780,7 @@ export default function RegisterView({
               <select
                 value={birthMonth}
                 onChange={e => setBirthMonth(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
               >
                 {[
                   '1 - มกราคม', '2 - กุมภาพันธ์', '3 - มีนาคม', '4 - เมษายน',
@@ -1739,15 +1793,16 @@ export default function RegisterView({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">
-                ปีเกิด (พ.ศ.)
+              <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center justify-between">
+                <span>ปีเกิด (พ.ศ.) *</span>
+                <span className="text-[10px] text-rescue-400 font-bold">15 ปี+</span>
               </label>
               <select
                 value={birthYearBE}
                 onChange={e => setBirthYearBE(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
               >
-                {Array.from({ length: 50 }, (_, i) => currentBE - i).map(year => (
+                {eligibleBirthYears.map(year => (
                   <option key={year} value={year.toString()}>
                     พ.ศ. {year} (ค.ศ. {year - 543})
                   </option>
@@ -1757,9 +1812,17 @@ export default function RegisterView({
           </div>
 
           {/* REAL-TIME CALCULATED AGE DISPLAY BOX */}
-          <div className="bg-gradient-to-r from-orange-950/60 via-slate-950 to-slate-900 border border-orange-500/40 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner">
+          <div className={`p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner border transition-all ${
+            ageResult.years < 15
+              ? 'bg-red-950/40 border-red-500/50'
+              : 'bg-gradient-to-r from-orange-950/60 via-slate-950 to-slate-900 border-orange-500/40'
+          }`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold text-xs shrink-0 border border-orange-500/30">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${
+                ageResult.years < 15
+                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                  : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+              }`}>
                 อายุ
               </div>
               <div>
@@ -1767,16 +1830,41 @@ export default function RegisterView({
                   อายุที่ระบบคำนวณให้อัตโนมัติ (ณ วันที่ปัจจุบัน):
                 </p>
                 <p className="text-base sm:text-lg font-black text-white">
-                  <span className="text-orange-400">{ageResult.years}</span> ปี{' '}
-                  <span className="text-orange-400">{ageResult.months}</span> เดือน{' '}
-                  <span className="text-orange-400">{ageResult.days}</span> วัน
+                  <span className={ageResult.years < 15 ? 'text-red-400' : 'text-orange-400'}>
+                    {ageResult.years}
+                  </span> ปี{' '}
+                  <span className={ageResult.years < 15 ? 'text-red-400' : 'text-orange-400'}>
+                    {ageResult.months}
+                  </span> เดือน{' '}
+                  <span className={ageResult.years < 15 ? 'text-red-400' : 'text-orange-400'}>
+                    {ageResult.days}
+                  </span> วัน
                 </p>
               </div>
             </div>
-            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-[11px] font-semibold">
-              ✓ คำนวณเรียลไทม์
-            </span>
+
+            {ageResult.years < 15 ? (
+              <span className="px-3 py-1 bg-red-500/20 text-red-300 border border-red-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                อายุต่ำกว่า 15 ปี (ไม่ผ่านเกณฑ์)
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                ผ่านเกณฑ์อายุ (15 ปีขึ้นไป)
+              </span>
+            )}
           </div>
+
+          {/* Underage Error Alert if calculated age is strictly < 15 */}
+          {ageResult.years < 15 && (
+            <div className="p-3 bg-red-950/70 border border-red-500/60 rounded-xl text-red-200 text-xs flex items-center gap-2.5 shadow-lg">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>
+                <strong>แจ้งเตือน:</strong> ผู้สมัครต้องมีอายุอย่างน้อย 15 ปีบริบูรณ์ขึ้นไปเท่านั้น จึงจะสามารถเข้าร่วมการฝึกอบรมปฏิบัติการกู้ภัยได้
+              </span>
+            </div>
+          )}
 
           {/* กรุ๊ปเลือด และ เบอร์โทร */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
