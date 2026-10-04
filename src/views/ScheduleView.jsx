@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { SCHEDULE_DAYS } from '../data/defaultData';
 import CurriculumSection from '../components/CurriculumSection';
+import AccommodationSection from '../components/AccommodationSection';
 
 export default function ScheduleView() {
   const [selectedDay, setSelectedDay] = useState(1);
@@ -267,6 +268,9 @@ export default function ScheduleView() {
       {/* Curriculum & Training Stations Section */}
       <CurriculumSection />
 
+      {/* Accommodation & Dormitory Section */}
+      <AccommodationSection />
+
       {/* Location Details Summary Box */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8">
         <h3 className="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -298,7 +302,7 @@ export default function ScheduleView() {
               <span>หอใน กุดรัง กองอาคารสถานที่ มมส</span>
             </p>
             <p className="text-slate-400 leading-relaxed">
-              ที่พักค้างแรม 1 คืน สำหรับผู้เข้าร่วมโครงการและเครือข่ายนักศึกษาอาสาสมัครทุกสถาบัน
+              ที่พักค้างแรม 1 คืน สำหรับผู้เข้าร่วมโครงการและเครือข่ายนักศึกษาอาสาสมัคร (ห้องปรับอากาศ/แอร์, เครื่องทำน้ำอุ่น, โต๊ะเขียนงาน, ตู้เสื้อผ้า, พร้อมหมอนและผ้าห่มจัดเตรียมไว้ให้)
             </p>
           </div>
         </div>

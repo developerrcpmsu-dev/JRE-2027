@@ -834,13 +834,23 @@ export default function RegisterView({
                       </p>
                       <p className="text-[11px] text-slate-300 mt-1.5 flex items-center gap-1">
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>เข้าพักตามห้องนอนที่ระบุ ณ เรือนนอนหอพักนิสิต มมส</span>
+                        <span>เข้าพักตามห้องนอนที่ระบุ ณ หอพักกุดรัง มมส</span>
                       </p>
+                      <div className="mt-2.5 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex flex-wrap gap-2">
+                        <span className="text-sky-300">❄️ แอร์</span>
+                        <span className="text-amber-300">🚿 เครื่องทำน้ำอุ่น</span>
+                        <span className="text-emerald-300">🛏️ มีหมอน & ผ้าห่มพร้อม</span>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-amber-400 py-2">
-                      <Clock className="w-4 h-4 animate-spin-slow" />
-                      <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรห้องพักค้างแรม...</span>
+                    <div>
+                      <div className="flex items-center gap-2 text-amber-400 py-1">
+                        <Clock className="w-4 h-4 animate-spin-slow" />
+                        <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรห้องพักค้างแรม...</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        เข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม โต๊ะเขียนงาน และตู้เสื้อผ้า)
+                      </p>
                     </div>
                   )}
                 </div>
