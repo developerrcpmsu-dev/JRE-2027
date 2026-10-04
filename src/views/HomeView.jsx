@@ -62,34 +62,52 @@ export default function HomeView({
         <div className="absolute top-0 right-0 w-96 h-96 bg-rescue-500/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-emergency-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        <div className="relative z-10 max-w-4xl">
-          
-          <div className="flex flex-wrap items-center gap-2 mb-6">
-            <span className="px-3 py-1 bg-emergency-500/20 text-emergency-400 border border-emergency-500/30 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5" />
-              การฝึกซ้อมร่วมประจำปี 2570
-            </span>
-            <span className="px-3 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5" />
-              มหาวิทยาลัยมหาสารคาม (มมส)
-            </span>
-            <span className="px-3 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-full text-xs font-medium flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-rescue-400" />
-              14 - 15 พฤศจิกายน 2569 (2 วัน 1 คืน)
-            </span>
+        <div className="relative z-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-8">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2 mb-6">
+                <span className="px-3 py-1 bg-emergency-500/20 text-emergency-400 border border-emergency-500/30 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  การฝึกซ้อมร่วมประจำปี 2570
+                </span>
+                <span className="px-3 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" />
+                  มหาวิทยาลัยมหาสารคาม (มมส)
+                </span>
+                <span className="px-3 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-full text-xs font-medium flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-rescue-400" />
+                  14 - 15 พฤศจิกายน 2569 (2 วัน 1 คืน)
+                </span>
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight mb-6">
+                มมส จัด <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-rescue-500 to-amber-300">JRE 2027</span><br />
+                ติวเข้มเครือข่ายกู้ภัยนักศึกษาทั่วประเทศ
+              </h1>
+
+              <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-3xl">
+                ยกระดับทักษะรับมือเหตุฉุกเฉินระดับประเทศ สานต่อความสำเร็จจากการฝึกซ้อม JRE 2026 โดย 
+                <span className="font-semibold text-white"> ชมรมกู้ภัยราชพฤกษ์ สังกัดองค์การนิสิต มหาวิทยาลัยมหาสารคาม </span>
+                ร่วมกับมหาวิทยาลัยและเครือข่ายกู้ภัยนักศึกษาทั่วประเทศทุกภูมิภาค (ภาคอีสาน, ภาคกลาง, ภาคเหนือ, ภาคใต้, ภาคตะวันออก)
+                ได้รับเกียรติจาก <span className="text-amber-300 font-semibold">รองศาสตราจารย์ ดร.นิตยา วรรณกิตร์</span> รองอธิการบดีฝ่ายพัฒนานิสิตและภาพลักษณ์องค์กร มหาวิทยาลัยมหาสารคาม เป็นประธานเปิดโครงการ
+              </p>
+            </div>
+
+            {/* Official Emblem Spotlight */}
+            <div className="hidden lg:flex flex-col items-center justify-center p-6 bg-slate-900/60 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-sm shrink-0 self-center group">
+              <img 
+                src="/images/logo/jre_logo.png" 
+                alt="ตราสัญลักษณ์ JRE 2027 (USVN)" 
+                className="w-44 h-56 object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-300"
+              />
+              <span className="text-[11px] font-bold text-orange-400/90 mt-3 tracking-wider text-center">
+                ตราสัญลักษณ์ประจำโครงการ
+              </span>
+              <span className="text-[9px] text-slate-400 font-medium text-center">
+                USVN • ภาคีเครือข่ายนักศึกษาอาสาสมัคร
+              </span>
+            </div>
           </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight mb-6">
-            มมส จัด <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-rescue-500 to-amber-300">JRE 2027</span><br />
-            ติวเข้มเครือข่ายกู้ภัยนักศึกษาทั่วประเทศ
-          </h1>
-
-          <p className="text-base sm:text-lg text-slate-300 leading-relaxed mb-8 max-w-3xl">
-            ยกระดับทักษะรับมือเหตุฉุกเฉินระดับประเทศ สานต่อความสำเร็จจากการฝึกซ้อม JRE 2026 โดย 
-            <span className="font-semibold text-white"> ชมรมกู้ภัยราชพฤกษ์ สังกัดองค์การนิสิต มหาวิทยาลัยมหาสารคาม </span>
-            ร่วมกับมหาวิทยาลัยและเครือข่ายกู้ภัยนักศึกษาทั่วประเทศทุกภูมิภาค (ภาคอีสาน, ภาคกลาง, ภาคเหนือ, ภาคใต้, ภาคตะวันออก)
-            ได้รับเกียรติจาก <span className="text-amber-300 font-semibold">รองศาสตราจารย์ ดร.นิตยา วรรณกิตร์</span> รองอธิการบดีฝ่ายพัฒนานิสิตและภาพลักษณ์องค์กร มหาวิทยาลัยมหาสารคาม เป็นประธานเปิดโครงการ
-          </p>
 
           <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">

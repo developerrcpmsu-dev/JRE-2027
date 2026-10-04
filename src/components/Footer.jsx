@@ -12,9 +12,11 @@ export default function Footer({ onOpenAdminLogin }) {
           {/* Col 1: About */}
           <div className="md:col-span-2 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rescue-600 flex items-center justify-center text-white shadow-lg shadow-rescue-600/30">
-                <Flame className="w-6 h-6" />
-              </div>
+              <img 
+                src="/images/logo/jre_logo.png" 
+                alt="ตราสัญลักษณ์ JRE 2027" 
+                className="w-9 h-11 object-contain drop-shadow" 
+              />
               <span className="text-xl font-black text-white tracking-wide">
                 JRE <span className="text-rescue-500">2027</span>
               </span>

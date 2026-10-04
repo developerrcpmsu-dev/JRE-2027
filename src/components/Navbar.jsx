@@ -49,13 +49,12 @@ export default function Navbar({
             onClick={() => handleNav('home')} 
             className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group select-none shrink-0"
           >
-            <div className="relative shrink-0">
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-rescue-600 via-orange-500 to-emergency-600 flex items-center justify-center shadow-lg shadow-orange-500/30 group-hover:scale-105 transition-transform duration-300">
-                <Flame className="w-6 h-6 text-white" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-600 border-2 border-slate-950 rounded-full flex items-center justify-center">
-                <Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-              </div>
+            <div className="relative shrink-0 flex items-center justify-center">
+              <img 
+                src="/images/logo/jre_logo.png" 
+                alt="ตราสัญลักษณ์ JRE 2027" 
+                className="w-9 h-11 sm:w-10 sm:h-12 object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+              />
             </div>
             <div className="shrink-0">
               <div className="flex items-center gap-1.5 sm:gap-2">

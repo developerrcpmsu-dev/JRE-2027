@@ -50,8 +50,12 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-gradient-to-tr from-purple-700 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-purple-600/30 mb-3 border border-purple-400/30">
-            <ShieldCheck className="w-7 h-7 text-white" />
+          <div className="w-16 h-18 mx-auto flex items-center justify-center mb-3">
+            <img 
+              src="/images/logo/jre_logo.png" 
+              alt="ตราสัญลักษณ์ JRE 2027" 
+              className="w-14 h-16 object-contain drop-shadow-xl" 
+            />
           </div>
           <h3 className="text-2xl font-black text-white">เข้าสู่ระบบผู้ดูแลระบบ</h3>
           <p className="text-slate-400 text-xs mt-1">
