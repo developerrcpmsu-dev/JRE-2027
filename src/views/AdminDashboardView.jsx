@@ -56,7 +56,9 @@ import {
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
   DEFAULT_SPEAKERS,
-  DEFAULT_TEAM_MEMBERS
+  DEFAULT_TEAM_MEMBERS,
+  isMsuInstitution,
+  getRegistrationFeeDetails
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
@@ -715,6 +717,10 @@ export default function AdminDashboardView({
     const textTarget = (
       (reg.first_name || '') + ' ' + 
       (reg.last_name || '') + ' ' + 
+      (reg.full_name_affiliation || '') + ' ' +
+      (reg.nickname || '') + ' ' +
+      (reg.callsign || '') + ' ' +
+      (reg.shirt_size || '') + ' ' +
       (reg.phone || '') + ' ' + 
       (reg.institution || '') + ' ' +
       (reg.user_email || '') + ' ' +
@@ -743,26 +749,42 @@ export default function AdminDashboardView({
   // Export CSV
   const handleExportCSV = () => {
     const headers = [
-      'ชื่อ-สกุล', 'วันเกิด', 'อายุ', 'กรุ๊ปเลือด', 'เบอร์โทร', 'สังกัด', 
-      'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'สถานะการชำระเงิน', 'ยอดเงิน', 'สลิปโอนเงิน', 'ดูแลพิเศษ', 'หมายเหตุพิเศษ'
+      'ชื่อ-สกุล', 'ชื่อเต็ม/สถาบัน (ไทย-อังกฤษ)', 'ชื่อเล่น', 'รหัสนามเรียกขาน', 'ไซส์เสื้อ (บังคับ)', 'สังกัด/มหาวิทยาลัย',
+      'เรทค่าสมัคร', 'วันเกิด', 'อายุ', 'กรุ๊ปเลือด', 'เบอร์โทร',
+      'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'สถานะการชำระเงิน', 'ยอดเงิน',
+      'สถานะงวด 1', 'สลิปงวด 1', 'สถานะงวด 2', 'สลิปงวด 2', 'สลิปเต็มจำนวน', 'รูปถ่าย ID Card',
+      'ดูแลพิเศษ', 'หมายเหตุพิเศษ'
     ];
-    const rows = registrations.map(r => [
-      `"${r.first_name || ''} ${r.last_name || ''}"`,
-      `"${r.dob || ''}"`,
-      `"${r.age_years || 0} ปี ${r.age_months || 0} เดือน"`,
-      `"${r.blood_group || ''}"`,
-      `"${r.phone || ''}"`,
-      `"${r.institution || ''}"`,
-      `"${r.emergency_name || ''}"`,
-      `"${r.emergency_phone || ''}"`,
-      `"${r.group_assigned || 'ยังไม่จัดสรร'}"`,
-      `"${r.room_assigned || 'ยังไม่จัดสรร'}"`,
-      `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
-      `"${r.payment_amount || 350}"`,
-      `"${r.payment_slip_url || ''}"`,
-      `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
-      `"${(r.special_notes || '').replace(/"/g, '""')}"`
-    ]);
+    const rows = registrations.map(r => {
+      const isMsu = isMsuInstitution(r.institution);
+      return [
+        `"${r.first_name || ''} ${r.last_name || ''}"`,
+        `"${(r.full_name_affiliation || '').replace(/"/g, '""')}"`,
+        `"${r.nickname || ''}"`,
+        `"${r.callsign || ''}"`,
+        `"${r.shirt_size || ''}"`,
+        `"${(r.institution || '').replace(/"/g, '""')}"`,
+        `"${isMsu ? 'นิสิต มมส (650 บ.)' : 'ต่างสถาบัน (850 บ.)'}"`,
+        `"${r.dob || ''}"`,
+        `"${r.age_years || 0} ปี ${r.age_months || 0} เดือน"`,
+        `"${r.blood_group || ''}"`,
+        `"${r.phone || ''}"`,
+        `"${r.emergency_name || ''}"`,
+        `"${r.emergency_phone || ''}"`,
+        `"${r.group_assigned || 'ยังไม่จัดสรร'}"`,
+        `"${r.room_assigned || 'ยังไม่จัดสรร'}"`,
+        `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
+        `"${r.payment_amount || (isMsu ? 650 : 850)}"`,
+        `"${r.installment_1_status || '-'}"`,
+        `"${r.installment_1_slip_url || ''}"`,
+        `"${r.installment_2_status || '-'}"`,
+        `"${r.installment_2_slip_url || ''}"`,
+        `"${r.payment_slip_url || ''}"`,
+        `"${r.id_card_photo || ''}"`,
+        `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
+        `"${(r.special_notes || '').replace(/"/g, '""')}"`
+      ];
+    });
 
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -1363,21 +1385,63 @@ export default function AdminDashboardView({
                         
                         {/* Name, Org, Email */}
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white text-sm">
-                              {reg.first_name} {reg.last_name}
-                            </span>
-                            {reg.is_special_care && (
-                              <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[10px] font-black animate-pulse flex items-center gap-1">
-                                ⭐ ดูแลพิเศษ
-                              </span>
+                          <div className="flex items-start gap-3">
+                            {reg.id_card_photo ? (
+                              <div
+                                onClick={() => handleOpenProfileModal(reg, 'info')}
+                                className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 shrink-0 cursor-pointer hover:border-purple-400 transition-colors shadow"
+                                title="คลิกดูประวัติและรูป ID Card"
+                              >
+                                <img src={reg.id_card_photo} alt="ID Card" className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 shrink-0 flex items-center justify-center text-slate-400 font-bold text-xs">
+                                {reg.first_name ? reg.first_name.slice(0, 1) : 'U'}
+                              </div>
                             )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
-                            {reg.institution}
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            {reg.phone} • {reg.user_email}
+
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-bold text-white text-sm">
+                                  {reg.first_name} {reg.last_name}
+                                </span>
+                                {reg.nickname && (
+                                  <span className="text-amber-300 font-bold text-xs">
+                                    ({reg.nickname})
+                                  </span>
+                                )}
+                                {reg.callsign && (
+                                  <span className="px-1.5 py-0.2 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded text-[10px] font-mono font-bold">
+                                    📡 {reg.callsign}
+                                  </span>
+                                )}
+                                {reg.shirt_size && (
+                                  <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[10px] font-bold">
+                                    👕 {reg.shirt_size}
+                                  </span>
+                                )}
+                                {isMsuInstitution(reg.institution) ? (
+                                  <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-semibold">
+                                    มมส (650 บ.)
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px] font-semibold">
+                                    ต่างสถาบัน (850 บ.)
+                                  </span>
+                                )}
+                                {reg.is_special_care && (
+                                  <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[10px] font-black animate-pulse flex items-center gap-1">
+                                    ⭐ ดูแลพิเศษ
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                                {reg.institution}
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono">
+                                {reg.phone} • {reg.user_email}
+                              </div>
+                            </div>
                           </div>
                         </td>
 
@@ -1580,16 +1644,53 @@ export default function AdminDashboardView({
 
             {/* Profile Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 border-b border-slate-800 pb-5">
-              <img
-                src={profileModalReg.user_avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'}
-                alt="Avatar"
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-rescue-500 shadow-md"
-              />
-              <div className="flex-1">
+              <div className="relative group shrink-0">
+                <img
+                  src={profileModalReg.id_card_photo || profileModalReg.user_avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'}
+                  alt="Avatar"
+                  className="w-20 h-20 rounded-2xl object-cover border-2 border-rescue-500 shadow-md"
+                />
+                {profileModalReg.id_card_photo && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDoc({ title: 'รูปถ่าย ID Card - ' + profileModalReg.first_name, file_url: profileModalReg.id_card_photo, file_name: 'id-card-photo.jpg' })}
+                    className="absolute -bottom-1 -right-1 p-1 bg-slate-950/90 hover:bg-slate-900 text-rescue-400 border border-slate-700 rounded-lg text-[10px] font-bold shadow flex items-center gap-0.5"
+                    title="คลิกดูรูปขนาดเต็ม"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-xl sm:text-2xl font-black text-white">
                     {profileModalReg.first_name} {profileModalReg.last_name}
                   </h3>
+                  {profileModalReg.nickname && (
+                    <span className="text-amber-300 font-bold text-xs bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
+                      ({profileModalReg.nickname})
+                    </span>
+                  )}
+                  {profileModalReg.callsign && (
+                    <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full text-xs font-mono font-bold">
+                      📡 {profileModalReg.callsign}
+                    </span>
+                  )}
+                  {profileModalReg.shirt_size && (
+                    <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-bold">
+                      👕 ไซส์ {profileModalReg.shirt_size}
+                    </span>
+                  )}
+                  {isMsuInstitution(profileModalReg.institution) ? (
+                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold">
+                      🏫 มมส (650 บ.)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold">
+                      🏢 ต่างสถาบัน (850 บ. รวมหอพัก)
+                    </span>
+                  )}
                   {modalSpecialCare && (
                     <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-xs font-black animate-pulse flex items-center gap-1">
                       ⭐ ผู้เข้าร่วมดูแลเป็นพิเศษ
@@ -1609,6 +1710,13 @@ export default function AdminDashboardView({
                     </span>
                   )}
                 </div>
+
+                {profileModalReg.full_name_affiliation && (
+                  <p className="text-xs text-indigo-300 mt-1 font-semibold">
+                    ชื่อ-สกุล (สถาบัน) ไทย/อังกฤษ: <span className="text-slate-200">{profileModalReg.full_name_affiliation}</span>
+                  </p>
+                )}
+
                 <p className="text-xs text-slate-300 mt-0.5">
                   สังกัด: <span className="text-white font-medium">{profileModalReg.institution}</span>
                 </p>
@@ -2422,7 +2530,7 @@ export default function AdminDashboardView({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    ยอดค่าลงทะเบียนรวมเต็มจำนวน (บาท):
+                    ยอดค่าลงทะเบียนสถาบันภายนอก (บาท):
                   </label>
                   <input
                     type="number"
@@ -2430,9 +2538,24 @@ export default function AdminDashboardView({
                     value={localPayment.fee_total ?? 850}
                     onChange={e => setLocalPayment(prev => ({ ...prev, fee_total: Number(e.target.value) || 0 }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder="เช่น 850"
+                    placeholder="850"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">ยอดรวมทั้งหมดสำหรับผู้ที่ชำระครั้งเดียวเต็มจำนวน (850 บาท)</p>
+                  <p className="text-[11px] text-slate-500 mt-1">อัตราสำหรับสถาบันภายนอก/ต่างมหาวิทยาลัย (รวมค่าที่พักหอพักกุดรัง มมส และอาหาร)</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    ยอดค่าลงทะเบียนนิสิต มมส (บาท):
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={localPayment.fee_total_msu ?? 650}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, fee_total_msu: Number(e.target.value) || 0 }))}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="650"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">อัตราสำหรับนิสิตมหาวิทยาลัยมหาสารคาม (ไม่มีค่าที่พัก)</p>
                 </div>
 
                 <div>
@@ -2442,10 +2565,10 @@ export default function AdminDashboardView({
                   <input
                     type="text"
                     required
-                    value={localPayment.bank_name ?? ''}
+                    value={localPayment.bank_name ?? 'ธนาคารไทยพาณิชย์'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_name: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder="เช่น ธนาคารกรุงไทย"
+                    placeholder="เช่น ธนาคารไทยพาณิชย์"
                   />
                 </div>
 
@@ -2456,10 +2579,10 @@ export default function AdminDashboardView({
                   <input
                     type="text"
                     required
-                    value={localPayment.bank_account_number ?? ''}
+                    value={localPayment.bank_account_number ?? '594-264865-5'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_account_number: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none tracking-wider"
-                    placeholder="เช่น 984-0-12345-6"
+                    placeholder="594-264865-5"
                   />
                 </div>
 
@@ -2470,25 +2593,25 @@ export default function AdminDashboardView({
                   <input
                     type="text"
                     required
-                    value={localPayment.bank_account_name ?? ''}
+                    value={localPayment.bank_account_name ?? 'นางสาวมัญชุพร ยังเหล็ก'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_account_name: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม"
+                    placeholder="นางสาวมัญชุพร ยังเหล็ก"
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    หมายเลขพร้อมเพย์ (PromptPay) (ถ้ามี):
+                    หมายเลขพร้อมเพย์ / เบอร์ติดต่อ:
                   </label>
                   <input
                     type="text"
-                    value={localPayment.bank_promptpay ?? ''}
+                    value={localPayment.bank_promptpay ?? '098-329-6762'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_promptpay: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder="เช่น 098-765-4321 หรือ เลขประจำตัวผู้เสียภาษี"
+                    placeholder="098-329-6762"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">ผู้สมัครจะมีปุ่มกดคัดลอกเลขพร้อมเพย์ได้ทันที</p>
+                  <p className="text-[11px] text-slate-500 mt-1">เบอร์สอบถามรายละเอียดและรับโอน: 098-329-6762</p>
                 </div>
               </div>
             </div>

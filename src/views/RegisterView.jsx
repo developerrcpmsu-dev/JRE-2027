@@ -35,7 +35,13 @@ import {
   Check,
   CalendarClock,
   Layers,
-  HelpCircle
+  HelpCircle,
+  Camera,
+  Shirt,
+  RotateCcw,
+  Trash2,
+  X,
+  Info
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
@@ -43,7 +49,13 @@ import { DataService } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
-import { DEFAULT_PAYMENT_CONFIG, OFFICIAL_NETWORK_INSTITUTIONS } from '../data/defaultData';
+import { 
+  DEFAULT_PAYMENT_CONFIG, 
+  OFFICIAL_NETWORK_INSTITUTIONS,
+  SHIRT_SIZE_OPTIONS,
+  getRegistrationFeeDetails,
+  isMsuInstitution
+} from '../data/defaultData';
 
 export default function RegisterView({ 
   user, 
@@ -70,6 +82,19 @@ export default function RegisterView({
   // Form State
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [fullNameAffiliation, setFullNameAffiliation] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [callsign, setCallsign] = useState('');
+  const [shirtSize, setShirtSize] = useState('L');
+  const [idCardPhoto, setIdCardPhoto] = useState('');
+  const [idCardFileName, setIdCardFileName] = useState('');
+  const [formSlipRound1, setFormSlipRound1] = useState('');
+  const [formSlipRound1FileName, setFormSlipRound1FileName] = useState('');
+  const [isProcessingIdPhoto, setIsProcessingIdPhoto] = useState(false);
+  const [isProcessingFormSlip, setIsProcessingFormSlip] = useState(false);
+  const [showShirtSizeModal, setShowShirtSizeModal] = useState(false);
+  const [hasDraftRestored, setHasDraftRestored] = useState(false);
+  const [lastDraftSavedTime, setLastDraftSavedTime] = useState(null);
   
   // Birth Date State (Buddhist Era friendly & Minimum 15 Years Old Enforced)
   const currentBE = new Date().getFullYear() + 543;
@@ -124,13 +149,135 @@ export default function RegisterView({
   const [previewSlipModal, setPreviewSlipModal] = useState(null);
 
   // 2-Round Installments State
-  const [paymentPlan, setPaymentPlan] = useState('full'); // 'full' or 'installment'
+  const [paymentPlan, setPaymentPlan] = useState('installment'); // default installment for 2 rounds
   const [isUploadingRound1, setIsUploadingRound1] = useState(false);
   const [isUploadingRound2, setIsUploadingRound2] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
 
   // Document Upload State
   const [uploadingDocId, setUploadingDocId] = useState(null);
+
+  const DRAFT_KEY = 'jre2027_form_draft_v1';
+
+  // Restore Draft from LocalStorage on mount if not registered yet
+  useEffect(() => {
+    if (!myRegistration) {
+      try {
+        const savedDraft = localStorage.getItem(DRAFT_KEY);
+        if (savedDraft) {
+          const d = JSON.parse(savedDraft);
+          if (d.fullNameAffiliation) setFullNameAffiliation(d.fullNameAffiliation);
+          if (d.firstName) setFirstName(d.firstName);
+          if (d.lastName) setLastName(d.lastName);
+          if (d.nickname) setNickname(d.nickname);
+          if (d.callsign) setCallsign(d.callsign);
+          if (d.institution) setInstitution(d.institution);
+          if (d.phone) setPhone(d.phone);
+          if (d.bloodGroup) setBloodGroup(d.bloodGroup);
+          if (d.birthDay) setBirthDay(d.birthDay);
+          if (d.birthMonth) setBirthMonth(d.birthMonth);
+          if (d.birthYearBE) setBirthYearBE(d.birthYearBE);
+          if (d.shirtSize) setShirtSize(d.shirtSize);
+          if (d.emergencyName) setEmergencyName(d.emergencyName);
+          if (d.emergencyPhone) setEmergencyPhone(d.emergencyPhone);
+          if (d.emergencyRelation) setEmergencyRelation(d.emergencyRelation);
+          if (d.medicalHistory) setMedicalHistory(d.medicalHistory);
+          if (d.foodAllergy) setFoodAllergy(d.foodAllergy);
+          if (d.previousTraining) setPreviousTraining(d.previousTraining);
+          if (d.idCardPhoto) {
+            setIdCardPhoto(d.idCardPhoto);
+            setIdCardFileName(d.idCardFileName || 'รูปถ่าย ID Card (บันทึกไว้)');
+          }
+          if (d.formSlipRound1) {
+            setFormSlipRound1(d.formSlipRound1);
+            setFormSlipRound1FileName(d.formSlipRound1FileName || 'สลิปการโอนเงิน (บันทึกไว้)');
+          }
+          setHasDraftRestored(true);
+          setLastDraftSavedTime(d.savedAt || null);
+        }
+      } catch (err) {
+        console.warn('Failed to parse registration draft:', err);
+      }
+    }
+  }, [myRegistration]);
+
+  // Auto-Save Draft to LocalStorage whenever form fields change
+  useEffect(() => {
+    if (!myRegistration) {
+      const draftData = {
+        fullNameAffiliation,
+        firstName,
+        lastName,
+        nickname,
+        callsign,
+        institution,
+        phone,
+        bloodGroup,
+        birthDay,
+        birthMonth,
+        birthYearBE,
+        shirtSize,
+        emergencyName,
+        emergencyPhone,
+        emergencyRelation,
+        medicalHistory,
+        foodAllergy,
+        previousTraining,
+        paymentPlan,
+        idCardPhoto,
+        idCardFileName,
+        formSlipRound1,
+        formSlipRound1FileName,
+        savedAt: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+        setLastDraftSavedTime(draftData.savedAt);
+      } catch (e) {}
+    }
+  }, [
+    myRegistration,
+    fullNameAffiliation,
+    firstName,
+    lastName,
+    nickname,
+    callsign,
+    institution,
+    phone,
+    bloodGroup,
+    birthDay,
+    birthMonth,
+    birthYearBE,
+    shirtSize,
+    emergencyName,
+    emergencyPhone,
+    emergencyRelation,
+    medicalHistory,
+    foodAllergy,
+    previousTraining,
+    paymentPlan,
+    idCardPhoto,
+    idCardFileName,
+    formSlipRound1,
+    formSlipRound1FileName
+  ]);
+
+  const handleClearDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setFullNameAffiliation('');
+    setNickname('');
+    setCallsign('');
+    setPhone('');
+    setMedicalHistory('');
+    setFoodAllergy('');
+    setPreviousTraining('');
+    setIdCardPhoto('');
+    setIdCardFileName('');
+    setFormSlipRound1('');
+    setFormSlipRound1FileName('');
+    setHasDraftRestored(false);
+    triggerToast('ล้างข้อมูลแบบร่างในเครื่องเรียบร้อยแล้ว', 'info');
+  };
 
   const handleCopyText = (text, keyName, label) => {
     if (!text) return;
@@ -154,11 +301,58 @@ export default function RegisterView({
     setEmergencyPhone(digits);
   };
 
+  // Upload ID Card Photo Handler
+  const handleIdPhotoFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingIdPhoto(true);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'id_cards');
+      if (uploadResult?.url) {
+        setIdCardPhoto(uploadResult.url);
+        setIdCardFileName(file.name);
+        triggerToast('อัปโหลดรูปถ่ายสำหรับทำ ID Card เรียบร้อยแล้ว', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดรูป ID Card', 'error');
+    } finally {
+      setIsProcessingIdPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  // Upload Form Round 1 Slip Handler
+  const handleFormSlipRound1Change = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingFormSlip(true);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'slips');
+      if (uploadResult?.url) {
+        setFormSlipRound1(uploadResult.url);
+        setFormSlipRound1FileName(file.name);
+        triggerToast('แนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท) เรียบร้อยแล้ว', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดสลิป', 'error');
+    } finally {
+      setIsProcessingFormSlip(false);
+      e.target.value = '';
+    }
+  };
+
   // Load existing data if registered
   useEffect(() => {
     if (myRegistration) {
       setFirstName(myRegistration.first_name || '');
       setLastName(myRegistration.last_name || '');
+      setFullNameAffiliation(myRegistration.full_name_affiliation || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim());
+      setNickname(myRegistration.nickname || '');
+      setCallsign(myRegistration.callsign || '');
+      setShirtSize(myRegistration.shirt_size || 'L');
+      setIdCardPhoto(myRegistration.id_card_photo || myRegistration.id_card_url || '');
       setBloodGroup(myRegistration.blood_group || 'O');
       setPhone(myRegistration.phone || '');
       setInstitution(myRegistration.institution || 'มหาวิทยาลัยมหาสารคาม (มมส)');
@@ -167,7 +361,7 @@ export default function RegisterView({
       setMedicalHistory(myRegistration.medical_history || '');
       setFoodAllergy(myRegistration.food_allergy || '');
       setPreviousTraining(myRegistration.previous_training || '');
-      setPaymentPlan(myRegistration.payment_plan || 'full');
+      setPaymentPlan(myRegistration.payment_plan || 'installment');
       
       // Parse relation if present
       if (myRegistration.emergency_name && myRegistration.emergency_name.includes('(')) {
@@ -196,6 +390,9 @@ export default function RegisterView({
         setLastName(parts.slice(1).join(' '));
       } else {
         setFirstName(user.name);
+      }
+      if (!fullNameAffiliation) {
+        setFullNameAffiliation(user.name);
       }
     }
   }, [myRegistration, user]);
@@ -239,6 +436,24 @@ export default function RegisterView({
       return;
     }
 
+    if (!nickname.trim()) {
+      setStatusMessage({ type: 'error', text: 'กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ' });
+      triggerToast('กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ', 'error');
+      return;
+    }
+
+    if (!callsign.trim()) {
+      setStatusMessage({ type: 'error', text: 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01' });
+      triggerToast('กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง', 'error');
+      return;
+    }
+
+    if (!shirtSize) {
+      setStatusMessage({ type: 'error', text: 'กรุณาเลือกไซส์เสื้อฝึก JRE 2027 (บังคับเลือกเนื่องจากจัดทำแบบพรีออเดอร์)' });
+      triggerToast('กรุณาเลือกไซส์เสื้อฝึก JRE 2027', 'error');
+      return;
+    }
+
     if (!agreeCorrectInfo || !agreePDPAAndRules) {
       setStatusMessage({
         type: 'error',
@@ -252,13 +467,28 @@ export default function RegisterView({
     setStatusMessage(null);
 
     const formattedDob = `${birthYearBE}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`;
+    const feeInfo = getRegistrationFeeDetails(institution);
+
+    let finalFirstName = firstName.trim();
+    let finalLastName = lastName.trim();
+    if (!finalFirstName && fullNameAffiliation) {
+      const parts = fullNameAffiliation.trim().split(' ');
+      finalFirstName = parts[0] || fullNameAffiliation;
+      finalLastName = parts.slice(1).join(' ') || '-';
+    }
 
     const payload = {
       user_id: user.id,
       user_email: user.email,
       user_avatar: user.avatar,
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
+      first_name: finalFirstName,
+      last_name: finalLastName,
+      full_name_affiliation: fullNameAffiliation.trim() || `${finalFirstName} ${finalLastName}`.trim(),
+      nickname: nickname.trim(),
+      callsign: callsign.trim(),
+      shirt_size: shirtSize,
+      id_card_photo: idCardPhoto,
+      id_card_url: idCardPhoto,
       dob: formattedDob,
       age_years: ageResult.years,
       age_months: ageResult.months,
@@ -275,20 +505,20 @@ export default function RegisterView({
       room_assigned: myRegistration?.room_assigned || '',
       is_special_care: myRegistration?.is_special_care || false,
       special_notes: myRegistration?.special_notes || '',
-      payment_plan: myRegistration?.payment_plan || paymentPlan,
-      payment_status: myRegistration?.payment_status || 'unpaid',
-      payment_amount: myRegistration?.payment_amount || effectivePaymentConfig.fee_total,
-      payment_bank_info: myRegistration?.payment_bank_info || `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
-      payment_slip_url: myRegistration?.payment_slip_url || '',
-      payment_slip_date: myRegistration?.payment_slip_date || '',
-      installment_1_status: myRegistration?.installment_1_status || 'unpaid',
-      installment_1_amount: myRegistration?.installment_1_amount || effectivePaymentConfig.installment_round1_amount,
-      installment_1_due: myRegistration?.installment_1_due || effectivePaymentConfig.installment_round1_due,
-      installment_1_slip_url: myRegistration?.installment_1_slip_url || '',
-      installment_1_slip_date: myRegistration?.installment_1_slip_date || '',
+      payment_plan: 'installment',
+      payment_status: formSlipRound1 ? 'pending_review' : (myRegistration?.payment_status || 'unpaid'),
+      payment_amount: feeInfo.totalFee,
+      payment_bank_info: `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
+      payment_slip_url: formSlipRound1 || myRegistration?.payment_slip_url || '',
+      payment_slip_date: formSlipRound1 ? new Date().toISOString() : (myRegistration?.payment_slip_date || ''),
+      installment_1_status: formSlipRound1 ? 'pending_review' : (myRegistration?.installment_1_status || 'unpaid'),
+      installment_1_amount: feeInfo.round1Amount,
+      installment_1_due: feeInfo.round1Due,
+      installment_1_slip_url: formSlipRound1 || myRegistration?.installment_1_slip_url || '',
+      installment_1_slip_date: formSlipRound1 ? new Date().toISOString() : (myRegistration?.installment_1_slip_date || ''),
       installment_2_status: myRegistration?.installment_2_status || 'unpaid',
-      installment_2_amount: myRegistration?.installment_2_amount || effectivePaymentConfig.installment_round2_amount,
-      installment_2_due: myRegistration?.installment_2_due || effectivePaymentConfig.installment_round2_due,
+      installment_2_amount: feeInfo.round2Amount,
+      installment_2_due: feeInfo.round2Due,
       installment_2_slip_url: myRegistration?.installment_2_slip_url || '',
       installment_2_slip_date: myRegistration?.installment_2_slip_date || '',
       admin_messages: myRegistration?.admin_messages || [],
@@ -298,9 +528,11 @@ export default function RegisterView({
 
     try {
       await onSaveRegistration(payload);
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraftRestored(false);
       setIsEditing(false);
       if (onSubRouteChange) onSubRouteChange('dashboard');
-      setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลประวัติผู้สมัครเรียบร้อยแล้ว!' });
+      setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลแบบฟอร์มสมัครเข้าร่วมโครงการ JRE 2027 เรียบร้อยแล้ว!' });
       triggerToast('บันทึกข้อมูลใบสมัคร JRE 2027 เรียบร้อยแล้ว', 'success');
       
       try {
@@ -540,9 +772,19 @@ export default function RegisterView({
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
   if (myRegistration && !isEditing) {
     const paymentStatus = myRegistration.payment_status || 'unpaid';
-    const paymentAmount = myRegistration.payment_amount || 350;
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
     const requestedDocs = Array.isArray(myRegistration.requested_docs) ? myRegistration.requested_docs : [];
+
+    const participantFee = getRegistrationFeeDetails(myRegistration.institution);
+    const dashboardPaymentConfig = {
+      ...effectivePaymentConfig,
+      fee_total: participantFee.totalFee,
+      installment_round1_amount: participantFee.round1Amount,
+      installment_round1_due: participantFee.round1Due,
+      installment_round2_amount: participantFee.round2Amount,
+      installment_round2_due: participantFee.round2Due,
+      notes: participantFee.feeNote
+    };
 
     return (
       <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -561,20 +803,57 @@ export default function RegisterView({
         {/* Top Header Profile Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-slate-800 pb-6">
-            <div className="flex items-center gap-4">
-              <img
-                src={myRegistration.user_avatar || user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'}
-                alt="Avatar"
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-rescue-500 shadow-md"
-              />
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="relative group shrink-0">
+                <img
+                  src={myRegistration.id_card_photo || myRegistration.user_avatar || user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'}
+                  alt="Avatar"
+                  className="w-20 h-20 rounded-2xl object-cover border-2 border-rescue-500 shadow-md"
+                />
+                {myRegistration.id_card_photo && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewSlipModal(myRegistration.id_card_photo)}
+                    className="absolute -bottom-1 -right-1 p-1 bg-slate-950/90 hover:bg-slate-900 text-rescue-400 border border-slate-700 rounded-lg text-[10px] font-bold shadow flex items-center gap-0.5"
+                    title="คลิกดูรูปถ่ายเต็มจอ"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-black text-white">
+                  <h1 className="text-xl sm:text-2xl font-black text-white">
                     {myRegistration.first_name} {myRegistration.last_name}
                   </h1>
+                  {myRegistration.nickname && (
+                    <span className="text-amber-300 font-bold text-xs bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
+                      ({myRegistration.nickname})
+                    </span>
+                  )}
+                  {myRegistration.callsign && (
+                    <span className="px-2.5 py-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full text-[11px] font-bold flex items-center gap-1 font-mono">
+                      📡 {myRegistration.callsign}
+                    </span>
+                  )}
+                  {myRegistration.shirt_size && (
+                    <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      👕 ไซส์ {myRegistration.shirt_size}
+                    </span>
+                  )}
                   <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[11px] font-bold">
                     ลงทะเบียนแล้ว
                   </span>
+                  {participantFee.isMsu ? (
+                    <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[11px] font-bold">
+                      🏫 มมส ({participantFee.totalFee} บ.)
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-[11px] font-bold">
+                      🏢 ต่างสถาบัน ({participantFee.totalFee} บ. รวมหอพัก)
+                    </span>
+                  )}
                   {myRegistration.group_assigned && (
                     <span className="px-2.5 py-0.5 bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
                       🎯 กลุ่ม: {myRegistration.group_assigned}
@@ -591,7 +870,14 @@ export default function RegisterView({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
+
+                {myRegistration.full_name_affiliation && (
+                  <p className="text-xs text-indigo-300 mt-1 font-semibold">
+                    ชื่อ-สกุล (สถาบัน) ไทย/อังกฤษ: <span className="text-slate-200">{myRegistration.full_name_affiliation}</span>
+                  </p>
+                )}
+
+                <p className="text-xs text-slate-400 mt-0.5">
                   สังกัด: <span className="text-slate-200 font-semibold">{myRegistration.institution}</span>
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
@@ -888,7 +1174,7 @@ export default function RegisterView({
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    ค่าสมัครรวม {effectivePaymentConfig.fee_total} บาท • {effectivePaymentConfig.notes || 'รองรับการชำระเต็มจำนวนหรือแบ่งจ่าย 2 งวด'}
+                    ค่าสมัครรวม {dashboardPaymentConfig.fee_total} บาท • {dashboardPaymentConfig.notes || 'รองรับการชำระเต็มจำนวนหรือแบ่งจ่าย 2 งวด'}
                   </p>
                 </div>
               </div>
@@ -904,7 +1190,7 @@ export default function RegisterView({
                 </span>
               ) : (
                 <span className="px-3.5 py-1.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                  <AlertCircle className="w-4 h-4" /> ค้างชำระค่าลงทะเบียน ({effectivePaymentConfig.fee_total} บ.)
+                  <AlertCircle className="w-4 h-4" /> ค้างชำระค่าลงทะเบียน ({dashboardPaymentConfig.fee_total} บ.)
                 </span>
               )}
             </div>
@@ -924,14 +1210,14 @@ export default function RegisterView({
                 {/* Bank Account Number */}
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block">{effectivePaymentConfig.bank_name}</span>
+                    <span className="text-[10px] text-slate-400 block">{dashboardPaymentConfig.bank_name}</span>
                     <span className="font-mono font-bold text-amber-300 text-sm truncate block">
-                      {effectivePaymentConfig.bank_account_number}
+                      {dashboardPaymentConfig.bank_account_number}
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCopyText(effectivePaymentConfig.bank_account_number, 'bank_acc', 'เลขบัญชี')}
+                    onClick={() => handleCopyText(dashboardPaymentConfig.bank_account_number, 'bank_acc', 'เลขบัญชี')}
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
                     title="คัดลอกเลขบัญชี"
                   >
@@ -944,13 +1230,13 @@ export default function RegisterView({
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <span className="text-[10px] text-slate-400 block">ชื่อบัญชี</span>
-                    <span className="font-semibold text-white text-xs truncate block" title={effectivePaymentConfig.bank_account_name}>
-                      {effectivePaymentConfig.bank_account_name}
+                    <span className="font-semibold text-white text-xs truncate block" title={dashboardPaymentConfig.bank_account_name}>
+                      {dashboardPaymentConfig.bank_account_name}
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCopyText(effectivePaymentConfig.bank_account_name, 'bank_name', 'ชื่อบัญชี')}
+                    onClick={() => handleCopyText(dashboardPaymentConfig.bank_account_name, 'bank_name', 'ชื่อบัญชี')}
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
                     title="คัดลอกชื่อบัญชี"
                   >
@@ -964,13 +1250,13 @@ export default function RegisterView({
                   <div className="min-w-0">
                     <span className="text-[10px] text-slate-400 block">พร้อมเพย์ (PromptPay)</span>
                     <span className="font-mono font-bold text-sky-300 text-sm truncate block">
-                      {effectivePaymentConfig.bank_promptpay || '-'}
+                      {dashboardPaymentConfig.bank_promptpay || '-'}
                     </span>
                   </div>
-                  {effectivePaymentConfig.bank_promptpay && (
+                  {dashboardPaymentConfig.bank_promptpay && (
                     <button
                       type="button"
-                      onClick={() => handleCopyText(effectivePaymentConfig.bank_promptpay, 'bank_prompt', 'พร้อมเพย์')}
+                      onClick={() => handleCopyText(dashboardPaymentConfig.bank_promptpay, 'bank_prompt', 'พร้อมเพย์')}
                       className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
                       title="คัดลอกพร้อมเพย์"
                     >
@@ -990,7 +1276,7 @@ export default function RegisterView({
             </div>
 
             {/* Plan Switcher Pills (If allow_installments is true) */}
-            {effectivePaymentConfig.allow_installments && (
+            {dashboardPaymentConfig.allow_installments && (
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-2xl border border-slate-800">
                 <span className="text-xs text-slate-400 px-2 font-medium">
                   เลือกรูปแบบการชำระเงิน:
@@ -1010,7 +1296,7 @@ export default function RegisterView({
                         : 'bg-slate-800 text-slate-300 hover:text-white'
                     }`}
                   >
-                    ชำระเต็มจำนวน ({effectivePaymentConfig.fee_total} บ.)
+                    ชำระเต็มจำนวน ({dashboardPaymentConfig.fee_total} บ.)
                   </button>
 
                   <button
@@ -1027,7 +1313,7 @@ export default function RegisterView({
                         : 'bg-slate-800 text-slate-300 hover:text-white'
                     }`}
                   >
-                    แบ่งจ่าย 2 งวด ({effectivePaymentConfig.installment_round1_amount} + {effectivePaymentConfig.installment_round2_amount} บ.)
+                    แบ่งจ่าย 2 งวด ({dashboardPaymentConfig.installment_round1_amount} + {dashboardPaymentConfig.installment_round2_amount} บ.)
                   </button>
                 </div>
               </div>
@@ -1044,7 +1330,7 @@ export default function RegisterView({
                         งวดที่ 1 (รอบแรก - วันเปิดรับสมัคร)
                       </span>
                       <p className="text-xl font-black text-white mt-0.5">
-                        {effectivePaymentConfig.installment_round1_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
+                        {dashboardPaymentConfig.installment_round1_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
                       </p>
                     </div>
 
@@ -1066,7 +1352,7 @@ export default function RegisterView({
                   <div className="text-xs text-slate-300 space-y-1">
                     <p className="flex items-center gap-1.5 text-slate-400">
                       <CalendarClock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>กำหนดชำระ: <strong className="text-white">{effectivePaymentConfig.installment_round1_due}</strong></span>
+                      <span>กำหนดชำระ: <strong className="text-white">{dashboardPaymentConfig.installment_round1_due}</strong></span>
                     </p>
                   </div>
 
@@ -1116,7 +1402,7 @@ export default function RegisterView({
                       ) : (
                         <>
                           <Upload className="w-4 h-4" />
-                          <span>แนบสลิปงวดที่ 1 ({effectivePaymentConfig.installment_round1_amount} บ.)</span>
+                          <span>แนบสลิปงวดที่ 1 ({dashboardPaymentConfig.installment_round1_amount} บ.)</span>
                         </>
                       )}
                       <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
@@ -1133,7 +1419,7 @@ export default function RegisterView({
                       งวดที่ 2 (รอบที่ 2)
                     </span>
                     <p className="text-xl font-black text-white mt-0.5">
-                      {effectivePaymentConfig.installment_round2_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
+                      {dashboardPaymentConfig.installment_round2_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
                     </p>
                   </div>
 
@@ -1155,7 +1441,7 @@ export default function RegisterView({
                 <div className="text-xs text-slate-300 space-y-1">
                   <p className="flex items-center gap-1.5 text-slate-400">
                     <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>กำหนดชำระ: <strong className="text-white">{effectivePaymentConfig.installment_round2_due}</strong></span>
+                    <span>กำหนดชำระ: <strong className="text-white">{dashboardPaymentConfig.installment_round2_due}</strong></span>
                   </p>
                 </div>
 
@@ -1205,7 +1491,7 @@ export default function RegisterView({
                         ) : (
                           <>
                             <Upload className="w-4 h-4" />
-                            <span>แนบสลิปงวดที่ 2 ({effectivePaymentConfig.installment_round2_amount} บ.)</span>
+                            <span>แนบสลิปงวดที่ 2 ({dashboardPaymentConfig.installment_round2_amount} บ.)</span>
                           </>
                         )}
                         <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
@@ -1219,7 +1505,7 @@ export default function RegisterView({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
                 <div className="space-y-1.5">
                   <p className="text-slate-400">
-                    ยอดค่าลงทะเบียนเต็มจำนวน: <span className="font-bold text-white text-base">{effectivePaymentConfig.fee_total} บาท</span>
+                    ยอดค่าลงทะเบียนเต็มจำนวน: <span className="font-bold text-white text-base">{dashboardPaymentConfig.fee_total} บาท</span>
                   </p>
                   <p className="text-slate-400 leading-relaxed">
                     ครอบคลุมค่าประกันอุบัติเหตุ อาหารทุกมื้อ ที่พักค้างแรม อุปกรณ์การฝึก และวุฒิบัตรรับรอง
@@ -1403,7 +1689,7 @@ export default function RegisterView({
           <div className="mt-8 pt-6 border-t border-slate-800">
             <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider flex items-center gap-2">
               <User className="w-4 h-4 text-rescue-400" />
-              ข้อมูลส่วนตัวประจำตัวผู้สมัคร
+              ข้อมูลส่วนตัวประจำตัวผู้สมัคร (แบบฟอร์ม 1)
             </h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
@@ -1435,6 +1721,61 @@ export default function RegisterView({
                 <span className="text-emerald-400 block mt-0.5 font-mono">
                   โทร: {myRegistration.emergency_phone || '-'}
                 </span>
+              </div>
+
+              {/* Shirt Size Card */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-purple-500/30">
+                <span className="text-purple-300 block mb-0.5 font-semibold flex items-center gap-1">
+                  <Shirt className="w-3.5 h-3.5 text-purple-400" />
+                  ไซส์เสื้อฝึก JRE 2027 (บังคับ):
+                </span>
+                <span className="font-black text-white text-base">
+                  ไซส์ {myRegistration.shirt_size || 'L'}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  คอเต่าซิป แขนสั้น โทนสีเทา–ดำ (พรีออเดอร์)
+                </span>
+              </div>
+
+              {/* Callsign & Nickname Card */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-sky-500/30">
+                <span className="text-sky-300 block mb-0.5 font-semibold">
+                  รหัสนามเรียกขาน / ชื่อเล่น:
+                </span>
+                <span className="font-mono font-bold text-sky-400 text-sm block">
+                  {myRegistration.callsign || '-'}
+                </span>
+                <span className="text-slate-300 text-xs block mt-0.5">
+                  ชื่อเล่น: <strong className="text-white">{myRegistration.nickname || '-'}</strong>
+                </span>
+              </div>
+
+              {/* ID Card Photo Card */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="text-slate-400 block text-[11px] mb-0.5">
+                    รูปถ่ายสำหรับทำ ID Card:
+                  </span>
+                  <span className="font-semibold text-white text-xs block">
+                    {myRegistration.id_card_photo ? '✓ แนบรูปถ่ายแล้ว' : 'ยังไม่ได้แนบรูป'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 block">
+                    ชุดสุภาพ หน้าตรง เห็นใบหน้าชัดเจน
+                  </span>
+                </div>
+                {myRegistration.id_card_photo && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewSlipModal(myRegistration.id_card_photo)}
+                    className="w-12 h-12 rounded-xl overflow-hidden border border-slate-700 hover:border-rescue-500 shrink-0 relative group"
+                    title="คลิกดูรูปขนาดเต็ม"
+                  >
+                    <img src={myRegistration.id_card_photo} alt="ID Card Photo" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <Maximize2 className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1600,8 +1941,8 @@ export default function RegisterView({
 
       <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-8">
         
-        {/* Form Header Official Emblem Banner */}
-        <div className="flex flex-col items-center justify-center pb-6 border-b border-slate-800 text-center space-y-3">
+        {/* Form Header: เเบบฟอร์มสมัครเข้าร่วมโครงการ ( 1 ) */}
+        <div className="flex flex-col items-center justify-center pb-6 border-b border-slate-800 text-center space-y-4">
           <div className="w-full max-w-lg bg-white p-2 sm:p-3 rounded-2xl shadow-xl border border-slate-700/50 flex items-center justify-center">
             <img
               src="/images/logo/jre_header_banner.png"
@@ -1609,21 +1950,109 @@ export default function RegisterView({
               className="w-full h-auto object-contain max-h-20 sm:max-h-24"
             />
           </div>
-          <div className="space-y-1">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rescue-500/10 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-black uppercase tracking-wider">
-              <FileText className="w-3.5 h-3.5" />
-              <span>ใบสมัครเข้าร่วมโครงการอย่างเป็นทางการ (Official Registration Form)</span>
-            </span>
+          
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-rescue-500/20 to-amber-500/20 text-rescue-300 border border-rescue-500/40 rounded-full text-xs font-black uppercase tracking-wider shadow-sm">
+              <FileText className="w-4 h-4 text-rescue-400" />
+              <span>เเบบฟอร์มสมัครเข้าร่วมโครงการ ( 1 )</span>
+            </div>
+            
             <h2 className="text-xl sm:text-2xl font-black text-white">
-              โครงการฝึกผสมภาคีเครือข่าย Joint Response Exercise (JRE 2027)
+              แบบฟอร์มแจ้งการสมัครและชำระค่าใช้จ่าย JRE 2027
             </h2>
-            <p className="text-xs text-slate-400">
-              วันที่ 14 – 15 พฤศจิกายน 2569 • ณ มหาวิทยาลัยมหาสารคาม
+            
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed">
+              แบบฟอร์มนี้จัดทำขึ้นเพื่อใช้สำหรับ <strong className="text-white font-semibold">แจ้งการสมัครและชำระค่าใช้จ่ายในการเข้าร่วมโครงการ Joint Response Exercise 2027 (JRE 2027) ณ มหาวิทยาลัยมหาสารคาม</strong> กรุณากรอกข้อมูลให้ครบถ้วน และแนบหลักฐานการโอนเงินเพื่อใช้ในการตรวจสอบและยืนยันการชำระเงิน
             </p>
+          </div>
+
+          {/* 💰 การชำระค่าใช้จ่ายแบ่งออกเป็น 2 รอบ Box */}
+          <div className="w-full max-w-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-amber-500/40 rounded-3xl p-5 sm:p-6 text-left shadow-2xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-black text-amber-300 flex items-center gap-2">
+                <span>💰</span>
+                <span>การชำระค่าใช้จ่ายแบ่งออกเป็น 2 รอบ</span>
+              </h3>
+              <span className="text-[11px] px-3 py-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-full font-bold self-start sm:self-auto">
+                รอบที่ 1 ชำระ 400 บ. พร้อมสมัคร
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+              {/* Round 1 Card */}
+              <div className="p-4 bg-slate-900/90 rounded-2xl border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-400 text-xs">รอบที่ 1 (ชำระพร้อมการสมัคร)</span>
+                  <span className="font-black text-amber-300 text-sm">💵 400 บาท</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-200 font-semibold text-[11px]">
+                  <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>📅 วันที่ 15–20 ตุลาคม 2569</span>
+                </div>
+                <p className="text-slate-400 leading-snug text-[11px]">
+                  สำหรับการสมัครและดำเนินการจัดทำเสื้อโครงการแบบพรีออเดอร์ (เสื้อฝึกคอเต่าซิป แขนสั้น โทนสีเทา–ดำ)
+                </p>
+              </div>
+
+              {/* Round 2 Card */}
+              <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-sky-400 text-xs">รอบที่ 2 (ชำระก่อนเข้าฝึก)</span>
+                  <span className="font-black text-sky-300 text-sm">💵 450 / 250 บาท</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-200 font-semibold text-[11px]">
+                  <Calendar className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span>📅 วันที่ 1–5 พฤศจิกายน 2569</span>
+                </div>
+                <p className="text-slate-400 leading-snug text-[11px]">
+                  สำหรับค่าใช้จ่ายด้านที่พักและอาหาร (ต่างมหาวิทยาลัย 450 บ. / นิสิต มมส 250 บ.)
+                </p>
+              </div>
+            </div>
+
+            {/* Total Fee & Notice */}
+            <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-1">
+                <span className="text-[11px] text-slate-400 block font-medium">💵 รวมค่าใช้จ่ายทั้งสิ้น:</span>
+                <p className="text-white font-bold leading-relaxed">
+                  • ต่างมหาวิทยาลัย: <span className="text-amber-400 font-black">850 บาท/คน</span> (รวมค่าที่พักหอพักกุดรัง มมส)<br className="hidden sm:inline" />
+                  • นิสิตมหาวิทยาลัยมหาสารคาม (มมส): <span className="text-emerald-400 font-black">650 บาท/คน</span> (ไม่มีค่าใช้จ่ายด้านที่พัก)
+                </p>
+              </div>
+              <div className="text-left sm:text-right shrink-0">
+                <span className="text-slate-400 block text-[11px]">☎️ สอบถามรายละเอียดเพิ่มเติม:</span>
+                <a href="tel:0983296762" className="text-amber-400 font-black text-xs hover:underline inline-flex items-center gap-1">
+                  <Phone className="w-3 h-3" />
+                  <span>098-329-6762</span>
+                </a>
+              </div>
+            </div>
+
+            {/* LocalStorage Auto-Draft Status Notice */}
+            <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>💾 บันทึกแบบร่างลงเครื่องอัตโนมัติ (ข้อมูลไม่สูญหายหากรีเฟรชหน้าเว็บหรือปิดเบราว์เซอร์)</span>
+                {lastDraftSavedTime && (
+                  <span className="text-slate-500 font-mono text-[10px]">[{lastDraftSavedTime}]</span>
+                )}
+              </div>
+              {hasDraftRestored && (
+                <button
+                  type="button"
+                  onClick={handleClearDraft}
+                  className="inline-flex items-center gap-1 text-slate-400 hover:text-rose-400 transition-colors text-[10px] cursor-pointer self-start sm:self-auto"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>ล้างแบบร่าง</span>
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
 
-        {/* Section 1: ชื่อและสังกัด */}
+        {/* Section 1: ข้อมูลผู้สมัคร */}
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h3 className="text-sm font-bold text-rescue-400 uppercase tracking-wider flex items-center gap-2">
@@ -1645,7 +2074,7 @@ export default function RegisterView({
                 อีเมล Google ที่ใช้ในการสมัครและติดต่อ
               </span>
               <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full font-bold">
-                ✓ ดึงจาก Google อัตโนมัติ (ไม่ต้องกรอก)
+                ✓ ดึงจาก Google อัตโนมัติ
               </span>
             </label>
             <input
@@ -1656,49 +2085,73 @@ export default function RegisterView({
             />
           </div>
 
+          {/* ฟิลด์ 1: คำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน * */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <span>ใส่คำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน <span className="text-rose-400 font-bold">*</span></span>
+            </label>
+            <input
+              type="text"
+              required
+              value={fullNameAffiliation}
+              onChange={e => {
+                setFullNameAffiliation(e.target.value);
+                // Also parse first/last name
+                const parts = e.target.value.trim().split(' ');
+                if (parts.length > 0) setFirstName(parts[0]);
+                if (parts.length > 1) setLastName(parts.slice(1).join(' '));
+              }}
+              placeholder="- นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU) - ตัวอย่าง"
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              ตัวอย่าง: - นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU)
+            </p>
+          </div>
+
+          {/* ฟิลด์ 2 & ฟิลด์ 3: ชื่อเล่น & รหัสนามเรียกขาน */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                <span>ชื่อจริง *</span>
-                <span className="text-[10px] text-slate-500">(ดึงจาก Google อัตโนมัติ)</span>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <span>ชื่อเล่น ภาษาไทย เเละ อังกฤษ <span className="text-rose-400 font-bold">*</span></span>
               </label>
               <input
                 type="text"
                 required
-                value={firstName}
-                onChange={e => setFirstName(e.target.value)}
-                placeholder="ระบุชื่อจริง"
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                placeholder="เช่น เจมส์ / James"
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                <span>นามสกุล *</span>
-                <span className="text-[10px] text-slate-500">(ดึงจาก Google อัตโนมัติ)</span>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <span>รหัสนามเรียกขานหน่วยตัวเอง <span className="text-rose-400 font-bold">*</span></span>
               </label>
               <input
                 type="text"
                 required
-                value={lastName}
-                onChange={e => setLastName(e.target.value)}
-                placeholder="ระบุนามสกุล"
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm"
+                value={callsign}
+                onChange={e => setCallsign(e.target.value)}
+                placeholder="RCPMSU 15-01 (ตัวอย่าง)"
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-mono font-medium"
               />
             </div>
           </div>
 
+          {/* ฟิลด์ 4: สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) * */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-slate-300">
-                สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) *
+                สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) <span className="text-rose-400 font-bold">*</span>
               </label>
               <span className="text-[11px] text-rescue-400 font-medium">
                 เปิดรับทุกมหาวิทยาลัยทั่วประเทศ
               </span>
             </div>
 
-            {/* Quick Dropdown Picker from 8 Official Network Institutions */}
+            {/* Quick Dropdown Picker */}
             <div className="mb-2">
               <select
                 value={OFFICIAL_NETWORK_INSTITUTIONS.find(i => i.fullName === institution)?.fullName || ''}
@@ -1727,11 +2180,11 @@ export default function RegisterView({
               className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
             />
 
-            {/* Quick Suggestions Pills (All 8 Official Network Institutions) */}
+            {/* Quick Suggestions Pills */}
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               <span className="text-[11px] font-bold text-rescue-400 mr-1 self-center flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
-                เลือกด่วน (8 สถาบันเครือข่าย):
+                เลือกด่วน (8 สถาบัน):
               </span>
               {OFFICIAL_NETWORK_INSTITUTIONS.map(inst => {
                 const isSelected = institution === inst.fullName;
@@ -1752,10 +2205,34 @@ export default function RegisterView({
                 );
               })}
             </div>
+
+            {/* Dynamic Fee Calculation Alert based on institution */}
+            {(() => {
+              const fee = getRegistrationFeeDetails(institution);
+              return (
+                <div className={`mt-3 p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
+                  fee.isMsu 
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                    : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                }`}>
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">
+                      {fee.isMsu ? '🎓 สังกัดนิสิตมหาวิทยาลัยมหาสารคาม (มมส): ยอดรวม 650 บาท' : '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท'}
+                    </span>
+                    <span className="text-[11px] text-slate-300 block mt-0.5">
+                      {fee.isMsu 
+                        ? 'ไม่มีค่าใช้จ่ายด้านที่พัก • รอบที่ 1: 400 บาท (ค่าจัดทำเสื้อ) / รอบที่ 2: 250 บาท (ค่าอาหารและกิจกรรม)'
+                        : 'รวมค่าที่พักหอพักกุดรัง มมส • รอบที่ 1: 400 บาท (ค่าจัดทำเสื้อ) / รอบที่ 2: 450 บาท (ค่าที่พักและอาหาร)'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
-        {/* Section 2: วันเดือนปี พ.ศ. เกิด และการคำนวณอายุ อัตโนมัติ (เกณฑ์ 15 ปีขึ้นไป) */}
+        {/* Section 2: วันเดือนปีเกิด และรูปถ่ายทำ ID Card */}
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
             <h3 className="text-sm font-bold text-rescue-400 uppercase tracking-wider flex items-center gap-2">
@@ -1866,41 +2343,13 @@ export default function RegisterView({
             )}
           </div>
 
-          {/* Underage Error Alert if calculated age is strictly < 15 */}
-          {ageResult.years < 15 && (
-            <div className="p-3 bg-red-950/70 border border-red-500/60 rounded-xl text-red-200 text-xs flex items-center gap-2.5 shadow-lg">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-              <span>
-                <strong>แจ้งเตือน:</strong> ผู้สมัครต้องมีอายุอย่างน้อย 15 ปีบริบูรณ์ขึ้นไปเท่านั้น จึงจะสามารถเข้าร่วมการฝึกอบรมปฏิบัติการกู้ภัยได้
-              </span>
-            </div>
-          )}
-
-          {/* กรุ๊ปเลือด และ เบอร์โทร */}
+          {/* เบอร์โทรศัพท์ และ กรุ๊ปเลือด */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <Droplet className="w-3.5 h-3.5 text-emergency-500" />
-                กรุ๊ปเลือด (Blood Group) *
-              </label>
-              <select
-                required
-                value={bloodGroup}
-                onChange={e => setBloodGroup(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold focus:ring-2 focus:ring-rescue-500 outline-none text-sm"
-              >
-                <option value="A">หมู่โลหิต A</option>
-                <option value="B">หมู่โลหิต B</option>
-                <option value="O">หมู่โลหิต O</option>
-                <option value="AB">หมู่โลหิต AB</option>
-              </select>
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-rescue-500" />
-                  เบอร์โทรศัพท์มือถือ *
+                  เบอร์โทรติดต่อ <span className="text-rose-400 font-bold">*</span>
                 </span>
                 <span className="text-[10px] text-slate-400 font-normal">
                   (เฉพาะตัวเลข 10 หลัก)
@@ -1927,20 +2376,234 @@ export default function RegisterView({
                 </span>
               </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <Droplet className="w-3.5 h-3.5 text-emergency-500" />
+                กรุ๊ปเลือด (Blood Group) <span className="text-rose-400 font-bold">*</span>
+              </label>
+              <select
+                required
+                value={bloodGroup}
+                onChange={e => setBloodGroup(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold focus:ring-2 focus:ring-rescue-500 outline-none text-sm"
+              >
+                <option value="A">หมู่โลหิต A</option>
+                <option value="B">หมู่โลหิต B</option>
+                <option value="O">หมู่โลหิต O</option>
+                <option value="AB">หมู่โลหิต AB</option>
+              </select>
+            </div>
+          </div>
+
+          {/* ฟิลด์ 7: 📸 รูปถ่ายสำหรับทำ ID Card */}
+          <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-orange-400" />
+                <span>📸 รูปถ่ายสำหรับทำ ID Card</span>
+                <span className="text-rose-400 font-bold">*</span>
+              </label>
+              <span className="text-[10px] text-slate-400">
+                ขนาดไฟล์สูงสุด 100 MB (ระบบย่อขนาดให้อัตโนมัติ)
+              </span>
+            </div>
+            
+            <p className="text-xs text-slate-300 leading-relaxed">
+              กรุณาอัปโหลดรูปถ่าย <strong className="text-white">ชุดสุภาพ หน้าตรง เห็นใบหน้าชัดเจน</strong> สำหรับใช้จัดทำบัตรประจำตัวผู้เข้าร่วมการฝึก JRE 2027
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+              {/* Photo Preview Box */}
+              <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                {idCardPhoto ? (
+                  <>
+                    <img 
+                      src={idCardPhoto} 
+                      alt="รูปทำ ID Card" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-[10px] text-white font-bold">เปลี่ยนรูป</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center p-2 text-slate-500">
+                    <User className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] block">ยังไม่มีรูป</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Input & Actions */}
+              <div className="flex-1 w-full space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
+                    isProcessingIdPhoto ? 'opacity-50 pointer-events-none' : ''
+                  }`}>
+                    {isProcessingIdPhoto ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>กำลังประมวลผลรูป...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{idCardPhoto ? 'เลือกรูปใหม่' : 'อัปโหลดรูปถ่าย ID Card'}</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleIdPhotoFileChange}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {idCardPhoto && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdCardPhoto('');
+                        setIdCardFileName('');
+                      }}
+                      className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ลบรูป</span>
+                    </button>
+                  )}
+                </div>
+
+                {idCardFileName && (
+                  <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="truncate max-w-xs">{idCardFileName}</span>
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Section 3: บุคคลที่ติดต่อได้กรณีฉุกเฉิน */}
+        {/* Section 3: ตารางไซต์เสื้อ & 👕 รายละเอียดเสื้อฝึก JRE 2027 (บังคับซื้อเสื้อ) */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
+            <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider flex items-center gap-2">
+              <Shirt className="w-4 h-4 text-orange-400" />
+              3. รายละเอียดเสื้อฝึก JRE 2027 & เลือกขนาดไซส์เสื้อ (บังคับเลือก) <span className="text-rose-400 font-bold">*</span>
+            </h3>
+            <span className="text-[11px] px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full font-bold self-start sm:self-auto">
+              ตอนสมัคร บังคับซื้อเสื้อพรีออเดอร์
+            </span>
+          </div>
+
+          {/* Official Shirt Description Box */}
+          <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-orange-500/30 rounded-2xl space-y-3">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-2 flex-1">
+                <h4 className="text-sm font-black text-white flex items-center gap-2">
+                  <span>👕</span>
+                  <span>รายละเอียดเสื้อฝึก Joint Response Exercise (JRE 2027)</span>
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  เสื้อฝึก Joint Response Exercise (JRE 2027) ออกแบบในรูปแบบ <strong className="text-orange-300 font-bold">เสื้อคอเต่าซิป แขนสั้น โทนสี เทา–ดำ</strong> ให้มีความเรียบ เท่ และเหมาะสำหรับการฝึกปฏิบัติร่วมกันของเครือข่าย
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-300 pt-1">
+                  <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+                    <strong className="text-amber-400 block mb-0.5">บริเวณด้านหน้า:</strong>
+                    <span>• <strong>อกซ้าย:</strong> ติดโลโก้ ภาคีเครือข่าย</span><br />
+                    <span>• <strong>อกขวา:</strong> แสดง ตัวย่อภาษาอังกฤษของหน่วย/ชมรม และตัวย่อของมหาวิทยาลัยต้นสังกัด</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+                    <strong className="text-amber-400 block mb-0.5">บริเวณด้านหลัง:</strong>
+                    <span>• ด้านบนเป็น โลโก้ของภาคีเครือข่ายที่เข้าร่วมการฝึก</span><br />
+                    <span>• ถัดลงมาเป็นข้อความ <strong>“ฝึกผสมภาคีเครือข่าย”</strong> พร้อมชื่อโครงการ “Joint Response Exercise (JRE 2027)”</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 italic">
+                  การออกแบบเสื้อเน้นให้ผู้เข้าร่วมจากแต่ละสถาบันสามารถ แสดงอัตลักษณ์ของหน่วยและมหาวิทยาลัยต้นสังกัด ขณะเดียวกันยังคงสะท้อนความเป็นหนึ่งเดียวกันของ เครือข่าย JRE 2027 🤝🚑
+                </p>
+              </div>
+
+              {/* Shirt Thumbnail Preview with Zoom */}
+              <div className="flex sm:flex-col gap-2 shrink-0 self-center md:self-auto">
+                <div 
+                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-slate-950 border border-slate-700 overflow-hidden cursor-pointer relative group shadow-lg"
+                  onClick={() => setShowShirtSizeModal(true)}
+                  title="คลิกเพื่อดูรูปเสื้อและตารางไซส์ขนาดใหญ่"
+                >
+                  <img 
+                    src="/images/merchandise/jre_shirt_official.jpg" 
+                    alt="เสื้อฝึก JRE 2027" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white font-bold gap-1">
+                    <Maximize2 className="w-3 h-3" />
+                    <span>ดูแบบเสื้อ</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowShirtSizeModal(true)}
+                  className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-orange-300 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 border border-slate-700 cursor-pointer"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>ดูตารางไซส์</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Size Selector Buttons */}
+          <div>
+            <label className="block text-xs font-bold text-white mb-2">
+              เลือกขนาดไซส์เสื้อฝึก JRE 2027 ของท่าน: <span className="text-rose-400 font-bold">*</span>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+              {SHIRT_SIZE_OPTIONS.map((opt) => {
+                const isSelected = shirtSize === opt.value;
+                return (
+                  <button
+                    type="button"
+                    key={opt.value}
+                    onClick={() => setShirtSize(opt.value)}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-orange-500/20 border-orange-500 ring-2 ring-orange-500/30 text-white shadow-md'
+                        : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <span className="font-black text-sm text-white">
+                        {opt.value}
+                      </span>
+                      {isSelected && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 leading-snug">
+                      {opt.label.replace(opt.value, '').replace(/[()]/g, '').trim()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: บุคคลติดต่อฉุกเฉิน & ข้อมูลสุขภาพ */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-emergency-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
             <AlertCircle className="w-4 h-4 text-emergency-500" />
-            3. ข้อมูลบุคคลที่ติดต่อได้กรณีฉุกเฉิน
+            4. บุคคลติดต่อฉุกเฉิน & ข้อมูลสุขภาพและความปลอดภัย
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                ชื่อ - สกุล บุคคลติดต่อฉุกเฉิน *
+                ชื่อ - สกุล บุคคลติดต่อฉุกเฉิน <span className="text-rose-400 font-bold">*</span>
               </label>
               <input
                 type="text"
@@ -1974,7 +2637,7 @@ export default function RegisterView({
             <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-emergency-500" />
-                เบอร์โทรศัพท์ติดต่อฉุกเฉิน *
+                เบอร์โทรศัพท์ติดต่อฉุกเฉิน <span className="text-rose-400 font-bold">*</span>
               </span>
               <span className="text-[10px] text-slate-400 font-normal">
                 (เฉพาะตัวเลข 10 หลัก)
@@ -2001,16 +2664,8 @@ export default function RegisterView({
               </span>
             </div>
           </div>
-        </div>
 
-        {/* Section 4: ข้อมูลสุขภาพ ประวัติการแพ้ & ประวัติการฝึกอบรม */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
-            <HeartPulse className="w-4 h-4 text-rose-500" />
-            4. ข้อมูลสุขภาพและความปลอดภัย & ประวัติการฝึกอบรม
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <Stethoscope className="w-3.5 h-3.5 text-rose-400" />
@@ -2046,139 +2701,175 @@ export default function RegisterView({
               ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา
             </label>
             <textarea
-              rows="3"
+              rows="2"
               value={previousTraining}
               onChange={e => setPreviousTraining(e.target.value)}
-              placeholder="ระบุหลักสูตรหรือการฝึกอบรมกู้ภัยที่เคยผ่าน เช่น เคยอบรม First Aid & CPR, BLS, การใช้เชือกกู้ภัย, กู้ชีพทางน้ำ, ดับเพลิง หรือ หากเป็นมือใหม่ให้ระบุ 'ไม่มี / ฝึกอบรมครั้งแรก'"
+              placeholder="ระบุหลักสูตรหรือการฝึกอบรมกู้ภัยที่เคยผ่าน หรือหากเป็นมือใหม่ให้ระบุ 'ไม่มี / ฝึกอบรมครั้งแรก'"
               className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
           </div>
         </div>
 
-        {/* Section 5: รูปแบบการชำระเงิน & ข้อมูลบัญชีโอนเงิน */}
+        {/* Section 5: แนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท) */}
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-amber-500" />
-              5. ค่าสมัคร & รูปแบบการชำระเงิน
+              5. เเนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท)
             </h3>
-            <span className="text-[11px] text-slate-400">
-              ค่าสมัครรวม {effectivePaymentConfig.fee_total} บาท
+            <span className="text-[11px] text-amber-300 font-bold">
+              ยอดชำระรอบนี้: 400 บาท
             </span>
           </div>
 
-          {/* Payment Plan Selection Radio Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div
-              onClick={() => setPaymentPlan('full')}
-              className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                paymentPlan === 'full'
-                  ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-lg'
-                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4 text-amber-400" />
-                  ชำระเต็มจำนวน
-                </span>
-                <span className="text-sm font-black text-amber-400">
-                  {effectivePaymentConfig.fee_total} บาท
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                ชำระครั้งเดียวครบถ้วน {effectivePaymentConfig.fee_total} บาท พร้อมรับสิทธิ์เข้าร่วมฝึกทันทีหลังตรวจสอบ
-              </p>
-            </div>
-
-            {effectivePaymentConfig.allow_installments && (
-              <div
-                onClick={() => setPaymentPlan('installment')}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                  paymentPlan === 'installment'
-                    ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/20 shadow-lg'
-                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-purple-400" />
-                    ขอแบ่งจ่าย 2 งวด
-                  </span>
-                  <span className="text-sm font-black text-purple-400">
-                    {effectivePaymentConfig.installment_round1_amount} + {effectivePaymentConfig.installment_round2_amount} บาท
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                  งวดที่ 1: {effectivePaymentConfig.installment_round1_amount} บ. ({effectivePaymentConfig.installment_round1_due}) • งวดที่ 2: {effectivePaymentConfig.installment_round2_amount} บ. ({effectivePaymentConfig.installment_round2_due})
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Bank Info Card with 1-Click Copy */}
-          <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2.5">
+          {/* Official Bank Account Information Card */}
+          <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-amber-500/40 rounded-2xl space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-300">
-                ข้อมูลบัญชีธนาคารสำหรับโอนเงิน:
+              <span className="font-bold text-white flex items-center gap-1.5">
+                <span>🏦</span> บัญชีธนาคารสำหรับโอนเงินค่าลงทะเบียน:
               </span>
-              <span className="text-[10px] text-emerald-400">
-                (โอนและส่งสลิปผ่านระบบหลังบันทึกใบสมัคร)
+              <span className="text-[10px] text-amber-300 font-bold">
+                รอบที่ 1: 400 บาท (15–20 ต.ค. 2569)
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+              {/* Account Number Card */}
+              <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
                 <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 block">{effectivePaymentConfig.bank_name}</span>
-                  <span className="font-mono font-bold text-amber-300 text-xs truncate block">{effectivePaymentConfig.bank_account_number}</span>
+                  <span className="text-[10px] text-slate-400 block font-medium">ธนาคารไทยพาณิชย์ (SCB)</span>
+                  <span className="font-mono font-black text-amber-300 text-sm tracking-wide block truncate">594-264865-5</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleCopyText(effectivePaymentConfig.bank_account_number, 'form_bank_acc', 'เลขบัญชี')}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                  onClick={() => handleCopyText('594-264865-5', 'form_bank_acc', 'เลขบัญชี')}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
                 >
                   {copiedKey === 'form_bank_acc' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedKey === 'form_bank_acc' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
                 </button>
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+              {/* Account Name Card */}
+              <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
                 <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 block">ชื่อบัญชี</span>
-                  <span className="font-medium text-white text-[11px] truncate block" title={effectivePaymentConfig.bank_account_name}>{effectivePaymentConfig.bank_account_name}</span>
+                  <span className="text-[10px] text-slate-400 block font-medium">ชื่อบัญชี</span>
+                  <span className="font-bold text-white text-xs block truncate" title="นางสาวมัญชุพร ยังเหล็ก">นางสาวมัญชุพร ยังเหล็ก</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleCopyText(effectivePaymentConfig.bank_account_name, 'form_bank_name', 'ชื่อบัญชี')}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                  onClick={() => handleCopyText('นางสาวมัญชุพร ยังเหล็ก', 'form_bank_name', 'ชื่อบัญชี')}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
                 >
                   {copiedKey === 'form_bank_name' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedKey === 'form_bank_name' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
                 </button>
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+              {/* Phone / PromptPay */}
+              <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
                 <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 block">พร้อมเพย์</span>
-                  <span className="font-mono font-bold text-sky-300 text-xs truncate block">{effectivePaymentConfig.bank_promptpay || '-'}</span>
+                  <span className="text-[10px] text-slate-400 block font-medium">เบอร์ติดต่อ / พร้อมเพย์</span>
+                  <span className="font-mono font-bold text-sky-300 text-xs block truncate">098-329-6762</span>
                 </div>
-                {effectivePaymentConfig.bank_promptpay && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopyText(effectivePaymentConfig.bank_promptpay, 'form_prompt', 'พร้อมเพย์')}
-                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
-                  >
-                    {copiedKey === 'form_prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedKey === 'form_prompt' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('098-329-6762', 'form_prompt', 'เบอร์ติดต่อ')}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  {copiedKey === 'form_prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedKey === 'form_prompt' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Slip Upload Area */}
+          <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                <Upload className="w-4 h-4 text-amber-400" />
+                <span>แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (400 บาท)</span>
+              </label>
+              <span className="text-[10px] text-amber-400 font-semibold">
+                (สามารถแนบพร้อมการสมัคร หรือแนบเพิ่มเติมภายหลังได้)
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+              {/* Slip Preview Box */}
+              <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                {formSlipRound1 ? (
+                  <>
+                    <img 
+                      src={formSlipRound1} 
+                      alt="สลิปโอนเงินรอบที่ 1" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-[10px] text-white font-bold">เปลี่ยนสลิป</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center p-2 text-slate-500">
+                    <FileText className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] block">ยังไม่แนบสลิป</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Input & Actions */}
+              <div className="flex-1 w-full space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
+                    isProcessingFormSlip ? 'opacity-50 pointer-events-none' : ''
+                  }`}>
+                    {isProcessingFormSlip ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>กำลังประมวลผลสลิป...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{formSlipRound1 ? 'เปลี่ยนไฟล์สลิป' : 'อัปโหลดสลิปโอนเงิน (400 บ.)'}</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleFormSlipRound1Change}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formSlipRound1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormSlipRound1('');
+                        setFormSlipRound1FileName('');
+                      }}
+                      className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ลบสลิป</span>
+                    </button>
+                  )}
+                </div>
+
+                {formSlipRound1FileName && (
+                  <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="truncate max-w-xs">{formSlipRound1FileName}</span>
+                  </p>
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Consent and Agreement Checkboxes (Required by Project & MSU PDPA) */}
+        {/* Consent and Agreement Checkboxes */}
         <div className="p-5 sm:p-6 bg-slate-950/80 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
           <div className="flex items-center gap-2.5 pb-2 border-b border-slate-800">
             <ShieldCheck className="w-5 h-5 text-rescue-500" />
@@ -2198,7 +2889,7 @@ export default function RegisterView({
                 className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
               />
               <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
-                <strong className="text-white font-semibold">การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ และข้อมูลติดต่อฉุกเฉินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
+                <strong className="text-white font-semibold">การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ ขนาดไซส์เสื้อ และหลักฐานการโอนเงินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
               </span>
             </label>
 
@@ -2220,7 +2911,7 @@ export default function RegisterView({
                     e.stopPropagation();
                     setShowPdpaModal(true);
                   }}
-                  className="ml-2 text-rescue-400 hover:text-rescue-300 underline font-semibold inline-flex items-center gap-1"
+                  className="ml-2 text-rescue-400 hover:text-rescue-300 underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                 >
                   [อ่านนโยบายข้อมูลส่วนบุคคล PDPA มมส]
                 </button>
@@ -2230,18 +2921,18 @@ export default function RegisterView({
         </div>
 
         {/* Submit Actions */}
-        <div className="pt-4 flex items-center gap-3">
+        <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <button
             type="submit"
             disabled={isSubmitting || !agreeCorrectInfo || !agreePDPAAndRules}
-            className="flex-1 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-bold rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-base flex items-center justify-center gap-2"
+            className="flex-1 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-bold rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-base flex items-center justify-center gap-2 cursor-pointer"
           >
             {isSubmitting ? (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             ) : (
               <>
                 <Save className="w-5 h-5" />
-                <span>{isEditing ? 'บันทึกการแก้ไขข้อมูลประวัติ' : 'ยืนยันและบันทึกใบสมัคร JRE 2027'}</span>
+                <span>{isEditing ? 'บันทึกการแก้ไขข้อมูลใบสมัคร' : 'ยืนยันและส่งใบสมัครเข้าร่วมโครงการ JRE 2027 (รอบที่ 1)'}</span>
               </>
             )}
           </button>
@@ -2261,6 +2952,65 @@ export default function RegisterView({
         </div>
 
       </form>
+
+      {/* Modal for viewing Shirt Details and Size Chart */}
+      {showShirtSizeModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowShirtSizeModal(false)}
+        >
+          <div 
+            className="relative max-w-3xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/80">
+              <div className="flex items-center gap-2">
+                <Shirt className="w-5 h-5 text-orange-400" />
+                <h3 className="font-bold text-white text-base sm:text-lg">
+                  แบบเสื้อและตารางไซส์เสื้อฝึก JRE 2027
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShirtSizeModal(false)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[75vh] overflow-y-auto">
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-orange-400 block">แบบเสื้อฝึกทางการ (คอเต่าซิป แขนสั้น)</span>
+                <img 
+                  src="/images/merchandise/jre_shirt_official.jpg" 
+                  alt="เสื้อฝึก JRE 2027" 
+                  className="w-full rounded-2xl border border-slate-700 object-contain shadow-lg"
+                />
+              </div>
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-amber-400 block">ตารางขนาดไซส์เสื้อ (นิ้ว)</span>
+                <img 
+                  src="/images/merchandise/jre_shirt_size_chart.jpg" 
+                  alt="ตารางไซส์เสื้อ JRE 2027" 
+                  className="w-full rounded-2xl border border-slate-700 object-contain shadow-lg"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-3 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span>* กรุณาเลือกขนาดไซส์ให้พอดีสำหรับการฝึกภาคสนาม</span>
+              <button
+                type="button"
+                onClick={() => setShowShirtSizeModal(false)}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MSU PDPA Policy Modal */}
       <PDPAModal

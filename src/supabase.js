@@ -88,6 +88,63 @@ if (typeof window !== 'undefined') {
   initializeLocalStorage();
 }
 
+const VALID_REGISTRATION_COLS = new Set([
+  'id', 'user_id', 'user_email', 'user_avatar', 'first_name', 'last_name',
+  'dob', 'age_years', 'age_months', 'age_days', 'blood_group', 'phone',
+  'institution', 'emergency_name', 'emergency_phone', 'group_assigned',
+  'room_assigned', 'status', 'created_at', 'special_notes', 'is_special_care',
+  'medical_history', 'food_allergy', 'previous_training', 'payment_status',
+  'payment_amount', 'payment_bank_info', 'payment_slip_url', 'payment_slip_date',
+  'payment_notes', 'admin_messages', 'requested_docs'
+]);
+
+const unpackRegistration = (row) => {
+  if (!row) return row;
+  let extra = {};
+  if (row.special_notes && typeof row.special_notes === 'string') {
+    try {
+      if (row.special_notes.startsWith('{') && row.special_notes.endsWith('}')) {
+        extra = JSON.parse(row.special_notes);
+      }
+    } catch (e) {}
+  }
+  return {
+    ...extra,
+    ...row,
+    special_notes: extra.user_notes !== undefined ? extra.user_notes : row.special_notes
+  };
+};
+
+const packRegistrationForSupabase = (fullData) => {
+  const extra = {
+    user_notes: fullData.special_notes || '',
+    nickname: fullData.nickname || '',
+    callsign: fullData.callsign || '',
+    shirt_size: fullData.shirt_size || '',
+    id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
+    payment_plan: fullData.payment_plan || 'full',
+    installment_1_amount: fullData.installment_1_amount,
+    installment_1_status: fullData.installment_1_status,
+    installment_1_due: fullData.installment_1_due,
+    installment_1_slip_url: fullData.installment_1_slip_url,
+    installment_1_slip_date: fullData.installment_1_slip_date,
+    installment_2_amount: fullData.installment_2_amount,
+    installment_2_status: fullData.installment_2_status,
+    installment_2_due: fullData.installment_2_due,
+    installment_2_slip_url: fullData.installment_2_slip_url,
+    installment_2_slip_date: fullData.installment_2_slip_date
+  };
+
+  const payload = {};
+  for (const key of Object.keys(fullData)) {
+    if (VALID_REGISTRATION_COLS.has(key)) {
+      payload[key] = fullData[key];
+    }
+  }
+  payload.special_notes = JSON.stringify(extra);
+  return payload;
+};
+
 /**
  * Data Service API - bridges Supabase and LocalStorage smoothly
  */
@@ -100,7 +157,11 @@ export const DataService = {
           .from('registrations')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data) return data;
+        if (!error && data) {
+          const unpacked = data.map(unpackRegistration);
+          localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(unpacked));
+          return unpacked;
+        }
       } catch (e) {
         console.warn('Supabase fetch failed, falling back to local storage', e);
       }
@@ -116,13 +177,17 @@ export const DataService = {
   },
 
   async saveRegistration(regData) {
+    let savedRow = null;
     if (isSupabaseConfigured) {
       try {
+        const payload = packRegistrationForSupabase(regData);
         const { data, error } = await supabase
           .from('registrations')
-          .upsert(regData, { onConflict: 'user_id' })
+          .upsert(payload, { onConflict: 'user_id' })
           .select();
-        if (!error && data) return data[0];
+        if (!error && data && data.length > 0) {
+          savedRow = unpackRegistration(data[0]);
+        }
       } catch (e) {
         console.warn('Supabase upsert failed, using localStorage fallback', e);
       }
@@ -130,13 +195,14 @@ export const DataService = {
     const regs = await this.getRegistrations();
     const existingIndex = regs.findIndex(r => r.user_id === regData.user_id);
     let updated;
+    const finalData = { ...(savedRow || regData), ...regData };
     if (existingIndex >= 0) {
-      regs[existingIndex] = { ...regs[existingIndex], ...regData, updated_at: new Date().toISOString() };
+      regs[existingIndex] = { ...regs[existingIndex], ...finalData, updated_at: new Date().toISOString() };
       updated = regs[existingIndex];
     } else {
       const newEntry = { 
-        id: 'reg-' + Date.now(), 
-        ...regData, 
+        id: finalData.id || 'reg-' + Date.now(), 
+        ...finalData, 
         created_at: new Date().toISOString() 
       };
       regs.unshift(newEntry);
@@ -153,12 +219,16 @@ export const DataService = {
   async updateRegistrationDetails(userId, fields) {
     if (isSupabaseConfigured) {
       try {
+        const current = await this.getRegistrationByUserId(userId);
+        const merged = { ...(current || {}), ...fields };
+        const payload = packRegistrationForSupabase(merged);
         const { error } = await supabase
           .from('registrations')
-          .update(fields)
+          .update(payload)
           .eq('user_id', userId);
-        if (!error) return true;
-        console.warn('Supabase update details returned error:', error);
+        if (error) {
+          console.warn('Supabase update details returned error:', error);
+        }
       } catch (e) {
         console.warn('Supabase update details failed, fallback to local', e);
       }
