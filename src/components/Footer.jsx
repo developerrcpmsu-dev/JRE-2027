@@ -237,30 +237,6 @@ export default function Footer({ onOpenAdminLogin }) {
                   <span className="text-slate-400">สาขาวิทยาการสารสนเทศ</span>
                   <span className="text-slate-500">·</span>
                   <span className="text-slate-400">เทคโนโลยีสารสนเทศ</span>
-
-                  <span className="text-slate-700 hidden sm:inline">|</span>
-
-                  <span className="text-slate-400 text-[11px]">ระบบมีปัญหา กรุณาติดต่อ Dev:</span>
-
-                  {/* Click to Call */}
-                  <a
-                    href="tel:0889463459"
-                    title="คลิกเพื่อโทรติดต่อผู้พัฒนาระบบ (088-9463459)"
-                    className="inline-flex items-center gap-1 font-mono text-emerald-400 hover:text-emerald-300 font-bold hover:underline transition-colors cursor-pointer px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25"
-                  >
-                    <Phone className="w-3 h-3 text-emerald-400" />
-                    <span>088-9463459</span>
-                  </a>
-
-                  {/* Click to Email */}
-                  <a
-                    href="mailto:developer.rcpmsu@gmail.com"
-                    title="คลิกเพื่อส่งอีเมลถึงผู้พัฒนาระบบ (developer.rcpmsu@gmail.com)"
-                    className="inline-flex items-center gap-1 font-mono text-sky-400 hover:text-sky-300 font-bold hover:underline transition-colors cursor-pointer px-2 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/25"
-                  >
-                    <Mail className="w-3 h-3 text-sky-400" />
-                    <span>developer.rcpmsu@gmail.com</span>
-                  </a>
                 </div>
               </div>
             </div>
