@@ -2584,11 +2584,14 @@ export default function AdminDashboardView({
                             onClick={async () => {
                               setModalPaymentStatus('paid');
                               setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
-                              await onUpdateAllocation(profileModalReg.user_id, {
+                              const fullApprovalUpdates = {
                                 payment_status: 'paid',
+                                installment_1_status: 'paid',
+                                installment_2_status: 'paid',
                                 payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
-                              });
-                              setProfileModalReg(prev => ({ ...prev, payment_status: 'paid', payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว' }));
+                              };
+                              await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
+                              setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
                               triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
                             }}
                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"

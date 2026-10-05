@@ -11,6 +11,35 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Clean Console Filter for External GIS / Third-Party Logging -->
+    <script>
+      (function() {
+        var originalWarn = console.warn;
+        var originalInfo = console.info;
+        var originalLog = console.log;
+        var isFiltered = function(args) {
+          if (!args || !args[0]) return false;
+          var msg = typeof args[0] === 'string' ? args[0] : '';
+          return msg.indexOf('[GSI_LOGGER]') !== -1 ||
+                 msg.indexOf('initialize() is called multiple times') !== -1 ||
+                 msg.indexOf('Cross-Origin-Opener-Policy') !== -1 ||
+                 msg.indexOf('attribution-reporting') !== -1 ||
+                 msg.indexOf('shared-storage') !== -1;
+        };
+        console.warn = function() {
+          if (isFiltered(arguments)) return;
+          return originalWarn.apply(console, arguments);
+        };
+        console.info = function() {
+          if (isFiltered(arguments)) return;
+          return originalInfo.apply(console, arguments);
+        };
+        console.log = function() {
+          if (isFiltered(arguments)) return;
+          return originalLog.apply(console, arguments);
+        };
+      })();
+    </script>
     <!-- Google OAuth 2.0 Client -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>

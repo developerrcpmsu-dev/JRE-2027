@@ -1389,15 +1389,22 @@ export default function RegisterView({
     const round1Amount = participantFee.round1Amount;
     const round2Amount = participantFee.round2Amount;
 
+    // Detect if single payment was approved OR if both installments were approved
+    const isSinglePaid = myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified';
+    const isInstallmentsBothPaid = myRegistration.installment_1_status === 'paid' && myRegistration.installment_2_status === 'paid';
+    const isFullyPaid = isSinglePaid || isInstallmentsBothPaid;
+
     let paidAmount = 0;
-    if (myRegistration.payment_plan === 'installment') {
+    if (isFullyPaid) {
+      paidAmount = totalFee;
+    } else if (myRegistration.payment_plan === 'installment') {
       if (myRegistration.installment_1_status === 'paid') paidAmount += round1Amount;
       if (myRegistration.installment_2_status === 'paid') paidAmount += round2Amount;
     } else {
-      if (myRegistration.payment_status === 'paid') paidAmount = totalFee;
+      if (isSinglePaid) paidAmount = totalFee;
     }
     const remainingAmount = Math.max(0, totalFee - paidAmount);
-    const isFullyPaid = (myRegistration.payment_plan === 'installment' && myRegistration.installment_1_status === 'paid' && myRegistration.installment_2_status === 'paid') || (myRegistration.payment_plan !== 'installment' && myRegistration.payment_status === 'paid');
+    const isInstallmentPlan = myRegistration.payment_plan === 'installment';
 
     const dashboardPaymentConfig = {
       ...effectivePaymentConfig,
@@ -1593,16 +1600,22 @@ export default function RegisterView({
                     </div>
                     <div>
                       <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 block">
-                        สถานะการเงิน: แผนแบ่งจ่าย 2 งวด
+                        {isInstallmentPlan ? 'สถานะการเงิน: แผนแบ่งจ่าย 2 งวด' : 'สถานะการเงิน: แผนชำระเต็มจำนวน'}
                       </span>
                       <h2 className="text-base sm:text-lg font-black text-white">
-                        {myRegistration.installment_1_status === 'unpaid'
-                          ? `⚠️ ค้างชำระงวดที่ 1 จำนวน 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ กำหนดชำระ 15–20 ต.ค. 2569)`
-                          : myRegistration.installment_1_status === 'pending_review'
-                          ? `⏳ ส่งสลิปงวดที่ 1 แล้ว (400 บ.) • รอผู้ดูแลระบบตรวจสอบยอดเงิน`
-                          : myRegistration.installment_2_status === 'unpaid'
-                          ? `✅ งวดที่ 1 ชำระแล้ว | ⚠️ ค้างชำระงวดที่ 2 จำนวน ${round2Amount} บาท (กำหนดชำระ 1–5 พ.ย. 2569)`
-                          : `✅ งวดที่ 1 ชำระแล้ว | ⏳ ส่งสลิปงวดที่ 2 แล้ว (${round2Amount} บ.) • รอผู้ดูแลระบบตรวจสอบ`}
+                        {isInstallmentPlan ? (
+                          myRegistration.installment_1_status === 'unpaid'
+                            ? `⚠️ ค้างชำระงวดที่ 1 จำนวน 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ กำหนดชำระ 15–20 ต.ค. 2569)`
+                            : myRegistration.installment_1_status === 'pending_review'
+                            ? `⏳ ส่งสลิปงวดที่ 1 แล้ว (400 บ.) • รอผู้ดูแลระบบตรวจสอบยอดเงิน`
+                            : myRegistration.installment_2_status === 'unpaid'
+                            ? `✅ งวดที่ 1 ชำระแล้ว | ⚠️ ค้างชำระงวดที่ 2 จำนวน ${round2Amount} บาท (กำหนดชำระ 1–5 พ.ย. 2569)`
+                            : `✅ งวดที่ 1 ชำระแล้ว | ⏳ ส่งสลิปงวดที่ 2 แล้ว (${round2Amount} บ.) • รอผู้ดูแลระบบตรวจสอบ`
+                        ) : (
+                          (myRegistration.payment_slip_url || myRegistration.slip_url)
+                            ? `⏳ ส่งสลิปชำระเต็มจำนวนแล้ว (${totalFee} บ.) • รอผู้ดูแลระบบตรวจสอบยอดเงิน`
+                            : `⚠️ ค้างชำระค่าลงทะเบียนเต็มจำนวน (${totalFee} บาท) • กรุณาแนบสลิปด้านล่าง`
+                        )}
                       </h2>
                       <p className="text-xs text-slate-400 mt-0.5">
                         ระบบส่งข้อมูลใบสมัครและรายการสั่งเสื้อไปยังผู้ดูแลระบบ (Admin) แล้ว ท่านสามารถแนบสลิปด้านล่างเพื่อยืนยันยอดเงิน
@@ -1625,19 +1638,19 @@ export default function RegisterView({
             )}
           </div>
 
-          {/* VISUAL 4-STEP INTERACTIVE PROGRESS FLOW */}
+          {/* VISUAL INTERACTIVE PROGRESS FLOW (3 Steps for Full Payment / 4 Steps for 2 Installments) */}
           <div className="mt-8 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <span>🚀</span>
-                <span>ขั้นตอนการเข้าร่วมโครงการ JRE 2027 (4 ขั้นตอน)</span>
+                <span>ขั้นตอนการเข้าร่วมโครงการ JRE 2027 ({isInstallmentPlan ? '4 ขั้นตอน' : '3 ขั้นตอน'})</span>
               </h3>
               <span className="text-xs text-slate-400 font-medium hidden sm:inline">
-                ระบบสมัครและสั่งซื้อเสื้อโครงการแบบครบวงจร
+                {isInstallmentPlan ? 'ระบบแบ่งชำระ 2 งวด พร้อมสั่งเสื้อพรีออเดอร์' : 'ระบบชำระเต็มจำนวน พร้อมสั่งเสื้อพรีออเดอร์'}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-1 ${isInstallmentPlan ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
               {/* Step 1 Card: ข้อมูลผู้สมัคร & ID Card */}
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden">
                 <div>
@@ -1740,149 +1753,226 @@ export default function RegisterView({
                 </div>
               </div>
 
-              {/* Step 3 Card: งวดที่ 1 (400 บาท) */}
-              <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
-                myRegistration.installment_1_status === 'paid'
-                  ? 'border-emerald-500/40 bg-emerald-950/10'
-                  : myRegistration.installment_1_status === 'pending_review'
-                  ? 'border-amber-500/40 bg-amber-950/10'
-                  : 'border-rose-500/40 bg-rose-950/10'
-              }`}>
-                <div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                      <CreditCard className="w-3.5 h-3.5 text-amber-400" /> ขั้นตอนที่ 3 (งวด 1)
-                    </span>
-                    {myRegistration.installment_1_status === 'paid' ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        ✓ ชำระแล้ว
+              {/* Step 3 (or Steps 3 & 4 depending on plan) */}
+              {!isInstallmentPlan ? (
+                /* Step 3 Card: ชำระเต็มจำนวน */
+                <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
+                  isFullyPaid
+                    ? 'border-emerald-500/40 bg-emerald-950/10'
+                    : (myRegistration.payment_slip_url || myRegistration.slip_url)
+                    ? 'border-amber-500/40 bg-amber-950/10'
+                    : 'border-rose-500/40 bg-rose-950/10'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                        <CreditCard className="w-3.5 h-3.5 text-amber-400" /> ขั้นตอนที่ 3
                       </span>
-                    ) : myRegistration.installment_1_status === 'pending_review' ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
-                        ⏳ รอตรวจ
-                      </span>
+                      {isFullyPaid ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          ✓ ชำระครบถ้วนแล้ว
+                        </span>
+                      ) : (myRegistration.payment_slip_url || myRegistration.slip_url) ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                          ⏳ รอตรวจสลิป
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                          ค้างชำระ
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="font-black text-white text-sm mt-2">
+                      ชำระค่าสมัครเต็มจำนวน: {totalFee} บาท
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      ค่าสมัครรวมเสื้อและกิจกรรม {isMsu ? '(นิสิต มมส)' : '(รวมที่พัก 1 คืน)'}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-800/80">
+                    {(myRegistration.payment_slip_url || myRegistration.slip_url) ? (
+                      <div className="flex items-center gap-2">
+                        <div
+                          onClick={() => setPreviewSlipModal(myRegistration.payment_slip_url || myRegistration.slip_url)}
+                          className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-emerald-400 transition-colors shrink-0 cursor-pointer"
+                          title="คลิกดูสลิปเต็มจำนวน"
+                        >
+                          <img src={myRegistration.payment_slip_url || myRegistration.slip_url} alt="สลิปเต็มจำนวน" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] text-emerald-400 font-bold block truncate">
+                            {isFullyPaid ? '✓ ยืนยันยอดเงินแล้ว (ล็อคสลิป)' : '✓ แนบสลิปแล้ว (รอตรวจ)'}
+                          </span>
+                          {myRegistration.slip_ocr_full && (
+                            <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_full.uploadTimeStr}>
+                              โอน: {myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} ({myRegistration.slip_ocr_full.amountFormatted || `${myRegistration.slip_ocr_full.amount} บ.`})
+                            </span>
+                          )}
+                          {!isFullyPaid && (
+                            <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
+                              <span>ส่งสลิปใหม่ทดแทน</span>
+                              <input type="file" accept="image/*" onChange={handleUploadPaymentSlip} className="hidden" />
+                            </label>
+                          )}
+                        </div>
+                      </div>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                        ค้างชำระ
-                      </span>
+                      <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        <span>แนบสลิปเต็มจำนวน ({totalFee} บ.)</span>
+                        <input type="file" accept="image/*" onChange={handleUploadPaymentSlip} className="hidden" />
+                      </label>
                     )}
                   </div>
-                  <h4 className="font-black text-white text-sm mt-2">
-                    ชำระรอบที่ 1: 400 บาท
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    ค่าจัดทำเสื้อโครงการ (15–20 ต.ค. 2569)
-                  </p>
                 </div>
-
-                <div className="pt-3 border-t border-slate-800/80">
-                  {myRegistration.installment_1_slip_url ? (
-                    <div className="flex items-center gap-2">
-                      <div
-                        onClick={() => setPreviewSlipModal(myRegistration.installment_1_slip_url)}
-                        className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-emerald-400 transition-colors shrink-0 cursor-pointer"
-                        title="คลิกดูสลิปงวด 1"
-                      >
-                        <img src={myRegistration.installment_1_slip_url} alt="สลิปงวด 1" className="w-full h-full object-cover" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[10px] text-emerald-400 font-bold block truncate">
-                          ✓ แนบสลิปแล้ว
+              ) : (
+                <>
+                  {/* Step 3 Card: งวดที่ 1 (400 บาท) */}
+                  <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
+                    (isFullyPaid || myRegistration.installment_1_status === 'paid')
+                      ? 'border-emerald-500/40 bg-emerald-950/10'
+                      : myRegistration.installment_1_status === 'pending_review'
+                      ? 'border-amber-500/40 bg-amber-950/10'
+                      : 'border-rose-500/40 bg-rose-950/10'
+                  }`}>
+                    <div>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                          <CreditCard className="w-3.5 h-3.5 text-amber-400" /> ขั้นตอนที่ 3 (งวด 1)
                         </span>
-                        {myRegistration.slip_ocr_round1 && (
-                          <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round1.uploadTimeStr}>
-                            โอน: {myRegistration.slip_ocr_round1.transferDateTimeStr || myRegistration.slip_ocr_round1.uploadTimeStr} ({myRegistration.slip_ocr_round1.amountFormatted || `${myRegistration.slip_ocr_round1.amount} บ.`})
+                        {(isFullyPaid || myRegistration.installment_1_status === 'paid') ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            ✓ ชำระแล้ว
+                          </span>
+                        ) : myRegistration.installment_1_status === 'pending_review' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                            ⏳ รอตรวจ
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            ค้างชำระ
                           </span>
                         )}
-                        {myRegistration.installment_1_status !== 'paid' && (
-                          <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
-                            <span>ส่งสลิปใหม่ทดแทน</span>
-                            <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
-                          </label>
-                        )}
                       </div>
+                      <h4 className="font-black text-white text-sm mt-2">
+                        ชำระรอบที่ 1: 400 บาท
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        ค่าจัดทำเสื้อโครงการ (15–20 ต.ค. 2569)
+                      </p>
                     </div>
-                  ) : (
-                    <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound1 ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {isUploadingRound1 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                      <span>แนบสลิปงวด 1 (400 บ.)</span>
-                      <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
-                    </label>
-                  )}
-                </div>
-              </div>
 
-              {/* Step 4 Card: งวดที่ 2 (450 หรือ 250 บาท) */}
-              <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
-                myRegistration.installment_2_status === 'paid'
-                  ? 'border-emerald-500/40 bg-emerald-950/10'
-                  : myRegistration.installment_2_status === 'pending_review'
-                  ? 'border-amber-500/40 bg-amber-950/10'
-                  : 'border-rose-500/40 bg-rose-950/10'
-              }`}>
-                <div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
-                      <CreditCard className="w-3.5 h-3.5 text-sky-400" /> ขั้นตอนที่ 4 (งวด 2)
-                    </span>
-                    {myRegistration.installment_2_status === 'paid' ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        ✓ ชำระแล้ว
-                      </span>
-                    ) : myRegistration.installment_2_status === 'pending_review' ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
-                        ⏳ รอตรวจ
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                        ค้างชำระ
-                      </span>
-                    )}
+                    <div className="pt-3 border-t border-slate-800/80">
+                      {(myRegistration.installment_1_slip_url || (isFullyPaid && (myRegistration.payment_slip_url || myRegistration.slip_url))) ? (
+                        <div className="flex items-center gap-2">
+                          <div
+                            onClick={() => setPreviewSlipModal(myRegistration.installment_1_slip_url || myRegistration.payment_slip_url || myRegistration.slip_url)}
+                            className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-emerald-400 transition-colors shrink-0 cursor-pointer"
+                            title="คลิกดูสลิปงวด 1"
+                          >
+                            <img src={myRegistration.installment_1_slip_url || myRegistration.payment_slip_url || myRegistration.slip_url} alt="สลิปงวด 1" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] text-emerald-400 font-bold block truncate">
+                              {(isFullyPaid || myRegistration.installment_1_status === 'paid') ? '✓ อนุมัติงวด 1 แล้ว' : '✓ แนบสลิปแล้ว'}
+                            </span>
+                            {myRegistration.slip_ocr_round1 && (
+                              <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round1.uploadTimeStr}>
+                                โอน: {myRegistration.slip_ocr_round1.transferDateTimeStr || myRegistration.slip_ocr_round1.uploadTimeStr} ({myRegistration.slip_ocr_round1.amountFormatted || `${myRegistration.slip_ocr_round1.amount} บ.`})
+                              </span>
+                            )}
+                            {(!isFullyPaid && myRegistration.installment_1_status !== 'paid') && (
+                              <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
+                                <span>ส่งสลิปใหม่ทดแทน</span>
+                                <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound1 ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {isUploadingRound1 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          <span>แนบสลิปงวด 1 (400 บ.)</span>
+                          <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
+                        </label>
+                      )}
+                    </div>
                   </div>
-                  <h4 className="font-black text-white text-sm mt-2">
-                    ชำระรอบที่ 2: {round2Amount} บาท
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    ค่าที่พัก & อาหาร (1–5 พ.ย. 2569)
-                  </p>
-                </div>
 
-                <div className="pt-3 border-t border-slate-800/80">
-                  {myRegistration.installment_2_slip_url ? (
-                    <div className="flex items-center gap-2">
-                      <div
-                        onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url)}
-                        className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-emerald-400 transition-colors shrink-0 cursor-pointer"
-                        title="คลิกดูสลิปงวด 2"
-                      >
-                        <img src={myRegistration.installment_2_slip_url} alt="สลิปงวด 2" className="w-full h-full object-cover" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[10px] text-emerald-400 font-bold block truncate">
-                          ✓ แนบสลิปแล้ว
+                  {/* Step 4 Card: งวดที่ 2 (450 หรือ 250 บาท) */}
+                  <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
+                    (isFullyPaid || myRegistration.installment_2_status === 'paid')
+                      ? 'border-emerald-500/40 bg-emerald-950/10'
+                      : myRegistration.installment_2_status === 'pending_review'
+                      ? 'border-amber-500/40 bg-amber-950/10'
+                      : 'border-rose-500/40 bg-rose-950/10'
+                  }`}>
+                    <div>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
+                          <CreditCard className="w-3.5 h-3.5 text-sky-400" /> ขั้นตอนที่ 4 (งวด 2)
                         </span>
-                        {myRegistration.slip_ocr_round2 && (
-                          <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>
-                            โอน: {myRegistration.slip_ocr_round2.transferDateTimeStr || myRegistration.slip_ocr_round2.uploadTimeStr} ({myRegistration.slip_ocr_round2.amountFormatted || `${myRegistration.slip_ocr_round2.amount} บ.`})
+                        {(isFullyPaid || myRegistration.installment_2_status === 'paid') ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            ✓ ชำระแล้ว
+                          </span>
+                        ) : myRegistration.installment_2_status === 'pending_review' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                            ⏳ รอตรวจ
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            ค้างชำระ
                           </span>
                         )}
-                        {myRegistration.installment_2_status !== 'paid' && (
-                          <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
-                            <span>ส่งสลิปใหม่ทดแทน</span>
-                            <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
-                          </label>
-                        )}
                       </div>
+                      <h4 className="font-black text-white text-sm mt-2">
+                        ชำระรอบที่ 2: {round2Amount} บาท
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {isMsu ? 'ค่าอาหาร & กิจกรรม (1–5 พ.ย. 2569)' : 'ค่าที่พัก & อาหาร (1–5 พ.ย. 2569)'}
+                      </p>
                     </div>
-                  ) : (
-                    <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {isUploadingRound2 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                      <span>แนบสลิปงวด 2 ({round2Amount} บ.)</span>
-                      <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
-                    </label>
-                  )}
-                </div>
-              </div>
+
+                    <div className="pt-3 border-t border-slate-800/80">
+                      {(myRegistration.installment_2_slip_url || (isFullyPaid && (myRegistration.payment_slip_url || myRegistration.slip_url))) ? (
+                        <div className="flex items-center gap-2">
+                          <div
+                            onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url || myRegistration.payment_slip_url || myRegistration.slip_url)}
+                            className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-emerald-400 transition-colors shrink-0 cursor-pointer"
+                            title="คลิกดูสลิปงวด 2"
+                          >
+                            <img src={myRegistration.installment_2_slip_url || myRegistration.payment_slip_url || myRegistration.slip_url} alt="สลิปงวด 2" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] text-emerald-400 font-bold block truncate">
+                              {(isFullyPaid || myRegistration.installment_2_status === 'paid') ? '✓ อนุมัติงวด 2 แล้ว' : '✓ แนบสลิปแล้ว'}
+                            </span>
+                            {myRegistration.slip_ocr_round2 && (
+                              <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>
+                                โอน: {myRegistration.slip_ocr_round2.transferDateTimeStr || myRegistration.slip_ocr_round2.uploadTimeStr} ({myRegistration.slip_ocr_round2.amountFormatted || `${myRegistration.slip_ocr_round2.amount} บ.`})
+                              </span>
+                            )}
+                            {(!isFullyPaid && myRegistration.installment_2_status !== 'paid') && (
+                              <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
+                                <span>ส่งสลิปใหม่ทดแทน</span>
+                                <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {isUploadingRound2 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          <span>แนบสลิปงวด 2 ({round2Amount} บ.)</span>
+                          <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

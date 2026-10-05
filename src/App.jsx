@@ -373,8 +373,8 @@ export default function App() {
         formsConfig={formsConfig}
       />
 
-      {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval) */}
-      {user && <FormsBanner formsConfig={formsConfig} user={user} />}
+      {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
+      {user && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={user} />}
 
       {/* Main Content Pages */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12 overflow-x-hidden">
