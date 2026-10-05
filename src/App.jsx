@@ -12,6 +12,7 @@ import AnnouncementsView from './views/AnnouncementsView';
 import AdminDashboardView from './views/AdminDashboardView';
 import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
+import UserProfileView from './views/UserProfileView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -42,6 +43,9 @@ export default function App() {
     } else if (newTab === 'shop' || newTab === 'store') {
       main = 'merchandise';
       sub = 'catalog';
+    } else if (newTab === 'users' || newTab === 'user') {
+      main = 'users';
+      sub = newSubRoute;
     }
 
     syncUrlToRoute(main, sub);
@@ -526,6 +530,20 @@ export default function App() {
               เข้าสู่ระบบ Admin (Admin Login)
             </button>
           </div>
+        )}
+
+        {currentTab === 'users' && (
+          <UserProfileView
+            userUid={currentSubRoute}
+            currentUser={user}
+            isAdmin={isAdmin}
+            registrations={registrations}
+            merchandiseOrders={merchandiseOrders}
+            onOpenAdminLogin={() => setAdminModalOpen(true)}
+            onNavigateHome={() => setCurrentTab('home')}
+            onNavigateAdmin={() => setCurrentTab('admin', 'users')}
+            onNavigateRegister={() => setCurrentTab('register')}
+          />
         )}
       </main>
 

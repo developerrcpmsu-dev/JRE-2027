@@ -202,7 +202,11 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
 
   for (const acc of rawAccounts) {
     if (!acc) continue;
-    const cleanEmail = (acc.email || '').trim().toLowerCase();
+    let cleanEmail = (acc.email || '').trim().toLowerCase();
+    // Normalize known typo alias besstasic22@gmail.com -> bestasic22@gmail.com
+    if (cleanEmail === 'besstasic22@gmail.com') {
+      cleanEmail = 'bestasic22@gmail.com';
+    }
     const key = cleanEmail || acc.id || `unknown_${Math.random()}`;
 
     const isGoogle = acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_'));
@@ -258,6 +262,16 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
         return a2;
       };
 
+      const chooseId = (id1, id2, email) => {
+        if (id1 && id1.startsWith('usr_') && !id1.includes('undefined')) return id1;
+        if (id2 && id2.startsWith('usr_') && !id2.includes('undefined')) return id2;
+        if (id1 && !id1.startsWith('google_')) return id1;
+        if (id2 && !id2.startsWith('google_')) return id2;
+        const userPart = (email || '').split('@')[0].replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const domain = ((email || '').split('@')[1] || '').split('.')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        return `usr_${userPart}${domain && domain !== 'gmail' ? '_' + domain : ''}`;
+      };
+
       const createdDates = [existing.created_at, acc.created_at].filter(Boolean);
       const earliestCreated = createdDates.length > 0 
         ? createdDates.sort((a, b) => new Date(a) - new Date(b))[0] 
@@ -269,7 +283,7 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
         : existing.last_login_at || acc.last_login_at;
 
       map.set(key, {
-        id: existing.id || acc.id,
+        id: chooseId(existing.id, acc.id, cleanEmail),
         name: chooseName(existing.name, acc.name),
         email: cleanEmail || existing.email,
         avatar: chooseAvatar(existing.avatar, acc.avatar),
@@ -287,10 +301,15 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
     }
   }
 
-  // Guarantee unique IDs across distinct records
+  // Guarantee clean, human-readable unique IDs across distinct records
   const result = Array.from(map.values());
   const seenIds = new Set();
   for (const item of result) {
+    if (!item.id || item.id.startsWith('google_')) {
+      const userPart = (item.email || '').split('@')[0].replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      const domain = ((item.email || '').split('@')[1] || '').split('.')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      item.id = `usr_${userPart}${domain && domain !== 'gmail' ? '_' + domain : ''}`;
+    }
     if (seenIds.has(item.id)) {
       item.id = `${item.id}_${Math.random().toString(36).slice(2, 6)}`;
     }
@@ -1218,8 +1237,9 @@ export const DataService = {
         last_login_at: new Date().toISOString()
       };
     } else {
-      const emailHash = cleanEmail.split('').reduce((acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0).toString(36).replace('-', 'z');
-      const userId = 'google_' + btoa(encodeURIComponent(cleanEmail)).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toLowerCase() + '_' + emailHash;
+      const userPart = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      const domain = (cleanEmail.split('@')[1] || '').split('.')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const userId = `usr_${userPart}${domain && domain !== 'gmail' ? '_' + domain : ''}`;
       userObj = {
         id: userId,
         name: cleanName,

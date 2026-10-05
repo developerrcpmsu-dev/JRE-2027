@@ -58,7 +58,8 @@ import {
   RefreshCw,
   ShieldCheck,
   Tag,
-  ShoppingBag
+  ShoppingBag,
+  Copy
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts } from '../supabase';
 import { 
@@ -5472,8 +5473,36 @@ export default function AdminDashboardView({
                               <div className="font-bold text-white flex items-center gap-1.5">
                                 <span>{acc.name || 'ไม่ระบุชื่อ'}</span>
                               </div>
-                              <div className="font-mono text-[10px] text-slate-500 mt-0.5">
-                                UID: {acc.id ? `${acc.id.slice(0, 12)}...` : '-'}
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="font-mono text-[10px] text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded font-bold tracking-wide">
+                                  UID: {acc.id || '-'}
+                                </span>
+                                {acc.id && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const profileUrl = `${window.location.origin}/users/${acc.id}`;
+                                        navigator.clipboard.writeText(profileUrl);
+                                        alert(`คัดลอก URL หน้าโปรไฟล์สำเร็จ!\n${profileUrl}`);
+                                      }}
+                                      className="p-1 hover:bg-slate-700/60 text-slate-400 hover:text-cyan-300 rounded transition-colors cursor-pointer"
+                                      title="คัดลอก URL โปรไฟล์ (https://jre-2027.vercel.app/users/...)"
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                    <a
+                                      href={`/users/${acc.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1 hover:bg-slate-700/60 text-slate-400 hover:text-cyan-400 rounded transition-colors"
+                                      title="เปิดดูหน้าโปรไฟล์และดิจิทัลไอดีผู้ใช้"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -5566,6 +5595,18 @@ export default function AdminDashboardView({
 
                         <td className="py-3.5 px-4">
                           <div className="flex items-center justify-center gap-1.5">
+                            {acc.id && (
+                              <a
+                                href={`/users/${acc.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                                title={`เปิดดูหน้าโปรไฟล์สาธารณะ & ดิจิทัลไอดี (/users/${acc.id})`}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => {

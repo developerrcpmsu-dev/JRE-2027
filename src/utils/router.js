@@ -101,6 +101,16 @@ export function parseCurrentRoute() {
     };
   }
 
+  // User Profiles & Digital ID Badge (/users/:uid or /user/:uid)
+  if (first === 'users' || first === 'user') {
+    const uid = second || null;
+    return {
+      mainTab: 'users',
+      subRoute: uid,
+      canonicalPath: uid ? `/users/${uid}` : '/users'
+    };
+  }
+
   return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
 }
 
@@ -131,6 +141,9 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'payment' || subRoute === 'payment_settings') return '/admin/payment';
       if (subRoute && subRoute !== 'applicants') return `/admin/${subRoute}`;
       return '/admin';
+    case 'users':
+    case 'user':
+      return subRoute ? `/users/${subRoute}` : '/users';
     default:
       return '/';
   }
