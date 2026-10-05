@@ -636,12 +636,12 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
   products: [
     {
       id: 'prod_official_shirt',
-      name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027 (Official Rescue Tactical Polo Shirt)',
+      name: 'เสื้อฝึก Joint Response Exercise (JRE 2027) คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
       enabled: true,
       allow_order: true,
       category: 'shirt',
-      base_price: 350,
-      description: 'เสื้อโปโลปฏิบัติการกู้ภัย JRE 2027 คอซิป ทรงสปอร์ตตัดต่อ สีเทาตัดดำ แขนสโลปสีดำ ปักตรา RCPMSU อกขวา และตราสัญลักษณ์ USVN อกซ้าย พร้อมตราภาคีเครือข่ายด้านหลัง เนื้อผ้าคุณภาพสูง ใส่สบาย เคลื่อนไหวคล่องตัว ระบายอากาศได้ดี พร้อมลุยทุกภารกิจ',
+      base_price: 400,
+      description: 'เสื้อฝึก Joint Response Exercise (JRE 2027) ออกแบบในรูปแบบ เสื้อคอเต่าซิป แขนสั้น โทนสี เทา–ดำ แขนสโลปสีดำ ปักตรา RCPMSU และตราสัญลักษณ์ USVN พร้อมตราภาคีเครือข่ายด้านหลัง เนื้อผ้าคุณภาพสูง ใส่สบาย ระบายอากาศได้ดี พร้อมลุยทุกภารกิจ (พรีออเดอร์ รวมอยู่ในค่างวดที่ 1 ของผู้สมัคร หรือสั่งซื้อเพิ่มเติม)',
       image: '/images/merchandise/jre_shirt_official.jpg',
       size_chart_image: '/images/merchandise/jre_shirt_size_chart.jpg',
       images: [

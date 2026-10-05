@@ -125,9 +125,48 @@ export default function AdminDashboardView({
     }
   };
 
+  // Helper to ensure Merchandise Config always uses the central project bank account and official shirt spec
+  const sanitizeAdminMerchConfig = (cfg, payCfg) => {
+    const base = cfg || DEFAULT_MERCHANDISE_CONFIG;
+    const payment = base.payment || {};
+    const isLegacyBank = !payment.bank_name || 
+      payment.bank_name.includes('กรุงไทย') || 
+      payment.account_number === '984-0-12345-6' || 
+      payment.promptpay === '098-765-4321';
+
+    const cleanPayment = isLegacyBank ? {
+      bank_name: payCfg?.bank_name || DEFAULT_MERCHANDISE_CONFIG.payment.bank_name,
+      account_number: payCfg?.bank_account_number || DEFAULT_MERCHANDISE_CONFIG.payment.account_number,
+      account_name: payCfg?.bank_account_name || DEFAULT_MERCHANDISE_CONFIG.payment.account_name,
+      promptpay: payCfg?.bank_promptpay || DEFAULT_MERCHANDISE_CONFIG.payment.promptpay,
+      contact_phone: payCfg?.contact_phone || DEFAULT_MERCHANDISE_CONFIG.payment.contact_phone,
+      note: payment.note || DEFAULT_MERCHANDISE_CONFIG.payment.note
+    } : payment;
+
+    const products = (base.products || []).map(p => {
+      if (p.id === 'prod_official_shirt') {
+        return {
+          ...p,
+          name: 'เสื้อฝึก Joint Response Exercise (JRE 2027) คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
+          base_price: (p.base_price === 350 || !p.base_price) ? 400 : p.base_price,
+          description: (p.description?.includes('350') || p.description?.includes('เสื้อโปโลปฏิบัติการ'))
+            ? DEFAULT_MERCHANDISE_CONFIG.products[0].description
+            : p.description
+        };
+      }
+      return p;
+    });
+
+    return {
+      ...base,
+      payment: cleanPayment,
+      products: products.length > 0 ? products : DEFAULT_MERCHANDISE_CONFIG.products
+    };
+  };
+
   // Merchandise State
   const [localMerchConfig, setLocalMerchConfig] = useState(() => {
-    return merchandiseConfig || DEFAULT_MERCHANDISE_CONFIG;
+    return sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig);
   });
   const [isSavingMerch, setIsSavingMerch] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -144,9 +183,31 @@ export default function AdminDashboardView({
 
   React.useEffect(() => {
     if (merchandiseConfig) {
-      setLocalMerchConfig(merchandiseConfig);
+      setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
     }
-  }, [merchandiseConfig]);
+  }, [merchandiseConfig, paymentConfig]);
+
+  const handleSyncBankFromPaymentConfig = () => {
+    const bankName = localPayment?.bank_name || 'ธนาคารไทยพาณิชย์';
+    const accNumber = localPayment?.bank_account_number || '594-264865-5';
+    const accName = localPayment?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก';
+    const promptpay = localPayment?.bank_promptpay || '098-329-6762';
+    const phone = localPayment?.contact_phone || '098-329-6762';
+    
+    setLocalMerchConfig(prev => ({
+      ...prev,
+      payment: {
+        ...(prev.payment || {}),
+        bank_name: bankName,
+        account_number: accNumber,
+        account_name: accName,
+        promptpay: promptpay,
+        contact_phone: phone,
+        note: prev.payment?.note || 'กรุณาโอนเงินตามยอดที่ระบุและแนบหลักฐานสลิปโอนเงินทุกครั้ง'
+      }
+    }));
+    triggerToast('ซิงค์ข้อมูลบัญชีธนาคารกลาง (SCB 594-264865-5) เรียบร้อยแล้ว');
+  };
 
   // Search & Filter for Applicants
   const [searchTerm, setSearchTerm] = useState('');
@@ -175,7 +236,7 @@ export default function AdminDashboardView({
   
   // Payment Modal Fields
   const [modalPaymentStatus, setModalPaymentStatus] = useState('unpaid');
-  const [modalPaymentAmount, setModalPaymentAmount] = useState(350);
+  const [modalPaymentAmount, setModalPaymentAmount] = useState(650);
   const [modalPaymentBank, setModalPaymentBank] = useState('');
   const [modalPaymentNotes, setModalPaymentNotes] = useState('');
 
@@ -242,7 +303,28 @@ export default function AdminDashboardView({
       } else {
         await DataService.savePaymentConfig(localPayment);
       }
-      triggerToast('บันทึกการตั้งค่าค่าสมัครและระบบแบ่งจ่าย 2 งวดเรียบร้อยแล้ว');
+
+      // Auto-sync central bank account to Merchandise config as well
+      const updatedMerch = {
+        ...localMerchConfig,
+        payment: {
+          ...(localMerchConfig.payment || {}),
+          bank_name: localPayment.bank_name || 'ธนาคารไทยพาณิชย์',
+          account_number: localPayment.bank_account_number || '594-264865-5',
+          account_name: localPayment.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก',
+          promptpay: localPayment.bank_promptpay || '098-329-6762',
+          contact_phone: localPayment.contact_phone || '098-329-6762',
+          note: localMerchConfig.payment?.note || 'กรุณาโอนเงินตามยอดที่ระบุและแนบหลักฐานสลิปโอนเงินทุกครั้ง'
+        }
+      };
+      setLocalMerchConfig(updatedMerch);
+      if (onSaveMerchandiseConfig) {
+        await onSaveMerchandiseConfig(updatedMerch);
+      } else {
+        await DataService.saveMerchandiseConfig(updatedMerch);
+      }
+
+      triggerToast('บันทึกการตั้งค่าค่าสมัครและซิงค์บัญชีธนาคารกลางเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
       triggerToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่าค่าสมัคร');
@@ -757,8 +839,8 @@ export default function AdminDashboardView({
     setModalAllergy(reg.food_allergy || '');
     setModalTraining(reg.previous_training || '');
     setModalPaymentStatus(reg.payment_status || 'unpaid');
-    setModalPaymentAmount(reg.payment_amount || 350);
-    setModalPaymentBank(reg.payment_bank_info || 'ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส');
+    setModalPaymentAmount(reg.payment_amount || (reg.is_msu ? 650 : 850));
+    setModalPaymentBank(reg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
     setModalPaymentNotes(reg.payment_notes || '');
     setNewMsgText('');
   };
@@ -781,7 +863,7 @@ export default function AdminDashboardView({
         food_allergy: modalAllergy.trim(),
         previous_training: modalTraining.trim(),
         payment_status: modalPaymentStatus,
-        payment_amount: Number(modalPaymentAmount) || 350,
+        payment_amount: Number(modalPaymentAmount) || (profileModalReg.is_msu ? 650 : 850),
         payment_bank_info: modalPaymentBank.trim(),
         payment_notes: modalPaymentNotes.trim()
       };
@@ -806,7 +888,7 @@ export default function AdminDashboardView({
     setIsSendingMsg(true);
     try {
       await DataService.sendAdminMessage(profileModalReg.user_id, newMsgText.trim(), {
-        payment_amount: Number(modalPaymentAmount) || 350,
+        payment_amount: Number(modalPaymentAmount) || (profileModalReg.is_msu ? 650 : 850),
         payment_bank_info: modalPaymentBank.trim(),
         payment_status: modalPaymentStatus
       });
@@ -1196,8 +1278,31 @@ export default function AdminDashboardView({
     if (e) e.preventDefault();
     setIsSavingMerch(true);
     try {
-      await onSaveMerchandiseConfig(localMerchConfig);
-      triggerToast('บันทึกการตั้งค่าสินค้า ไซต์ ราคา และ Google Form สำรองเรียบร้อยแล้ว');
+      if (onSaveMerchandiseConfig) {
+        await onSaveMerchandiseConfig(localMerchConfig);
+      } else {
+        await DataService.saveMerchandiseConfig(localMerchConfig);
+      }
+
+      // Also sync central bank account to registration paymentConfig
+      if (localMerchConfig.payment?.bank_name) {
+        const updatedPayment = {
+          ...localPayment,
+          bank_name: localMerchConfig.payment.bank_name || localPayment.bank_name,
+          bank_account_number: localMerchConfig.payment.account_number || localPayment.bank_account_number,
+          bank_account_name: localMerchConfig.payment.account_name || localPayment.bank_account_name,
+          bank_promptpay: localMerchConfig.payment.promptpay || localPayment.bank_promptpay,
+          contact_phone: localMerchConfig.payment.contact_phone || localPayment.contact_phone
+        };
+        setLocalPayment(updatedPayment);
+        if (onSavePaymentConfig) {
+          await onSavePaymentConfig(updatedPayment);
+        } else {
+          await DataService.savePaymentConfig(updatedPayment);
+        }
+      }
+
+      triggerToast('บันทึกการตั้งค่าสินค้า ไซต์ ราคา และซิงค์บัญชีธนาคารกลางเรียบร้อยแล้ว');
     } catch (err) {
       triggerToast('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
     } finally {
@@ -2376,7 +2481,7 @@ export default function AdminDashboardView({
                         type="text"
                         value={modalPaymentNotes}
                         onChange={e => setModalPaymentNotes(e.target.value)}
-                        placeholder="เช่น ชำระครบถ้วน, โอนผ่าน KTB"
+                        placeholder="เช่น ชำระครบถ้วน, โอนผ่าน SCB / พร้อมเพย์"
                         className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
                       />
                     </div>
@@ -2388,7 +2493,7 @@ export default function AdminDashboardView({
                       type="text"
                       value={modalPaymentBank}
                       onChange={e => setModalPaymentBank(e.target.value)}
-                      placeholder="ธนาคารกรุงไทย เลขที่ 984-0-XXXXX-X ชื่อบัญชี ชมรมกู้ภัยราชพฤกษ์ มมส"
+                      placeholder="ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก"
                       className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
                     />
                   </div>
@@ -2422,7 +2527,7 @@ export default function AdminDashboardView({
                       {/* ROUND 1 */}
                       <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-indigo-300 text-xs">งวดที่ 1: {paymentConfig?.installment_round1_amount || 350} บาท</span>
+                          <span className="font-bold text-indigo-300 text-xs">งวดที่ 1: {paymentConfig?.installment_round1_amount || 400} บาท</span>
                           {profileModalReg.installment_1_status === 'paid' ? (
                             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
                               ✓ อนุมัติแล้ว
@@ -2514,7 +2619,9 @@ export default function AdminDashboardView({
                       {/* ROUND 2 */}
                       <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-purple-300 text-xs">งวดที่ 2: {paymentConfig?.installment_round2_amount || 300} บาท</span>
+                          <span className="font-bold text-purple-300 text-xs">
+                            งวดที่ 2: {profileModalReg?.is_msu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท ({profileModalReg?.is_msu ? 'นิสิต มมส' : 'ต่างสถาบัน'})
+                          </span>
                           {profileModalReg.installment_2_status === 'paid' ? (
                             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
                               ✓ อนุมัติแล้ว
@@ -2701,7 +2808,7 @@ export default function AdminDashboardView({
                     required
                     value={newMsgText}
                     onChange={e => setNewMsgText(e.target.value)}
-                    placeholder="พิมพ์ข้อความที่ต้องการแจ้ง เช่น ขอแจ้งค้างชำระค่าลงทะเบียนจำนวน 350 บาท โปรดโอนเข้าบัญชี ... หรือ เอกสารไม่สมบูรณ์..."
+                    placeholder="พิมพ์ข้อความที่ต้องการแจ้ง เช่น ขอแจ้งค้างชำระค่างวดที่ 1 จำนวน 400 บาท หรือค่างวดที่ 2 โปรดโอนเข้าบัญชี SCB 594-264865-5 ... หรือ เอกสารไม่สมบูรณ์..."
                     className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none"
                   />
 
@@ -4182,14 +4289,33 @@ export default function AdminDashboardView({
                 <div>
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-rescue-400" />
-                    <span>ข้อมูลธนาคาร & ช่องทางรับโอนเงินค่าสินค้า (Bank & Payment Settings)</span>
+                    <span>ข้อมูลธนาคารกลาง & ช่องทางรับโอนเงิน (Central Project Bank Account)</span>
                   </h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    กำหนดชื่อธนาคาร เลขที่บัญชี ชื่อบัญชี และพร้อมเพย์สำหรับให้ผู้สั่งซื้อโอนเงินในหน้าสั่งซื้อสินค้า
+                    บัญชีธนาคารกลางที่ใช้ร่วมกันทั้งโครงการ JRE 2027 (ระบบลงทะเบียน & สั่งซื้อเสื้อโครงการ)
                   </p>
                 </div>
-                <span className="text-[11px] px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-full font-bold self-start sm:self-auto">
-                  แสดงผลอัตโนมัติในหน้าสั่งซื้อ
+                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleSyncBankFromPaymentConfig}
+                    className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                    title="ดึงข้อมูลบัญชีจากระบบค่าลงทะเบียนมาใส่ทันที"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>🔄 ซิงค์จากบัญชีลงทะเบียน (SCB 594-264865-5)</span>
+                  </button>
+                  <span className="text-[11px] px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-full font-bold">
+                    แสดงผลอัตโนมัติในหน้าร้านค้า
+                  </span>
+                </div>
+              </div>
+
+              {/* Informational banner about unified bank account */}
+              <div className="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl text-xs text-indigo-200 flex items-center gap-2.5">
+                <Building className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>
+                  <strong>บัญชีธนาคารกลางเดียวกัน:</strong> โครงการ JRE 2027 ใช้บัญชีธนาคารเดียวกันทั้งขั้นตอนลงทะเบียนและสั่งซื้อเสื้อ (ธนาคารไทยพาณิชย์ เลขที่ 594-264865-5 นางสาวมัญชุพร ยังเหล็ก) เพื่อความถูกต้องและโปร่งใสทางบัญชี
                 </span>
               </div>
 
@@ -4200,7 +4326,7 @@ export default function AdminDashboardView({
                     type="text"
                     value={localMerchConfig.payment?.bank_name || ''}
                     onChange={(e) => handleUpdateMerchPaymentField('bank_name', e.target.value)}
-                    placeholder="เช่น ธนาคารกรุงไทย"
+                    placeholder="เช่น ธนาคารไทยพาณิชย์"
                     className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
                   />
                 </div>
@@ -4211,7 +4337,7 @@ export default function AdminDashboardView({
                     type="text"
                     value={localMerchConfig.payment?.account_number || ''}
                     onChange={(e) => handleUpdateMerchPaymentField('account_number', e.target.value)}
-                    placeholder="เช่น 984-0-12345-6"
+                    placeholder="เช่น 594-264865-5"
                     className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-rescue-400 focus:outline-none focus:border-rescue-500"
                   />
                 </div>
@@ -4222,7 +4348,7 @@ export default function AdminDashboardView({
                     type="text"
                     value={localMerchConfig.payment?.account_name || ''}
                     onChange={(e) => handleUpdateMerchPaymentField('account_name', e.target.value)}
-                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม"
+                    placeholder="เช่น นางสาวมัญชุพร ยังเหล็ก"
                     className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
                   />
                 </div>
@@ -4233,7 +4359,7 @@ export default function AdminDashboardView({
                     type="text"
                     value={localMerchConfig.payment?.promptpay || ''}
                     onChange={(e) => handleUpdateMerchPaymentField('promptpay', e.target.value)}
-                    placeholder="เช่น 098-765-4321 หรือเลขประจำตัวผู้เสียภาษี"
+                    placeholder="เช่น 098-329-6762"
                     className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-rescue-500"
                   />
                 </div>

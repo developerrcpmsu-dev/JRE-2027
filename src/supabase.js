@@ -63,8 +63,31 @@ function initializeLocalStorage() {
   if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG)) {
     localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(DEFAULT_PAYMENT_CONFIG));
   }
-  if (!localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG)) {
+  const rawMerch = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG);
+  if (!rawMerch) {
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
+  } else {
+    try {
+      const parsed = JSON.parse(rawMerch);
+      const isLegacy = !parsed.payment?.bank_name || 
+        parsed.payment?.bank_name.includes('กรุงไทย') || 
+        parsed.payment?.account_number === '984-0-12345-6' || 
+        parsed.products?.some(p => p.id === 'prod_official_shirt' && (p.base_price === 350 || !p.base_price));
+      if (isLegacy) {
+        parsed.payment = DEFAULT_MERCHANDISE_CONFIG.payment;
+        if (parsed.products) {
+          parsed.products = parsed.products.map(p => p.id === 'prod_official_shirt' ? {
+            ...p,
+            name: 'เสื้อฝึก Joint Response Exercise (JRE 2027) คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
+            base_price: 400,
+            description: DEFAULT_MERCHANDISE_CONFIG.products[0].description
+          } : p);
+        }
+        localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(parsed));
+      }
+    } catch {
+      localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
+    }
   }
   // Start with empty real merchandise orders & purge any legacy mock orders
   const existingOrders = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_ORDERS);
@@ -569,6 +592,44 @@ export const DataService = {
 
   // MERCHANDISE CONFIG & STORE SETTINGS
   async getMerchandiseConfig() {
+    const sanitizeConfig = (cfg) => {
+      if (!cfg) return DEFAULT_MERCHANDISE_CONFIG;
+      const payment = cfg.payment || {};
+      const isLegacyBank = !payment.bank_name ||
+        payment.bank_name.includes('กรุงไทย') ||
+        payment.account_number === '984-0-12345-6' ||
+        payment.promptpay === '098-765-4321';
+
+      const cleanPayment = isLegacyBank ? {
+        bank_name: DEFAULT_MERCHANDISE_CONFIG.payment.bank_name,
+        account_number: DEFAULT_MERCHANDISE_CONFIG.payment.account_number,
+        account_name: DEFAULT_MERCHANDISE_CONFIG.payment.account_name,
+        promptpay: DEFAULT_MERCHANDISE_CONFIG.payment.promptpay,
+        contact_phone: DEFAULT_MERCHANDISE_CONFIG.payment.contact_phone,
+        note: payment.note || DEFAULT_MERCHANDISE_CONFIG.payment.note
+      } : payment;
+
+      const products = (cfg.products || []).map(p => {
+        if (p.id === 'prod_official_shirt') {
+          return {
+            ...p,
+            name: 'เสื้อฝึก Joint Response Exercise (JRE 2027) คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
+            base_price: (p.base_price === 350 || !p.base_price) ? 400 : p.base_price,
+            description: (p.description?.includes('350') || p.description?.includes('เสื้อโปโลปฏิบัติการ')) 
+              ? DEFAULT_MERCHANDISE_CONFIG.products[0].description 
+              : p.description
+          };
+        }
+        return p;
+      });
+
+      return {
+        ...cfg,
+        payment: cleanPayment,
+        products: products.length > 0 ? products : DEFAULT_MERCHANDISE_CONFIG.products
+      };
+    };
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
@@ -577,15 +638,19 @@ export const DataService = {
           .eq('key', 'merchandise_config')
           .maybeSingle();
         if (!error && data?.value) {
-          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(data.value));
-          return data.value;
+          const sanitized = sanitizeConfig(data.value);
+          localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(sanitized));
+          return sanitized;
         }
       } catch (e) {
         console.warn('Supabase merchandise_config query error, fallback', e);
       }
     }
     const raw = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG);
-    return raw ? JSON.parse(raw) : DEFAULT_MERCHANDISE_CONFIG;
+    const parsed = raw ? JSON.parse(raw) : DEFAULT_MERCHANDISE_CONFIG;
+    const sanitized = sanitizeConfig(parsed);
+    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(sanitized));
+    return sanitized;
   },
 
   async saveMerchandiseConfig(config) {
