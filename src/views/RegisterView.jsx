@@ -47,7 +47,8 @@ import {
   EyeOff,
   UserCheck,
   Shield,
-  ArrowLeft
+  ArrowLeft,
+  QrCode
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
