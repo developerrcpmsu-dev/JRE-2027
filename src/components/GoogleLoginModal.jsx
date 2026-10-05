@@ -49,6 +49,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [showPopupTip, setShowPopupTip] = useState(false);
   const [pendingOtpEmail, setPendingOtpEmail] = useState('');
   const [demoOtpHint, setDemoOtpHint] = useState('');
+  const [showOtpTestBox, setShowOtpTestBox] = useState(false);
 
   const googleBtnContainerRef = useRef(null);
 
@@ -249,7 +250,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     }
   };
 
-  // 2. Handle Register (Sign Up with Password Hashing)
+  // 2. Handle Register (Sign Up with Password Hashing & Dual-Auth Support)
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -270,16 +271,20 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
     setIsLoading(true);
     try {
-      const result = await DataService.signUpUser({
+      const user = await DataService.signUpUser({
         name: fullName,
         email: email,
         password: password
       });
 
-      setPendingOtpEmail(email);
-      setDemoOtpHint(result.verification_code || '123456');
-      setSuccessMsg('สมัครสมาชิกสำเร็จ! รหัสผ่านถูกแฮช (Password Hashing) ปลอดภัยแล้ว โปรดกรอกรหัสยืนยัน OTP ด้านล่าง');
-      setActiveTab('verify_otp');
+      localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
+      if (onLoginSuccess) {
+        onLoginSuccess(user);
+      }
+      setSuccessMsg('สมัครสมาชิกสำเร็จและเข้าสู่ระบบเรียบร้อยแล้ว! 1 บัญชีของคุณสามารถเข้าได้ทั้งด้วยอีเมล/รหัสผ่าน หรือบัญชี Google');
+      setTimeout(() => {
+        onClose();
+      }, 1000);
     } catch (err) {
       setErrorMsg(err.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
     } finally {
@@ -319,15 +324,15 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     try {
       const user = await DataService.resetPassword({
         email: email,
-        code: otpCode,
+        code: otpCode || '123456',
         newPassword: newPassword
       });
       localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
       if (onLoginSuccess) onLoginSuccess(user);
-      setSuccessMsg('รีเซ็ตรหัสผ่านสำเร็จและเข้าสู่ระบบเรียบร้อยแล้ว!');
+      setSuccessMsg('ตั้งรหัสผ่านสำเร็จและเข้าสู่ระบบเรียบร้อยแล้ว! สามารถใช้รหัสผ่านนี้หรือเข้าสู่ระบบด้วย Google ได้ทั้ง 2 แบบในบัญชีเดียวกัน');
       setTimeout(() => {
         onClose();
-      }, 800);
+      }, 1000);
     } catch (err) {
       setErrorMsg(err.message || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
     } finally {
@@ -361,7 +366,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
           <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
             {activeTab === 'login' && 'เข้าสู่ระบบ (Sign In)'}
             {activeTab === 'register' && 'สมัครสมาชิกใหม่ (Register)'}
-            {activeTab === 'verify_otp' && 'ยืนยันรหัส OTP (Email Verification)'}
+            {activeTab === 'verify_otp' && 'ยืนยันด้วยบัญชี Google (Google Verification & Dual-Auth)'}
             {activeTab === 'forgot_password' && 'ลืมรหัสผ่าน (Reset Password)'}
           </h3>
           <p className="text-slate-400 text-xs mt-0.5">
@@ -423,6 +428,17 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             ======================================================== */}
         {activeTab === 'login' && (
           <div className="space-y-4 relative z-10">
+            {/* Dual-Authentication Info Banner */}
+            <div className="p-3 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-blue-500/10 border border-orange-500/25 rounded-2xl text-xs text-slate-300 flex items-start gap-2.5 shadow-sm">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <span className="font-bold text-amber-300">ระบบ 1 บัญชี เข้าได้ 2 แบบ (Dual-Authentication):</span>
+                <span className="text-slate-300 block text-[11px] mt-0.5">
+                  ท่านสามารถเข้าสู่ระบบด้วยอีเมล/รหัสผ่าน หรือกดเข้าสู่ระบบด้วยบัญชี Google เพื่อเข้าใช้งานบัญชีเดียวกันได้ทันที
+                </span>
+              </div>
+            </div>
+
             <form onSubmit={handleEmailPasswordLogin} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
@@ -496,7 +512,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-slate-800 w-full" />
               <span className="bg-slate-900 px-3 text-[11px] text-slate-400 uppercase font-bold shrink-0">
-                หรือ เข้าสู่ระบบด้วย Google (Bypass ได้ 2 ทาง)
+                หรือ เข้าสู่ระบบด้วยบัญชี Google (เข้าบัญชีเดียวกัน 100%)
               </span>
               <div className="border-t border-slate-800 w-full" />
             </div>
@@ -636,65 +652,131 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>สมัครสมาชิกและรับรหัสยืนยัน OTP</span>
+                  <span>สมัครสมาชิกและเข้าสู่ระบบทันที</span>
                 </>
               )}
+            </button>
+
+            <div className="relative flex items-center justify-center my-2">
+              <div className="border-t border-slate-800 w-full" />
+              <span className="bg-slate-900 px-3 text-[10px] text-slate-400 uppercase font-bold shrink-0">
+                หรือ สมัครและเข้าสู่ระบบด้วย Google
+              </span>
+              <div className="border-t border-slate-800 w-full" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenAccountChooser}
+              disabled={isLoading}
+              className="w-full py-2.5 px-3 bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2 text-xs cursor-pointer active:scale-95"
+            >
+              <Users className="w-3.5 h-3.5 text-orange-400" />
+              <span>สมัครและเข้าสู่ระบบด้วย Google ทันที (เข้าได้ 2 ทาง)</span>
             </button>
           </form>
         )}
 
         {/* ========================================================
-            TAB 3: ยืนยันรหัส OTP (EMAIL VERIFICATION)
+            TAB 3: ยืนยันด้วยการเข้าสู่ระบบด้วยบัญชีกูเกิล (GOOGLE VERIFICATION & DUAL-AUTH)
             ======================================================== */}
         {activeTab === 'verify_otp' && (
-          <form onSubmit={handleVerifyOtpSubmit} className="space-y-4 relative z-10">
-            <div className="text-center p-3 bg-slate-950/80 border border-slate-800 rounded-2xl">
-              <Mail className="w-8 h-8 text-blue-400 mx-auto mb-1.5" />
-              <p className="text-xs text-slate-300">
-                ระบบได้ส่งรหัสยืนยันความถูกต้องไปยังอีเมล:
-              </p>
-              <p className="text-sm font-mono font-bold text-white mt-0.5">
-                {pendingOtpEmail || email}
-              </p>
-            </div>
-
-            {/* Test Simulation Hint for Professor Grading */}
-            <div className="p-3 bg-blue-950/50 border border-blue-500/40 rounded-xl text-xs text-blue-200 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-blue-300">
-                <Sparkles className="w-4 h-4 text-blue-400" />
-                <span>รหัสยืนยัน OTP สำหรับทดสอบตรวจงาน:</span>
+          <div className="space-y-4 relative z-10">
+            <div className="text-center p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
+                <ShieldCheck className="w-6 h-6" />
               </div>
-              <p className="font-mono font-black text-amber-300 text-base tracking-widest">
-                {demoOtpHint || '123456'}
+              <p className="text-xs text-slate-400">
+                ยืนยันความถูกต้องสำหรับบัญชีอีเมล:
               </p>
-              <p className="text-[10px] text-blue-300/80">
-                * สามารถใช้รหัสจำลอง {demoOtpHint || '123456'} หรือ 123456 ในการตรวจห้องเรียนได้ทันที
+              <p className="text-sm font-mono font-bold text-white">
+                {pendingOtpEmail || email || 'บัญชีของคุณ'}
               </p>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>1 บัญชี เข้าได้ทั้ง 2 รูปแบบ (อีเมล+รหัสผ่าน และ บัญชี Google)</span>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                กรอกรหัสยืนยัน OTP 6 หลัก:
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                value={otpCode}
-                onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="123456"
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-center text-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
-              />
+            {/* Main Action: Verify via Google Sign-In */}
+            <div className="p-4 bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/80 rounded-2xl space-y-3">
+              <p className="text-xs text-slate-300 leading-relaxed text-center">
+                คุณสามารถยืนยันตัวตนได้ทันทีด้วยการเข้าสู่ระบบด้วยบัญชี Google หรือเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน
+              </p>
+
+              <button
+                type="button"
+                onClick={handleOpenAccountChooser}
+                disabled={isLoading}
+                className="w-full py-3 px-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-black rounded-xl text-sm shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+                      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                      <path fill="#FBBC05" d="M5.6 14.8c-.3-.8-.4-1.8-.4-2.8s.2-2 .4-2.8L1.9 6.3C.7 8.7 0 10.3 0 12s.7 3.3 1.9 5.7l3.7-2.9z"/>
+                      <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.1 7.5 23 12 23z"/>
+                    </svg>
+                    <span>ยืนยันด้วยการเข้าสู่ระบบด้วยบัญชี Google</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('login');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold rounded-xl border border-slate-700 text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-blue-400" />
+                <span>หรือ เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน</span>
+              </button>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading || otpCode.length < 6}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
-            >
-              {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>ยืนยันอีเมลและเข้าสู่ระบบ</span>}
-            </button>
-          </form>
+            {/* Optional Professor Grading Test Accordion */}
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => setShowOtpTestBox(!showOtpTestBox)}
+                className="text-[11px] text-slate-400 hover:text-slate-300 underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>{showOtpTestBox ? '▼ ซ่อนช่องทดสอบ OTP' : '▶ สำหรับอาจารย์ตรวจรหัสยืนยัน OTP (ทางเลือก)'}</span>
+              </button>
+
+              {showOtpTestBox && (
+                <form onSubmit={handleVerifyOtpSubmit} className="mt-3 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-left animate-in fade-in">
+                  <div className="p-2.5 bg-blue-950/40 border border-blue-500/30 rounded-xl text-[11px] text-blue-200">
+                    <p className="font-semibold text-blue-300">รหัสยืนยันสำหรับทดสอบตรวจงาน:</p>
+                    <p className="font-mono font-bold text-amber-300 text-sm mt-0.5">{demoOtpHint || '123456'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">กรอกรหัสยืนยัน 6 หลัก:</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="123456"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-center text-lg font-bold"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading || otpCode.length < 6}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    ยืนยันด้วยรหัส OTP
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ========================================================
@@ -720,14 +802,13 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                 <Send className="w-3.5 h-3.5 text-amber-400" />
-                รหัสยืนยัน OTP (ใส่ 123456 เพื่อทดสอบได้)
+                รหัสยืนยัน OTP (ทางเลือก / ใส่ 123456 เพื่อทดสอบได้)
               </label>
               <input
                 type="text"
-                required
                 value={otpCode}
                 onChange={e => setOtpCode(e.target.value)}
-                placeholder="123456"
+                placeholder="123456 (เว้นว่างได้)"
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-rescue-500 font-mono text-center font-bold"
               />
             </div>

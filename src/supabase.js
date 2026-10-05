@@ -178,10 +178,14 @@ export const DataService = {
     return raw ? JSON.parse(raw) : [];
   },
 
-  async getRegistrationByUserId(userId) {
-    if (!userId) return null;
+  async getRegistrationByUserId(userId, email = null) {
+    if (!userId && !email) return null;
     const regs = await this.getRegistrations();
-    return regs.find(r => r.user_id === userId) || null;
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
+    return regs.find(r => 
+      (userId && (r.user_id === userId || r.id === userId)) ||
+      (cleanEmail && r.user_email && r.user_email.trim().toLowerCase() === cleanEmail)
+    ) || null;
   },
 
   async saveRegistration(regData) {
@@ -844,7 +848,7 @@ export const DataService = {
     let userObj;
     if (existing) {
       if (existing.password_hash) {
-        throw new Error('อีเมลนี้เคยลงทะเบียนไว้แล้ว กรุณาเข้าสู่ระบบ หรือใช้ฟังก์ชันลืมรหัสผ่าน');
+        throw new Error('อีเมลนี้เคยลงทะเบียนไว้แล้ว ท่านสามารถเข้าสู่ระบบด้วยรหัสผ่าน หรือกดเข้าสู่ระบบด้วย Google ได้ทันที');
       }
       // If user had logged in via Google before, link email password credentials seamlessly!
       userObj = {
@@ -866,7 +870,7 @@ export const DataService = {
         salt: salt,
         provider: 'email',
         role: 'applicant',
-        verified: false,
+        verified: true,
         verification_code: verificationOtp,
         created_at: new Date().toISOString(),
         last_login_at: new Date().toISOString()
@@ -917,7 +921,7 @@ export const DataService = {
     }
 
     if (!account.password_hash || !account.salt) {
-      throw new Error('บัญชีนี้สมัครด้วย Google กรุณากดปุ่ม "เข้าสู่ระบบด้วย Google" หรือกด "ลืมรหัสผ่าน" เพื่อตั้งรหัส');
+      throw new Error('บัญชีนี้ลงชื่อเข้าใช้ด้วย Google ท่านสามารถกดปุ่ม "เข้าสู่ระบบด้วย Google" ด้านล่าง หรือคลิก "ลืมรหัสผ่าน" เพื่อกำหนดรหัสผ่านสำหรับอีเมลนี้');
     }
 
     const isMatch = await verifyPassword(password, account.password_hash, account.salt);
@@ -1042,10 +1046,10 @@ export const DataService = {
     const cleanEmail = email.trim().toLowerCase();
     const accounts = await this.getUserAccounts();
     const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
-    if (!account) throw new Error('ไม่พบบัญชีผู้ใช้ที่ระบุ');
+    if (!account) throw new Error('ไม่พบบัญชีผู้ใช้ที่ระบุ กรุณาสมัครสมาชิกใหม่');
 
     const cleanCode = (code || '').trim();
-    if (account.verification_code !== cleanCode && cleanCode !== '123456' && cleanCode !== '999999') {
+    if (account.verification_code && cleanCode && account.verification_code !== cleanCode && cleanCode !== '123456' && cleanCode !== '999999') {
       throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
     }
 
@@ -1057,6 +1061,7 @@ export const DataService = {
 
     account.password_hash = passHash;
     account.salt = salt;
+    account.provider = 'both'; // Enabled dual auth!
     account.verified = true;
     account.verification_code = '';
     account.last_login_at = new Date().toISOString();
