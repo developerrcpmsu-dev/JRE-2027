@@ -4283,98 +4283,41 @@ export default function AdminDashboardView({
               </button>
             </div>
 
-            {/* 1. BANK ACCOUNT & PAYMENT CONFIGURATION */}
-            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
-                <div>
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-rescue-400" />
-                    <span>ข้อมูลธนาคารกลาง & ช่องทางรับโอนเงิน (Central Project Bank Account)</span>
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    บัญชีธนาคารกลางที่ใช้ร่วมกันทั้งโครงการ JRE 2027 (ระบบลงทะเบียน & สั่งซื้อเสื้อโครงการ)
+            {/* 1. CENTRAL BANK ACCOUNT REFERENCE (Uses Settings from Payment Tab) */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shrink-0 text-indigo-400 mt-0.5">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-white">
+                      ข้อมูลบัญชีธนาคารกลางรับโอนเงิน (Central Project Bank Account)
+                    </h4>
+                    <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full font-bold">
+                      ✓ เชื่อมโยงกับระบบลงทะเบียนหลักแล้ว
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    <strong className="text-white">{localPayment?.bank_name || 'ธนาคารไทยพาณิชย์'}</strong> • เลขที่บัญชี: <span className="font-mono font-bold text-amber-300">{localPayment?.bank_account_number || '594-264865-5'}</span> • ชื่อบัญชี: <strong className="text-white">{localPayment?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก'}</strong> • พร้อมเพย์/เบอร์ติดต่อ: <span className="font-mono text-purple-300">{localPayment?.bank_promptpay || '098-329-6762'}</span>
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    ระบบคำสั่งซื้อเสื้อและกางเกงโครงการ JRE 2027 ใช้บัญชีธนาคารกลางร่วมกับระบบค่าลงทะเบียนหลักโดยอัตโนมัติ (แก้ไขข้อมูลบัญชีได้ที่เมนู "ตั้งค่าค่าสมัคร & ผ่อนชำระ")
                   </p>
                 </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                  <button
-                    type="button"
-                    onClick={handleSyncBankFromPaymentConfig}
-                    className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                    title="ดึงข้อมูลบัญชีจากระบบค่าลงทะเบียนมาใส่ทันที"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>🔄 ซิงค์จากบัญชีลงทะเบียน (SCB 594-264865-5)</span>
-                  </button>
-                  <span className="text-[11px] px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-full font-bold">
-                    แสดงผลอัตโนมัติในหน้าร้านค้า
-                  </span>
-                </div>
               </div>
 
-              {/* Informational banner about unified bank account */}
-              <div className="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl text-xs text-indigo-200 flex items-center gap-2.5">
-                <Building className="w-4 h-4 text-indigo-400 shrink-0" />
-                <span>
-                  <strong>บัญชีธนาคารกลางเดียวกัน:</strong> โครงการ JRE 2027 ใช้บัญชีธนาคารเดียวกันทั้งขั้นตอนลงทะเบียนและสั่งซื้อเสื้อ (ธนาคารไทยพาณิชย์ เลขที่ 594-264865-5 นางสาวมัญชุพร ยังเหล็ก) เพื่อความถูกต้องและโปร่งใสทางบัญชี
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-300">ชื่อธนาคาร (Bank Name):</label>
-                  <input
-                    type="text"
-                    value={localMerchConfig.payment?.bank_name || ''}
-                    onChange={(e) => handleUpdateMerchPaymentField('bank_name', e.target.value)}
-                    placeholder="เช่น ธนาคารไทยพาณิชย์"
-                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-300">เลขที่บัญชีธนาคาร (Account Number):</label>
-                  <input
-                    type="text"
-                    value={localMerchConfig.payment?.account_number || ''}
-                    onChange={(e) => handleUpdateMerchPaymentField('account_number', e.target.value)}
-                    placeholder="เช่น 594-264865-5"
-                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-rescue-400 focus:outline-none focus:border-rescue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-300">ชื่อบัญชีรับโอนเงิน (Account Name):</label>
-                  <input
-                    type="text"
-                    value={localMerchConfig.payment?.account_name || ''}
-                    onChange={(e) => handleUpdateMerchPaymentField('account_name', e.target.value)}
-                    placeholder="เช่น นางสาวมัญชุพร ยังเหล็ก"
-                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-300">เบอร์พร้อมเพย์ (PromptPay):</label>
-                  <input
-                    type="text"
-                    value={localMerchConfig.payment?.promptpay || ''}
-                    onChange={(e) => handleUpdateMerchPaymentField('promptpay', e.target.value)}
-                    placeholder="เช่น 098-329-6762"
-                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-rescue-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="text-xs font-bold text-slate-300">คำแนะนำ / หมายเหตุการโอนเงิน (Payment Note):</label>
-                  <input
-                    type="text"
-                    value={localMerchConfig.payment?.note || ''}
-                    onChange={(e) => handleUpdateMerchPaymentField('note', e.target.value)}
-                    placeholder="เช่น กรุณาโอนเงินตามยอดที่ระบุและแนบหลักฐานสลิปโอนเงินทุกครั้ง"
-                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-rescue-500"
-                  />
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('payment_settings');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold flex items-center gap-2 shrink-0 transition-all cursor-pointer active:scale-95 self-start md:self-auto"
+              >
+                <Settings className="w-4 h-4 text-indigo-400" />
+                <span>ไปที่ตั้งค่าบัญชีธนาคารหลัก</span>
+              </button>
             </div>
 
             {/* 2. Google Form Backup Configuration */}
