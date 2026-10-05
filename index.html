@@ -17,11 +17,14 @@
         var originalWarn = console.warn;
         var originalInfo = console.info;
         var originalLog = console.log;
+        var originalError = console.error;
         var isFiltered = function(args) {
           if (!args || !args[0]) return false;
           var msg = typeof args[0] === 'string' ? args[0] : '';
           return msg.indexOf('[GSI_LOGGER]') !== -1 ||
                  msg.indexOf('initialize() is called multiple times') !== -1 ||
+                 msg.indexOf('Failed to open popup window') !== -1 ||
+                 msg.indexOf('Maybe blocked by the browser') !== -1 ||
                  msg.indexOf('Cross-Origin-Opener-Policy') !== -1 ||
                  msg.indexOf('attribution-reporting') !== -1 ||
                  msg.indexOf('shared-storage') !== -1;
@@ -37,6 +40,10 @@
         console.log = function() {
           if (isFiltered(arguments)) return;
           return originalLog.apply(console, arguments);
+        };
+        console.error = function() {
+          if (isFiltered(arguments)) return;
+          return originalError.apply(console, arguments);
         };
       })();
     </script>

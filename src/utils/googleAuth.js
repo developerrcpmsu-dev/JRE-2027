@@ -23,7 +23,7 @@ export function decodeJwtResponse(token) {
 
 let activeTokenClient = null;
 
-// Suppress [GSI_LOGGER] duplicate initialization warnings globally in console
+// Suppress [GSI_LOGGER] duplicate initialization warnings and popup blocker notices globally in console
 if (typeof window !== 'undefined' && !window.__jreGsiLoggerFiltered) {
   window.__jreGsiLoggerFiltered = true;
   const isNoise = (args) => {
@@ -31,9 +31,11 @@ if (typeof window !== 'undefined' && !window.__jreGsiLoggerFiltered) {
     const msg = typeof args[0] === 'string' ? args[0] : '';
     return msg.includes('[GSI_LOGGER]') ||
            msg.includes('initialize() is called multiple times') ||
+           msg.includes('Failed to open popup window') ||
+           msg.includes('Maybe blocked by the browser') ||
            msg.includes('Cross-Origin-Opener-Policy');
   };
-  ['warn', 'info', 'log', 'debug'].forEach((method) => {
+  ['warn', 'info', 'log', 'debug', 'error'].forEach((method) => {
     const original = console[method];
     console[method] = function (...args) {
       if (isNoise(args)) return;
@@ -153,4 +155,11 @@ export function getGoogleTokenClient(clientId, onTokenResponse, onError) {
   }
 
   return activeTokenClient;
+}
+
+export function getDirectGoogleAuthUrl(clientId = '292467898061-a10ff6et3k1up950hfvstelqh7hu5f6d.apps.googleusercontent.com') {
+  if (typeof window === 'undefined') return '#';
+  const redirectUri = window.location.origin;
+  const nonce = Math.random().toString(36).substring(2, 12);
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token%20id_token&scope=openid%20email%20profile&prompt=select_account&nonce=${nonce}`;
 }

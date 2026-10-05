@@ -23,7 +23,8 @@ import {
   initGoogleIdentityServices, 
   renderGoogleButton, 
   getGoogleTokenClient, 
-  decodeJwtResponse 
+  decodeJwtResponse,
+  getDirectGoogleAuthUrl
 } from '../utils/googleAuth';
 
 export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
@@ -221,13 +222,19 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     if (tokenClient) {
       try {
         tokenClient.requestAccessToken({ prompt: 'select_account' });
+        // Set a safeguard timeout in case browser silently blocks the popup
+        setTimeout(() => {
+          setIsLoading((prev) => (prev ? false : prev));
+        }, 3500);
         return;
       } catch (e) {
         console.warn('Token client request failed:', e);
+        setShowPopupTip(true);
       }
     }
 
-    setErrorMsg('ระบบกำลังเตรียมพร้อม กรุณากดปุ่ม "ลงชื่อเข้าใช้ด้วย Google" ด้านบน');
+    setErrorMsg('หากหน้าต่างป๊อปอัปไม่แสดง สามารถคลิกลิงก์ "เข้าสู่ระบบโดยตรง" ด้านล่างได้ทันที');
+    setShowPopupTip(true);
     setIsLoading(false);
   };
 
@@ -423,6 +430,50 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
           </div>
         )}
 
+        {showPopupTip && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-amber-500/15 via-rose-500/15 to-orange-500/15 border-2 border-amber-500/60 rounded-2xl text-slate-200 text-xs shadow-xl space-y-2.5 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-4 h-4 animate-bounce" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="font-black text-amber-300 text-xs sm:text-sm">
+                  เบราว์เซอร์กำลังบล็อกหน้าต่างป๊อปอัป (Popup Blocked)
+                </h4>
+                <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                  Google Sign-In ต้องใช้หน้าต่างป๊อปอัปเพื่อเลือกบัญชี แต่ถูกเบราว์เซอร์บล็อกไว้
+                </p>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-1">
+              <p className="font-bold text-white flex items-center gap-1">
+                <span>💡 วิธีปลดบล็อกในเบราว์เซอร์ (ทำเพียง 1 ครั้ง):</span>
+              </p>
+              <p className="text-slate-400 leading-relaxed">
+                คลิกที่ไอคอนป๊อปอัปถูกบล็อก <strong className="text-amber-300">🚫</strong> บนแถบ URL ของเบราว์เซอร์ แล้วเลือก <strong className="text-white">"อนุญาตป๊อปอัปเสมอ"</strong> หรือคลิกปุ่มเปิดตรงด้านล่าง
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-0.5">
+              <a
+                href={getDirectGoogleAuthUrl(GOOGLE_CLIENT_ID)}
+                className="flex-1 py-2 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer text-center"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>เข้าสู่ระบบ Google แบบเปิดตรง (ไม่ติดบล็อก)</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowPopupTip(false)}
+                className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                ปิดข้อความ
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ========================================================
             TAB 1: เข้าสู่ระบบ (SIGN IN)
             ======================================================== */}
@@ -532,6 +583,16 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
                 <Users className="w-3.5 h-3.5 text-orange-400" />
                 <span>เลือกบัญชี Google อื่น / สลับ Gmail</span>
               </button>
+
+              <div className="pt-1 text-center w-full">
+                <a
+                  href={getDirectGoogleAuthUrl(GOOGLE_CLIENT_ID)}
+                  className="text-[11px] text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <ExternalLink className="w-3 h-3 text-sky-400" />
+                  <span>ติดปัญหาป๊อปอัปไม่เด้ง? คลิกที่นี่เพื่อเปิดหน้าต่าง Google แบบตรง</span>
+                </a>
+              </div>
             </div>
           </div>
         )}
@@ -674,6 +735,16 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
               <Users className="w-3.5 h-3.5 text-orange-400" />
               <span>สมัครและเข้าสู่ระบบด้วย Google ทันที (เข้าได้ 2 ทาง)</span>
             </button>
+
+            <div className="pt-1 text-center w-full">
+              <a
+                href={getDirectGoogleAuthUrl(GOOGLE_CLIENT_ID)}
+                className="text-[11px] text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <ExternalLink className="w-3 h-3 text-sky-400" />
+                <span>ป๊อปอัปไม่เด้ง? คลิกสมัครด้วย Google แบบเปิดตรง</span>
+              </a>
+            </div>
           </form>
         )}
 
@@ -724,6 +795,14 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
                   </>
                 )}
               </button>
+
+              <a
+                href={getDirectGoogleAuthUrl(GOOGLE_CLIENT_ID)}
+                className="w-full py-2 px-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-semibold rounded-xl border border-slate-700/80 text-[11px] transition-colors flex items-center justify-center gap-2 cursor-pointer text-center"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>หากป๊อปอัปไม่เปิด: คลิกที่นี่เพื่อยืนยันด้วย Google โดยตรง</span>
+              </a>
 
               <button
                 type="button"

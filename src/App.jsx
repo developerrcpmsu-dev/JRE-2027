@@ -17,6 +17,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/router';
+import { decodeJwtResponse } from './utils/googleAuth';
 
 export default function App() {
   const [route, setRoute] = useState(parseCurrentRoute);
@@ -120,32 +121,50 @@ export default function App() {
         setTeamMembers(team);
         setSpeakers(spks);
 
-        // Check for Google OAuth Direct Redirect Hash Callback (#access_token=...)
-        if (window.location.hash && window.location.hash.includes('access_token=')) {
+        // Check for Google OAuth Direct Redirect Hash Callback (#access_token=... or #id_token=...)
+        if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('id_token='))) {
           try {
             const hash = window.location.hash.substring(1);
             const params = new URLSearchParams(hash);
             const accessToken = params.get('access_token');
-            if (accessToken) {
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            const idToken = params.get('id_token');
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+            let cleanEmail = null;
+            let cleanName = null;
+            let avatar = null;
+
+            if (idToken) {
+              const payload = decodeJwtResponse(idToken);
+              if (payload?.email) {
+                cleanEmail = payload.email.trim().toLowerCase();
+                cleanName = payload.name || cleanEmail.split('@')[0];
+                avatar = payload.picture || ("https://api.dicebear.com/7.x/bottts/svg?seed=" + encodeURIComponent(cleanEmail));
+              }
+            }
+
+            if (!cleanEmail && accessToken) {
               const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${accessToken}` }
+                headers: { Authorization: "Bearer " + accessToken }
               });
               const profile = await res.json();
               if (profile?.email) {
-                const cleanEmail = profile.email.trim().toLowerCase();
-                const cleanName = profile.name || cleanEmail.split('@')[0];
-                const avatar = profile.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-                const userObj = await DataService.loginWithGoogleProfile({
-                  name: cleanName,
-                  email: cleanEmail,
-                  avatar: avatar
-                });
-                localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
-                setUser(userObj);
-                const found = matchRegistration(userObj, regs);
-                if (found) setMyRegistration(found);
+                cleanEmail = profile.email.trim().toLowerCase();
+                cleanName = profile.name || cleanEmail.split('@')[0];
+                avatar = profile.picture || ("https://api.dicebear.com/7.x/bottts/svg?seed=" + encodeURIComponent(cleanEmail));
               }
+            }
+
+            if (cleanEmail) {
+              const userObj = await DataService.loginWithGoogleProfile({
+                name: cleanName,
+                email: cleanEmail,
+                avatar: avatar
+              });
+              localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
+              setUser(userObj);
+              const found = matchRegistration(userObj, regs);
+              if (found) setMyRegistration(found);
             }
           } catch (oauthErr) {
             console.warn('OAuth redirect hash parse error:', oauthErr);
