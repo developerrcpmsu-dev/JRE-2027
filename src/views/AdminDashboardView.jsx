@@ -5673,16 +5673,6 @@ export default function AdminDashboardView({
                   {selectedHashUser.password_hash || 'N/A'}
                 </div>
               </div>
-
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-300 leading-relaxed space-y-1">
-                <div className="font-bold text-amber-400 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>คำอธิบายเชิงวิชาการสำหรับนำเสนออาจารย์</span>
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  ระบบไม่ได้จัดเก็บ Plaintext Password ใดๆ ทั้งสิ้น แต่ใช้การสุ่ม Salt ขนาด 16 ไบต์ (32 hex characters) นำมาต่อกับรหัสผ่านแล้วส่งผ่านกระบวนการ SHA-256 Digest ทางเดียว (One-Way Hash) ทำให้แม้ฐานข้อมูลจะถูกโจมตี ผู้ไม่ประสงค์ดีก็ไม่สามารถย้อนกลับเป็นรหัสผ่านเดิมได้ ป้องกันการโจมตีแบบ Rainbow Table และ Dictionary Attack ได้อย่างสมบูรณ์
-                </p>
-              </div>
             </div>
 
             <button
