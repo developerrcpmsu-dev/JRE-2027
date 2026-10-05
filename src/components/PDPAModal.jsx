@@ -1,12 +1,20 @@
 import React from 'react';
 import { ShieldCheck, X, FileText, CheckCircle2, Lock, AlertTriangle, Building, HeartPulse } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 export default function PDPAModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
         
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
@@ -117,5 +125,6 @@ export default function PDPAModal({ isOpen, onClose }) {
 
       </div>
     </div>
-  );
+  </ModalPortal>
+);
 }

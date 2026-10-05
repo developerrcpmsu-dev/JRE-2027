@@ -24,6 +24,7 @@ import {
   User,
   Megaphone
 } from 'lucide-react';
+import ModalPortal from '../components/ModalPortal';
 
 export default function AnnouncementsView({ 
   announcements, 
@@ -528,119 +529,137 @@ export default function AnnouncementsView({
 
       {/* LIGHTBOX MODAL FOR IMAGES */}
       {lightboxImages && (
-        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
-          {/* Top Bar */}
-          <div className="w-full max-w-4xl flex items-center justify-between py-3 text-white">
-            <span className="text-xs font-bold text-slate-300">
-              รูปภาพที่ {lightboxIndex + 1} จาก {lightboxImages.length}
-            </span>
-            <div className="flex items-center gap-2">
-              <a
-                href={lightboxImages[lightboxIndex]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white transition-colors"
-                title="เปิดรูปภาพแท็บใหม่"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
-              <button
-                onClick={() => setLightboxImages(null)}
-                className="p-2 bg-slate-800 hover:bg-red-600 rounded-full text-slate-300 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Image Container with Prev/Next Controls */}
-          <div className="relative w-full max-w-4xl flex-1 flex items-center justify-center overflow-hidden">
-            {lightboxImages.length > 1 && (
-              <button
-                onClick={handlePrevPhoto}
-                className="absolute left-2 sm:left-4 z-10 p-3 bg-slate-900/80 hover:bg-rescue-600 text-white rounded-full transition-all backdrop-blur shadow-xl border border-slate-700"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-            )}
-
-            <img
-              src={lightboxImages[lightboxIndex]}
-              alt={`รูปภาพประกอบที่ ${lightboxIndex + 1}`}
-              className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
-            />
-
-            {lightboxImages.length > 1 && (
-              <button
-                onClick={handleNextPhoto}
-                className="absolute right-2 sm:right-4 z-10 p-3 bg-slate-900/80 hover:bg-rescue-600 text-white rounded-full transition-all backdrop-blur shadow-xl border border-slate-700"
-              >
-                <ChevronRight className="w-6 h-6" />
-              </button>
-            )}
-          </div>
-
-          {/* Bottom Thumbnails */}
-          {lightboxImages.length > 1 && (
-            <div className="w-full max-w-2xl flex items-center justify-center gap-2 py-3 overflow-x-auto">
-              {lightboxImages.map((thumb, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setLightboxIndex(idx)}
-                  className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all shrink-0 ${
-                    lightboxIndex === idx ? 'border-rescue-500 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  <img src={thumb} alt="thumb" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* PDF PREVIEW MODAL */}
-      {previewPdf && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
-          <div className="w-full max-w-5xl h-[90vh] bg-slate-900 border border-slate-700 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <FileText className="w-5 h-5 text-red-500" />
-                <h3 className="font-bold text-white text-sm truncate max-w-md">
-                  {previewPdf.name || 'เอกสารแนบ PDF'}
-                </h3>
-              </div>
+        <ModalPortal isOpen={Boolean(lightboxImages)} onClose={() => setLightboxImages(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setLightboxImages(null)}
+          >
+            {/* Top Bar */}
+            <div className="w-full max-w-4xl flex items-center justify-between py-3 text-white" onClick={e => e.stopPropagation()}>
+              <span className="text-xs font-bold text-slate-300">
+                รูปภาพที่ {lightboxIndex + 1} จาก {lightboxImages.length}
+              </span>
               <div className="flex items-center gap-2">
                 <a
-                  href={previewPdf.url}
-                  download={previewPdf.name || 'document.pdf'}
+                  href={lightboxImages[lightboxIndex]}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white transition-colors"
+                  title="เปิดรูปภาพแท็บใหม่"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>ดาวน์โหลด</span>
+                  <ExternalLink className="w-4 h-4" />
                 </a>
                 <button
-                  onClick={() => setPreviewPdf(null)}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors"
+                  type="button"
+                  onClick={() => setLightboxImages(null)}
+                  className="p-2 bg-slate-800 hover:bg-red-600 rounded-full text-slate-300 hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* PDF Viewer Iframe */}
-            <div className="flex-1 w-full bg-slate-950">
-              <iframe
-                src={previewPdf.url}
-                title="PDF Preview"
-                className="w-full h-full border-none"
+            {/* Image Container with Prev/Next Controls */}
+            <div className="relative w-full max-w-4xl flex-1 flex items-center justify-center overflow-hidden" onClick={e => e.stopPropagation()}>
+              {lightboxImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handlePrevPhoto}
+                  className="absolute left-2 sm:left-4 z-10 p-3 bg-slate-900/80 hover:bg-rescue-600 text-white rounded-full transition-all backdrop-blur shadow-xl border border-slate-700 cursor-pointer"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+              )}
+
+              <img
+                src={lightboxImages[lightboxIndex]}
+                alt={`รูปภาพประกอบที่ ${lightboxIndex + 1}`}
+                className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               />
+
+              {lightboxImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleNextPhoto}
+                  className="absolute right-2 sm:right-4 z-10 p-3 bg-slate-900/80 hover:bg-rescue-600 text-white rounded-full transition-all backdrop-blur shadow-xl border border-slate-700 cursor-pointer"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              )}
+            </div>
+
+            {/* Bottom Thumbnails */}
+            {lightboxImages.length > 1 && (
+              <div className="w-full max-w-2xl flex items-center justify-center gap-2 py-3 overflow-x-auto" onClick={e => e.stopPropagation()}>
+                {lightboxImages.map((thumb, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setLightboxIndex(idx)}
+                    className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                      lightboxIndex === idx ? 'border-rescue-500 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={thumb} alt="thumb" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* PDF PREVIEW MODAL */}
+      {previewPdf && (
+        <ModalPortal isOpen={Boolean(previewPdf)} onClose={() => setPreviewPdf(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+            onClick={() => setPreviewPdf(null)}
+          >
+            <div 
+              className="w-full max-w-5xl h-[90vh] bg-slate-900 border border-slate-700 rounded-3xl flex flex-col overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <FileText className="w-5 h-5 text-red-500" />
+                  <h3 className="font-bold text-white text-sm truncate max-w-md">
+                    {previewPdf.name || 'เอกสารแนบ PDF'}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={previewPdf.url}
+                    download={previewPdf.name || 'document.pdf'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>ดาวน์โหลด</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPdf(null)}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* PDF Viewer Iframe */}
+              <div className="flex-1 w-full bg-slate-950">
+                <iframe
+                  src={previewPdf.url}
+                  title="PDF Preview"
+                  className="w-full h-full border-none"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

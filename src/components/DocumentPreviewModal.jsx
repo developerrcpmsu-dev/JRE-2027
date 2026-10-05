@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Download, ZoomIn, ZoomOut, FileText, Maximize2, RotateCcw } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -7,21 +8,7 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
   useEffect(() => {
     // Reset zoom when doc changes or modal opens
     setZoomLevel(1);
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen, doc, onClose]);
+  }, [isOpen, doc]);
 
   const fileUrl = doc?.fileUrl || doc?.file_url;
   const fileName = doc?.fileName || doc?.file_name || 'document';
@@ -47,11 +34,15 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+    <ModalPortal isOpen={Boolean(isOpen && doc && fileUrl)} onClose={onClose}>
       <div 
-        className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
+        onClick={onClose}
       >
+        <div 
+          className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header Bar */}
         <div className="px-5 py-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -153,6 +144,7 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
           <span className="text-emerald-400 font-medium">✓ แสดงตัวอย่างเอกสารในระบบ</span>
         </div>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

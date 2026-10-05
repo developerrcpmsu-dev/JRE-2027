@@ -14,6 +14,7 @@ import {
   Copy,
   Check
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 export default function PickupQRModal({ order, onClose }) {
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -63,8 +64,15 @@ export default function PickupQRModal({ order, onClose }) {
   const isReceived = order.pickup_status === 'received';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700/80 max-w-md w-full rounded-3xl p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200">
+    <ModalPortal isOpen={Boolean(order)} onClose={onClose}>
+      <div 
+        className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-slate-900 border border-slate-700/80 max-w-md w-full rounded-3xl p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
         
         {/* Close Button */}
         <button
@@ -222,5 +230,6 @@ export default function PickupQRModal({ order, onClose }) {
 
       </div>
     </div>
-  );
+  </ModalPortal>
+);
 }

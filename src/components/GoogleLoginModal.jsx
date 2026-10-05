@@ -19,6 +19,7 @@ import {
   Send
 } from 'lucide-react';
 import { DataService, GOOGLE_CLIENT_ID } from '../supabase';
+import ModalPortal from './ModalPortal';
 import { 
   initGoogleIdentityServices, 
   renderGoogleButton, 
@@ -348,8 +349,15 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl shadow-orange-500/10 relative overflow-hidden max-h-[92vh] overflow-y-auto">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-slate-900 border border-slate-700/80 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl shadow-orange-500/10 relative overflow-hidden max-h-[92vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
         
         {/* Glow Ambient Effects */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -934,5 +942,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
       </div>
     </div>
-  );
+  </ModalPortal>
+);
 }

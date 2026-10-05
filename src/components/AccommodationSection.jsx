@@ -16,6 +16,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { ACCOMMODATION_DETAILS } from '../data/defaultData';
+import ModalPortal from './ModalPortal';
 
 export default function AccommodationSection() {
   const [isPhotoOpen, setIsPhotoOpen] = useState(false);
@@ -190,57 +191,59 @@ export default function AccommodationSection() {
 
       {/* Lightbox Modal */}
       {isPhotoOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setIsPhotoOpen(false)}
-        >
+        <ModalPortal isOpen={isPhotoOpen} onClose={() => setIsPhotoOpen(false)}>
           <div 
-            className="relative max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setIsPhotoOpen(false)}
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/80">
-              <div className="flex items-center gap-2">
-                <Building className="w-5 h-5 text-rescue-400" />
-                <h3 className="font-bold text-white text-base sm:text-lg">
-                  ตัวอย่างห้องพักจริง — หอพักกุดรัง มมส
-                </h3>
+            <div 
+              className="relative max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/80">
+                <div className="flex items-center gap-2">
+                  <Building className="w-5 h-5 text-rescue-400" />
+                  <h3 className="font-bold text-white text-base sm:text-lg">
+                    ตัวอย่างห้องพักจริง — หอพักกุดรัง มมส
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoOpen(false)}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsPhotoOpen(false)}
-                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Modal Image */}
-            <div className="p-3 sm:p-5 bg-slate-950 flex items-center justify-center">
-              <img 
-                src={data.image} 
-                alt="ตัวอย่างห้องพักจริง หอพักกุดรัง มหาวิทยาลัยมหาสารคาม" 
-                className="max-h-[70vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
-              />
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-slate-950/90 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-1 bg-sky-950 text-sky-300 border border-sky-800 rounded-lg font-bold">
-                  ❄️ ห้องปรับอากาศ (แอร์)
-                </span>
-                <span className="px-2.5 py-1 bg-amber-950 text-amber-300 border border-amber-800 rounded-lg font-bold">
-                  🚿 เครื่องทำน้ำอุ่น
-                </span>
-                <span className="px-2.5 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-lg font-bold">
-                  🛏️ มีหมอน & ผ้าห่มพร้อม
-                </span>
+              {/* Modal Image */}
+              <div className="p-3 sm:p-5 bg-slate-950 flex items-center justify-center">
+                <img 
+                  src={data.image} 
+                  alt="ตัวอย่างห้องพักจริง หอพักกุดรัง มหาวิทยาลัยมหาสารคาม" 
+                  className="max-h-[70vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
+                />
               </div>
-              <p className="text-slate-400">กองอาคารสถานที่ มหาวิทยาลัยมหาสารคาม</p>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 bg-slate-950/90 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-1 bg-sky-950 text-sky-300 border border-sky-800 rounded-lg font-bold">
+                    ❄️ ห้องปรับอากาศ (แอร์)
+                  </span>
+                  <span className="px-2.5 py-1 bg-amber-950 text-amber-300 border border-amber-800 rounded-lg font-bold">
+                    🚿 เครื่องทำน้ำอุ่น
+                  </span>
+                  <span className="px-2.5 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-lg font-bold">
+                    🛏️ มีหมอน & ผ้าห่มพร้อม
+                  </span>
+                </div>
+                <p className="text-slate-400">กองอาคารสถานที่ มหาวิทยาลัยมหาสารคาม</p>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </section>
   );

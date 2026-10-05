@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Eye, EyeOff, X, Lock, AlertCircle } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [username, setUsername] = useState('');
@@ -35,8 +36,15 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Glow accent */}
         <div className="absolute -top-16 -right-16 w-36 h-36 bg-purple-600/30 rounded-full blur-2xl pointer-events-none"></div>
 
@@ -134,5 +142,6 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
         </form>
       </div>
     </div>
-  );
+  </ModalPortal>
+);
 }

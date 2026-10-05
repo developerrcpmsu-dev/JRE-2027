@@ -71,6 +71,7 @@ import {
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
+import ModalPortal from '../components/ModalPortal';
 import * as XLSX from 'xlsx';
 
 export default function AdminDashboardView({
@@ -1982,8 +1983,15 @@ export default function AdminDashboardView({
 
       {/* MODAL: VIEW FULL PARTICIPANT PROFILE & REMARKS */}
       {profileModalReg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(profileModalReg)} onClose={() => setProfileModalReg(null)}>
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setProfileModalReg(null)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
             
             <button
               onClick={() => setProfileModalReg(null)}
@@ -2846,7 +2854,8 @@ export default function AdminDashboardView({
 
           </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* TAB: PAYMENT SETTINGS & INSTALLMENTS CONFIG */}
       {activeTab === 'payment_settings' && (
@@ -3537,8 +3546,15 @@ export default function AdminDashboardView({
 
       {/* ANNOUNCEMENT CREATE / EDIT MODAL */}
       {showAnnModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(showAnnModal)} onClose={() => setShowAnnModal(false)}>
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setShowAnnModal(false)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
             
             <button
               onClick={() => setShowAnnModal(false)}
@@ -3756,7 +3772,8 @@ export default function AdminDashboardView({
 
           </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* TAB 5: MERCHANDISE, SIZES, AND QR PICKUP MANAGEMENT */}
       {activeTab === 'merchandise' && (
@@ -5460,8 +5477,15 @@ export default function AdminDashboardView({
 
       {/* PASSWORD HASH INSPECTOR MODAL (FOR PROFESSOR INSPECTION) */}
       {selectedHashUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border-2 border-emerald-500/50 max-w-lg w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-4">
+        <ModalPortal isOpen={Boolean(selectedHashUser)} onClose={() => setSelectedHashUser(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setSelectedHashUser(null)}
+          >
+            <div 
+              className="bg-slate-900 border-2 border-emerald-500/50 max-w-lg w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-4"
+              onClick={e => e.stopPropagation()}
+            >
             <button
               type="button"
               onClick={() => setSelectedHashUser(null)}
@@ -5533,12 +5557,20 @@ export default function AdminDashboardView({
             </button>
           </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* EDIT USER ACCOUNT MODAL */}
       {editingUserAccount && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+        <ModalPortal isOpen={Boolean(editingUserAccount)} onClose={() => setEditingUserAccount(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setEditingUserAccount(null)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4"
+              onClick={e => e.stopPropagation()}
+            >
             <button
               type="button"
               onClick={() => setEditingUserAccount(null)}
@@ -5634,12 +5666,20 @@ export default function AdminDashboardView({
             </form>
           </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* ADMIN RESET PASSWORD MODAL */}
       {resetPassUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border-2 border-amber-500/50 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+        <ModalPortal isOpen={Boolean(resetPassUser)} onClose={() => setResetPassUser(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setResetPassUser(null)}
+          >
+            <div 
+              className="bg-slate-900 border-2 border-amber-500/50 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4"
+              onClick={e => e.stopPropagation()}
+            >
             <button
               type="button"
               onClick={() => setResetPassUser(null)}
@@ -5710,12 +5750,20 @@ export default function AdminDashboardView({
             </form>
           </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* DELETE USER ACCOUNT MODAL */}
       {deletingUserAccount && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border-2 border-rose-600/50 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+        <ModalPortal isOpen={Boolean(deletingUserAccount)} onClose={() => setDeletingUserAccount(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setDeletingUserAccount(null)}
+          >
+            <div 
+              className="bg-slate-900 border-2 border-rose-600/50 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4"
+              onClick={e => e.stopPropagation()}
+            >
             <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -5753,12 +5801,20 @@ export default function AdminDashboardView({
             </div>
           </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* SPEAKER MODAL */}
       {showSpeakerModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+        <ModalPortal isOpen={Boolean(showSpeakerModal)} onClose={() => setShowSpeakerModal(false)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+            onClick={() => setShowSpeakerModal(false)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8"
+              onClick={e => e.stopPropagation()}
+            >
             <button
               type="button"
               onClick={() => setShowSpeakerModal(false)}
@@ -5925,12 +5981,20 @@ export default function AdminDashboardView({
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* TEAM MEMBER MODAL */}
       {showTeamModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+        <ModalPortal isOpen={Boolean(showTeamModal)} onClose={() => setShowTeamModal(false)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+            onClick={() => setShowTeamModal(false)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8"
+              onClick={e => e.stopPropagation()}
+            >
             <button
               type="button"
               onClick={() => setShowTeamModal(false)}
@@ -6125,6 +6189,7 @@ export default function AdminDashboardView({
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* ADMIN QR SCANNER MODAL */}
@@ -6139,62 +6204,74 @@ export default function AdminDashboardView({
 
       {/* MERCHANDISE SLIP PREVIEW MODAL */}
       {previewMerchSlip && (
-        <div 
-          onClick={() => setPreviewMerchSlip(null)}
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div className="relative max-w-lg max-h-[85vh]">
-            <img
-              src={previewMerchSlip}
-              alt="Merchandise Slip"
-              className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl"
-            />
-            <button
-              onClick={() => setPreviewMerchSlip(null)}
-              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <ModalPortal isOpen={Boolean(previewMerchSlip)} onClose={() => setPreviewMerchSlip(null)}>
+          <div 
+            onClick={() => setPreviewMerchSlip(null)}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+          >
+            <div className="relative max-w-lg max-h-[85vh]" onClick={e => e.stopPropagation()}>
+              <img
+                src={previewMerchSlip}
+                alt="Merchandise Slip"
+                className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl"
+              />
+              <button
+                onClick={() => setPreviewMerchSlip(null)}
+                className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* MERCHANDISE PRODUCT IMAGE PREVIEW MODAL */}
       {previewProductImageModal && (
-        <div 
-          onClick={() => setPreviewProductImageModal(null)}
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div className="relative max-w-2xl max-h-[85vh]">
-            <img
-              src={previewProductImageModal}
-              alt="Product Preview"
-              className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl"
-            />
-            <button
-              onClick={() => setPreviewProductImageModal(null)}
-              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <ModalPortal isOpen={Boolean(previewProductImageModal)} onClose={() => setPreviewProductImageModal(null)}>
+          <div 
+            onClick={() => setPreviewProductImageModal(null)}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+          >
+            <div className="relative max-w-2xl max-h-[85vh]" onClick={e => e.stopPropagation()}>
+              <img
+                src={previewProductImageModal}
+                alt="Product Preview"
+                className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl"
+              />
+              <button
+                onClick={() => setPreviewProductImageModal(null)}
+                className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* PREVIEW SLIP MODAL FOR ADMIN */}
       {previewSlipUrl && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative">
-            <button
-              onClick={() => setPreviewSlipUrl(null)}
-              className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full"
+        <ModalPortal isOpen={Boolean(previewSlipUrl)} onClose={() => setPreviewSlipUrl(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setPreviewSlipUrl(null)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
             >
-              <XCircle className="w-5 h-5" />
-            </button>
-            <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงินของผู้สมัคร</h4>
-            <img src={previewSlipUrl} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
+              <button
+                onClick={() => setPreviewSlipUrl(null)}
+                className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+              <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงินของผู้สมัคร</h4>
+              <img src={previewSlipUrl} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* IN-APP DOCUMENT & SLIP PREVIEW MODAL */}

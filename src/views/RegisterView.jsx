@@ -56,6 +56,7 @@ import { DataService } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import ModalPortal from '../components/ModalPortal';
 import { scanSlipImage } from '../utils/slipOcr';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
@@ -2908,99 +2909,123 @@ export default function RegisterView({
 
         {/* PREVIEW SLIP MODAL */}
         {previewSlipModal && (
-          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative">
-              <button
-                onClick={() => setPreviewSlipModal(null)}
-                className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full"
+          <ModalPortal isOpen={Boolean(previewSlipModal)} onClose={() => setPreviewSlipModal(null)}>
+            <div 
+              className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+              onClick={() => setPreviewSlipModal(null)}
+            >
+              <div 
+                className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative"
+                onClick={(e) => e.stopPropagation()}
               >
-                <XCircle className="w-5 h-5" />
-              </button>
-              <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงิน</h4>
-              <img src={previewSlipModal} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
+                <button
+                  type="button"
+                  onClick={() => setPreviewSlipModal(null)}
+                  className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+                <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงิน</h4>
+                <img src={previewSlipModal} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
+              </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
 
         {/* DELETE REGISTRATION CONFIRMATION MODAL (CRUD Ownership Delete) */}
         {showDeleteConfirmModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 border-2 border-rose-600/50 max-w-md w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-5">
-              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-900/30">
-                <Trash2 className="w-7 h-7" />
-              </div>
-
-              <div className="text-center space-y-1.5">
-                <h3 className="text-xl font-black text-white">
-                  ยืนยันยกเลิกใบสมัครและลบข้อมูล?
-                </h3>
-                <p className="text-xs text-rose-300 font-semibold">
-                  (CRUD: User Data Ownership - ผู้ใช้มีสิทธิ์ลบข้อมูลของตนเอง)
-                </p>
-              </div>
-
-              <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-xs space-y-2 text-slate-300">
-                <div className="flex justify-between border-b border-slate-800/80 pb-2">
-                  <span className="text-slate-400">ผู้สมัคร:</span>
-                  <span className="font-bold text-white">{myRegistration.first_name} {myRegistration.last_name}</span>
+          <ModalPortal isOpen={Boolean(showDeleteConfirmModal)} onClose={() => setShowDeleteConfirmModal(false)}>
+            <div 
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+              onClick={() => setShowDeleteConfirmModal(false)}
+            >
+              <div 
+                className="bg-slate-900 border-2 border-rose-600/50 max-w-md w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-900/30">
+                  <Trash2 className="w-7 h-7" />
                 </div>
-                <div className="flex justify-between border-b border-slate-800/80 pb-2">
-                  <span className="text-slate-400">รหัสอ้างอิง:</span>
-                  <span className="font-mono text-amber-400 font-bold">JRE27-{(myRegistration.id || myRegistration.user_id || '').slice(0, 6).toUpperCase()}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-800/80 pb-2">
-                  <span className="text-slate-400">สถาบัน:</span>
-                  <span className="text-slate-200">{myRegistration.institution}</span>
-                </div>
-                <div className="flex justify-between pt-1">
-                  <span className="text-slate-400">เจ้าของบัญชี:</span>
-                  <span className="font-mono text-emerald-400">{user?.email}</span>
-                </div>
-              </div>
 
-              <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-[11px] text-rose-200 leading-relaxed flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>คำเตือน:</strong> การยกเลิกใบสมัครจะลบข้อมูลประวัติผู้สมัคร, คำสั่งจองเสื้อ, และภาพสลิปที่แนบไว้ทั้งหมดออกจากฐานข้อมูลอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้
-                </span>
-              </div>
+                <div className="text-center space-y-1.5">
+                  <h3 className="text-xl font-black text-white">
+                    ยืนยันยกเลิกใบสมัครและลบข้อมูล?
+                  </h3>
+                  <p className="text-xs text-rose-300 font-semibold">
+                    (CRUD: User Data Ownership - ผู้ใช้มีสิทธิ์ลบข้อมูลของตนเอง)
+                  </p>
+                </div>
 
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirmModal(false)}
-                  disabled={isDeletingReg}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  ยกเลิก / ปิด
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteMyRegistration}
-                  disabled={isDeletingReg}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isDeletingReg ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>กำลังลบข้อมูล...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4" />
-                      <span>ยืนยันลบข้อมูลถาวร</span>
-                    </>
-                  )}
-                </button>
+                <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-xs space-y-2 text-slate-300">
+                  <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                    <span className="text-slate-400">ผู้สมัคร:</span>
+                    <span className="font-bold text-white">{myRegistration.first_name} {myRegistration.last_name}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                    <span className="text-slate-400">รหัสอ้างอิง:</span>
+                    <span className="font-mono text-amber-400 font-bold">JRE27-{(myRegistration.id || myRegistration.user_id || '').slice(0, 6).toUpperCase()}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                    <span className="text-slate-400">สถาบัน:</span>
+                    <span className="text-slate-200">{myRegistration.institution}</span>
+                  </div>
+                  <div className="flex justify-between pt-1">
+                    <span className="text-slate-400">เจ้าของบัญชี:</span>
+                    <span className="font-mono text-emerald-400">{user?.email}</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-[11px] text-rose-200 leading-relaxed flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>คำเตือน:</strong> การยกเลิกใบสมัครจะลบข้อมูลประวัติผู้สมัคร, คำสั่งจองเสื้อ, และภาพสลิปที่แนบไว้ทั้งหมดออกจากฐานข้อมูลอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirmModal(false)}
+                    disabled={isDeletingReg}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    ยกเลิก / ปิด
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteMyRegistration}
+                    disabled={isDeletingReg}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isDeletingReg ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>กำลังลบข้อมูล...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>ยืนยันลบข้อมูลถาวร</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
 
         {/* USER ACCOUNT & PASSWORD MODAL (Profile & Password Hashing Management) */}
         {showAccountModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto">
+          <ModalPortal isOpen={Boolean(showAccountModal)} onClose={() => setShowAccountModal(false)}>
+            <div 
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+              onClick={() => setShowAccountModal(false)}
+            >
+              <div 
+                className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
               <button
                 type="button"
                 onClick={() => setShowAccountModal(false)}
@@ -3205,6 +3230,7 @@ export default function RegisterView({
               </form>
             </div>
           </div>
+        </ModalPortal>
         )}
 
         {/* IN-APP DOCUMENT PREVIEW MODAL */}
@@ -5415,61 +5441,63 @@ export default function RegisterView({
 
       {/* Modal for viewing Shirt Details and Size Chart */}
       {showShirtSizeModal && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setShowShirtSizeModal(false)}
-        >
+        <ModalPortal isOpen={Boolean(showShirtSizeModal)} onClose={() => setShowShirtSizeModal(false)}>
           <div 
-            className="relative max-w-3xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setShowShirtSizeModal(false)}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/80">
-              <div className="flex items-center gap-2">
-                <Shirt className="w-5 h-5 text-orange-400" />
-                <h3 className="font-bold text-white text-base sm:text-lg">
-                  แบบเสื้อและตารางไซส์เสื้อฝึก JRE 2027
-                </h3>
+            <div 
+              className="relative max-w-3xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/80">
+                <div className="flex items-center gap-2">
+                  <Shirt className="w-5 h-5 text-orange-400" />
+                  <h3 className="font-bold text-white text-base sm:text-lg">
+                    แบบเสื้อและตารางไซส์เสื้อฝึก JRE 2027
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowShirtSizeModal(false)}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowShirtSizeModal(false)}
-                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[75vh] overflow-y-auto">
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-orange-400 block">แบบเสื้อฝึกทางการ (คอเต่าซิป แขนสั้น)</span>
-                <img 
-                  src="/images/merchandise/jre_shirt_official.jpg" 
-                  alt="เสื้อฝึก JRE 2027" 
-                  className="w-full rounded-2xl border border-slate-700 object-contain shadow-lg"
-                />
+              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[75vh] overflow-y-auto">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-orange-400 block">แบบเสื้อฝึกทางการ (คอเต่าซิป แขนสั้น)</span>
+                  <img 
+                    src="/images/merchandise/jre_shirt_official.jpg" 
+                    alt="เสื้อฝึก JRE 2027" 
+                    className="w-full rounded-2xl border border-slate-700 object-contain shadow-lg"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-amber-400 block">ตารางขนาดไซส์เสื้อ (นิ้ว)</span>
+                  <img 
+                    src="/images/merchandise/jre_shirt_size_chart.jpg" 
+                    alt="ตารางไซส์เสื้อ JRE 2027" 
+                    className="w-full rounded-2xl border border-slate-700 object-contain shadow-lg"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-amber-400 block">ตารางขนาดไซส์เสื้อ (นิ้ว)</span>
-                <img 
-                  src="/images/merchandise/jre_shirt_size_chart.jpg" 
-                  alt="ตารางไซส์เสื้อ JRE 2027" 
-                  className="w-full rounded-2xl border border-slate-700 object-contain shadow-lg"
-                />
-              </div>
-            </div>
 
-            <div className="px-6 py-3 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span>* กรุณาเลือกขนาดไซส์ให้พอดีสำหรับการฝึกภาคสนาม</span>
-              <button
-                type="button"
-                onClick={() => setShowShirtSizeModal(false)}
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                ปิดหน้าต่าง
-              </button>
+              <div className="px-6 py-3 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                <span>* กรุณาเลือกขนาดไซส์ให้พอดีสำหรับการฝึกภาคสนาม</span>
+                <button
+                  type="button"
+                  onClick={() => setShowShirtSizeModal(false)}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* MSU PDPA Policy Modal */}

@@ -16,6 +16,7 @@ import {
   Eye,
   RefreshCw
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 export default function AdminQRScannerModal({ 
   orders = [], 
@@ -164,8 +165,15 @@ export default function AdminQRScannerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700/80 max-w-xl w-full rounded-3xl p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200">
+    <ModalPortal isOpen={true} onClose={onClose}>
+      <div 
+        className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-slate-900 border border-slate-700/80 max-w-xl w-full rounded-3xl p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
         
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -404,25 +412,29 @@ export default function AdminQRScannerModal({
           </button>
         </div>
 
+        </div>
       </div>
 
       {/* Slip Modal */}
       {previewSlip && (
-        <div 
-          onClick={() => setPreviewSlip(null)}
-          className="fixed inset-0 z-60 bg-black/90 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div className="relative max-w-lg max-h-[85vh]">
-            <img src={previewSlip} alt="Slip Full" className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl" />
-            <button
-              onClick={() => setPreviewSlip(null)}
-              className="absolute top-3 right-3 p-2 bg-slate-900 text-white rounded-full"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <ModalPortal isOpen={Boolean(previewSlip)} onClose={() => setPreviewSlip(null)}>
+          <div 
+            onClick={() => setPreviewSlip(null)}
+            className="fixed inset-0 z-60 bg-black/90 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+          >
+            <div className="relative max-w-lg max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+              <img src={previewSlip} alt="Slip Full" className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl" />
+              <button
+                type="button"
+                onClick={() => setPreviewSlip(null)}
+                className="absolute top-3 right-3 p-2 bg-slate-900 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
-    </div>
+    </ModalPortal>
   );
 }
