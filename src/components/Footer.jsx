@@ -1,16 +1,32 @@
 import React, { useState } from 'react';
-import { Flame, Shield, MapPin, Phone, Mail, Heart, ShieldCheck } from 'lucide-react';
+import { 
+  Shield, 
+  MapPin, 
+  Phone, 
+  Mail, 
+  Heart, 
+  ShieldCheck, 
+  AlertCircle, 
+  ExternalLink,
+  Code2,
+  Database
+} from 'lucide-react';
 import PDPAModal from './PDPAModal';
 
 export default function Footer({ onOpenAdminLogin }) {
   const [showPdpaModal, setShowPdpaModal] = useState(false);
+
+  // Auto-updating Buddhist Era Year (e.g. 2569 onwards)
+  const currentYearBE = new Date().getFullYear() + 543;
+  const copyrightYearText = currentYearBE > 2569 ? `2569 - ${currentYearBE}` : '2569';
+
   return (
-    <footer className="bg-slate-950 border-t border-slate-800 text-slate-400 text-sm mt-20">
+    <footer className="bg-slate-950 border-t border-slate-800 text-slate-400 text-sm mt-20 relative z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           
-          {/* Col 1: About */}
-          <div className="md:col-span-2 space-y-4">
+          {/* Col 1: About JRE 2027 */}
+          <div className="space-y-4">
             <div className="flex items-center gap-3">
               <img 
                 src="/images/logo/jre_logo.png" 
@@ -21,42 +37,114 @@ export default function Footer({ onOpenAdminLogin }) {
                 JRE <span className="text-rescue-500">2027</span>
               </span>
             </div>
-            <p className="text-slate-400 text-xs leading-relaxed max-w-md">
+            <p className="text-slate-400 text-xs leading-relaxed">
               โครงการฝึกอบรมเชิงปฏิบัติการ "JRE 2027" (Joint Response Exercise 2027) 
               จัดโดย ชมรมกู้ภัยราชพฤกษ์ สังกัดองค์การนิสิต มหาวิทยาลัยมหาสารคาม 
               เพื่อเสริมสร้างทักษะการกู้ภัยเบื้องต้นและสร้างเครือข่ายความร่วมมือในการรับมือเหตุฉุกเฉินระหว่างสถาบันอุดมศึกษาทั่วประเทศ (ทุกภูมิภาค)
             </p>
-            <div className="text-xs text-slate-500 space-y-1">
-              <p>• ร่วมกับ อาสาสมัครปฏิบัติการและสืบสวนพิเศษ มหาวิทยาลัยขอนแก่น (มข.)</p>
-              <p>• ร่วมกับ ชมรมอาสาสมัครกู้ชีพ ชุดเคลื่อนที่เร็ว มหาวิทยาลัยเกษตรศาสตร์ (มก.)</p>
-              <p>• และเครือข่ายชมรมกู้ชีพกู้ภัยมหาวิทยาลัยทั่วประเทศ ทุกภูมิภาค</p>
+            <div className="text-[11px] text-slate-500 space-y-1">
+              <p>• ภาคีเครือข่ายกู้ภัยนิสิตนักศึกษา 8 สถาบันหลักทั่วประเทศ</p>
+              <p>• อาสาสมัครกู้ชีพ กู้ภัย และบรรเทาสาธารณภัยทุกภูมิภาค</p>
             </div>
           </div>
 
-          {/* Col 2: Contact */}
+          {/* Col 2: Contact Organizer */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              สถานที่จัดโครงการ & ติดต่อ
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200 border-b border-slate-800 pb-2">
+              ติดต่อ
             </h4>
-            <div className="space-y-2 text-xs">
+            <div className="space-y-2.5 text-xs">
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-rescue-500 shrink-0 mt-0.5" />
-                <span>กองกิจการนิสิต / อาคารบรมราชกุมารี มหาวิทยาลัยมหาสารคาม (มมส)</span>
+                <span>อาคารกองกิจการนิสิต ชั้น 2 มหาวิทยาลัยมหาสารคาม (มมส)</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-rescue-500 shrink-0" />
-                <span>เบอร์ฉุกเฉินชมรม: 043-754-321 ต่อ 1234</span>
+              <div className="flex items-start gap-2">
+                <Phone className="w-4 h-4 text-rescue-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-slate-400 block text-[11px]">เบอร์ติดต่อสอบถามผู้จัดโครงการ:</span>
+                  <a 
+                    href="tel:0983296762" 
+                    className="font-mono text-slate-200 hover:text-rescue-400 font-bold transition-colors cursor-pointer"
+                    title="คลิกเพื่อโทรออก"
+                  >
+                    098-329-6762
+                  </a>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-rescue-500 shrink-0" />
-                <span>rescue.rajapruek@msu.ac.th</span>
+                <a 
+                  href="mailto:rescue.rajapruek@msu.ac.th" 
+                  className="text-slate-200 hover:text-rescue-400 font-medium transition-colors break-all cursor-pointer"
+                  title="คลิกเพื่อส่งอีเมล"
+                >
+                  rescue.rajapruek@msu.ac.th
+                </a>
               </div>
             </div>
           </div>
 
-          {/* Col 3: Links & Admin */}
+          {/* Col 3: Developer & Web Admin Team (RCPDEV) */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200 border-b border-slate-800 pb-2 flex items-center gap-1.5">
+              <Code2 className="w-4 h-4 text-sky-400" />
+              <span>ทีมพัฒนาเว็บไซต์ผู้ดูแลระบบ RCPDEV</span>
+            </h4>
+            <div className="space-y-2.5 text-xs">
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[11px] text-amber-300 leading-snug">
+                <div className="flex items-center gap-1 font-bold mb-0.5 text-amber-400">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>คำเตือนช่องทางติดต่อ:</span>
+                </div>
+                <span>ใช้สำหรับปัญหาบัญชี เว็บไซต์ ความปลอดภัย หรือข้อมูลระบบ <strong>ไม่ใช่ช่องทางขอรถพยาบาล</strong></span>
+              </div>
+
+              <div>
+                <span className="text-[11px] text-slate-400 block">ผู้ดูแลระบบเว็บไซต์:</span>
+                <span className="font-bold text-white">นายพงศ์ภรณ์ ทองศิริ · RCPDEV</span>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                รายงานปัญหาเว็บไซต์ ความปลอดภัย บัญชี หรือข้อมูลระบบ
+              </p>
+
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center gap-2">
+                  <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>โทร:</span>
+                  <a 
+                    href="tel:0889463459" 
+                    className="font-mono text-emerald-400 font-bold hover:underline cursor-pointer"
+                    title="คลิกเพื่อโทรติดต่อผู้ดูแลระบบ"
+                  >
+                    088-946-3459
+                  </a>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <a 
+                    href="mailto:developer.rcpmsu@gmail.com" 
+                    className="text-sky-300 hover:text-sky-200 font-mono hover:underline break-all cursor-pointer"
+                    title="คลิกเพื่อส่งอีเมลติดต่อผู้ดูแลระบบ"
+                  >
+                    developer.rcpmsu@gmail.com
+                  </a>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-semibold shrink-0">
+                    กรณีระบบเร่งด่วน
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-500 italic">
+                * กรณีทั่วไปให้ส่งรายงานผ่านหน้าแจ้งปัญหาเว็บก่อน
+              </p>
+            </div>
+          </div>
+
+          {/* Col 4: Links & Admin */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200 border-b border-slate-800 pb-2">
               ข้อมูลระบบ & ลิงก์
             </h4>
             <ul className="space-y-2 text-xs">
@@ -65,12 +153,26 @@ export default function Footer({ onOpenAdminLogin }) {
                   href="https://github.com/developerrcpmsu-dev/JRE-2027" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="hover:text-white flex items-center gap-1.5 transition-colors"
+                  className="hover:text-white flex items-center gap-1.5 transition-colors group cursor-pointer"
                 >
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 fill-current group-hover:text-white" viewBox="0 0 24 24">
                     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                   </svg>
-                  GitHub Repository (JRE-2027)
+                  <span>GitHub Repository (JRE-2027)</span>
+                  <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-white" />
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://supabase.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-emerald-400 flex items-center gap-1.5 transition-colors group cursor-pointer"
+                  title="Supabase Database, Auth & Storage Console"
+                >
+                  <Database className="w-4 h-4 text-emerald-400" />
+                  <span>supperbase</span>
+                  <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-emerald-400" />
                 </a>
               </li>
               <li>
@@ -78,27 +180,33 @@ export default function Footer({ onOpenAdminLogin }) {
                   href="https://vercel.com/new?teamSlug=rcp-msu" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="hover:text-white flex items-center gap-1.5 transition-colors"
+                  className="hover:text-white flex items-center gap-1.5 transition-colors group cursor-pointer"
                 >
-                  <span>▲</span> Vercel Deployment (rcp-msu)
+                  <span className="text-white font-bold">▲</span>
+                  <span>Vercel Deployment (rcp-msu)</span>
+                  <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-white" />
                 </a>
               </li>
-              <li className="pt-1">
-                <button
-                  onClick={() => setShowPdpaModal(true)}
-                  className="text-slate-400 hover:text-rescue-400 text-xs flex items-center gap-1.5 transition-colors"
+              <li>
+                <a 
+                  href="https://pdpa.msu.ac.th/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-slate-400 hover:text-rescue-400 flex items-center gap-1.5 transition-colors group cursor-pointer"
                 >
                   <ShieldCheck className="w-3.5 h-3.5 text-rescue-500" />
-                  นโยบายข้อมูลส่วนบุคคล (PDPA มมส)
-                </button>
+                  <span>นโยบายข้อมูลส่วนบุคคล (PDPA มมส)</span>
+                  <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-rescue-400" />
+                </a>
               </li>
               <li className="pt-2">
                 <button
+                  type="button"
                   onClick={onOpenAdminLogin}
-                  className="text-slate-500 hover:text-purple-400 text-xs flex items-center gap-1 transition-colors"
+                  className="text-slate-400 hover:text-purple-300 text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 rounded-xl cursor-pointer"
                 >
-                  <Shield className="w-3.5 h-3.5" />
-                  เข้าสู่ระบบผู้ดูแลระบบ (Admin)
+                  <Shield className="w-3.5 h-3.5 text-purple-400" />
+                  <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
                 </button>
               </li>
             </ul>
@@ -106,29 +214,59 @@ export default function Footer({ onOpenAdminLogin }) {
 
         </div>
 
-        <div className="mt-8 pt-8 border-t border-slate-900 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <div className="text-center md:text-left leading-relaxed space-y-1.5">
-            <p>
-              © 2569 - {new Date().getFullYear() + 543} JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม สงวนลิขสิทธิ์
+        {/* Bottom Bar: Copyright & Developer Full Credit */}
+        <div className="mt-10 pt-8 border-t border-slate-900 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 gap-6">
+          <div className="text-center md:text-left leading-relaxed space-y-3 w-full md:w-auto">
+            {/* Auto-updating Copyright line */}
+            <p className="text-slate-400 font-medium">
+              © {copyrightYearText} JRE 2027 ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม สงวนลิขสิทธิ์
             </p>
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-0.5">
-              <span className="text-slate-400">พัฒนาระบบโดย:</span>
-              <a
-                href="tel:0889463459"
-                title="คลิกเพื่อโทรติดต่อผู้พัฒนาระบบเมื่อพบปัญหา"
-                className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 font-semibold transition-all duration-300 hover:border-rescue-500 hover:bg-gradient-to-r hover:from-rescue-950/80 hover:via-slate-900 hover:to-orange-950/80 hover:text-rescue-400 hover:shadow-xl hover:shadow-rescue-500/25 hover:scale-105 active:scale-95 cursor-pointer"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                <span className="text-rescue-400 font-black group-hover:text-amber-300 transition-colors">
-                  Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ
-                </span>
-                <span className="text-[11px] text-slate-400 group-hover:text-orange-200 transition-colors border-l border-slate-700 pl-2">
-                  ระบบมีปัญหา กรุณาติดต่อ Dev: <span className="font-mono text-emerald-400 font-bold group-hover:underline">088-9463459</span>
-                </span>
-              </a>
+
+            {/* Developer Card with full details and interactive buttons */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start md:items-center gap-2 pt-1">
+              <span className="text-slate-400 shrink-0 font-semibold">พัฒนาระบบโดย:</span>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 shadow-lg">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="text-rescue-400 font-black">
+                    Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ
+                  </span>
+                  <span className="text-slate-500">•</span>
+                  <span className="font-mono text-slate-300 font-semibold">68011211206</span>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-400">สาขาวิทยาการสารสนเทศ</span>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-400">เทคโนโลยีสารสนเทศ</span>
+
+                  <span className="text-slate-700 hidden sm:inline">|</span>
+
+                  <span className="text-slate-400 text-[11px]">ระบบมีปัญหา กรุณาติดต่อ Dev:</span>
+
+                  {/* Click to Call */}
+                  <a
+                    href="tel:0889463459"
+                    title="คลิกเพื่อโทรติดต่อผู้พัฒนาระบบ (088-9463459)"
+                    className="inline-flex items-center gap-1 font-mono text-emerald-400 hover:text-emerald-300 font-bold hover:underline transition-colors cursor-pointer px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25"
+                  >
+                    <Phone className="w-3 h-3 text-emerald-400" />
+                    <span>088-9463459</span>
+                  </a>
+
+                  {/* Click to Email */}
+                  <a
+                    href="mailto:developer.rcpmsu@gmail.com"
+                    title="คลิกเพื่อส่งอีเมลถึงผู้พัฒนาระบบ (developer.rcpmsu@gmail.com)"
+                    className="inline-flex items-center gap-1 font-mono text-sky-400 hover:text-sky-300 font-bold hover:underline transition-colors cursor-pointer px-2 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/25"
+                  >
+                    <Mail className="w-3 h-3 text-sky-400" />
+                    <span>developer.rcpmsu@gmail.com</span>
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
-          <p className="flex items-center gap-1 shrink-0 text-slate-400">
+
+          <p className="flex items-center gap-1 shrink-0 text-slate-400 text-xs">
             ร่วมใจเพื่อความปลอดภัยของสังคม <Heart className="w-3.5 h-3.5 text-emergency-500 fill-emergency-500" />
           </p>
         </div>
