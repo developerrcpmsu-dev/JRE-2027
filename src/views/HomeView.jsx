@@ -12,7 +12,8 @@ import {
   Activity, 
   FileCheck2,
   HeartHandshake,
-  Shirt
+  Shirt,
+  Play
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
@@ -26,6 +27,7 @@ export default function HomeView({
   myRegistration,
   onOpenGoogleLogin
 }) {
+  const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
   // Dynamic university resolution helper
   const getMemberUniversity = (m) => {
     if (m.university && m.university.trim()) return m.university.trim();
@@ -172,24 +174,58 @@ export default function HomeView({
       <section className="bg-gradient-to-br from-slate-900 via-slate-950 to-orange-950/30 border border-orange-500/30 rounded-3xl p-5 sm:p-10 shadow-2xl relative overflow-hidden max-w-full">
         <div className="flex flex-col lg:flex-row items-center gap-8 max-w-full">
           
-          {/* Left: Real Facebook Video Iframe */}
-          <div className="w-full max-w-full lg:w-5/12 relative rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl bg-slate-950 flex items-center justify-center">
-            <div className="w-full max-w-full overflow-hidden flex justify-center items-center">
-              <iframe 
-                src="https://www.facebook.com/plugins/video.php?height=314&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F3124397917947926%2F&show_text=true&width=560&t=0" 
-                width="100%" 
-                height="429" 
-                style={{ border: 'none', overflow: 'hidden', minHeight: '320px', maxWidth: '100%' }} 
-                scrolling="no" 
-                frameBorder="0" 
-                allowFullScreen={true} 
-                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
-                title="JRE 2026 การเข้าระงับเหตุเพลิงไหม้นอกอาคาร"
-                className="w-full max-w-full"
-              ></iframe>
-            </div>
+          {/* Left: Interactive On-Demand Video Player (Eliminates Third-Party Console Errors on Initial Load) */}
+          <div className="w-full max-w-full lg:w-5/12 relative rounded-2xl overflow-hidden border-2 border-orange-500/40 shadow-2xl bg-slate-950 flex items-center justify-center min-h-[340px]">
+            {isVideoPlaying ? (
+              <div className="w-full max-w-full overflow-hidden flex justify-center items-center">
+                <iframe 
+                  src="https://www.facebook.com/plugins/video.php?height=314&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F3124397917947926%2F&show_text=true&width=560&t=0&autoplay=true" 
+                  width="100%" 
+                  height="429" 
+                  style={{ border: 'none', overflow: 'hidden', minHeight: '320px', maxWidth: '100%' }} 
+                  scrolling="no" 
+                  frameBorder="0" 
+                  allowFullScreen={true} 
+                  allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  title="JRE 2026 การเข้าระงับเหตุเพลิงไหม้นอกอาคาร"
+                  className="w-full max-w-full"
+                ></iframe>
+              </div>
+            ) : (
+              <div 
+                onClick={() => setIsVideoPlaying(true)}
+                className="relative w-full h-full min-h-[340px] flex flex-col items-center justify-center p-6 text-center cursor-pointer group bg-gradient-to-b from-slate-900 via-slate-950 to-orange-950/40 hover:to-orange-950/60 transition-all select-none"
+              >
+                {/* Background Accent glow */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.15)_0%,transparent_70%)] pointer-events-none" />
+
+                {/* Animated Play Button */}
+                <div className="relative mb-4">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-rescue-600 to-amber-500 flex items-center justify-center text-white shadow-xl shadow-rescue-600/40 group-hover:scale-110 group-hover:shadow-rescue-600/60 transition-all">
+                    <Play className="w-8 h-8 fill-white translate-x-0.5" />
+                  </div>
+                  <div className="absolute -inset-2 rounded-full border-2 border-orange-500/40 animate-ping pointer-events-none" />
+                </div>
+
+                <span className="text-xs font-black uppercase tracking-wider text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-full mb-2">
+                  คลิปวิดีโอภาคสนาม JRE 2026
+                </span>
+
+                <h4 className="text-base font-black text-white group-hover:text-amber-300 transition-colors">
+                  การเข้าระงับเหตุเพลิงไหม้นอกอาคาร
+                </h4>
+
+                <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                  คลิกเพื่อเปิดเล่นวิดีโอการฝึกจริง (Facebook Video Stream)
+                </p>
+
+                <div className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 group-hover:text-white bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700 transition-colors">
+                  <Play className="w-3 h-3 text-rescue-400 fill-rescue-400" />
+                  <span>กดเพื่อเล่นคลิปวิดีโอ</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right: Message & Philosophy */}
