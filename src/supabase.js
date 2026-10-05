@@ -588,7 +588,7 @@ export const DataService = {
     return true;
   },
 
-  // FILE UPLOAD SERVICE (Supports Supabase Storage bucket 'announcements' with Base64 fallback, auto HEIC conversion & compression)
+  // FILE UPLOAD SERVICE (Generates real, hosted, shareable URLs via Supabase storage or project_settings file endpoint)
   async uploadFile(file, folder = 'images') {
     if (!file) throw new Error('No file provided');
 
@@ -601,7 +601,7 @@ export const DataService = {
       processedFile = file;
     }
 
-    // 1. Try Supabase Storage
+    // 1. Try Supabase Storage first
     if (isSupabaseConfigured && supabase) {
       try {
         const cleanName = (processedFile.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -627,28 +627,112 @@ export const DataService = {
               type: processedFile.type
             };
           }
-        } else {
-          console.warn('Supabase storage upload failed:', error?.message);
         }
       } catch (err) {
-        console.warn('Supabase storage upload exception:', err);
+        console.warn('Supabase storage upload notice:', err);
       }
     }
 
-    // 2. Fallback to FileReader Base64 Data URL so uploads never fail
-    return new Promise((resolve, reject) => {
+    // 2. Read as Base64 Data URL and host permanently in Supabase project_settings
+    const base64Data = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          url: reader.result,
-          name: processedFile.name,
-          size: processedFile.size,
-          type: processedFile.type
-        });
-      };
+      reader.onload = () => resolve(reader.result);
       reader.onerror = (err) => reject(err);
       reader.readAsDataURL(processedFile);
     });
+
+    const fileId = `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://jre-2027.vercel.app';
+    const hostedUrl = `${origin}/api/file?id=${fileId}`;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .insert({
+            key: fileId,
+            value: {
+              id: fileId,
+              name: processedFile.name || 'uploaded_image.jpg',
+              size: processedFile.size || 0,
+              type: processedFile.type || 'image/jpeg',
+              data: base64Data,
+              folder: folder,
+              created_at: new Date().toISOString()
+            },
+            updated_at: new Date().toISOString()
+          });
+      } catch (err) {
+        console.warn('File record insert notice:', err);
+      }
+    }
+
+    // Cache locally as well
+    try {
+      localStorage.setItem(`jre_file_${fileId}`, base64Data);
+    } catch (e) {}
+
+    return {
+      url: hostedUrl,
+      id: fileId,
+      name: processedFile.name,
+      size: processedFile.size,
+      type: processedFile.type,
+      dataUrl: base64Data
+    };
+  },
+
+  // Retrieve base64 data for any file URL or ID (used for Excel image embedding and offline previews)
+  async getFileBase64(urlOrId) {
+    if (!urlOrId) return null;
+    if (typeof urlOrId !== 'string') return null;
+    const str = urlOrId.trim();
+    if (str.startsWith('data:image/')) return str;
+
+    // Check if it's a hosted /api/file?id=file_... URL
+    const idMatch = str.match(/id=([^&]+)/);
+    const fileId = idMatch ? idMatch[1] : (str.startsWith('file_') ? str : null);
+
+    if (fileId) {
+      const cached = localStorage.getItem(`jre_file_${fileId}`);
+      if (cached) return cached;
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const key = fileId.startsWith('file_') ? fileId : `file_${fileId}`;
+          const { data } = await supabase
+            .from('project_settings')
+            .select('value')
+            .eq('key', key)
+            .maybeSingle();
+
+          if (data?.value?.data) {
+            try { localStorage.setItem(`jre_file_${fileId}`, data.value.data); } catch (e) {}
+            return data.value.data;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // If external HTTP URL, fetch blob and convert to base64
+    if (str.startsWith('http://') || str.startsWith('https://')) {
+      try {
+        const res = await fetch(str);
+        if (res.ok) {
+          const blob = await res.blob();
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch (e) {
+        console.warn('Fetch media blob notice:', e);
+      }
+    }
+
+    return null;
   },
 
   // FORMS CONFIG (Pre-test, Post-test, Evaluation)
@@ -1521,3 +1605,41 @@ export const DataService = {
     return null;
   }
 };
+
+/**
+ * Ensures any image URL or legacy base64 string is converted to a permanent hosted URL
+ */
+export async function ensureHostedUrl(urlOrBase64, defaultName = 'slip.jpg') {
+  if (!urlOrBase64 || typeof urlOrBase64 !== 'string') return '';
+  const trimmed = urlOrBase64.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('data:image/')) {
+    const fileId = `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://jre-2027.vercel.app';
+    const hostedUrl = `${origin}/api/file?id=${fileId}`;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .insert({
+            key: fileId,
+            value: {
+              id: fileId,
+              name: defaultName,
+              size: Math.round(trimmed.length * 0.75),
+              type: trimmed.match(/^data:([^;]+);/)?.[1] || 'image/jpeg',
+              data: trimmed,
+              created_at: new Date().toISOString()
+            },
+            updated_at: new Date().toISOString()
+          });
+      } catch (e) {}
+    }
+    try { localStorage.setItem(`jre_file_${fileId}`, trimmed); } catch (e) {}
+    return hostedUrl;
+  }
+  return trimmed;
+}

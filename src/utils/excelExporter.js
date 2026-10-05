@@ -1,0 +1,312 @@
+import ExcelJS from 'exceljs';
+import { isMsuInstitution } from '../data/defaultData';
+import { DataService, ensureHostedUrl } from '../supabase';
+
+/**
+ * Cleanly extracts base64 string from data URL or raw string
+ */
+function extractPureBase64(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const match = dataUrl.match(/^data:image\/[a-zA-Z+]+;base64,(.+)$/);
+  if (match) return match[1];
+  if (!dataUrl.startsWith('http') && dataUrl.length > 50) return dataUrl;
+  return null;
+}
+
+/**
+ * Determines image format extension for ExcelJS
+ */
+function getImageExtension(dataUrl, defaultExt = 'jpeg') {
+  if (!dataUrl || typeof dataUrl !== 'string') return defaultExt;
+  if (dataUrl.includes('image/png') || dataUrl.toLowerCase().endsWith('.png')) return 'png';
+  if (dataUrl.includes('image/webp') || dataUrl.toLowerCase().endsWith('.webp')) return 'png';
+  if (dataUrl.includes('image/gif') || dataUrl.toLowerCase().endsWith('.gif')) return 'gif';
+  return 'jpeg';
+}
+
+/**
+ * Exports all registrations to Excel (.xlsx) with embedded visible images and hyperlinks
+ */
+export async function exportRegistrationsToExcel(registrations, paymentConfig, onProgress) {
+  if (!registrations || registrations.length === 0) {
+    throw new Error('ไม่พบข้อมูลผู้สมัครในระบบสำหรับส่งออก');
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'JRE 2027 Admin Console • BestCyniX Dev';
+  workbook.lastModifiedBy = 'JRE 2027 Admin';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const worksheet = workbook.addWorksheet('ผู้สมัคร JRE 2027', {
+    views: [{ state: 'frozen', ySplit: 1, xSplit: 5 }]
+  });
+
+  const columns = [
+    { header: 'ลำดับ', key: 'index', width: 8 },
+    { header: 'วันเวลาที่สมัคร', key: 'created_at', width: 20 },
+    { header: 'รหัสผู้สมัคร', key: 'applicant_id', width: 16 },
+    { header: 'อีเมล Google', key: 'email', width: 28 },
+    { header: 'ชื่อ-สกุล (สถาบัน)', key: 'full_name_affiliation', width: 34 },
+    { header: 'ชื่อจริง', key: 'first_name', width: 16 },
+    { header: 'นามสกุล', key: 'last_name', width: 16 },
+    { header: 'ชื่อเล่น', key: 'nickname', width: 14 },
+    { header: 'รหัสนามเรียกขาน', key: 'callsign', width: 16 },
+    { header: 'สังกัด / มหาวิทยาลัย', key: 'institution', width: 28 },
+    { header: 'ประเภทสถาบัน', key: 'institution_tier', width: 22 },
+    { header: 'ยอดค่าสมัครรวม (บาท)', key: 'total_fee', width: 18 },
+    { header: 'ไซส์เสื้อฝึก JRE 2027', key: 'shirt_size', width: 18 },
+    { header: 'รูปแบบเสื้อ', key: 'shirt_type', width: 26 },
+    { header: 'วันเกิด', key: 'dob', width: 14 },
+    { header: 'อายุ (ปี)', key: 'age_years', width: 10 },
+    { header: 'อายุ (เดือน)', key: 'age_months', width: 10 },
+    { header: 'อายุ (วัน)', key: 'age_days', width: 10 },
+    { header: 'อายุสรุป', key: 'age_full', width: 18 },
+    { header: 'กรุ๊ปเลือด', key: 'blood_group', width: 12 },
+    { header: 'เบอร์โทร', key: 'phone', width: 16 },
+    { header: 'ผู้ติดต่อฉุกเฉิน', key: 'emergency_name', width: 20 },
+    { header: 'เบอร์ฉุกเฉิน', key: 'emergency_phone', width: 16 },
+    { header: 'ความสัมพันธ์', key: 'emergency_relation', width: 16 },
+    { header: 'โรคประจำตัว', key: 'medical_history', width: 22 },
+    { header: 'แพ้อาหาร/ยา', key: 'food_allergy', width: 22 },
+    { header: 'ประวัติการฝึกอบรม', key: 'previous_training', width: 24 },
+    { header: 'รูปถ่าย ID Card (รูปภาพจริง)', key: 'id_card_photo', width: 20 },
+    { header: 'แผนชำระเงิน', key: 'payment_plan', width: 18 },
+    { header: 'สถานะชำระเงินรวม', key: 'overall_payment_status', width: 18 },
+    { header: 'ยอดที่ชำระแล้ว (บาท)', key: 'paid_amount', width: 18 },
+    { header: 'ยอดค้างชำระ (บาท)', key: 'remaining_amount', width: 18 },
+    { header: 'งวด 1: ยอดเงิน', key: 'round1_amount', width: 14 },
+    { header: 'งวด 1: สถานะ', key: 'round1_status', width: 16 },
+    { header: 'งวด 1: วันที่ส่งสลิป', key: 'round1_slip_date', width: 20 },
+    { header: 'งวด 1: รูปสลิปโอนเงิน (รูปภาพจริง)', key: 'round1_slip', width: 20 },
+    { header: 'งวด 1: หมายเหตุ', key: 'round1_notes', width: 24 },
+    { header: 'งวด 2: ยอดเงิน', key: 'round2_amount', width: 14 },
+    { header: 'งวด 2: สถานะ', key: 'round2_status', width: 16 },
+    { header: 'งวด 2: วันที่ส่งสลิป', key: 'round2_slip_date', width: 20 },
+    { header: 'งวด 2: รูปสลิปโอนเงิน (รูปภาพจริง)', key: 'round2_slip', width: 20 },
+    { header: 'งวด 2: หมายเหตุ', key: 'round2_notes', width: 24 },
+    { header: 'ชำระเต็ม: วันที่ส่งสลิป', key: 'full_slip_date', width: 20 },
+    { header: 'ชำระเต็ม: รูปสลิปโอนเงิน (รูปภาพจริง)', key: 'full_slip', width: 20 },
+    { header: 'รายการเอกสารแนบ', key: 'submitted_docs', width: 30 },
+    { header: 'กลุ่มฝึกที่จัดสรร', key: 'group_assigned', width: 18 },
+    { header: 'ห้องนอนที่จัดสรร', key: 'room_assigned', width: 18 },
+    { header: 'ดูแลพิเศษ', key: 'special_care', width: 16 },
+    { header: 'หมายเหตุพิเศษ', key: 'special_notes', width: 26 },
+    { header: 'ข้อความแจ้งเตือนแอดมิน', key: 'admin_messages', width: 30 }
+  ];
+
+  worksheet.columns = columns;
+
+  // Header Styling (Professional Deep Navy Blue with White Bold Text)
+  const headerRow = worksheet.getRow(1);
+  headerRow.height = 30;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E293B' }
+    };
+    cell.font = {
+      name: 'Sarabun',
+      size: 11,
+      bold: true,
+      color: { argb: 'FFFFFFFF' }
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true
+    };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF475569' } },
+      left: { style: 'thin', color: { argb: 'FF475569' } },
+      bottom: { style: 'medium', color: { argb: 'FF0284C7' } },
+      right: { style: 'thin', color: { argb: 'FF475569' } }
+    };
+  });
+
+  // Identify 1-indexed column positions for media insertion
+  const idCardColIdx = columns.findIndex(c => c.key === 'id_card_photo') + 1;
+  const round1ColIdx = columns.findIndex(c => c.key === 'round1_slip') + 1;
+  const round2ColIdx = columns.findIndex(c => c.key === 'round2_slip') + 1;
+  const fullSlipColIdx = columns.findIndex(c => c.key === 'full_slip') + 1;
+
+  for (let i = 0; i < registrations.length; i++) {
+    const r = registrations[i];
+    if (onProgress) {
+      onProgress(i + 1, registrations.length);
+    }
+
+    const isMsu = isMsuInstitution(r.institution);
+    const totalFee = isMsu ? 650 : 850;
+    const round1Amount = 400;
+    const round2Amount = isMsu ? 250 : 450;
+
+    let paidAmount = 0;
+    if (r.payment_plan === 'installment') {
+      if (r.installment_1_status === 'paid') paidAmount += round1Amount;
+      if (r.installment_2_status === 'paid') paidAmount += round2Amount;
+    } else {
+      if (r.payment_status === 'paid') paidAmount = totalFee;
+    }
+    const remainingAmount = Math.max(0, totalFee - paidAmount);
+
+    const docsSummary = Array.isArray(r.requested_docs) && r.requested_docs.length > 0
+      ? r.requested_docs.map(d => `${d.title}: [${d.status}] ${d.file_url ? 'มีไฟล์แนบ' : 'ยังไม่แนบ'}`).join(' | ')
+      : 'ไม่มีคำขอเอกสารเพิ่มเติม';
+
+    const messagesSummary = Array.isArray(r.admin_messages) && r.admin_messages.length > 0
+      ? r.admin_messages.map(m => `[${m.created_at ? new Date(m.created_at).toLocaleDateString('th-TH') : ''}] ${m.text}`).join(' | ')
+      : 'ไม่มีข้อความ';
+
+    const rowData = {
+      index: i + 1,
+      created_at: r.created_at ? new Date(r.created_at).toLocaleString('th-TH') : '-',
+      applicant_id: `JRE27-${(r.id || r.user_id || '').slice(0, 6).toUpperCase()}`,
+      email: r.user_email || '-',
+      full_name_affiliation: r.full_name_affiliation || `${r.first_name || ''} ${r.last_name || ''}`,
+      first_name: r.first_name || '',
+      last_name: r.last_name || '',
+      nickname: r.nickname || '-',
+      callsign: r.callsign || '-',
+      institution: r.institution || '-',
+      institution_tier: isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)',
+      total_fee: totalFee,
+      shirt_size: r.shirt_size || 'L',
+      shirt_type: 'เสื้อคอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
+      dob: r.dob || '-',
+      age_years: r.age_years || 0,
+      age_months: r.age_months || 0,
+      age_days: r.age_days || 0,
+      age_full: `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,
+      blood_group: r.blood_group || '-',
+      phone: r.phone || '-',
+      emergency_name: r.emergency_name || '-',
+      emergency_phone: r.emergency_phone || '-',
+      emergency_relation: r.emergency_relation || '-',
+      medical_history: r.medical_history || 'ไม่มี',
+      food_allergy: r.food_allergy || 'ไม่มี',
+      previous_training: r.previous_training || 'ไม่มี',
+      id_card_photo: '',
+      payment_plan: r.payment_plan === 'installment' ? 'แบ่งชำระ 2 งวด' : 'ชำระเต็มจำนวน',
+      overall_payment_status: r.payment_status === 'paid' ? 'ชำระครบถ้วนแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ',
+      paid_amount: paidAmount,
+      remaining_amount: remainingAmount,
+      round1_amount: round1Amount,
+      round1_status: r.installment_1_status === 'paid' ? 'ชำระแล้ว' : r.installment_1_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ',
+      round1_slip_date: r.installment_1_slip_date ? new Date(r.installment_1_slip_date).toLocaleString('th-TH') : '-',
+      round1_slip: '',
+      round1_notes: r.installment_1_notes || '',
+      round2_amount: round2Amount,
+      round2_status: r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ',
+      round2_slip_date: r.installment_2_slip_date ? new Date(r.installment_2_slip_date).toLocaleString('th-TH') : '-',
+      round2_slip: '',
+      round2_notes: r.installment_2_notes || '',
+      full_slip_date: r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
+      full_slip: '',
+      submitted_docs: docsSummary,
+      group_assigned: r.group_assigned || 'ยังไม่จัดสรร',
+      room_assigned: r.room_assigned || 'ยังไม่จัดสรร',
+      special_care: r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ',
+      special_notes: r.special_notes || '',
+      admin_messages: messagesSummary
+    };
+
+    const addedRow = worksheet.addRow(rowData);
+    const currentRowIdx = addedRow.number; // 1-indexed row number in sheet
+
+    // Track if any real image is embedded for this row to expand row height
+    let hasEmbeddedImage = false;
+
+    // Helper to embed media into cell
+    const embedImageCell = async (rawUrl, colIdx, label) => {
+      if (!rawUrl) {
+        const cell = addedRow.getCell(colIdx);
+        cell.value = 'ยังไม่ได้แนบ';
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        return;
+      }
+
+      // Ensure we have a hosted public URL
+      const hostedUrl = await ensureHostedUrl(rawUrl, `${label}.jpg`);
+      const cell = addedRow.getCell(colIdx);
+
+      // Fetch base64 data to embed into Excel
+      const base64Data = await DataService.getFileBase64(rawUrl);
+      const pureBase64 = extractPureBase64(base64Data);
+
+      if (pureBase64) {
+        try {
+          const extension = getImageExtension(base64Data);
+          const imageId = workbook.addImage({
+            base64: pureBase64,
+            extension: extension
+          });
+
+          // 0-indexed column and row coordinates in ExcelJS
+          worksheet.addImage(imageId, {
+            tl: { col: colIdx - 1 + 0.1, row: currentRowIdx - 1 + 0.08 },
+            ext: { width: 88, height: 88 },
+            editAs: 'oneCell'
+          });
+
+          hasEmbeddedImage = true;
+        } catch (e) {
+          console.warn('Excel image embedding notice:', e);
+        }
+      }
+
+      // Add clickable hyperlink so user can click to open or view full image online
+      cell.value = {
+        text: '🖼️ ดูรูปสลิป/รูปถ่าย',
+        hyperlink: hostedUrl,
+        tooltip: `คลิกเพื่อเปิดดู ${label} ขนาดเต็มในเบราว์เซอร์`
+      };
+      cell.font = { color: { argb: 'FF0284C7' }, underline: true, size: 9 };
+      cell.alignment = { vertical: 'bottom', horizontal: 'center' };
+    };
+
+    // Embed all media columns asynchronously
+    await embedImageCell(r.id_card_photo, idCardColIdx, 'รูปถ่าย ID Card');
+    await embedImageCell(r.installment_1_slip_url, round1ColIdx, 'สลิปงวด 1');
+    await embedImageCell(r.installment_2_slip_url, round2ColIdx, 'สลิปงวด 2');
+    await embedImageCell(r.payment_slip_url, fullSlipColIdx, 'สลิปเต็มจำนวน');
+
+    // Adjust row height
+    if (hasEmbeddedImage) {
+      addedRow.height = 75;
+    } else {
+      addedRow.height = 24;
+    }
+
+    // Zebra striping for data rows
+    if (i % 2 === 1) {
+      addedRow.eachCell((cell) => {
+        if (!cell.fill) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF8FAFC' }
+          };
+        }
+      });
+    }
+  }
+
+  // Generate buffer and trigger browser download
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { 
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+  });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const fileName = `JRE2027_รายชื่อผู้สมัครทุกคน_พร้อมรูปสลิปและรูปถ่าย_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+
+  return fileName;
+}

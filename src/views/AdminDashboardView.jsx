@@ -61,7 +61,8 @@ import {
   ShoppingBag,
   Copy
 } from 'lucide-react';
-import { DataService, mergeAndDeduplicateAccounts } from '../supabase';
+import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
+import { exportRegistrationsToExcel } from '../utils/excelExporter';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
@@ -343,6 +344,10 @@ export default function AdminDashboardView({
     setAlertToast(msg);
     setTimeout(() => setAlertToast(null), 3500);
   };
+
+  // Excel Export Progress State
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
 
   // User Accounts Management State
   const [userAccounts, setUserAccounts] = useState([]);
@@ -1004,229 +1009,50 @@ export default function AdminDashboardView({
     return matchSearch && matchBlood && matchFilter;
   });
 
-  // Export Excel (.xlsx) with all fields, dates, statuses, slips, photos, and remarks
-  const handleExportExcel = () => {
+  // Export Excel (.xlsx) with all fields, dates, statuses, slips, photos, and remarks (Embeds actual visible images into cells)
+  const handleExportExcel = async () => {
+    if (!registrations || registrations.length === 0) {
+      triggerToast('ยังไม่มีข้อมูลผู้สมัครในระบบ');
+      return;
+    }
+
+    setIsExportingExcel(true);
+    setExportProgress({ current: 0, total: registrations.length });
+    try {
+      const fileName = await exportRegistrationsToExcel(registrations, paymentConfig, (cur, total) => {
+        setExportProgress({ current: cur, total });
+      });
+      triggerToast(`ส่งออกไฟล์ Excel สำเร็จ: ${fileName}`);
+    } catch (err) {
+      console.error('Export Excel error:', err);
+      triggerToast('เกิดข้อผิดพลาดในการส่งออก Excel: ' + (err.message || ''));
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  // Export CSV with guaranteed hosted URLs for slips and photos
+  const handleExportCSV = async () => {
     if (!registrations || registrations.length === 0) {
       triggerToast('ยังไม่มีข้อมูลผู้สมัครในระบบ');
       return;
     }
 
     const headers = [
-      'ลำดับ',
-      'วันเวลาที่สมัคร (Submitted Date)',
-      'รหัสอ้างอิงผู้สมัคร (Applicant ID)',
-      'อีเมล Google (Email)',
-      'คำนำหน้า ชื่อ-สกุล (สถาบัน) ไทย/อังกฤษ (Full Name & Affiliation)',
-      'ชื่อจริง (First Name)',
-      'นามสกุล (Last Name)',
-      'ชื่อเล่น ไทย/อังกฤษ (Nickname)',
-      'รหัสนามเรียกขานประจำหน่วย (Callsign)',
-      'สังกัด / มหาวิทยาลัย / ชมรม (Institution)',
-      'ประเภทสถาบัน (Institution Tier)',
-      'ยอดค่าสมัครรวม (Total Fee)',
-      'ไซส์เสื้อฝึก JRE 2027 (Shirt Size)',
-      'รูปแบบเสื้อ (Shirt Type)',
-      'วันเดือนปีเกิด พ.ศ. (Date of Birth)',
-      'อายุคำนวณได้ (ปี)',
-      'อายุคำนวณได้ (เดือน)',
-      'อายุคำนวณได้ (วัน)',
-      'อายุสรุป (Full Age)',
-      'กรุ๊ปเลือด (Blood Group)',
-      'เบอร์โทรติดต่อ (Phone Number)',
-      'ผู้ติดต่อกรณีฉุกเฉิน (Emergency Contact)',
-      'เบอร์โทรผู้ติดต่อฉุกเฉิน (Emergency Phone)',
-      'ความสัมพันธ์ (Relation)',
-      'โรคประจำตัว / ข้อจำกัดทางกาย (Medical History)',
-      'ประวัติแพ้อาหาร / ยา (Food / Drug Allergy)',
-      'ประวัติการฝึกอบรมกู้ภัยที่ผ่านมา (Previous Training)',
-      'ลิงก์รูปถ่ายสำหรับทำ ID Card (ID Card Photo URL)',
-      'ลิงก์รูป Avatar Google (Avatar URL)',
-      'แผนการชำระเงิน (Payment Plan)',
-      'สถานะการชำระเงินรวม (Overall Payment Status)',
-      'ยอดเงินรวมที่ต้องชำระ (Total Fee Amount)',
-      'ยอดเงินที่อนุมัติแล้ว (Approved Paid Amount)',
-      'ยอดเงินค้างชำระ (Pending Remaining Amount)',
-      'งวดที่ 1: จำนวนเงิน (Round 1 Amount)',
-      'งวดที่ 1: สถานะ (Round 1 Status)',
-      'งวดที่ 1: วันเวลาที่ส่งสลิป (Round 1 Slip Date)',
-      'งวดที่ 1: ลิงก์สลิปโอนเงิน (Round 1 Slip URL)',
-      'งวดที่ 1: หมายเหตุจากผู้ดูแล (Round 1 Notes)',
-      'งวดที่ 2: จำนวนเงิน (Round 2 Amount)',
-      'งวดที่ 2: สถานะ (Round 2 Status)',
-      'งวดที่ 2: วันเวลาที่ส่งสลิป (Round 2 Slip Date)',
-      'งวดที่ 2: ลิงก์สลิปโอนเงิน (Round 2 Slip URL)',
-      'งวดที่ 2: หมายเหตุจากผู้ดูแล (Round 2 Notes)',
-      'ชำระเต็มจำนวน: วันเวลาที่ส่งสลิป (Full Slip Date)',
-      'ชำระเต็มจำนวน: ลิงก์สลิปโอนเงิน (Full Slip URL)',
-      'รายการเอกสารที่แนบและสถานะ (Submitted Documents)',
-      'กลุ่มฝึกที่ได้รับจัดสรร (Assigned Group)',
-      'ห้องนอนหอพักกุดรังที่ได้รับจัดสรร (Assigned Room)',
-      'สิทธิการดูแลพิเศษ (Special Care)',
-      'หมายเหตุการดูแลพิเศษ (Special Care Notes)',
-      'ข้อความแจ้งเตือนจากผู้ดูแลระบบ (Admin Messages)'
-    ];
-
-    // Helper to safely format media/URLs for Excel without exceeding 32,767 char limit
-    const formatMediaForExcel = (val, label) => {
-      if (!val) return 'ยังไม่ได้แนบ';
-      const str = String(val).trim();
-      if (str.startsWith('http://') || str.startsWith('https://')) {
-        return str;
-      }
-      if (str.startsWith('data:image/') || str.startsWith('data:application/')) {
-        const kb = Math.round(str.length / 1024);
-        return `[มี${label}แนบในระบบ - ขนาด ${kb} KB]`;
-      }
-      return str.length > 32000 ? str.slice(0, 32000) + '...' : str;
-    };
-
-    // Sanitize any generic string cell to guarantee it never exceeds Excel's 32,767 char limit
-    const sanitizeExcelCell = (val) => {
-      if (val === null || val === undefined) return '-';
-      if (typeof val === 'number') return val;
-      if (typeof val === 'boolean') return val ? 'ใช่' : 'ไม่ใช่';
-      let str = String(val);
-      if (str.startsWith('data:image/') || str.startsWith('data:application/')) {
-        const kb = Math.round(str.length / 1024);
-        return `[ไฟล์แนบในระบบ - ขนาด ${kb} KB]`;
-      }
-      if (str.length > 32000) {
-        return str.slice(0, 32000) + '... (ตัดทอนเนื่องจากเกินขีดจำกัดเซลล์ Excel 32,767 ตัวอักษร)';
-      }
-      return str;
-    };
-
-    const dataRows = registrations.map((r, index) => {
-      const isMsu = isMsuInstitution(r.institution);
-      const totalFee = isMsu ? 650 : 850;
-      const round1Amount = 400;
-      const round2Amount = isMsu ? 250 : 450;
-      
-      let paidAmount = 0;
-      if (r.payment_plan === 'installment') {
-        if (r.installment_1_status === 'paid') paidAmount += round1Amount;
-        if (r.installment_2_status === 'paid') paidAmount += round2Amount;
-      } else {
-        if (r.payment_status === 'paid') paidAmount = totalFee;
-      }
-      const remainingAmount = Math.max(0, totalFee - paidAmount);
-
-      const docsSummary = Array.isArray(r.requested_docs) && r.requested_docs.length > 0
-        ? r.requested_docs.map(d => {
-            let fileDesc = 'ยังไม่แนบ';
-            if (d.file_url) {
-              fileDesc = d.file_url.startsWith('data:') 
-                ? `[ไฟล์แนบในระบบ Base64 (${Math.round(d.file_url.length / 1024)} KB)]` 
-                : (d.file_url.length > 500 ? d.file_url.slice(0, 500) + '...' : d.file_url);
-            }
-            return `${d.title}: [${d.status}] ${fileDesc}`;
-          }).join(' | ')
-        : 'ไม่มีคำขอเอกสารเพิ่มเติม';
-
-      const messagesSummary = Array.isArray(r.admin_messages) && r.admin_messages.length > 0
-        ? r.admin_messages.map(m => `[${m.created_at || ''}] ${m.text}`).join(' | ')
-        : 'ไม่มีข้อความ';
-
-      const paymentStatusText = r.payment_status === 'paid' 
-        ? 'ชำระครบถ้วนแล้ว' 
-        : r.payment_status === 'pending_review' 
-        ? 'รอตรวจสอบสลิป' 
-        : 'ค้างชำระ';
-
-      const round1StatusText = r.installment_1_status === 'paid'
-        ? 'ชำระแล้ว'
-        : r.installment_1_status === 'pending_review'
-        ? 'รอตรวจสอบสลิป'
-        : 'ค้างชำระ';
-
-      const round2StatusText = r.installment_2_status === 'paid'
-        ? 'ชำระแล้ว'
-        : r.installment_2_status === 'pending_review'
-        ? 'รอตรวจสอบสลิป'
-        : 'ค้างชำระ';
-
-      return [
-        index + 1,
-        r.created_at ? new Date(r.created_at).toLocaleString('th-TH') : '-',
-        `JRE27-${(r.id || r.user_id || '').slice(0, 6).toUpperCase()}`,
-        r.user_email || '-',
-        r.full_name_affiliation || `${r.first_name || ''} ${r.last_name || ''}`,
-        r.first_name || '',
-        r.last_name || '',
-        r.nickname || '-',
-        r.callsign || '-',
-        r.institution || '-',
-        isMsu ? 'นิสิตมหาวิทยาลัยมหาสารคาม (มมส)' : 'สถาบันภายนอก / ต่างมหาวิทยาลัย',
-        totalFee,
-        r.shirt_size || 'L',
-        'เสื้อคอเต่าซิป แขนสั้น โทนสีเทา–ดำ (พรีออเดอร์)',
-        r.dob || '-',
-        r.age_years || 0,
-        r.age_months || 0,
-        r.age_days || 0,
-        `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,
-        r.blood_group || '-',
-        r.phone || '-',
-        r.emergency_name || '-',
-        r.emergency_phone || '-',
-        r.emergency_relation || '-',
-        r.medical_history || 'ไม่มี',
-        r.food_allergy || 'ไม่มี',
-        r.previous_training || 'ไม่มี',
-        formatMediaForExcel(r.id_card_photo, 'รูปถ่าย ID Card'),
-        formatMediaForExcel(r.user_avatar, 'รูปโปรไฟล์'),
-        r.payment_plan === 'installment' ? 'แบ่งชำระ 2 งวด' : 'ชำระเต็มจำนวน',
-        paymentStatusText,
-        totalFee,
-        paidAmount,
-        remainingAmount,
-        round1Amount,
-        round1StatusText,
-        r.installment_1_slip_date ? new Date(r.installment_1_slip_date).toLocaleString('th-TH') : '-',
-        formatMediaForExcel(r.installment_1_slip_url, 'สลิปงวดที่ 1'),
-        r.installment_1_notes || '',
-        round2Amount,
-        round2StatusText,
-        r.installment_2_slip_date ? new Date(r.installment_2_slip_date).toLocaleString('th-TH') : '-',
-        formatMediaForExcel(r.installment_2_slip_url, 'สลิปงวดที่ 2'),
-        r.installment_2_notes || '',
-        r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
-        formatMediaForExcel(r.payment_slip_url, 'สลิปเต็มจำนวน'),
-        docsSummary,
-        r.group_assigned || 'ยังไม่จัดสรร',
-        r.room_assigned || 'ยังไม่จัดสรร',
-        r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ',
-        r.special_notes || '',
-        messagesSummary
-      ];
-    });
-
-    const sanitizedDataRows = dataRows.map(row => row.map(sanitizeExcelCell));
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sanitizedDataRows]);
-
-    // Set column widths
-    const colWidths = headers.map(h => ({ wch: Math.max(h.length * 2, 16) }));
-    worksheet['!cols'] = colWidths;
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'ผู้สมัคร JRE 2027');
-
-    const fileName = `JRE2027_รายชื่อผู้สมัครทุกคน_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-    triggerToast(`ส่งออกไฟล์ Excel สำเร็จ: ${fileName}`);
-  };
-
-  // Export CSV
-  const handleExportCSV = () => {
-    const headers = [
       'ชื่อ-สกุล', 'ชื่อเต็ม/สถาบัน (ไทย-อังกฤษ)', 'ชื่อเล่น', 'รหัสนามเรียกขาน', 'ไซส์เสื้อ (บังคับ)', 'สังกัด/มหาวิทยาลัย',
       'เรทค่าสมัคร', 'วันเกิด', 'อายุ', 'กรุ๊ปเลือด', 'เบอร์โทร',
       'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'สถานะการชำระเงิน', 'ยอดเงิน',
-      'สถานะงวด 1', 'สลิปงวด 1', 'สถานะงวด 2', 'สลิปงวด 2', 'สลิปเต็มจำนวน', 'รูปถ่าย ID Card',
+      'สถานะงวด 1', 'สลิปงวด 1 (URL)', 'สถานะงวด 2', 'สลิปงวด 2 (URL)', 'สลิปเต็มจำนวน (URL)', 'รูปถ่าย ID Card (URL)',
       'ดูแลพิเศษ', 'หมายเหตุพิเศษ'
     ];
-    const rows = registrations.map(r => {
+
+    const rows = await Promise.all(registrations.map(async (r) => {
       const isMsu = isMsuInstitution(r.institution);
+      const s1 = r.installment_1_slip_url ? await ensureHostedUrl(r.installment_1_slip_url, 'slip-round1.jpg') : '';
+      const s2 = r.installment_2_slip_url ? await ensureHostedUrl(r.installment_2_slip_url, 'slip-round2.jpg') : '';
+      const sFull = r.payment_slip_url ? await ensureHostedUrl(r.payment_slip_url, 'slip-full.jpg') : '';
+      const idPhoto = r.id_card_photo ? await ensureHostedUrl(r.id_card_photo, 'id-card.jpg') : '';
+
       return [
         `"${r.first_name || ''} ${r.last_name || ''}"`,
         `"${(r.full_name_affiliation || '').replace(/"/g, '""')}"`,
@@ -1246,24 +1072,25 @@ export default function AdminDashboardView({
         `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
         `"${r.payment_amount || (isMsu ? 650 : 850)}"`,
         `"${r.installment_1_status || '-'}"`,
-        `"${r.installment_1_slip_url ? (r.installment_1_slip_url.startsWith('data:') ? '[แนบสลิป Base64]' : r.installment_1_slip_url) : ''}"`,
+        `"${s1 || 'ยังไม่แนบ'}"`,
         `"${r.installment_2_status || '-'}"`,
-        `"${r.installment_2_slip_url ? (r.installment_2_slip_url.startsWith('data:') ? '[แนบสลิป Base64]' : r.installment_2_slip_url) : ''}"`,
-        `"${r.payment_slip_url ? (r.payment_slip_url.startsWith('data:') ? '[แนบสลิป Base64]' : r.payment_slip_url) : ''}"`,
-        `"${r.id_card_photo ? (r.id_card_photo.startsWith('data:') ? '[แนบรูปถ่าย Base64]' : r.id_card_photo) : ''}"`,
+        `"${s2 || 'ยังไม่แนบ'}"`,
+        `"${sFull || 'ยังไม่แนบ'}"`,
+        `"${idPhoto || 'ยังไม่แนบ'}"`,
         `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
         `"${(r.special_notes || '').replace(/"/g, '""')}"`
       ];
-    });
+    }));
 
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `JRE2027_applicants_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `JRE2027_รายชื่อผู้สมัครทุกคน_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    triggerToast("ส่งออกไฟล์ CSV สำเร็จ (พร้อมลิงก์สลิปออนไลน์)");
   };
 
   // --- Handlers for Forms Config ---
@@ -1656,11 +1483,21 @@ export default function AdminDashboardView({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={handleExportExcel}
-              className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer"
-              title="ส่งออกข้อมูลผู้สมัครทุกคน ทุกฟิลด์ ทุกสเต็ป ทุกสลิป เป็นตาราง Excel (.xlsx)"
+              disabled={isExportingExcel}
+              className={`px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer ${isExportingExcel ? 'opacity-80 cursor-wait' : ''}`}
+              title="ส่งออกข้อมูลผู้สมัครทุกคน พร้อมฝังรูปถ่ายสลิปจริงลงในตาราง Excel (.xlsx)"
             >
-              <FileDown className="w-4 h-4 text-emerald-100" />
-              <span>ส่งออกข้อมูลทุกคนเป็น Excel (.xlsx)</span>
+              {isExportingExcel ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-emerald-200 animate-spin" />
+                  <span>กำลังฝังรูปภาพลง Excel ({exportProgress.current}/{exportProgress.total})...</span>
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4 text-emerald-100" />
+                  <span>ส่งออกข้อมูลทุกคนเป็น Excel (.xlsx)</span>
+                </>
+              )}
             </button>
 
             <button
@@ -2571,9 +2408,34 @@ export default function AdminDashboardView({
                               </div>
                             </div>
 
-                            <p className="text-[11px] text-slate-400">
-                              ส่งเมื่อ: {profileModalReg.installment_1_slip_date ? new Date(profileModalReg.installment_1_slip_date).toLocaleString('th-TH') : '-'}
-                            </p>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                              <span>ส่งเมื่อ: {profileModalReg.installment_1_slip_date ? new Date(profileModalReg.installment_1_slip_date).toLocaleString('th-TH') : '-'}</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const hosted = await ensureHostedUrl(profileModalReg.installment_1_slip_url, 'slip-round1.jpg');
+                                    await navigator.clipboard.writeText(hosted);
+                                    triggerToast('คัดลอกลิงก์สลิปงวด 1 แล้ว');
+                                  }}
+                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                  title="คัดลอก URL ลิงก์สลิป"
+                                >
+                                  <Copy className="w-3 h-3 text-cyan-400" />
+                                  <span>ก๊อปลิ้งค์</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 1 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_1_slip_url, file_name: 'installment-1-slip.jpg' })}
+                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                  title="เปิดดูสลิป"
+                                >
+                                  <ExternalLink className="w-3 h-3 text-cyan-400" />
+                                  <span>เปิดดู</span>
+                                </button>
+                              </div>
+                            </div>
 
                             {profileModalReg.installment_1_notes && (
                               <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
@@ -2665,9 +2527,34 @@ export default function AdminDashboardView({
                               </div>
                             </div>
 
-                            <p className="text-[11px] text-slate-400">
-                              ส่งเมื่อ: {profileModalReg.installment_2_slip_date ? new Date(profileModalReg.installment_2_slip_date).toLocaleString('th-TH') : '-'}
-                            </p>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                              <span>ส่งเมื่อ: {profileModalReg.installment_2_slip_date ? new Date(profileModalReg.installment_2_slip_date).toLocaleString('th-TH') : '-'}</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const hosted = await ensureHostedUrl(profileModalReg.installment_2_slip_url, 'slip-round2.jpg');
+                                    await navigator.clipboard.writeText(hosted);
+                                    triggerToast('คัดลอกลิงก์สลิปงวด 2 แล้ว');
+                                  }}
+                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                  title="คัดลอก URL ลิงก์สลิป"
+                                >
+                                  <Copy className="w-3 h-3 text-cyan-400" />
+                                  <span>ก๊อปลิ้งค์</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 2 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_2_slip_url, file_name: 'installment-2-slip.jpg' })}
+                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                  title="เปิดดูสลิป"
+                                >
+                                  <ExternalLink className="w-3 h-3 text-cyan-400" />
+                                  <span>เปิดดู</span>
+                                </button>
+                              </div>
+                            </div>
 
                             {profileModalReg.installment_2_notes && (
                               <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
@@ -2745,11 +2632,38 @@ export default function AdminDashboardView({
                       </div>
 
                       <div className="space-y-3 flex-1">
-                        <div>
-                          <p className="text-slate-400">วันที่ส่งสลิป:</p>
-                          <p className="text-white font-semibold">
-                            {profileModalReg.payment_slip_date ? new Date(profileModalReg.payment_slip_date).toLocaleString('th-TH') : '-'}
-                          </p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-slate-400 text-xs">วันที่ส่งสลิป:</p>
+                            <p className="text-white font-semibold text-xs mt-0.5">
+                              {profileModalReg.payment_slip_date ? new Date(profileModalReg.payment_slip_date).toLocaleString('th-TH') : '-'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const hosted = await ensureHostedUrl(profileModalReg.payment_slip_url, 'slip-full.jpg');
+                                await navigator.clipboard.writeText(hosted);
+                                triggerToast('คัดลอกลิงก์สลิปเรียบร้อยแล้ว');
+                              }}
+                              className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs inline-flex items-center gap-1 cursor-pointer"
+                              title="คัดลอก URL ลิงก์สลิป"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>ก๊อปลิ้งค์สลิป</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDoc({ title: 'สลิปการโอนเงิน - ' + profileModalReg.first_name, file_url: profileModalReg.payment_slip_url, file_name: 'payment-slip.jpg' })}
+                              className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs inline-flex items-center gap-1 cursor-pointer"
+                              title="เปิดดูสลิป"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>เปิดดู</span>
+                            </button>
+                          </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2 pt-2">

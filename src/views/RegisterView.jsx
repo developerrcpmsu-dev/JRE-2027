@@ -48,11 +48,12 @@ import {
   UserCheck,
   Shield,
   ArrowLeft,
-  QrCode
+  QrCode,
+  Download
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
-import { DataService } from '../supabase';
+import { DataService, ensureHostedUrl } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
@@ -401,6 +402,7 @@ export default function RegisterView({
   // Payment Slip Upload State
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [previewSlipModal, setPreviewSlipModal] = useState(null);
+  const [copiedSlipUrl, setCopiedSlipUrl] = useState(false);
 
   // 2-Round Installments & Full Payment State
   const [paymentPlan, setPaymentPlan] = useState('installment'); // 'installment' (4 steps) | 'full' (3 steps)
@@ -2930,24 +2932,88 @@ export default function RegisterView({
 
         {/* PREVIEW SLIP MODAL */}
         {previewSlipModal && (
-          <ModalPortal isOpen={Boolean(previewSlipModal)} onClose={() => setPreviewSlipModal(null)}>
+          <ModalPortal isOpen={Boolean(previewSlipModal)} onClose={() => { setPreviewSlipModal(null); setCopiedSlipUrl(false); }}>
             <div 
               className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-              onClick={() => setPreviewSlipModal(null)}
+              onClick={() => { setPreviewSlipModal(null); setCopiedSlipUrl(false); }}
             >
               <div 
-                className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative"
+                className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-4"
                 onClick={(e) => e.stopPropagation()}
               >
-                <button
-                  type="button"
-                  onClick={() => setPreviewSlipModal(null)}
-                  className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
-                >
-                  <XCircle className="w-5 h-5" />
-                </button>
-                <h4 className="font-bold text-white text-sm mb-3">ภาพสลิปการโอนเงิน</h4>
-                <img src={previewSlipModal} alt="สลิป" className="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800" />
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h4 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
+                    <span>ภาพสลิปการโอนเงิน / เอกสาร</span>
+                  </h4>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const targetUrl = await ensureHostedUrl(previewSlipModal, 'payment-slip.jpg');
+                        await navigator.clipboard.writeText(targetUrl);
+                        setCopiedSlipUrl(true);
+                        setTimeout(() => setCopiedSlipUrl(false), 2500);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-xl border transition-all text-xs font-semibold flex items-center gap-1 cursor-pointer ${
+                        copiedSlipUrl
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                          : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                      }`}
+                      title="คัดลอกลิงก์รูปสลิปนี้"
+                    >
+                      {copiedSlipUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
+                      <span>{copiedSlipUrl ? 'คัดลอกแล้ว!' : 'ก๊อปลิ้งค์'}</span>
+                    </button>
+
+                    {previewSlipModal.startsWith('http') && (
+                      <a
+                        href={previewSlipModal}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+                        title="เปิดดูรูปเต็มในแท็บใหม่"
+                      >
+                        <ExternalLink className="w-4 h-4 text-cyan-400" />
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = previewSlipModal;
+                        link.download = 'payment-slip.jpg';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+                      title="ดาวน์โหลดรูปสลิป"
+                    >
+                      <Download className="w-4 h-4 text-emerald-400" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setPreviewSlipModal(null); setCopiedSlipUrl(false); }}
+                      className="p-1.5 bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white rounded-xl cursor-pointer transition-colors"
+                      title="ปิดหน้าต่าง"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-800/80">
+                  <img src={previewSlipModal} alt="สลิป" className="w-full max-h-[62vh] object-contain rounded-xl" />
+                </div>
+
+                <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="truncate max-w-[280px] sm:max-w-md font-mono text-[10px] text-cyan-300 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                    🔗 {previewSlipModal.length > 50 ? `${previewSlipModal.slice(0, 48)}...` : previewSlipModal}
+                  </span>
+                  <span className="text-emerald-400 font-medium">✓ ลิงก์ออนไลน์แชร์ได้</span>
+                </div>
               </div>
             </div>
           </ModalPortal>
