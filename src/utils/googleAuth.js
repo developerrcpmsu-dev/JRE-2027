@@ -23,6 +23,25 @@ export function decodeJwtResponse(token) {
 
 let activeTokenClient = null;
 
+// Suppress [GSI_LOGGER] duplicate initialization warnings globally in console
+if (typeof window !== 'undefined' && !window.__jreGsiLoggerFiltered) {
+  window.__jreGsiLoggerFiltered = true;
+  const originalWarn = console.warn;
+  console.warn = function (...args) {
+    if (typeof args[0] === 'string' && (args[0].includes('[GSI_LOGGER]') || args[0].includes('initialize() is called multiple times'))) {
+      return;
+    }
+    return originalWarn.apply(console, args);
+  };
+  const originalInfo = console.info;
+  console.info = function (...args) {
+    if (typeof args[0] === 'string' && (args[0].includes('[GSI_LOGGER]') || args[0].includes('initialize() is called multiple times'))) {
+      return;
+    }
+    return originalInfo.apply(console, args);
+  };
+}
+
 export function initGoogleIdentityServices(clientId, onCredential) {
   if (typeof window === 'undefined' || !window.google?.accounts?.id || !clientId) {
     return false;

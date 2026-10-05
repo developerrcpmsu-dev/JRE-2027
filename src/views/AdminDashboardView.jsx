@@ -55,7 +55,10 @@ import {
   Shield,
   EyeOff,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck,
+  Tag,
+  ShoppingBag
 } from 'lucide-react';
 import { DataService } from '../supabase';
 import { 
