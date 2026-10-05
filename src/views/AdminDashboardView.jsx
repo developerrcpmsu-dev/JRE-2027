@@ -381,9 +381,9 @@ export default function AdminDashboardView({
 
     const dataRows = userAccounts.map((u, idx) => [
       idx + 1,
-      u.id,
-      u.name,
-      u.email,
+      u.id || '-',
+      u.name || '-',
+      u.email || '-',
       u.email_verified ? 'ยืนยันแล้ว' : 'ยังไม่ยืนยัน',
       u.provider === 'both' ? 'Google + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
       u.salt || 'N/A (Google OAuth)',
@@ -393,7 +393,15 @@ export default function AdminDashboardView({
       u.updated_at ? new Date(u.updated_at).toLocaleString('th-TH') : '-'
     ]);
 
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    const sanitizeCell = (val) => {
+      if (val === null || val === undefined) return '-';
+      if (typeof val === 'number') return val;
+      let s = String(val);
+      return s.length > 32000 ? s.slice(0, 32000) + '...' : s;
+    };
+
+    const sanitizedRows = dataRows.map(row => row.map(sanitizeCell));
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sanitizedRows]);
     worksheet['!cols'] = headers.map(h => ({ wch: Math.max(h.length * 2, 16) }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'บัญชีผู้ใช้งาน');
@@ -964,6 +972,36 @@ export default function AdminDashboardView({
       'ข้อความแจ้งเตือนจากผู้ดูแลระบบ (Admin Messages)'
     ];
 
+    // Helper to safely format media/URLs for Excel without exceeding 32,767 char limit
+    const formatMediaForExcel = (val, label) => {
+      if (!val) return 'ยังไม่ได้แนบ';
+      const str = String(val).trim();
+      if (str.startsWith('http://') || str.startsWith('https://')) {
+        return str;
+      }
+      if (str.startsWith('data:image/') || str.startsWith('data:application/')) {
+        const kb = Math.round(str.length / 1024);
+        return `[มี${label}แนบในระบบ - ขนาด ${kb} KB]`;
+      }
+      return str.length > 32000 ? str.slice(0, 32000) + '...' : str;
+    };
+
+    // Sanitize any generic string cell to guarantee it never exceeds Excel's 32,767 char limit
+    const sanitizeExcelCell = (val) => {
+      if (val === null || val === undefined) return '-';
+      if (typeof val === 'number') return val;
+      if (typeof val === 'boolean') return val ? 'ใช่' : 'ไม่ใช่';
+      let str = String(val);
+      if (str.startsWith('data:image/') || str.startsWith('data:application/')) {
+        const kb = Math.round(str.length / 1024);
+        return `[ไฟล์แนบในระบบ - ขนาด ${kb} KB]`;
+      }
+      if (str.length > 32000) {
+        return str.slice(0, 32000) + '... (ตัดทอนเนื่องจากเกินขีดจำกัดเซลล์ Excel 32,767 ตัวอักษร)';
+      }
+      return str;
+    };
+
     const dataRows = registrations.map((r, index) => {
       const isMsu = isMsuInstitution(r.institution);
       const totalFee = isMsu ? 650 : 850;
@@ -980,7 +1018,15 @@ export default function AdminDashboardView({
       const remainingAmount = Math.max(0, totalFee - paidAmount);
 
       const docsSummary = Array.isArray(r.requested_docs) && r.requested_docs.length > 0
-        ? r.requested_docs.map(d => `${d.title}: [${d.status}] ${d.file_url || 'ยังไม่แนบ'}`).join(' | ')
+        ? r.requested_docs.map(d => {
+            let fileDesc = 'ยังไม่แนบ';
+            if (d.file_url) {
+              fileDesc = d.file_url.startsWith('data:') 
+                ? `[ไฟล์แนบในระบบ Base64 (${Math.round(d.file_url.length / 1024)} KB)]` 
+                : (d.file_url.length > 500 ? d.file_url.slice(0, 500) + '...' : d.file_url);
+            }
+            return `${d.title}: [${d.status}] ${fileDesc}`;
+          }).join(' | ')
         : 'ไม่มีคำขอเอกสารเพิ่มเติม';
 
       const messagesSummary = Array.isArray(r.admin_messages) && r.admin_messages.length > 0
@@ -1033,8 +1079,8 @@ export default function AdminDashboardView({
         r.medical_history || 'ไม่มี',
         r.food_allergy || 'ไม่มี',
         r.previous_training || 'ไม่มี',
-        r.id_card_photo || '',
-        r.user_avatar || '',
+        formatMediaForExcel(r.id_card_photo, 'รูปถ่าย ID Card'),
+        formatMediaForExcel(r.user_avatar, 'รูปโปรไฟล์'),
         r.payment_plan === 'installment' ? 'แบ่งชำระ 2 งวด' : 'ชำระเต็มจำนวน',
         paymentStatusText,
         totalFee,
@@ -1043,15 +1089,15 @@ export default function AdminDashboardView({
         round1Amount,
         round1StatusText,
         r.installment_1_slip_date ? new Date(r.installment_1_slip_date).toLocaleString('th-TH') : '-',
-        r.installment_1_slip_url || '',
+        formatMediaForExcel(r.installment_1_slip_url, 'สลิปงวดที่ 1'),
         r.installment_1_notes || '',
         round2Amount,
         round2StatusText,
         r.installment_2_slip_date ? new Date(r.installment_2_slip_date).toLocaleString('th-TH') : '-',
-        r.installment_2_slip_url || '',
+        formatMediaForExcel(r.installment_2_slip_url, 'สลิปงวดที่ 2'),
         r.installment_2_notes || '',
         r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
-        r.payment_slip_url || '',
+        formatMediaForExcel(r.payment_slip_url, 'สลิปเต็มจำนวน'),
         docsSummary,
         r.group_assigned || 'ยังไม่จัดสรร',
         r.room_assigned || 'ยังไม่จัดสรร',
@@ -1061,7 +1107,8 @@ export default function AdminDashboardView({
       ];
     });
 
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    const sanitizedDataRows = dataRows.map(row => row.map(sanitizeExcelCell));
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sanitizedDataRows]);
 
     // Set column widths
     const colWidths = headers.map(h => ({ wch: Math.max(h.length * 2, 16) }));
@@ -1105,11 +1152,11 @@ export default function AdminDashboardView({
         `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
         `"${r.payment_amount || (isMsu ? 650 : 850)}"`,
         `"${r.installment_1_status || '-'}"`,
-        `"${r.installment_1_slip_url || ''}"`,
+        `"${r.installment_1_slip_url ? (r.installment_1_slip_url.startsWith('data:') ? '[แนบสลิป Base64]' : r.installment_1_slip_url) : ''}"`,
         `"${r.installment_2_status || '-'}"`,
-        `"${r.installment_2_slip_url || ''}"`,
-        `"${r.payment_slip_url || ''}"`,
-        `"${r.id_card_photo || ''}"`,
+        `"${r.installment_2_slip_url ? (r.installment_2_slip_url.startsWith('data:') ? '[แนบสลิป Base64]' : r.installment_2_slip_url) : ''}"`,
+        `"${r.payment_slip_url ? (r.payment_slip_url.startsWith('data:') ? '[แนบสลิป Base64]' : r.payment_slip_url) : ''}"`,
+        `"${r.id_card_photo ? (r.id_card_photo.startsWith('data:') ? '[แนบรูปถ่าย Base64]' : r.id_card_photo) : ''}"`,
         `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
         `"${(r.special_notes || '').replace(/"/g, '""')}"`
       ];
