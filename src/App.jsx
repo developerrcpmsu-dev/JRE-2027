@@ -377,8 +377,8 @@ export default function App() {
     setMerchandiseOrders(updated);
   };
 
-  const handleMarkOrderReceived = async (orderId, adminName) => {
-    await DataService.markOrderReceived(orderId, adminName);
+  const handleMarkOrderReceived = async (orderId, adminName, status = 'received') => {
+    await DataService.markOrderReceived(orderId, adminName, status);
     const updated = await DataService.getMerchandiseOrders();
     setMerchandiseOrders(updated);
   };

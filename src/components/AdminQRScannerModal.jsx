@@ -20,7 +20,9 @@ import ModalPortal from './ModalPortal';
 
 export default function AdminQRScannerModal({ 
   orders = [], 
+  registrations = [],
   onMarkReceived, 
+  onMarkRegistrationShirtReceived,
   onClose,
   onVerifyPayment
 }) {
@@ -46,6 +48,104 @@ export default function AdminQRScannerModal({
 
   const scannerRef = useRef(null);
   const qrRegionId = 'admin-qr-reader-region';
+
+  // Find matching item across merchandise orders and trainee registrations
+  const findMatchingItem = (rawText) => {
+    if (!rawText || typeof rawText !== 'string') return null;
+    let target = rawText.trim();
+    try {
+      const parsed = JSON.parse(rawText);
+      if (parsed.order_number) target = parsed.order_number;
+      else if (parsed.user_id) target = parsed.user_id;
+      else if (parsed.id) target = parsed.id;
+    } catch (e) {}
+
+    const q = target.toLowerCase();
+
+    // 1. Check in Merchandise Orders
+    const matchedOrder = orders.find(
+      o => o.order_number?.toLowerCase() === q ||
+           o.order_number?.toLowerCase().includes(q) ||
+           o.id === target ||
+           o.customer_phone?.includes(target) ||
+           o.customer_name?.toLowerCase().includes(q) ||
+           o.user_email?.toLowerCase().includes(q)
+    );
+    if (matchedOrder) {
+      return { ...matchedOrder, itemType: 'merchandise' };
+    }
+
+    // 2. Check in Trainee Registrations
+    let cleanCode = target;
+    if (target.toUpperCase().startsWith('JRE27-SHIRT-')) {
+      cleanCode = target.toUpperCase().replace('JRE27-SHIRT-', '');
+    }
+
+    const matchedReg = registrations.find(r => {
+      const regId = (r.id || '').toLowerCase();
+      const userId = (r.user_id || '').toLowerCase();
+      const regOrderNum = `JRE27-SHIRT-${(r.id || r.user_id || 'REG').slice(0, 6).toUpperCase()}`.toLowerCase();
+      const codeMatches = cleanCode.length >= 3 && (regId.includes(cleanCode.toLowerCase()) || userId.includes(cleanCode.toLowerCase()));
+
+      return (
+        regOrderNum === q ||
+        regId === q ||
+        userId === q ||
+        codeMatches ||
+        (r.callsign && r.callsign.toLowerCase().includes(q)) ||
+        (r.nickname && r.nickname.toLowerCase().includes(q)) ||
+        (r.phone && r.phone.includes(target)) ||
+        (r.user_email && r.user_email.toLowerCase().includes(q)) ||
+        (r.first_name && r.first_name.toLowerCase().includes(q)) ||
+        (r.last_name && r.last_name.toLowerCase().includes(q)) ||
+        (r.full_name_affiliation && r.full_name_affiliation.toLowerCase().includes(q))
+      );
+    });
+
+    if (matchedReg) {
+      const isRound1Paid = matchedReg.installment_1_status === 'paid' || matchedReg.payment_status === 'paid' || matchedReg.payment_status === 'full';
+      const isFullyPaid = matchedReg.payment_status === 'paid' || matchedReg.payment_status === 'full' || (matchedReg.installment_1_status === 'paid' && matchedReg.installment_2_status === 'paid');
+      const isReceived = matchedReg.shirt_pickup_status === 'received' || matchedReg.shirt_received === true;
+      const orderNumber = `JRE27-SHIRT-${(matchedReg.id || matchedReg.user_id || 'REG').slice(0, 6).toUpperCase()}`;
+
+      return {
+        id: `reg_shirt_${matchedReg.id || matchedReg.user_id}`,
+        user_id: matchedReg.user_id,
+        itemType: 'registration',
+        order_number: orderNumber,
+        customer_name: matchedReg.full_name_affiliation || `${matchedReg.first_name || ''} ${matchedReg.last_name || ''}`.trim() || matchedReg.user_email || 'ผู้เข้ารับการฝึกอบรม',
+        nickname: matchedReg.nickname || '-',
+        callsign: matchedReg.callsign || '-',
+        institution: matchedReg.institution || '-',
+        group_assigned: matchedReg.group_assigned || '-',
+        room_assigned: matchedReg.room_assigned || '-',
+        customer_phone: matchedReg.phone || '-',
+        user_email: matchedReg.user_email || '',
+        shirt_size: matchedReg.shirt_size || 'L',
+        pickup_method: 'pickup',
+        pickup_location: 'อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (13 ก.พ. 2570)',
+        pickup_status: isReceived ? 'received' : 'pending',
+        pickup_at: matchedReg.shirt_received_date || null,
+        payment_status: isFullyPaid ? 'paid_verified' : (isRound1Paid ? 'paid_verified' : 'pending_verification'),
+        isFullyPaid,
+        isRound1Paid,
+        total_amount: matchedReg.payment_amount || (matchedReg.institution?.includes('มหาสารคาม') || matchedReg.institution?.includes('มมส') ? 650 : 850),
+        slip_url: matchedReg.payment_slip_url || matchedReg.installment_1_slip_url || matchedReg.slip_url || null,
+        items: [
+          {
+            product_name: 'เสื้อฝึก Joint Response Exercise (JRE 2027) คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
+            size: matchedReg.shirt_size || 'L',
+            color: 'สีเทาตัดดำ (Official Tactical Gray-Black)',
+            quantity: 1,
+            unit_price: 400
+          }
+        ],
+        rawRegistration: matchedReg
+      };
+    }
+
+    return null;
+  };
 
   // Start Scanner
   const startScanner = async () => {
@@ -74,7 +174,7 @@ export default function AdminQRScannerModal({
       );
     } catch (err) {
       console.warn('QR Scanner start failed:', err);
-      setScanError('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์เข้าถึงกล้อง หรือใช้การค้นหาด้วยรหัสคำสั่งซื้อ');
+      setScanError('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์เข้าถึงกล้อง หรือใช้การค้นหาด้วยรหัสคำสั่งซื้อ/เบอร์โทร/นามเรียกขาน');
       setIsScanning(false);
     }
   };
@@ -100,27 +200,13 @@ export default function AdminQRScannerModal({
   // Parse QR content
   const handleQrDecoded = (decodedText) => {
     stopScanner();
-
-    let targetOrderNumber = decodedText;
-    try {
-      const parsed = JSON.parse(decodedText);
-      if (parsed.order_number) {
-        targetOrderNumber = parsed.order_number;
-      }
-    } catch (e) {
-      // plain text order number
-    }
-
-    const matched = orders.find(
-      o => o.order_number?.toLowerCase() === targetOrderNumber?.toLowerCase() ||
-           o.id === targetOrderNumber
-    );
+    const matched = findMatchingItem(decodedText);
 
     if (matched) {
       setScannedOrder(matched);
       setActionSuccessMsg('');
     } else {
-      setScanError(`ไม่พบข้อมูลออเดอร์จาก QR: ${targetOrderNumber}`);
+      setScanError(`ไม่พบข้อมูลออเดอร์หรือผู้สมัครจาก QR: ${decodedText}`);
     }
   };
 
@@ -129,12 +215,7 @@ export default function AdminQRScannerModal({
     e.preventDefault();
     if (!manualQuery.trim()) return;
 
-    const q = manualQuery.trim().toLowerCase();
-    const matched = orders.find(
-      o => o.order_number?.toLowerCase().includes(q) ||
-           o.customer_phone?.includes(q) ||
-           o.customer_name?.toLowerCase().includes(q)
-    );
+    const matched = findMatchingItem(manualQuery);
 
     if (matched) {
       setScannedOrder(matched);
@@ -142,16 +223,22 @@ export default function AdminQRScannerModal({
       setActionSuccessMsg('');
     } else {
       setScannedOrder(null);
-      setScanError(`ไม่พบคำสั่งซื้อที่ตรงกับ "${manualQuery}"`);
+      setScanError(`ไม่พบข้อมูลที่ตรงกับ "${manualQuery}"`);
     }
   };
 
   const handleConfirmReceived = async () => {
     if (!scannedOrder) return;
     try {
-      await onMarkReceived(scannedOrder.id, 'Admin JRE 2027');
-      setActionSuccessMsg('บันทึกการส่งมอบสินค้าเรียบร้อยแล้ว!');
-      // Update local view
+      if (scannedOrder.itemType === 'registration') {
+        if (onMarkRegistrationShirtReceived) {
+          await onMarkRegistrationShirtReceived(scannedOrder.user_id, true);
+        }
+        setActionSuccessMsg(`✓ บันทึกส่งมอบเสื้อฝึก (ไซส์ ${scannedOrder.shirt_size}) ให้แก่คุณ ${scannedOrder.customer_name} เรียบร้อยแล้ว!`);
+      } else {
+        await onMarkReceived(scannedOrder.id, 'Admin JRE 2027');
+        setActionSuccessMsg(`✓ บันทึกส่งมอบสินค้าออเดอร์ ${scannedOrder.order_number} เรียบร้อยแล้ว!`);
+      }
       setScannedOrder({
         ...scannedOrder,
         pickup_status: 'received',
@@ -162,9 +249,37 @@ export default function AdminQRScannerModal({
     }
   };
 
+  const handleUndoReceived = async () => {
+    if (!scannedOrder) return;
+    try {
+      if (scannedOrder.itemType === 'registration') {
+        if (onMarkRegistrationShirtReceived) {
+          await onMarkRegistrationShirtReceived(scannedOrder.user_id, false);
+        }
+        setActionSuccessMsg(`ยกเลิกการส่งมอบเสื้อฝึกคุณ ${scannedOrder.customer_name} เรียบร้อยแล้ว`);
+      } else {
+        if (onMarkReceived) {
+          await onMarkReceived(scannedOrder.id, null, 'pending');
+        }
+        setActionSuccessMsg(`ยกเลิกการส่งมอบออเดอร์ ${scannedOrder.order_number} เรียบร้อยแล้ว`);
+      }
+      setScannedOrder({
+        ...scannedOrder,
+        pickup_status: 'pending',
+        pickup_at: null
+      });
+    } catch (err) {
+      alert('เกิดข้อผิดพลาดในการยกเลิกสถานะ');
+    }
+  };
+
   const handleQuickApprovePayment = async () => {
     if (!scannedOrder) return;
     try {
+      if (scannedOrder.itemType === 'registration') {
+        alert('กรุณาตรวจสอบยอดค่าสมัครของผู้สมัครที่เมนู "จัดการผู้สมัคร"');
+        return;
+      }
       await onVerifyPayment(scannedOrder.id, true, 'อนุมัติสลิปหน้างานโดย Admin');
       setScannedOrder({
         ...scannedOrder,
@@ -285,30 +400,68 @@ export default function AdminQRScannerModal({
         {/* Scanned Order Details Card */}
         {scannedOrder && (
           <div className="mt-5 p-4 bg-slate-950 border border-purple-500/40 rounded-2xl space-y-3.5 shadow-xl animate-in fade-in duration-200">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div>
-                <span className="text-xs font-mono font-black text-purple-400">
-                  {scannedOrder.order_number}
-                </span>
-                <h4 className="text-base font-black text-white mt-0.5">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    scannedOrder.itemType === 'registration'
+                      ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+                      : 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                  }`}>
+                    {scannedOrder.itemType === 'registration' ? '📋 เสื้อฝึกผู้สมัคร (ในค่าสมัคร)' : '🛍️ สั่งซื้อเพิ่ม (ร้านค้า)'}
+                  </span>
+                  <span className="text-xs font-mono font-black text-slate-300">
+                    {scannedOrder.order_number}
+                  </span>
+                </div>
+
+                <h4 className="text-base font-black text-white">
                   {scannedOrder.customer_name}
+                  {scannedOrder.nickname && scannedOrder.nickname !== '-' && (
+                    <span className="text-amber-300 ml-1.5 font-bold text-sm">({scannedOrder.nickname})</span>
+                  )}
                 </h4>
-                <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                  <Phone className="w-3 h-3 text-slate-500" />
-                  <span>{scannedOrder.customer_phone}</span>
-                  {scannedOrder.user_email && <span>• {scannedOrder.user_email}</span>}
-                </p>
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 mt-1">
+                  {scannedOrder.callsign && scannedOrder.callsign !== '-' && (
+                    <span className="text-sky-300 font-mono font-bold">
+                      📡 {scannedOrder.callsign}
+                    </span>
+                  )}
+                  {scannedOrder.institution && scannedOrder.institution !== '-' && (
+                    <span>🏛️ {scannedOrder.institution}</span>
+                  )}
+                  <p className="flex items-center gap-1">
+                    <Phone className="w-3 h-3 text-slate-500" />
+                    <a href={`tel:${scannedOrder.customer_phone}`} className="text-indigo-400 hover:underline">{scannedOrder.customer_phone}</a>
+                  </p>
+                </div>
+
+                {( (scannedOrder.group_assigned && scannedOrder.group_assigned !== '-') || (scannedOrder.room_assigned && scannedOrder.room_assigned !== '-') ) && (
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px]">
+                    {scannedOrder.group_assigned && scannedOrder.group_assigned !== '-' && (
+                      <span className="px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-800">
+                        กลุ่ม: {scannedOrder.group_assigned}
+                      </span>
+                    )}
+                    {scannedOrder.room_assigned && scannedOrder.room_assigned !== '-' && (
+                      <span className="px-2 py-0.5 rounded bg-sky-900/40 text-sky-300 border border-sky-800">
+                        ห้องพัก: {scannedOrder.room_assigned}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Status Badges */}
-              <div className="text-right space-y-1">
+              <div className="text-left sm:text-right space-y-1">
                 {scannedOrder.pickup_status === 'received' ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] rounded-full font-bold">
-                    <PackageCheck className="w-3 h-3" /> รับของแล้ว
+                    <PackageCheck className="w-3 h-3" /> รับเสื้อแล้ว
                   </span>
                 ) : scannedOrder.payment_status === 'paid_verified' ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[11px] rounded-full font-bold">
-                    <CheckCircle2 className="w-3 h-3" /> ชำระแล้ว • รอส่งมอบ
+                    <CheckCircle2 className="w-3 h-3" /> ชำระแล้ว • รอรับเสื้อ
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] rounded-full font-bold">
@@ -320,23 +473,28 @@ export default function AdminQRScannerModal({
 
             {/* Items List */}
             <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-2">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                รายการสินค้าที่ต้องส่งมอบ:
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  รายการเสื้อที่ต้องส่งมอบ:
+                </p>
+                <div className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-black">
+                  👕 ไซส์ {scannedOrder.shirt_size}
+                </div>
+              </div>
               <div className="space-y-1.5 divide-y divide-slate-800/60">
                 {scannedOrder.items?.map((it, idx) => (
                   <div key={idx} className="pt-1.5 first:pt-0 flex justify-between items-center text-xs">
                     <div>
                       <p className="font-bold text-slate-200">{it.product_name}</p>
                       <p className="text-[11px] text-slate-400">
-                        ไซต์: <span className="text-purple-400 font-bold">{it.size}</span>
+                        ไซต์: <span className="text-amber-300 font-bold text-sm">ไซส์ {it.size}</span>
                         {it.extra_price > 0 && <span className="text-amber-400 ml-1">(+{it.extra_price} บ.)</span>}
                         {it.color && <span> • {it.color}</span>}
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="px-2 py-0.5 bg-slate-800 text-white rounded font-black text-xs">
-                        x{it.quantity}
+                      <span className="px-2.5 py-1 bg-slate-800 text-white rounded-lg font-black text-xs">
+                        x{it.quantity} ตัว
                       </span>
                     </div>
                   </div>
@@ -344,9 +502,11 @@ export default function AdminQRScannerModal({
               </div>
 
               <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
-                <span className="text-slate-400">ยอดชำระสุทธิ:</span>
-                <span className="text-sm font-black text-purple-400 font-mono">
-                  {scannedOrder.total_amount} บาท
+                <span className="text-slate-400">ยอดชำระ:</span>
+                <span className="text-sm font-black text-amber-400 font-mono">
+                  {scannedOrder.itemType === 'registration' 
+                    ? `${scannedOrder.total_amount} บาท (ค่าสมัครรวมเสื้อ)` 
+                    : `${scannedOrder.total_amount} บาท`}
                 </span>
               </div>
             </div>
@@ -371,17 +531,17 @@ export default function AdminQRScannerModal({
                   <button
                     type="button"
                     onClick={() => setPreviewSlip(scannedOrder.slip_url)}
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1"
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>ดูสลิป</span>
                   </button>
 
-                  {scannedOrder.payment_status !== 'paid_verified' && (
+                  {scannedOrder.itemType !== 'registration' && scannedOrder.payment_status !== 'paid_verified' && (
                     <button
                       type="button"
                       onClick={handleQuickApprovePayment}
-                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold"
+                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold cursor-pointer"
                     >
                       อนุมัติยอดเงิน
                     </button>
@@ -393,18 +553,27 @@ export default function AdminQRScannerModal({
             {/* Admin Action: Mark as Received */}
             <div className="pt-2">
               {scannedOrder.pickup_status === 'received' ? (
-                <div className="w-full py-3 bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
-                  <PackageCheck className="w-4 h-4" />
-                  <span>สินค้ารายการนี้ถูกส่งมอบเรียบร้อยแล้ว</span>
+                <div className="space-y-2">
+                  <div className="w-full py-3 bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
+                    <PackageCheck className="w-4 h-4" />
+                    <span>ส่งมอบเสื้อไซส์ {scannedOrder.shirt_size} เรียบร้อยแล้ว {scannedOrder.pickup_at ? `(${new Date(scannedOrder.pickup_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })})` : ''}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUndoReceived}
+                    className="w-full py-1 text-slate-400 hover:text-rose-400 text-[11px] font-semibold transition-colors text-center cursor-pointer"
+                  >
+                    ยกเลิกสถานะส่งมอบ (เปลี่ยนกลับเป็นยังไม่ได้รับ)
+                  </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={handleConfirmReceived}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
                 >
                   <PackageCheck className="w-5 h-5" />
-                  <span>ยืนยันการส่งมอบสินค้าเรียบร้อย (Mark as Received)</span>
+                  <span>ยืนยันส่งมอบเสื้อ ไซส์ {scannedOrder.shirt_size} ให้ผู้รับเรียบร้อย</span>
                 </button>
               )}
             </div>

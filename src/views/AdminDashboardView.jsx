@@ -59,7 +59,8 @@ import {
   ShieldCheck,
   Tag,
   ShoppingBag,
-  Copy
+  Copy,
+  Filter
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel } from '../utils/excelExporter';
@@ -174,6 +175,10 @@ export default function AdminDashboardView({
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [merchSearchQuery, setMerchSearchQuery] = useState('');
   const [merchStatusFilter, setMerchStatusFilter] = useState('all');
+  const [merchSourceFilter, setMerchSourceFilter] = useState('all'); // 'all', 'registration', 'merchandise'
+  const [merchSizeFilter, setMerchSizeFilter] = useState('all'); // 'all', 'SS', 'S', 'M', 'L', 'XL', '2XL', etc.
+  const [merchPaymentFilter, setMerchPaymentFilter] = useState('all'); // 'all', 'paid', 'pending', 'unpaid'
+  const [merchDeliveryFilter, setMerchDeliveryFilter] = useState('all'); // 'all', 'pending', 'received'
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
   const [newSizeName, setNewSizeName] = useState('');
   const [newSizeMeasurement, setNewSizeMeasurement] = useState('');
@@ -182,6 +187,245 @@ export default function AdminDashboardView({
   const [newProductImageUrl, setNewProductImageUrl] = useState('');
   const [isUploadingProductImg, setIsUploadingProductImg] = useState(false);
   const [previewProductImageModal, setPreviewProductImageModal] = useState(null);
+
+  // Normalize shirt size helper
+  const normalizeSize = (rawSize) => {
+    if (!rawSize) return 'L';
+    const clean = String(rawSize).trim().toUpperCase();
+    if (clean === 'XXL' || clean === '2XL') return '2XL';
+    if (clean === '3XL' || clean === 'XXXL') return '3XL';
+    if (clean === '4XL' || clean === 'XXXXL') return '4XL';
+    if (clean === '5XL') return '5XL';
+    if (clean === 'SS' || clean === 'XS') return 'SS';
+    if (clean === 'S') return 'S';
+    if (clean === 'M') return 'M';
+    if (clean === 'L') return 'L';
+    if (clean === 'XL') return 'XL';
+    return clean || 'L';
+  };
+
+  const SIZE_MEASUREMENTS = {
+    'SS': 'อก 34" / ยาว 25"',
+    'S': 'อก 36" / ยาว 26"',
+    'M': 'อก 38" / ยาว 27"',
+    'L': 'อก 40" / ยาว 28"',
+    'XL': 'อก 42" / ยาว 29"',
+    '2XL': 'อก 44" / ยาว 30"',
+    '3XL': 'อก 46" / ยาว 31"',
+    '4XL': 'อก 48" / ยาว 32"',
+    '5XL': 'อก 50" / ยาว 32"',
+    'อื่นๆ': 'ขนาดสั่งตัดพิเศษ'
+  };
+
+  // Trainee registrations unified as official training shirt records
+  const traineeShirtRecords = React.useMemo(() => {
+    return (registrations || []).map((r) => {
+      const isRound1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid' || r.payment_status === 'full';
+      const isFullyPaid = r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && r.installment_2_status === 'paid');
+      const isReceived = r.shirt_pickup_status === 'received' || r.shirt_received === true;
+      const rawSize = (r.shirt_size || 'L').trim();
+      const normSize = normalizeSize(rawSize);
+      const orderNumber = `JRE27-SHIRT-${(r.id || r.user_id || 'REG').slice(0, 6).toUpperCase()}`;
+
+      return {
+        id: `reg_shirt_${r.id || r.user_id}`,
+        user_id: r.user_id,
+        source: 'registration',
+        source_label: '📋 เสื้อฝึกผู้สมัคร (รวมในค่าสมัคร)',
+        order_number: orderNumber,
+        customer_name: r.full_name_affiliation || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.user_email || 'ผู้สมัคร JRE 2027',
+        nickname: r.nickname || '-',
+        callsign: r.callsign || '-',
+        institution: r.institution || '-',
+        phone: r.phone || '-',
+        user_email: r.user_email || '',
+        group_assigned: r.group_assigned || '-',
+        room_assigned: r.room_assigned || '-',
+        size: rawSize,
+        normalized_size: normSize,
+        quantity: 1,
+        product_name: 'เสื้อฝึก JRE 2027 คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
+        color: 'สีเทาตัดดำ (Official Tactical Gray-Black)',
+        total_amount: r.payment_amount || (r.institution && (r.institution.includes('มหาสารคาม') || r.institution.includes('มมส')) ? 650 : 850),
+        payment_status: isFullyPaid ? 'paid_verified' : isRound1Paid ? 'paid_verified' : (r.payment_slip_url || r.installment_1_slip_url) ? 'pending_verification' : 'unpaid',
+        payment_badge: isFullyPaid ? 'ชำระเต็มจำนวน' : isRound1Paid ? 'ชำระงวดที่ 1 (ค่าเสื้อ)' : (r.payment_slip_url || r.installment_1_slip_url) ? 'รอตรวจสลิป' : 'ยังไม่ชำระ',
+        pickup_status: isReceived ? 'received' : 'pending',
+        pickup_at: r.shirt_received_date || null,
+        slip_url: r.payment_slip_url || r.installment_1_slip_url || r.slip_url || null,
+        slip_uploaded_at: r.payment_slip_date || r.installment_1_slip_date || null,
+        created_at: r.created_at || new Date().toISOString(),
+        rawRegistration: r
+      };
+    });
+  }, [registrations]);
+
+  // Merchandise store orders records
+  const merchandiseStoreRecords = React.useMemo(() => {
+    return (merchandiseOrders || []).map((ord) => {
+      const isVerified = ord.payment_status === 'paid_verified';
+      const isReceived = ord.pickup_status === 'received';
+      const totalQty = (ord.items || []).reduce((sum, it) => sum + (it.quantity || 1), 0);
+      const primarySize = ord.items?.[0]?.size ? String(ord.items[0].size).toUpperCase() : 'L';
+      const normSize = normalizeSize(primarySize);
+
+      return {
+        id: ord.id,
+        user_id: ord.user_id,
+        source: 'merchandise',
+        source_label: '🛍️ สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
+        order_number: ord.order_number,
+        customer_name: ord.customer_name || 'ลูกค้าหน้าร้าน',
+        nickname: '-',
+        callsign: '-',
+        institution: '-',
+        phone: ord.customer_phone || '-',
+        user_email: ord.user_email || '',
+        group_assigned: '-',
+        room_assigned: '-',
+        size: primarySize,
+        normalized_size: normSize,
+        quantity: totalQty,
+        product_name: ord.items?.map(it => `${it.product_name} (${it.size} x${it.quantity})`).join(', ') || 'สินค้า JRE 2027',
+        color: ord.items?.[0]?.color || '-',
+        items: ord.items || [],
+        shipping_address: ord.shipping_address || null,
+        pickup_method: ord.pickup_method || 'pickup',
+        total_amount: ord.total_amount || 0,
+        payment_status: ord.payment_status || 'pending_verification',
+        payment_badge: isVerified ? 'ชำระแล้ว (อนุมัติสลิป)' : ord.payment_status === 'pending_verification' ? 'รอตรวจสลิป' : 'ยังไม่ชำระ',
+        pickup_status: isReceived ? 'received' : 'pending',
+        pickup_at: ord.pickup_at || null,
+        slip_url: ord.slip_url || null,
+        slip_uploaded_at: ord.slip_uploaded_at || null,
+        created_at: ord.created_at || new Date().toISOString(),
+        rawOrder: ord
+      };
+    });
+  }, [merchandiseOrders]);
+
+  // Combined statistics for sizes
+  const sizeStats = React.useMemo(() => {
+    const STANDARD_SIZES = ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'];
+    const counts = {};
+    const receivedCounts = {};
+    const pendingCounts = {};
+    const sizePeople = {};
+
+    STANDARD_SIZES.forEach(s => {
+      counts[s] = 0;
+      receivedCounts[s] = 0;
+      pendingCounts[s] = 0;
+      sizePeople[s] = [];
+    });
+
+    let totalShirts = 0;
+    let totalReceivedShirts = 0;
+    let totalPendingShirts = 0;
+
+    // 1. Process Trainee Registrations
+    traineeShirtRecords.forEach(rec => {
+      const s = STANDARD_SIZES.includes(rec.normalized_size) ? rec.normalized_size : 'อื่นๆ';
+      counts[s] = (counts[s] || 0) + 1;
+      totalShirts += 1;
+      if (rec.pickup_status === 'received') {
+        receivedCounts[s] = (receivedCounts[s] || 0) + 1;
+        totalReceivedShirts += 1;
+      } else {
+        pendingCounts[s] = (pendingCounts[s] || 0) + 1;
+        totalPendingShirts += 1;
+      }
+      sizePeople[s].push(rec);
+    });
+
+    // 2. Process Store Orders
+    merchandiseStoreRecords.forEach(rec => {
+      (rec.items || []).forEach(it => {
+        const norm = normalizeSize(it.size);
+        const s = STANDARD_SIZES.includes(norm) ? norm : 'อื่นๆ';
+        const qty = it.quantity || 1;
+        counts[s] = (counts[s] || 0) + qty;
+        totalShirts += qty;
+        if (rec.pickup_status === 'received') {
+          receivedCounts[s] = (receivedCounts[s] || 0) + qty;
+          totalReceivedShirts += qty;
+        } else {
+          pendingCounts[s] = (pendingCounts[s] || 0) + qty;
+          totalPendingShirts += qty;
+        }
+        sizePeople[s].push({
+          ...rec,
+          itemSize: it.size,
+          itemQty: qty
+        });
+      });
+    });
+
+    return {
+      STANDARD_SIZES,
+      counts,
+      receivedCounts,
+      pendingCounts,
+      sizePeople,
+      totalShirts,
+      totalReceivedShirts,
+      totalPendingShirts
+    };
+  }, [traineeShirtRecords, merchandiseStoreRecords]);
+
+  // Unified items filtered for search and inspector
+  const filteredShirtItems = React.useMemo(() => {
+    return [...traineeShirtRecords, ...merchandiseStoreRecords].filter(item => {
+      // 1. Source filter
+      if (merchSourceFilter !== 'all' && item.source !== merchSourceFilter) {
+        return false;
+      }
+
+      // 2. Size filter
+      if (merchSizeFilter !== 'all') {
+        if (item.source === 'registration') {
+          if (item.normalized_size !== merchSizeFilter) return false;
+        } else {
+          const hasSize = (item.items || []).some(it => normalizeSize(it.size) === merchSizeFilter);
+          if (!hasSize && item.normalized_size !== merchSizeFilter) return false;
+        }
+      }
+
+      // 3. Delivery status filter
+      if (merchDeliveryFilter !== 'all' && item.pickup_status !== merchDeliveryFilter) {
+        return false;
+      }
+
+      // 4. Payment status filter
+      if (merchPaymentFilter !== 'all') {
+        if (merchPaymentFilter === 'paid' && item.payment_status !== 'paid_verified') return false;
+        if (merchPaymentFilter === 'pending' && item.payment_status !== 'pending_verification') return false;
+        if (merchPaymentFilter === 'unpaid' && item.payment_status !== 'unpaid') return false;
+      }
+
+      // 5. Legacy status filter
+      if (merchStatusFilter !== 'all') {
+        if (merchStatusFilter === 'received' && item.pickup_status !== 'received') return false;
+        if (merchStatusFilter === 'pending_verification' && item.payment_status !== 'pending_verification') return false;
+        if (merchStatusFilter === 'paid_verified' && (item.payment_status !== 'paid_verified' || item.pickup_status === 'received')) return false;
+      }
+
+      // 6. Search Query
+      if (merchSearchQuery.trim()) {
+        const q = merchSearchQuery.toLowerCase().trim();
+        const matchesName = item.customer_name?.toLowerCase().includes(q);
+        const matchesCallsign = item.callsign?.toLowerCase().includes(q);
+        const matchesNickname = item.nickname?.toLowerCase().includes(q);
+        const matchesPhone = item.phone?.includes(q);
+        const matchesEmail = item.user_email?.toLowerCase().includes(q);
+        const matchesOrder = item.order_number?.toLowerCase().includes(q);
+        const matchesInst = item.institution?.toLowerCase().includes(q);
+        const matchesSize = item.size?.toLowerCase().includes(q);
+        return matchesName || matchesCallsign || matchesNickname || matchesPhone || matchesEmail || matchesOrder || matchesInst || matchesSize;
+      }
+
+      return true;
+    });
+  }, [traineeShirtRecords, merchandiseStoreRecords, merchSourceFilter, merchSizeFilter, merchDeliveryFilter, merchPaymentFilter, merchStatusFilter, merchSearchQuery]);
 
   React.useEffect(() => {
     if (merchandiseConfig) {
@@ -1609,7 +1853,7 @@ export default function AdminDashboardView({
           }`}
         >
           <Shirt className="w-4 h-4 text-rescue-400" />
-          <span>จัดการเสื้อ/กางเกง & สแกน QR ({merchandiseOrders.length})</span>
+          <span>จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</span>
         </button>
 
         <button
@@ -3896,292 +4140,609 @@ export default function AdminDashboardView({
 
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <span className="text-xs text-slate-400 font-bold uppercase">ออเดอร์ทั้งหมด</span>
-              <p className="text-2xl sm:text-3xl font-black text-white mt-1">
-                {merchandiseOrders.length} <span className="text-xs font-normal text-slate-400">รายการ</span>
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                <span>รวมเสื้อทั้งหมด</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-rescue-500/10 text-rescue-400 border border-rescue-500/30">
+                  Live Unified
+                </span>
+              </span>
+              <p className="text-2xl sm:text-3xl font-black text-white">
+                {sizeStats.totalShirts} <span className="text-xs font-normal text-slate-400">ตัว</span>
+              </p>
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                ผู้สมัคร <strong className="text-amber-300">{traineeShirtRecords.length}</strong> ตัว • สั่งซื้อเพิ่ม <strong className="text-purple-300">{sizeStats.totalShirts - traineeShirtRecords.length}</strong> ตัว
               </p>
             </div>
 
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <span className="text-xs text-slate-400 font-bold uppercase">ยอดชำระแล้วสุทธิ</span>
-              <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                <span>ส่งมอบเสื้อแล้ว</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  {sizeStats.totalShirts > 0 ? Math.round((sizeStats.totalReceivedShirts / sizeStats.totalShirts) * 100) : 0}%
+                </span>
+              </span>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-400">
+                {sizeStats.totalReceivedShirts} <span className="text-xs font-normal text-slate-400">ตัว</span>
+              </p>
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                ส่งมอบแล้ว <strong className="text-emerald-300">{sizeStats.totalReceivedShirts}</strong> จากทั้งหมด {sizeStats.totalShirts} ตัว
+              </p>
+            </div>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                <span>รอส่งมอบหน้างาน</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  {sizeStats.totalShirts > 0 ? Math.round((sizeStats.totalPendingShirts / sizeStats.totalShirts) * 100) : 0}%
+                </span>
+              </span>
+              <p className="text-2xl sm:text-3xl font-black text-amber-400">
+                {sizeStats.totalPendingShirts} <span className="text-xs font-normal text-slate-400">ตัว</span>
+              </p>
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80 truncate">
+                รอรับ ณ อาคารพลศึกษา มมส (13 ก.พ. 2570)
+              </p>
+            </div>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+                ยอดสั่งซื้อเพิ่มหน้าร้าน
+              </span>
+              <p className="text-2xl sm:text-3xl font-black text-purple-400">
                 {merchandiseOrders
                   .filter(o => o.payment_status === 'paid_verified')
                   .reduce((sum, o) => sum + (o.total_amount || 0), 0)
                   .toLocaleString()}{' '}
                 <span className="text-xs font-normal text-slate-400">บาท</span>
               </p>
-            </div>
-
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <span className="text-xs text-slate-400 font-bold uppercase">รอตรวจสอบสลิป</span>
-              <p className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
-                {merchandiseOrders.filter(o => o.payment_status === 'pending_verification').length}{' '}
-                <span className="text-xs font-normal text-slate-400">รายการ</span>
-              </p>
-            </div>
-
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <span className="text-xs text-slate-400 font-bold uppercase">ส่งมอบสินค้าแล้ว</span>
-              <p className="text-2xl sm:text-3xl font-black text-purple-400 mt-1">
-                {merchandiseOrders.filter(o => o.pickup_status === 'received').length}{' '}
-                <span className="text-xs font-normal text-slate-400">รายการ</span>
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                รอตรวจสลิปหน้าร้าน: <strong className="text-amber-300">{merchandiseOrders.filter(o => o.payment_status === 'pending_verification').length}</strong> รายการ
               </p>
             </div>
           </div>
 
-          {/* ORDERS LIST SECTION */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                <PackageCheck className="w-5 h-5 text-rescue-500" />
-                <span>รายการคำสั่งซื้อของสมาชิก & ผู้เข้าร่วมโครงการ</span>
-              </h3>
-
-              {/* Search & Filter */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-[200px]">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={merchSearchQuery}
-                    onChange={(e) => setMerchSearchQuery(e.target.value)}
-                    placeholder="ค้นหาชื่อ, เบอร์, รหัสออเดอร์..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
-                  />
+          {/* SECTION: VISUAL CHART & SIZE BREAKDOWN ANALYTICS */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-3xl p-5 sm:p-7 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 mb-1.5">
+                  <Shirt className="w-3.5 h-3.5" />
+                  <span>สรุปยอดแจกแจงตามขนาดไซส์ (Size Breakdown Analytics)</span>
                 </div>
+                <h3 className="text-lg font-black text-white">
+                  แผนภูมิสัดส่วนไซส์เสื้อ & ยอดผลิตสำหรับแจกจ่ายหน้างาน
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  คลิกที่ปุ่มไซส์เพื่อกรองดู <strong className="text-amber-300">"ใครบ้าง กี่ตัว"</strong> ในตารางด้านล่างได้ทันที
+                </p>
+              </div>
+
+              {merchSizeFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setMerchSizeFilter('all')}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto border border-slate-700 transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>ล้างการกรองไซส์ (แสดงทั้งหมด)</span>
+                </button>
+              )}
+            </div>
+
+            {/* Visual Distribution Horizontal Bars */}
+            <div className="space-y-3">
+              {sizeStats.STANDARD_SIZES.map((sizeKey) => {
+                const count = sizeStats.counts[sizeKey] || 0;
+                const recCount = sizeStats.receivedCounts[sizeKey] || 0;
+                const pendCount = sizeStats.pendingCounts[sizeKey] || 0;
+                const pct = sizeStats.totalShirts > 0 ? ((count / sizeStats.totalShirts) * 100).toFixed(1) : 0;
+                const isSelected = merchSizeFilter === sizeKey;
+                const measurement = SIZE_MEASUREMENTS[sizeKey] || '';
+
+                return (
+                  <div 
+                    key={sizeKey}
+                    onClick={() => setMerchSizeFilter(isSelected ? 'all' : sizeKey)}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500/10 border-amber-500/60 ring-2 ring-amber-500/30 shadow-lg'
+                        : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black font-mono ${
+                          isSelected ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-amber-300 border border-slate-700'
+                        }`}>
+                          {sizeKey}
+                        </span>
+                        <div>
+                          <span className="text-xs font-bold text-white">
+                            ไซส์ {sizeKey}
+                          </span>
+                          {measurement && (
+                            <span className="text-[11px] text-slate-400 ml-2 font-mono">
+                              ({measurement})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-slate-400">
+                          ส่งมอบแล้ว <strong className="text-emerald-400">{recCount}</strong> / รอรับ <strong className="text-amber-400">{pendCount}</strong>
+                        </span>
+                        <div className="text-right min-w-[70px]">
+                          <span className="font-black text-sm text-white font-mono">{count}</span>{' '}
+                          <span className="text-[11px] text-slate-400">ตัว ({pct}%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar with Delivered vs Pending Split */}
+                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800/60">
+                      {count > 0 ? (
+                        <>
+                          <div 
+                            style={{ width: `${sizeStats.totalShirts > 0 ? (recCount / sizeStats.totalShirts) * 100 : 0}%` }}
+                            className="bg-emerald-500 h-full transition-all duration-500 hover:opacity-90"
+                            title={`ส่งมอบแล้ว: ${recCount} ตัว`}
+                          />
+                          <div 
+                            style={{ width: `${sizeStats.totalShirts > 0 ? (pendCount / sizeStats.totalShirts) * 100 : 0}%` }}
+                            className="bg-amber-500 h-full transition-all duration-500 hover:opacity-90"
+                            title={`รอรับ: ${pendCount} ตัว`}
+                          />
+                        </>
+                      ) : (
+                        <div className="w-full h-full bg-slate-900/50" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quick Interactive Size Badges Grid */}
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                คลิกเลือกขนาดไซส์เพื่อดูรายชื่อผู้รับทันที (Quick Size Filter):
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMerchSizeFilter('all')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    merchSizeFilter === 'all'
+                      ? 'bg-purple-600 border-purple-400 text-white shadow-md'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black">ทั้งหมด</span>
+                    <span className="text-xs font-mono font-bold">{sizeStats.totalShirts}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">รวมทุกขนาดไซส์</span>
+                </button>
+
+                {sizeStats.STANDARD_SIZES.map((s) => {
+                  const count = sizeStats.counts[s] || 0;
+                  const isSelected = merchSizeFilter === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setMerchSizeFilter(isSelected ? 'all' : s)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-500 ring-2 ring-amber-500/30 text-white shadow-md'
+                          : count > 0
+                          ? 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                          : 'bg-slate-950/40 border-slate-900 text-slate-600 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black font-mono">👕 {s}</span>
+                        <span className={`text-xs font-mono font-black ${count > 0 ? 'text-amber-400' : 'text-slate-600'}`}>
+                          {count} ตัว
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                        <span className="text-emerald-400">✓ {sizeStats.receivedCounts[s] || 0}</span>
+                        <span className="text-amber-400">⏳ {sizeStats.pendingCounts[s] || 0}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION: ORDERS & TRAINEE SHIRTS LIST ("ใครบ้าง กี่ตัว") */}
+          <div className="space-y-4">
+            
+            {/* Source Filter Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMerchSourceFilter('all')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    merchSourceFilter === 'all'
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  ทั้งหมด ({filteredShirtItems.length} รายการ)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMerchSourceFilter('registration')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    merchSourceFilter === 'registration'
+                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30'
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <span>📋 เสื้อฝึกผู้สมัคร</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-black/30 text-[10px]">
+                    {traineeShirtRecords.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMerchSourceFilter('merchandise')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    merchSourceFilter === 'merchandise'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <span>🛍️ สั่งซื้อเพิ่ม (หน้าร้าน)</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-black/30 text-[10px]">
+                    {merchandiseStoreRecords.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Active size indicator if filtered */}
+              {merchSizeFilter !== 'all' && (
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold">
+                  <span>กำลังแสดงเฉพาะ: ไซส์ {merchSizeFilter}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setMerchSizeFilter('all')}
+                    className="p-0.5 hover:bg-amber-500/30 rounded-full cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Search and Dropdown Filter Controls */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={merchSearchQuery}
+                  onChange={(e) => setMerchSearchQuery(e.target.value)}
+                  placeholder="ค้นหาชื่อ, นามเรียกขาน, ชื่อเล่น, เบอร์โทร, สังกัด, รหัส..."
+                  className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={merchSizeFilter}
+                  onChange={(e) => setMerchSizeFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
+                >
+                  <option value="all">ไซส์ทั้งหมด</option>
+                  {sizeStats.STANDARD_SIZES.map(s => (
+                    <option key={s} value={s}>ไซส์ {s} ({sizeStats.counts[s] || 0} ตัว)</option>
+                  ))}
+                </select>
 
                 <select
-                  value={merchStatusFilter}
-                  onChange={(e) => setMerchStatusFilter(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
+                  value={merchDeliveryFilter}
+                  onChange={(e) => setMerchDeliveryFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
                 >
-                  <option value="all">สถานะทั้งหมด</option>
-                  <option value="pending_verification">รอตรวจสอบสลิป</option>
-                  <option value="paid_verified">ชำระแล้ว (รอส่งมอบ)</option>
-                  <option value="received">ส่งมอบแล้ว</option>
+                  <option value="all">การส่งมอบทั้งหมด</option>
+                  <option value="pending">⏳ ยังไม่ส่งมอบ (รอรับ)</option>
+                  <option value="received">✓ ส่งมอบแล้ว</option>
                 </select>
+
+                <select
+                  value={merchPaymentFilter}
+                  onChange={(e) => setMerchPaymentFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
+                >
+                  <option value="all">การชำระเงินทั้งหมด</option>
+                  <option value="paid">✓ ชำระแล้ว</option>
+                  <option value="pending">⏳ รอตรวจสลิป</option>
+                  <option value="unpaid">ยังไม่ชำระ</option>
+                </select>
+
+                {(merchSearchQuery || merchSizeFilter !== 'all' || merchDeliveryFilter !== 'all' || merchPaymentFilter !== 'all' || merchSourceFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMerchSearchQuery('');
+                      setMerchSizeFilter('all');
+                      setMerchDeliveryFilter('all');
+                      setMerchPaymentFilter('all');
+                      setMerchSourceFilter('all');
+                    }}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs cursor-pointer"
+                    title="ล้างตัวกรองทั้งหมด"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Orders Cards / Table */}
-            {(() => {
-              const filteredOrders = merchandiseOrders.filter(o => {
-                if (merchStatusFilter !== 'all') {
-                  if (merchStatusFilter === 'received' && o.pickup_status !== 'received') return false;
-                  if (merchStatusFilter === 'pending_verification' && o.payment_status !== 'pending_verification') return false;
-                  if (merchStatusFilter === 'paid_verified' && (o.payment_status !== 'paid_verified' || o.pickup_status === 'received')) return false;
-                }
-                if (!merchSearchQuery.trim()) return true;
-                const q = merchSearchQuery.toLowerCase().trim();
-                return (
-                  o.order_number?.toLowerCase().includes(q) ||
-                  o.customer_name?.toLowerCase().includes(q) ||
-                  o.customer_phone?.includes(q) ||
-                  o.user_email?.toLowerCase().includes(q)
-                );
-              });
+            {/* LIST OF FILTERED ITEMS */}
+            {filteredShirtItems.length === 0 ? (
+              <div className="p-12 text-center bg-slate-950/70 border border-slate-800 rounded-3xl space-y-3">
+                <Shirt className="w-10 h-10 text-slate-600 mx-auto" />
+                <h4 className="text-base font-bold text-white">ไม่พบรายการเสื้อหรือคำสั่งซื้อตามเงื่อนไขที่เลือก</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  ลองล้างคำค้นหาหรือเปลี่ยนขนาดไซส์ที่ต้องการกรอง
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredShirtItems.map((item, index) => {
+                  const isReceived = item.pickup_status === 'received';
+                  const isPaid = item.payment_status === 'paid_verified';
+                  const isReg = item.source === 'registration';
 
-              if (filteredOrders.length === 0) {
-                if (merchandiseOrders.length === 0) {
                   return (
-                    <div className="p-10 sm:p-14 text-center bg-slate-950/70 border border-slate-800 rounded-3xl space-y-4">
-                      <div className="w-16 h-16 bg-slate-900 border border-slate-700/80 rounded-2xl mx-auto flex items-center justify-center text-slate-400 shadow-inner">
-                        <PackageCheck className="w-8 h-8 text-rescue-500" />
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-base sm:text-lg font-bold text-white">ยังไม่มีรายการคำสั่งซื้อจากสมาชิกหรือผู้เข้าร่วมโครงการในระบบ</h4>
-                        <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
-                          ระบบเชื่อมต่อฐานข้อมูลคำสั่งซื้อจริง (Real Database) โดยไม่มีข้อมูลจำลอง (Mock Data) เมื่อมีสมาชิกสั่งซื้อเสื้อหรือกางเกงผ่านระบบ รายการคำสั่งซื้อ สลิปโอนเงิน และรหัส QR รับของจะแสดงขึ้นที่นี่ทันที
-                        </p>
-                      </div>
-                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        เชื่อมต่อฐานข้อมูลคำสั่งซื้อจริงเรียบร้อยแล้ว (Live System)
-                      </div>
-                    </div>
-                  );
-                }
+                    <div
+                      key={item.id || index}
+                      className={`p-4 sm:p-5 rounded-2xl border transition-all shadow-lg space-y-3 ${
+                        isReceived 
+                          ? 'bg-slate-950/95 border-emerald-500/30' 
+                          : 'bg-slate-950/95 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Card Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                            isReg 
+                              ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' 
+                              : 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                          }`}>
+                            {item.source_label}
+                          </span>
+                          <span className="text-xs font-mono font-black text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            {item.order_number}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(item.created_at).toLocaleDateString('th-TH')} • {new Date(item.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 bg-slate-800 rounded text-slate-300 font-bold">
+                            {item.pickup_method === 'shipping' ? 'จัดส่งพัสดุ' : 'รับหน้างาน 13 ก.พ. 2570'}
+                          </span>
+                        </div>
 
-                return (
-                  <div className="p-12 text-center bg-slate-950/60 border border-slate-800 rounded-2xl space-y-2">
-                    <PackageCheck className="w-10 h-10 text-slate-600 mx-auto" />
-                    <p className="text-sm font-bold text-slate-300">ไม่พบรายการสั่งซื้อตามเงื่อนไขที่ค้นหา</p>
-                  </div>
-                );
-              }
+                        {/* Status Badges */}
+                        <div className="flex items-center gap-2">
+                          {isReceived ? (
+                            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs rounded-full font-bold flex items-center gap-1 shadow">
+                              <PackageCheck className="w-3.5 h-3.5" /> ส่งมอบเสื้อแล้ว
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs rounded-full font-bold flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> รอส่งมอบหน้างาน
+                            </span>
+                          )}
 
-              return (
-                <div className="space-y-3">
-                  {filteredOrders.map((ord) => {
-                    const isVerified = ord.payment_status === 'paid_verified';
-                    const isReceived = ord.pickup_status === 'received';
+                          {isPaid ? (
+                            <span className="px-2.5 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[11px] rounded-full font-bold">
+                              ✓ {item.payment_badge}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-slate-800 text-slate-400 border border-slate-700 text-[11px] rounded-full font-bold">
+                              {item.payment_badge}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                    return (
-                      <div
-                        key={ord.id}
-                        className="p-4 sm:p-5 bg-slate-950/90 border border-slate-800 hover:border-slate-700 rounded-2xl shadow-lg space-y-3 transition-all"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono font-black text-rescue-400 bg-rescue-500/10 px-2 py-0.5 rounded border border-rescue-500/30">
-                                {ord.order_number}
+                      {/* Card Body (3-Column Layout) */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                        
+                        {/* Col 1: Person Info (5 cols) */}
+                        <div className="md:col-span-5 space-y-1">
+                          <h4 className="text-sm font-black text-white flex items-center gap-1.5 flex-wrap">
+                            <span>{item.customer_name}</span>
+                            {item.nickname && item.nickname !== '-' && (
+                              <span className="text-amber-300 text-xs font-bold">({item.nickname})</span>
+                            )}
+                          </h4>
+
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-400">
+                            {item.callsign && item.callsign !== '-' && (
+                              <span className="text-sky-300 font-mono font-bold">
+                                📡 {item.callsign}
                               </span>
-                              <span className="text-[11px] text-slate-400">
-                                {new Date(ord.created_at).toLocaleDateString('th-TH')} • {new Date(ord.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                            )}
+                            {item.institution && item.institution !== '-' && (
+                              <span className="truncate max-w-[220px]" title={item.institution}>
+                                🏛️ {item.institution}
                               </span>
-                              <span className="text-[10px] px-2 py-0.5 bg-slate-800 rounded text-slate-300 font-bold">
-                                {ord.pickup_method === 'shipping' ? 'จัดส่งพัสดุ' : 'รับหน้างาน'}
-                              </span>
-                            </div>
-                            <h4 className="text-sm font-bold text-white mt-1">
-                              {ord.customer_name} • เบอร์โทร: <a href={`tel:${ord.customer_phone}`} className="text-indigo-400 hover:underline">{ord.customer_phone}</a>
-                              {ord.user_email && <span className="text-slate-400 font-normal ml-1">({ord.user_email})</span>}
-                            </h4>
-                            {ord.shipping_address && (
-                              <p className="text-xs text-amber-300/90 mt-0.5">
-                                ที่อยู่จัดส่ง: {ord.shipping_address}
-                              </p>
                             )}
                           </div>
 
-                          {/* Status badges */}
-                          <div className="flex items-center gap-2">
-                            {isReceived ? (
-                              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs rounded-full font-bold flex items-center gap-1">
-                                <PackageCheck className="w-3.5 h-3.5" /> ส่งมอบสินค้าแล้ว
+                          <div className="flex items-center gap-3 text-xs text-slate-400">
+                            <p className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-500" />
+                              <a href={`tel:${item.phone}`} className="text-indigo-400 hover:underline">{item.phone}</a>
+                            </p>
+                            {item.group_assigned && item.group_assigned !== '-' && (
+                              <span className="px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-800 text-[10px]">
+                                กลุ่ม: {item.group_assigned}
                               </span>
-                            ) : isVerified ? (
-                              <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs rounded-full font-bold flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> ยอดเงินถูกต้อง • รอส่งมอบ
-                              </span>
-                            ) : (
-                              <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs rounded-full font-bold flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5" /> รอตรวจสลิป
+                            )}
+                            {item.room_assigned && item.room_assigned !== '-' && (
+                              <span className="px-2 py-0.5 rounded bg-sky-900/40 text-sky-300 border border-sky-800 text-[10px]">
+                                ห้อง: {item.room_assigned}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Items breakdown & Slip */}
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                          {/* Items Column (7 cols) */}
-                          <div className="md:col-span-7 space-y-1.5">
-                            {ord.items?.map((it, idx) => (
-                              <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs flex justify-between items-center">
-                                <div>
-                                  <p className="font-bold text-white">{it.product_name}</p>
-                                  <p className="text-[11px] text-slate-400">
-                                    ไซต์: <span className="text-rescue-400 font-black">{it.size}</span>
-                                    {it.extra_price > 0 && <span className="text-amber-400 ml-1 font-bold">(+{it.extra_price} บ. ไซต์พิเศษ)</span>}
-                                    {it.color && <span> • {it.color}</span>}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-black text-white px-2 py-0.5 bg-slate-800 rounded text-xs mr-2">x{it.quantity}</span>
-                                  <span className="font-black text-rescue-400">{it.unit_price * it.quantity} บ.</span>
-                                </div>
-                              </div>
-                            ))}
-                            <div className="text-right pt-1 text-xs">
-                              <span className="text-slate-400 mr-2">ยอดรวมทั้งสิ้น:</span>
-                              <span className="text-sm font-black text-rescue-400 font-mono">{ord.total_amount} บาท</span>
+                        {/* Col 2: Shirt Size & Items (4 cols) */}
+                        <div className="md:col-span-4 bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-slate-400 font-bold uppercase">ไซส์เสื้อ:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-black text-sm">
+                                👕 ไซส์ {item.size}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-slate-800 text-white font-mono font-bold text-xs">
+                                x{item.quantity} ตัว
+                              </span>
                             </div>
                           </div>
 
-                          {/* Slip Preview & Admin Actions (5 cols) */}
-                          <div className="md:col-span-5 bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
-                            {ord.slip_url ? (
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <img
-                                    src={ord.slip_url}
-                                    alt="Slip"
-                                    className="w-10 h-10 rounded-lg object-cover border border-slate-700"
-                                  />
-                                  <div>
-                                    <p className="text-xs font-bold text-slate-300">สลิปโอนเงิน</p>
-                                    <p className="text-[10px] text-slate-400">
-                                      {ord.slip_uploaded_at ? new Date(ord.slip_uploaded_at).toLocaleString('th-TH') : 'แนบแล้ว'}
-                                    </p>
-                                  </div>
+                          <p className="text-xs text-slate-300 truncate" title={item.product_name}>
+                            {item.product_name}
+                          </p>
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/80">
+                            <span className="text-slate-400">ยอดเงิน:</span>
+                            <span className="font-black text-amber-400 font-mono">
+                              {item.total_amount ? `${item.total_amount.toLocaleString()} บาท` : '-'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Col 3: Slip & Admin Handover Actions (3 cols) */}
+                        <div className="md:col-span-3 space-y-2">
+                          {/* Slip Preview if present */}
+                          {item.slip_url ? (
+                            <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={item.slip_url}
+                                  alt="สลิป"
+                                  className="w-8 h-8 rounded-lg object-cover border border-slate-700"
+                                />
+                                <span className="text-[11px] text-slate-300 font-bold">สลิปโอนเงิน</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewSlipUrl(item.slip_url)}
+                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>ดูสลิป</span>
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {/* Handover Buttons */}
+                          <div>
+                            {!isReceived ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (isReg) {
+                                    if (onUpdateAllocation) {
+                                      await onUpdateAllocation(item.user_id, {
+                                        shirt_pickup_status: 'received',
+                                        shirt_received: true,
+                                        shirt_received_date: new Date().toISOString()
+                                      });
+                                      triggerToast(`บันทึกส่งมอบเสื้อฝึก (ไซส์ ${item.size}) แก่คุณ ${item.customer_name} เรียบร้อยแล้ว`);
+                                    }
+                                  } else {
+                                    await onMarkOrderReceived(item.id, 'Admin JRE 2027');
+                                    triggerToast(`บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว`);
+                                  }
+                                }}
+                                className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
+                              >
+                                <PackageCheck className="w-4 h-4" />
+                                <span>บันทึกส่งมอบเสื้อแล้ว</span>
+                              </button>
+                            ) : (
+                              <div className="space-y-1">
+                                <div className="text-center py-1 text-[11px] text-emerald-400 font-bold flex items-center justify-center gap-1 bg-emerald-950/40 rounded-lg border border-emerald-500/20">
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>ส่งมอบแล้ว {item.pickup_at ? `(${new Date(item.pickup_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })})` : ''}</span>
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => setPreviewMerchSlip(ord.slip_url)}
-                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1"
+                                  onClick={async () => {
+                                    if (isReg) {
+                                      if (onUpdateAllocation) {
+                                        await onUpdateAllocation(item.user_id, {
+                                          shirt_pickup_status: 'pending',
+                                          shirt_received: false,
+                                          shirt_received_date: null
+                                        });
+                                        triggerToast(`ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                                      }
+                                    } else {
+                                      await onMarkOrderReceived(item.id, null, 'pending');
+                                      triggerToast(`ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
+                                    }
+                                  }}
+                                  className="w-full text-center py-0.5 text-[10px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
                                 >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>ตรวจสลิป</span>
+                                  ยกเลิก (เปลี่ยนเป็นรอรับ)
                                 </button>
                               </div>
-                            ) : (
-                              <p className="text-xs text-amber-400 flex items-center gap-1">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                <span>ยังไม่มีสลิป</span>
-                              </p>
                             )}
 
-                            {/* Action Buttons for Admin */}
-                            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
-                              {!isVerified && (
+                            {/* Store order slip verify buttons */}
+                            {!isReg && !isPaid && (
+                              <div className="flex gap-1.5 pt-1.5">
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    await onVerifyOrderPayment(ord.id, true, 'อนุมัติโดย Admin');
-                                    triggerToast(`อนุมัติสลิปออเดอร์ ${ord.order_number} แล้ว`);
+                                    await onVerifyOrderPayment(item.id, true, 'อนุมัติโดย Admin');
+                                    triggerToast(`อนุมัติสลิปออเดอร์ ${item.order_number} แล้ว`);
                                   }}
-                                  className="flex-1 py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow"
+                                  className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold cursor-pointer"
                                 >
                                   ✓ อนุมัติสลิป
                                 </button>
-                              )}
-
-                              {!isVerified && (
                                 <button
                                   type="button"
                                   onClick={async () => {
                                     const note = prompt('ระบุเหตุผลที่ปฏิเสธสลิป:', 'ยอดเงินไม่ถูกต้อง กรุณาแนบสลิปใหม่');
                                     if (note !== null) {
-                                      await onVerifyOrderPayment(ord.id, false, note);
-                                      triggerToast(`ปฏิเสธสลิปออเดอร์ ${ord.order_number}`);
+                                      await onVerifyOrderPayment(item.id, false, note);
+                                      triggerToast(`ปฏิเสธสลิปออเดอร์ ${item.order_number}`);
                                     }
                                   }}
-                                  className="py-1.5 px-2.5 bg-slate-800 hover:bg-rose-900/60 text-rose-300 rounded-lg text-xs font-semibold transition-all"
+                                  className="py-1 px-2 bg-slate-800 hover:bg-rose-900/60 text-rose-300 rounded-lg text-[11px] cursor-pointer"
                                 >
                                   ปฏิเสธ
                                 </button>
-                              )}
-
-                              {!isReceived ? (
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    await onMarkOrderReceived(ord.id, 'Admin JRE 2027');
-                                    triggerToast(`บันทึกส่งมอบออเดอร์ ${ord.order_number} เรียบร้อยแล้ว`);
-                                  }}
-                                  className="flex-1 py-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow"
-                                >
-                                  <PackageCheck className="w-3.5 h-3.5" />
-                                  <span>กดยืนยันรับสินค้าแล้ว</span>
-                                </button>
-                              ) : (
-                                <div className="w-full text-center py-1 text-[11px] text-emerald-400 font-bold">
-                                  ✓ ส่งมอบแล้ว {ord.pickup_at ? `(${new Date(ord.pickup_at).toLocaleDateString('th-TH')})` : ''}
-                                </div>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
                       </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
           </div>
 
           {/* SETTINGS SECTION: PRODUCTS, SIZES, PRICES & BACKUP GOOGLE FORM */}
@@ -6278,8 +6839,19 @@ export default function AdminDashboardView({
       {showQRScanner && (
         <AdminQRScannerModal
           orders={merchandiseOrders}
+          registrations={registrations}
           onClose={() => setShowQRScanner(false)}
           onMarkReceived={onMarkOrderReceived}
+          onMarkRegistrationShirtReceived={async (userId, received) => {
+            if (onUpdateAllocation) {
+              await onUpdateAllocation(userId, {
+                shirt_pickup_status: received ? 'received' : 'pending',
+                shirt_received: received,
+                shirt_received_date: received ? new Date().toISOString() : null
+              });
+              triggerToast(received ? 'บันทึกการส่งมอบเสื้อฝึกเรียบร้อยแล้ว' : 'ยกเลิกสถานะส่งมอบเสื้อฝึกเรียบร้อยแล้ว');
+            }
+          }}
           onVerifyPayment={onVerifyOrderPayment}
         />
       )}

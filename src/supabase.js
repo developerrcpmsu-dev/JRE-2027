@@ -163,6 +163,9 @@ const packRegistrationForSupabase = (fullData) => {
     nickname: fullData.nickname || '',
     callsign: fullData.callsign || '',
     shirt_size: fullData.shirt_size || '',
+    shirt_pickup_status: fullData.shirt_pickup_status || '',
+    shirt_received: fullData.shirt_received || false,
+    shirt_received_date: fullData.shirt_received_date || '',
     id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
     payment_plan: fullData.payment_plan || 'full',
     installment_1_amount: fullData.installment_1_amount,
@@ -978,11 +981,11 @@ export const DataService = {
     });
   },
 
-  async markOrderReceived(orderId, adminName = 'Admin JRE 2027') {
+  async markOrderReceived(orderId, adminName = 'Admin JRE 2027', status = 'received') {
     return this.updateMerchandiseOrder(orderId, {
-      pickup_status: 'received',
-      pickup_at: new Date().toISOString(),
-      pickup_by_admin: adminName
+      pickup_status: status,
+      pickup_at: status === 'received' ? new Date().toISOString() : null,
+      pickup_by_admin: status === 'received' ? adminName : null
     });
   },
 
