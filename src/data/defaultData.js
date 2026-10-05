@@ -582,8 +582,16 @@ export const SHIRT_SIZE_OPTIONS = [
 
 export const isMsuInstitution = (inst) => {
   if (!inst) return false;
-  const s = inst.toLowerCase();
-  return s.includes('มหาสารคาม') || s.includes('มมส') || s.includes('msu') || s.includes('ราชพฤกษ์');
+  const s = inst.toLowerCase().trim();
+  return (
+    s.includes('มหาสารคาม') ||
+    s.includes('มมส') ||
+    s.includes('msu') ||
+    s.includes('ราชพฤกษ์') ||
+    s.includes('rcpmsu') ||
+    s.includes('mahasarakham') ||
+    s.includes('mahasarakam')
+  );
 };
 
 export const getRegistrationFeeDetails = (institution) => {

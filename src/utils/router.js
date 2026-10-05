@@ -82,11 +82,8 @@ export function parseCurrentRoute() {
 
   // Merchandise & Sub-pages
   if (first === 'merchandise' || first === 'shop' || first === 'store' || first === 'shirt' || first === 'shirts') {
-    if (second === 'orders' || second === 'tracking' || second === 'my-orders') {
+    if (second === 'orders' || second === 'tracking' || second === 'my-orders' || second === 'cart') {
       return { mainTab: 'merchandise', subRoute: 'my_orders', canonicalPath: '/merchandise/orders' };
-    }
-    if (second === 'cart') {
-      return { mainTab: 'merchandise', subRoute: 'cart', canonicalPath: '/merchandise/cart' };
     }
     return { mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' };
   }
@@ -128,8 +125,7 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'merchandise':
     case 'shop':
     case 'store':
-      if (subRoute === 'my_orders' || subRoute === 'orders') return '/merchandise/orders';
-      if (subRoute === 'cart') return '/merchandise/cart';
+      if (subRoute === 'my_orders' || subRoute === 'orders' || subRoute === 'cart') return '/merchandise/orders';
       return '/merchandise';
     case 'admin':
       if (subRoute === 'payment' || subRoute === 'payment_settings') return '/admin/payment';

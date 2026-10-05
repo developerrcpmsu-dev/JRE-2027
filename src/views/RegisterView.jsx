@@ -1719,13 +1719,23 @@ export default function RegisterView({
                     <span className="text-base font-black text-amber-300 block">
                       ไซส์ {myRegistration.shirt_size || 'L'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowShirtSizeModal(true)}
-                      className="text-[10px] text-purple-400 hover:underline cursor-pointer block mt-0.5"
-                    >
-                      ดูตารางขนาดไซส์
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowShirtSizeModal(true)}
+                        className="text-[10px] text-purple-400 hover:underline cursor-pointer"
+                      >
+                        ดูตารางไซส์
+                      </button>
+                      <span className="text-slate-600">•</span>
+                      <a
+                        href="/merchandise/orders"
+                        className="text-[10px] text-amber-300 hover:underline font-bold inline-flex items-center gap-0.5"
+                      >
+                        <QrCode className="w-3 h-3 text-amber-400" />
+                        <span>บัตรรับเสื้อ & QR</span>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2152,7 +2162,7 @@ export default function RegisterView({
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    ค่าสมัครรวม {dashboardPaymentConfig.fee_total} บาท • {dashboardPaymentConfig.notes || 'รองรับการชำระเต็มจำนวนหรือแบ่งจ่าย 2 งวด'}
+                    {isMsu ? '🎓 สังกัดนิสิต มมส (ยอดรวม 650 บ. • ไม่มีค่าที่พัก)' : '🏨 สังกัดต่างมหาวิทยาลัย (ยอดรวม 850 บ. • รวมที่พักหอกุดรัง มมส)'} • {dashboardPaymentConfig.notes || 'รองรับการชำระเต็มจำนวนหรือแบ่งจ่าย 2 งวด'}
                   </p>
                 </div>
               </div>
@@ -3836,18 +3846,93 @@ export default function RegisterView({
               </div>
 
               {/* ฟิลด์ 4: สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) * */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
+              <div className="space-y-3.5">
+                <div className="flex items-center justify-between">
                   <label className="block text-xs font-semibold text-slate-300">
-                    สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) <span className="text-rose-400 font-bold">*</span>
+                    ประเภทผู้สมัคร & สังกัดสถาบันการศึกษา <span className="text-rose-400 font-bold">*</span>
                   </label>
                   <span className="text-[11px] text-rescue-400 font-medium">
-                    เปิดรับทุกมหาวิทยาลัยทั่วประเทศ
+                    เปิดรับทุกมหาวิทยาลัยและหน่วยกู้ภัยทั่วประเทศ
                   </span>
                 </div>
 
+                {/* 🎓 Interactive Affiliation Type Switcher: MSU (650.-) vs External (850.-) */}
+                {(() => {
+                  const fee = getRegistrationFeeDetails(institution);
+                  const isCurrentMsu = fee.isMsu;
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Option 1: นิสิต มมส */}
+                      <div
+                        onClick={() => {
+                          handleInstitutionSelect('ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)');
+                          triggerToast('เลือกสังกัด: นิสิตมหาวิทยาลัยมหาสารคาม (ยอดรวม 650 บ. / ไม่มีค่าที่พัก)', 'info');
+                        }}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 select-none ${
+                          isCurrentMsu
+                            ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-500/10'
+                            : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs text-white flex items-center gap-1.5">
+                            <span>🎓</span>
+                            <span>นิสิตมหาวิทยาลัยมหาสารคาม (มมส)</span>
+                          </span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                            isCurrentMsu ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            650 บาท
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-300/80 leading-snug">
+                          ไม่มีค่าใช้จ่ายด้านที่พัก • รวมค่าเสื้อโครงการ
+                        </p>
+                        <div className="text-[10px] text-slate-300 pt-1 border-t border-slate-800/80 flex justify-between">
+                          <span>รอบ 1: 400 บ. (ค่าเสื้อ)</span>
+                          <span>รอบ 2: 250 บ. (อาหาร)</span>
+                        </div>
+                      </div>
+
+                      {/* Option 2: ต่างมหาวิทยาลัย */}
+                      <div
+                        onClick={() => {
+                          if (isCurrentMsu) {
+                            handleInstitutionSelect('TSI - Tactic of Special Services and Investigation มหาวิทยาลัยขอนแก่น (มข)');
+                            triggerToast('เลือกสังกัด: ต่างมหาวิทยาลัย (ยอดรวม 850 บ. / รวมที่พักหอกุดรัง มมส)', 'info');
+                          }
+                        }}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 select-none ${
+                          !isCurrentMsu
+                            ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30 shadow-lg shadow-indigo-500/10'
+                            : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs text-white flex items-center gap-1.5">
+                            <span>🏨</span>
+                            <span>ต่างมหาวิทยาลัย / บุคคลภายนอก</span>
+                          </span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                            !isCurrentMsu ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            850 บาท
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-indigo-300/80 leading-snug">
+                          รวมค่าที่พักหอพักกุดรัง มมส & ค่าเสื้อโครงการ
+                        </p>
+                        <div className="text-[10px] text-slate-300 pt-1 border-t border-slate-800/80 flex justify-between">
+                          <span>รอบ 1: 400 บ. (ค่าเสื้อ)</span>
+                          <span>รอบ 2: 450 บ. (ที่พัก+อาหาร)</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Quick Dropdown Picker */}
-                <div className="mb-2">
+                <div>
                   <select
                     value={OFFICIAL_NETWORK_INSTITUTIONS.find(i => i.fullName === institution)?.fullName || ''}
                     onChange={e => {
@@ -3876,7 +3961,7 @@ export default function RegisterView({
                 />
 
                 {/* Quick Suggestions Pills */}
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                <div className="flex flex-wrap gap-1.5 pt-1">
                   <span className="text-[11px] font-bold text-rescue-400 mr-1 self-center flex items-center gap-1">
                     <Sparkles className="w-3 h-3" />
                     เลือกด่วน (8 สถาบัน):
@@ -3905,21 +3990,26 @@ export default function RegisterView({
                 {(() => {
                   const fee = getRegistrationFeeDetails(institution);
                   return (
-                    <div className={`mt-3 p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
+                    <div className={`mt-2 p-4 rounded-2xl border text-xs flex items-start gap-3 shadow-sm ${
                       fee.isMsu 
-                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
-                        : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                        ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200' 
+                        : 'bg-indigo-950/40 border-indigo-500/50 text-indigo-200'
                     }`}>
-                      <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold block">
-                          {fee.isMsu ? '🎓 สังกัดนิสิตมหาวิทยาลัยมหาสารคาม (มมส): ยอดรวม 650 บาท' : '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท'}
-                        </span>
-                        <span className="text-[11px] text-slate-300 block mt-0.5">
+                      <Info className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
+                      <div className="space-y-1 w-full">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-sm text-white">
+                            {fee.isMsu ? '🎓 สังกัดนิสิต มมส: ยอดรวม 650 บาท' : '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท'}
+                          </span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300">
+                            {fee.isMsu ? 'ไม่มีค่าที่พัก' : 'รวมที่พักหอกุดรัง มมส'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
                           {fee.isMsu 
-                            ? 'ไม่มีค่าใช้จ่ายด้านที่พัก • รอบที่ 1: 400 บาท (ค่าจัดทำเสื้อ) / รอบที่ 2: 250 บาท (ค่าอาหารและกิจกรรม)'
-                            : 'รวมค่าที่พักหอพักกุดรัง มมส • รอบที่ 1: 400 บาท (ค่าจัดทำเสื้อ) / รอบที่ 2: 450 บาท (ค่าที่พักและอาหาร)'}
-                        </span>
+                            ? '• งวดที่ 1: 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ 15–20 ต.ค. 69) • งวดที่ 2: 250 บาท (ค่าอาหารและกิจกรรม 1–5 พ.ย. 69)'
+                            : '• งวดที่ 1: 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ 15–20 ต.ค. 69) • งวดที่ 2: 450 บาท (ค่าที่พักหอกุดรัง มมส และอาหาร 1–5 พ.ย. 69)'}
+                        </p>
                       </div>
                     </div>
                   );
