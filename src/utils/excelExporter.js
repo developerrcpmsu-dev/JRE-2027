@@ -7,9 +7,14 @@ import { DataService, ensureHostedUrl } from '../supabase';
  */
 function extractPureBase64(dataUrl) {
   if (!dataUrl || typeof dataUrl !== 'string') return null;
-  const match = dataUrl.match(/^data:image\/[a-zA-Z+]+;base64,(.+)$/);
-  if (match) return match[1];
-  if (!dataUrl.startsWith('http') && dataUrl.length > 50) return dataUrl;
+  const base64Index = dataUrl.indexOf(';base64,');
+  if (base64Index !== -1) {
+    const raw = dataUrl.slice(base64Index + 8).replace(/\s+/g, '');
+    return raw || null;
+  }
+  if (!dataUrl.startsWith('http') && dataUrl.length > 50) {
+    return dataUrl.replace(/\s+/g, '');
+  }
   return null;
 }
 
@@ -302,6 +307,186 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
   const a = document.createElement('a');
   a.href = url;
   const fileName = `JRE2027_รายชื่อผู้สมัครทุกคน_พร้อมรูปสลิปและรูปถ่าย_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+
+  return fileName;
+}
+
+/**
+ * Exports merchandise & trainee shirt orders to Excel (.xlsx) with embedded slip images
+ */
+export async function exportMerchandiseOrdersToExcel(items, onProgress) {
+  if (!items || items.length === 0) {
+    throw new Error('ไม่พบข้อมูลรายการเสื้อหรือคำสั่งซื้อสำหรับส่งออก');
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'JRE 2027 Admin Console • BestCyniX Dev';
+  workbook.lastModifiedBy = 'JRE 2027 Admin';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const worksheet = workbook.addWorksheet('รายการส่งมอบเสื้อ JRE 2027', {
+    views: [{ state: 'frozen', ySplit: 1, xSplit: 4 }]
+  });
+
+  const columns = [
+    { header: 'ลำดับ', key: 'index', width: 8 },
+    { header: 'ประเภทรายการ', key: 'source_label', width: 20 },
+    { header: 'รหัสออเดอร์', key: 'order_number', width: 22 },
+    { header: 'ชื่อ-นามสกุล', key: 'customer_name', width: 28 },
+    { header: 'ชื่อเล่น', key: 'nickname', width: 14 },
+    { header: 'รหัสนามเรียกขาน', key: 'callsign', width: 16 },
+    { header: 'สังกัด / มหาวิทยาลัย', key: 'institution', width: 28 },
+    { header: 'เบอร์โทร', key: 'phone', width: 16 },
+    { header: 'อีเมล', key: 'email', width: 28 },
+    { header: 'ไซส์เสื้อ', key: 'shirt_size', width: 12 },
+    { header: 'รายละเอียดสินค้า', key: 'items_summary', width: 32 },
+    { header: 'ยอดรวม (บาท)', key: 'total_amount', width: 16 },
+    { header: 'สถานะชำระเงิน', key: 'payment_status', width: 18 },
+    { header: 'รูปสลิปโอนเงิน (รูปภาพจริง)', key: 'slip_image', width: 20 },
+    { header: 'สถานะส่งมอบเสื้อ', key: 'delivery_status', width: 18 },
+    { header: 'วันเวลาที่ส่งมอบ', key: 'pickup_at', width: 22 },
+    { header: 'กลุ่มฝึกที่จัดสรร', key: 'group_assigned', width: 16 },
+    { header: 'ห้องนอนที่จัดสรร', key: 'room_assigned', width: 16 }
+  ];
+
+  worksheet.columns = columns;
+
+  // Header Styling
+  const headerRow = worksheet.getRow(1);
+  headerRow.height = 30;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF581C87' } // Deep purple
+    };
+    cell.font = {
+      name: 'Sarabun',
+      size: 11,
+      bold: true,
+      color: { argb: 'FFFFFFFF' }
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true
+    };
+  });
+
+  const slipColIdx = columns.findIndex(c => c.key === 'slip_image') + 1;
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (onProgress) {
+      onProgress(i + 1, items.length);
+    }
+
+    const isReg = it.source === 'registration' || it.itemType === 'registration';
+    const isReceived = it.pickup_status === 'received';
+    const isPaid = it.payment_status === 'paid_verified' || it.payment_status === 'paid';
+
+    const itemsSummary = Array.isArray(it.items) && it.items.length > 0
+      ? it.items.map(p => `${p.product_name || 'เสื้อ'} (ไซส์ ${p.size || it.shirt_size || it.size}) x${p.quantity || 1}`).join(', ')
+      : `เสื้อปฏิบัติการกู้ภัย JRE 2027 (ไซส์ ${it.shirt_size || it.size || 'L'}) x1`;
+
+    const rowData = {
+      index: i + 1,
+      source_label: isReg ? 'เสื้อฝึกในใบสมัคร' : 'สั่งซื้อหน้าร้าน',
+      order_number: it.order_number || `ORD-${(it.id || '').slice(0, 8)}`,
+      customer_name: it.customer_name || '-',
+      nickname: it.nickname || '-',
+      callsign: it.callsign || '-',
+      institution: it.institution || '-',
+      phone: it.customer_phone || '-',
+      email: it.user_email || '-',
+      shirt_size: it.shirt_size || it.size || 'L',
+      items_summary: itemsSummary,
+      total_amount: it.total_amount || 0,
+      payment_status: isPaid ? 'ชำระแล้ว (อนุมัติ)' : (it.payment_status === 'pending_verification' ? 'รอตรวจสลิป' : 'ค้างชำระ'),
+      slip_image: '',
+      delivery_status: isReceived ? 'ส่งมอบแล้ว' : 'รอส่งมอบ (รอรับ)',
+      pickup_at: it.pickup_at ? new Date(it.pickup_at).toLocaleString('th-TH') : '-',
+      group_assigned: it.group_assigned || 'ยังไม่จัดสรร',
+      room_assigned: it.room_assigned || 'ยังไม่จัดสรร'
+    };
+
+    const addedRow = worksheet.addRow(rowData);
+    const currentRowIdx = addedRow.number;
+    let hasEmbeddedImage = false;
+
+    if (it.slip_url) {
+      const hostedUrl = await ensureHostedUrl(it.slip_url, `slip-${it.order_number || 'shirt'}.jpg`);
+      const cell = addedRow.getCell(slipColIdx);
+
+      const base64Data = await DataService.getFileBase64(it.slip_url);
+      const pureBase64 = extractPureBase64(base64Data);
+
+      if (pureBase64) {
+        try {
+          const extension = getImageExtension(base64Data);
+          const imageId = workbook.addImage({
+            base64: pureBase64,
+            extension: extension
+          });
+
+          worksheet.addImage(imageId, {
+            tl: { col: slipColIdx - 1 + 0.1, row: currentRowIdx - 1 + 0.08 },
+            ext: { width: 88, height: 88 },
+            editAs: 'oneCell'
+          });
+
+          hasEmbeddedImage = true;
+        } catch (e) {
+          console.warn('Shirt order slip image embedding notice:', e);
+        }
+      }
+
+      cell.value = {
+        text: '🖼️ ดูรูปสลิป',
+        hyperlink: hostedUrl,
+        tooltip: `คลิกเพื่อเปิดดูรูปสลิปขนาดเต็มในเบราว์เซอร์`
+      };
+      cell.font = { color: { argb: 'FF0284C7' }, underline: true, size: 9 };
+      cell.alignment = { vertical: 'bottom', horizontal: 'center' };
+    } else {
+      const cell = addedRow.getCell(slipColIdx);
+      cell.value = 'ไม่มีสลิป';
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    }
+
+    if (hasEmbeddedImage) {
+      addedRow.height = 75;
+    } else {
+      addedRow.height = 24;
+    }
+
+    if (i % 2 === 1) {
+      addedRow.eachCell((cell) => {
+        if (!cell.fill) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF8FAFC' }
+          };
+        }
+      });
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { 
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+  });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const fileName = `JRE2027_รายการส่งมอบเสื้อทุกคน_พร้อมรูปสลิป_${new Date().toISOString().slice(0, 10)}.xlsx`;
   a.download = fileName;
   document.body.appendChild(a);
   a.click();

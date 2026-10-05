@@ -63,7 +63,7 @@ import {
   Filter
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
-import { exportRegistrationsToExcel } from '../utils/excelExporter';
+import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel } from '../utils/excelExporter';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
@@ -594,6 +594,8 @@ export default function AdminDashboardView({
   // Excel Export Progress State
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
+  const [isExportingMerchExcel, setIsExportingMerchExcel] = useState(false);
+  const [exportMerchProgress, setExportMerchProgress] = useState({ current: 0, total: 0 });
 
   // User Accounts Management State
   const [userAccounts, setUserAccounts] = useState([]);
@@ -716,8 +718,9 @@ export default function AdminDashboardView({
     ];
 
     const getVerificationStatusText = (u) => {
+      const email = (u.email || '').trim().toLowerCase();
       if (u.provider === 'both') return 'ยืนยันแล้ว (Google + รหัสผ่าน)';
-      if (u.provider === 'google' || (typeof u.id === 'string' && u.id.startsWith('google_') && !u.password_hash)) {
+      if (u.provider === 'google' || (typeof u.id === 'string' && u.id.startsWith('google_')) || email.endsWith('@gmail.com')) {
         return 'ยืนยันด้วย Google OAuth แล้ว';
       }
       if (u.email_verified || u.verified) return 'ยืนยันผ่าน OTP แล้ว';
@@ -1277,7 +1280,7 @@ export default function AdminDashboardView({
     }
   };
 
-  // Export CSV with guaranteed hosted URLs for slips and photos
+  // Export CSV with both =IMAGE() formula (renders image in sheets) and pure URL link
   const handleExportCSV = async () => {
     if (!registrations || registrations.length === 0) {
       triggerToast('ยังไม่มีข้อมูลผู้สมัครในระบบ');
@@ -1288,7 +1291,10 @@ export default function AdminDashboardView({
       'ชื่อ-สกุล', 'ชื่อเต็ม/สถาบัน (ไทย-อังกฤษ)', 'ชื่อเล่น', 'รหัสนามเรียกขาน', 'ไซส์เสื้อ (บังคับ)', 'สังกัด/มหาวิทยาลัย',
       'เรทค่าสมัคร', 'วันเกิด', 'อายุ', 'กรุ๊ปเลือด', 'เบอร์โทร',
       'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'สถานะการชำระเงิน', 'ยอดเงิน',
-      'สถานะงวด 1', 'สลิปงวด 1 (URL)', 'สถานะงวด 2', 'สลิปงวด 2 (URL)', 'สลิปเต็มจำนวน (URL)', 'รูปถ่าย ID Card (URL)',
+      'สถานะงวด 1', 'สลิปงวด 1 (รูปภาพ)', 'สลิปงวด 1 (URL ลิงก์ตรง)',
+      'สถานะงวด 2', 'สลิปงวด 2 (รูปภาพ)', 'สลิปงวด 2 (URL ลิงก์ตรง)',
+      'สลิปเต็มจำนวน (รูปภาพ)', 'สลิปเต็มจำนวน (URL ลิงก์ตรง)',
+      'รูปถ่าย ID Card (รูปภาพ)', 'รูปถ่าย ID Card (URL ลิงก์ตรง)',
       'ดูแลพิเศษ', 'หมายเหตุพิเศษ'
     ];
 
@@ -1318,10 +1324,14 @@ export default function AdminDashboardView({
         `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
         `"${r.payment_amount || (isMsu ? 650 : 850)}"`,
         `"${r.installment_1_status || '-'}"`,
+        `"${s1 ? `=IMAGE(""${s1}"")` : 'ยังไม่แนบ'}"`,
         `"${s1 || 'ยังไม่แนบ'}"`,
         `"${r.installment_2_status || '-'}"`,
+        `"${s2 ? `=IMAGE(""${s2}"")` : 'ยังไม่แนบ'}"`,
         `"${s2 || 'ยังไม่แนบ'}"`,
+        `"${sFull ? `=IMAGE(""${sFull}"")` : 'ยังไม่แนบ'}"`,
         `"${sFull || 'ยังไม่แนบ'}"`,
+        `"${idPhoto ? `=IMAGE(""${idPhoto}"")` : 'ยังไม่แนบ'}"`,
         `"${idPhoto || 'ยังไม่แนบ'}"`,
         `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
         `"${(r.special_notes || '').replace(/"/g, '""')}"`
@@ -1336,7 +1346,86 @@ export default function AdminDashboardView({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    triggerToast("ส่งออกไฟล์ CSV สำเร็จ (พร้อมลิงก์สลิปออนไลน์)");
+    triggerToast("ส่งออกไฟล์ CSV สำเร็จ (พร้อมสูตรแสดงภาพสลิป =IMAGE และลิงก์ตรง)");
+  };
+
+  // Export Merchandise Shirt Orders to Excel (.xlsx)
+  const handleExportMerchandiseExcel = async () => {
+    if (!filteredShirtItems || filteredShirtItems.length === 0) {
+      triggerToast('ไม่พบรายการเสื้อสำหรับส่งออก');
+      return;
+    }
+    setIsExportingMerchExcel(true);
+    setExportMerchProgress({ current: 0, total: filteredShirtItems.length });
+    try {
+      const fileName = await exportMerchandiseOrdersToExcel(filteredShirtItems, (cur, total) => {
+        setExportMerchProgress({ current: cur, total });
+      });
+      triggerToast(`ส่งออกรายการเสื้อเป็น Excel สำเร็จ: ${fileName}`);
+    } catch (err) {
+      console.error('Export shirt orders Excel error:', err);
+      triggerToast('เกิดข้อผิดพลาดในการส่งออก Excel: ' + (err.message || ''));
+    } finally {
+      setIsExportingMerchExcel(false);
+    }
+  };
+
+  // Export Merchandise Shirt Orders to CSV
+  const handleExportMerchandiseCSV = async () => {
+    if (!filteredShirtItems || filteredShirtItems.length === 0) {
+      triggerToast('ไม่พบรายการเสื้อสำหรับส่งออก');
+      return;
+    }
+
+    const headers = [
+      'ลำดับ', 'ประเภทรายการ', 'รหัสออเดอร์', 'ชื่อ-นามสกุล', 'ชื่อเล่น', 'รหัสนามเรียกขาน',
+      'สังกัด/มหาวิทยาลัย', 'เบอร์โทร', 'อีเมล', 'ไซส์เสื้อ', 'รายการสินค้า',
+      'ยอดรวม (บาท)', 'สถานะการชำระเงิน', 'รูปสลิป (แสดงในชีต)', 'สลิปโอนเงิน (URL ลิงก์ตรง)',
+      'สถานะการส่งมอบ', 'วันเวลาที่ส่งมอบ', 'กลุ่มฝึก', 'ห้องนอน'
+    ];
+
+    const rows = await Promise.all(filteredShirtItems.map(async (it, idx) => {
+      const isReg = it.source === 'registration' || it.itemType === 'registration';
+      const isReceived = it.pickup_status === 'received';
+      const isPaid = it.payment_status === 'paid_verified' || it.payment_status === 'paid';
+      const slipUrl = it.slip_url ? await ensureHostedUrl(it.slip_url, `slip-${it.order_number || 'shirt'}.jpg`) : '';
+
+      const itemsSummary = Array.isArray(it.items) && it.items.length > 0
+        ? it.items.map(p => `${p.product_name || 'เสื้อ'} (${p.size || it.shirt_size || it.size}) x${p.quantity || 1}`).join('; ')
+        : `เสื้อปฏิบัติการกู้ภัย JRE 2027 (${it.shirt_size || it.size || 'L'}) x1`;
+
+      return [
+        idx + 1,
+        `"${isReg ? 'เสื้อฝึกในใบสมัคร' : 'สั่งซื้อหน้าร้าน'}"`,
+        `"${it.order_number || `ORD-${(it.id || '').slice(0, 8)}`}"`,
+        `"${(it.customer_name || '').replace(/"/g, '""')}"`,
+        `"${it.nickname || ''}"`,
+        `"${it.callsign || ''}"`,
+        `"${(it.institution || '').replace(/"/g, '""')}"`,
+        `"${it.customer_phone || ''}"`,
+        `"${it.user_email || ''}"`,
+        `"${it.shirt_size || it.size || 'L'}"`,
+        `"${itemsSummary.replace(/"/g, '""')}"`,
+        `"${it.total_amount || 0}"`,
+        `"${isPaid ? 'ชำระแล้ว (อนุมัติ)' : (it.payment_status === 'pending_verification' ? 'รอตรวจสลิป' : 'ค้างชำระ')}"`,
+        `"${slipUrl ? `=IMAGE(""${slipUrl}"")` : 'ไม่มีสลิป'}"`,
+        `"${slipUrl || 'ไม่มีสลิป'}"`,
+        `"${isReceived ? 'ส่งมอบแล้ว' : 'รอรับ'}"`,
+        `"${it.pickup_at ? new Date(it.pickup_at).toLocaleString('th-TH') : '-'}"`,
+        `"${it.group_assigned || 'ยังไม่จัดสรร'}"`,
+        `"${it.room_assigned || 'ยังไม่จัดสรร'}"`
+      ];
+    }));
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `JRE2027_รายการส่งมอบเสื้อทุกคน_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    triggerToast("ส่งออกไฟล์ CSV รายการเสื้อสำเร็จ (พร้อมสูตรแสดงภาพสลิป =IMAGE และลิงก์ตรง)");
   };
 
   // --- Handlers for Forms Config ---
@@ -4124,15 +4213,45 @@ export default function AdminDashboardView({
               <button
                 type="button"
                 onClick={() => setShowQRScanner(true)}
-                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95"
+                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95 cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
                 <span>เปิดกล้องสแกน QR รับสินค้า</span>
               </button>
 
+              <button
+                type="button"
+                onClick={handleExportMerchandiseExcel}
+                disabled={isExportingMerchExcel}
+                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-900/40 border border-emerald-400/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                title="ส่งออกรายการส่งมอบเสื้อทุกคนพร้อมรูปสลิปเป็น Excel (.xlsx)"
+              >
+                {isExportingMerchExcel ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>กำลังฝังรูปภาพลง Excel ({exportMerchProgress.current}/{exportMerchProgress.total})...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="w-4 h-4 text-emerald-100" />
+                    <span>ส่งออกรายการเสื้อเป็น Excel (.xlsx)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportMerchandiseCSV}
+                className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
+                title="ดาวน์โหลดไฟล์ CSV สำหรับเปิดใน Google Sheets พร้อมสูตรแสดงภาพสลิป"
+              >
+                <Download className="w-4 h-4 text-cyan-400" />
+                <span>ดาวน์โหลด CSV</span>
+              </button>
+
               <a
                 href="#merchandise-settings"
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all"
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
               >
                 <Settings className="w-4 h-4 text-rescue-400" />
                 <span>ไปที่ตั้งค่าไซต์ & ราคา</span>
@@ -4643,10 +4762,14 @@ export default function AdminDashboardView({
                               </div>
                               <button
                                 type="button"
-                                onClick={() => setPreviewSlipUrl(item.slip_url)}
-                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+                                onClick={() => setPreviewDoc({
+                                  fileUrl: item.slip_url,
+                                  fileName: `slip-${item.order_number || item.id || 'shirt'}.jpg`,
+                                  title: `หลักฐานสลิปโอนเงิน - ${item.customer_name} (${item.order_number || item.shirt_size})`
+                                })}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
                               >
-                                <Eye className="w-3 h-3" />
+                                <Eye className="w-3.5 h-3.5 text-cyan-400" />
                                 <span>ดูสลิป</span>
                               </button>
                             </div>
@@ -6031,7 +6154,7 @@ export default function AdminDashboardView({
                                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                                 <span>✓ ยืนยันแล้ว (Google + รหัสผ่าน)</span>
                               </span>
-                            ) : (acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_'))) ? (
+                            ) : (acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_')) || (acc.email && acc.email.toLowerCase().endsWith('@gmail.com'))) ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded-full text-[10px] font-bold">
                                 <CheckCircle2 className="w-3 h-3 text-sky-400" />
                                 <span>✓ ยืนยันด้วยการเข้าสู่ระบบด้วย Google</span>

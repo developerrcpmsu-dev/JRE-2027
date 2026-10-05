@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import DocumentPreviewModal from './DocumentPreviewModal';
 
 export default function AdminQRScannerModal({ 
   orders = [], 
@@ -621,26 +622,16 @@ export default function AdminQRScannerModal({
         </div>
       </div>
 
-      {/* Slip Modal */}
-      {previewSlip && (
-        <ModalPortal isOpen={Boolean(previewSlip)} onClose={() => setPreviewSlip(null)}>
-          <div 
-            onClick={() => setPreviewSlip(null)}
-            className="fixed inset-0 z-60 bg-black/90 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
-          >
-            <div className="relative max-w-lg max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-              <img src={previewSlip} alt="Slip Full" className="max-w-full max-h-[80vh] rounded-2xl object-contain border border-slate-700 shadow-2xl" />
-              <button
-                type="button"
-                onClick={() => setPreviewSlip(null)}
-                className="absolute top-3 right-3 p-2 bg-slate-900 text-white rounded-full cursor-pointer hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
+      {/* Full Document & Slip Preview Modal with Direct Link Copy */}
+      <DocumentPreviewModal
+        isOpen={Boolean(previewSlip)}
+        onClose={() => setPreviewSlip(null)}
+        doc={previewSlip ? {
+          fileUrl: previewSlip,
+          fileName: `slip-${scannedOrder?.order_number || 'scan'}.jpg`,
+          title: `สลิปโอนเงิน - ${scannedOrder?.customer_name || 'ผู้รับสินค้า'}`
+        } : null}
+      />
     </ModalPortal>
   );
 }

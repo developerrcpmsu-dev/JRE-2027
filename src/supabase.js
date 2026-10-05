@@ -205,14 +205,10 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
 
   for (const acc of rawAccounts) {
     if (!acc) continue;
-    let cleanEmail = (acc.email || '').trim().toLowerCase();
-    // Normalize known typo alias besstasic22@gmail.com -> bestasic22@gmail.com
-    if (cleanEmail === 'besstasic22@gmail.com') {
-      cleanEmail = 'bestasic22@gmail.com';
-    }
+    const cleanEmail = (acc.email || '').trim().toLowerCase();
     const key = cleanEmail || acc.id || `unknown_${Math.random()}`;
 
-    const isGoogle = acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_'));
+    const isGoogle = acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_')) || cleanEmail.endsWith('@gmail.com');
     const isBoth = acc.provider === 'both';
     const isVerified = Boolean(acc.email_verified || acc.verified || isGoogle || isBoth);
 
@@ -222,7 +218,7 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
         email: cleanEmail || acc.email,
         email_verified: isVerified,
         verified: isVerified,
-        provider: isBoth ? 'both' : (isGoogle ? 'google' : (acc.provider || 'email'))
+        provider: isBoth ? 'both' : (isGoogle ? (acc.password_hash ? 'both' : 'google') : (acc.provider || 'email'))
       });
     } else {
       const existing = map.get(key);
@@ -1152,7 +1148,7 @@ export const DataService = {
     let updated;
     if (idx >= 0) {
       const existing = accounts[idx];
-      const hasGoogle = userObj.provider === 'google' || existing.provider === 'google' || (typeof userObj.id === 'string' && userObj.id.startsWith('google_')) || (typeof existing.id === 'string' && existing.id.startsWith('google_'));
+      const hasGoogle = userObj.provider === 'google' || existing.provider === 'google' || (typeof userObj.id === 'string' && userObj.id.startsWith('google_')) || (typeof existing.id === 'string' && existing.id.startsWith('google_')) || cleanEmail.endsWith('@gmail.com');
       const hasPass = Boolean(userObj.password_hash || existing.password_hash);
       const isBoth = (hasGoogle && hasPass) || userObj.provider === 'both' || existing.provider === 'both';
       const isVerified = Boolean(userObj.email_verified || existing.email_verified || userObj.verified || existing.verified || hasGoogle);
@@ -1171,7 +1167,7 @@ export const DataService = {
       updated = [...accounts];
       updated[idx] = mergedUser;
     } else {
-      const isGoogle = userObj.provider === 'google' || (typeof userObj.id === 'string' && userObj.id.startsWith('google_'));
+      const isGoogle = userObj.provider === 'google' || (typeof userObj.id === 'string' && userObj.id.startsWith('google_')) || cleanEmail.endsWith('@gmail.com');
       const newUser = {
         ...userObj,
         email: cleanEmail,

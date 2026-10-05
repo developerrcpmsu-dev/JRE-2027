@@ -268,7 +268,7 @@ export default function UserProfileView({
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>✓ ยืนยันแล้ว (Google + รหัสผ่าน)</span>
                 </span>
-              ) : (userAccount.provider === 'google' || userAccount.id?.startsWith('google_')) ? (
+              ) : (userAccount.provider === 'google' || userAccount.id?.startsWith('google_') || (userAccount.email && userAccount.email.toLowerCase().endsWith('@gmail.com'))) ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>✓ ยืนยันด้วยการเข้าสู่ระบบด้วย Google</span>
