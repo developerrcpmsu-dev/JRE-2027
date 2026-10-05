@@ -62,6 +62,159 @@ import {
   isMsuInstitution
 } from '../data/defaultData';
 
+export const TITLE_THAI_OPTIONS = [
+  'นาย',
+  'นาง',
+  'นางสาว',
+  'ว่าที่ร้อยตรี',
+  'ว่าที่ร้อยตรีหญิง',
+  'อื่นๆ'
+];
+
+export const TITLE_ENGLISH_OPTIONS = [
+  'Mr.',
+  'Mrs.',
+  'Miss',
+  'Ms.',
+  'Act.2nd Lt.',
+  'Act.2nd Lt. (W)',
+  'อื่นๆ'
+];
+
+export const TITLE_TH_TO_EN_MAP = {
+  'นาย': 'Mr.',
+  'นาง': 'Mrs.',
+  'นางสาว': 'Miss',
+  'ว่าที่ร้อยตรี': 'Act.2nd Lt.',
+  'ว่าที่ร้อยตรีหญิง': 'Act.2nd Lt. (W)'
+};
+
+export const INSTITUTION_ABBR_MAP = {
+  'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)': { th: 'มมส', en: 'MSU' },
+  'มหาวิทยาลัยมหาสารคาม (มมส)': { th: 'มมส', en: 'MSU' },
+  'TSI - Tactic of Special Services and Investigation มหาวิทยาลัยขอนแก่น (มข)': { th: 'มข', en: 'KKU' },
+  'มหาวิทยาลัยขอนแก่น (มข)': { th: 'มข', en: 'KKU' },
+  'ชมรมจิตอาสาแสดทอง องค์การนักศึกษา มหาวิทยาลัยเทคโนโลยีสุรนารี (มทส)': { th: 'มทส', en: 'SUT' },
+  'มหาวิทยาลัยเทคโนโลยีสุรนารี (มทส)': { th: 'มทส', en: 'SUT' },
+  'ชมรมปฏิบัติการกู้ภัยและบรรเทาสาธารณภัย มหาวิทยาลัยเชียงใหม่ (มช)': { th: 'มช', en: 'CMU' },
+  'มหาวิทยาลัยเชียงใหม่ (มช)': { th: 'มช', en: 'CMU' },
+  'ชมรมกู้ชีพกู้ภัยมหาวิทยาลัยกาฬสินธุ์ KSU Rescue (มกส)': { th: 'มกส', en: 'KSU' },
+  'มหาวิทยาลัยกาฬสินธุ์ (มกส)': { th: 'มกส', en: 'KSU' },
+  'ชมรมอาสาสมัครกู้ชีพ-กู้ภัย มหาวิทยาลัยราชภัฏอุดรธานี (มรภ.อุดรธานี)': { th: 'มรภ.อุดรธานี', en: 'UDRU' },
+  'มหาวิทยาลัยราชภัฏอุดรธานี (มรภ.อุดรธานี)': { th: 'มรภ.อุดรธานี', en: 'UDRU' },
+  'ชมรมนักวิทยุสมัครเล่นและอาสาบรรเทาภัย (วลัยอาสา) มหาวิทยาลัยวลัยลักษณ์ (มวล.)': { th: 'มวล.', en: 'WU' },
+  'มหาวิทยาลัยวลัยลักษณ์ (มวล.)': { th: 'มวล.', en: 'WU' },
+  'ชมรมกู้ชีพ-กู้ภัย มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตเฉลิมพระเกียรติ จังหวัดสกลนคร (มก.ฉกส)': { th: 'มก.ฉกส', en: 'KU-CSC' },
+  'มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตเฉลิมพระเกียรติ จังหวัดสกลนคร (มก.ฉกส)': { th: 'มก.ฉกส', en: 'KU-CSC' }
+};
+
+export const buildFullNameAffiliation = ({
+  titleTh = '',
+  titleOtherTh = '',
+  firstNameTh = '',
+  lastNameTh = '',
+  institutionAbbrTh = '',
+  titleEn = '',
+  titleOtherEn = '',
+  firstNameEn = '',
+  lastNameEn = '',
+  institutionAbbrEn = ''
+}) => {
+  const finalTitleTh = (titleTh === 'อื่นๆ' ? titleOtherTh : titleTh).trim();
+  const finalTitleEn = (titleEn === 'อื่นๆ' ? titleOtherEn : titleEn).trim();
+  const fTh = firstNameTh.trim();
+  const lTh = lastNameTh.trim();
+  const aTh = institutionAbbrTh.trim();
+  const fEn = firstNameEn.trim();
+  const lEn = lastNameEn.trim();
+  const aEn = institutionAbbrEn.trim();
+
+  let thPart = '';
+  if (fTh || lTh) {
+    let prefix = '';
+    if (finalTitleTh) {
+      if (['นาย', 'นาง', 'นางสาว'].includes(finalTitleTh)) {
+        prefix = finalTitleTh;
+      } else {
+        prefix = `${finalTitleTh} `;
+      }
+    }
+    const name = `${prefix}${fTh} ${lTh}`.trim();
+    const abbr = aTh ? ` (${aTh})` : '';
+    thPart = `${name}${abbr}`;
+  }
+
+  let enPart = '';
+  if (fEn || lEn) {
+    const prefix = finalTitleEn ? `${finalTitleEn} ` : '';
+    const name = `${prefix}${fEn} ${lEn}`.trim();
+    const abbr = aEn ? ` (${aEn})` : '';
+    enPart = `${name}${abbr}`;
+  }
+
+  if (thPart && enPart) return `${thPart} / ${enPart}`;
+  return thPart || enPart || '';
+};
+
+export const parseFullNameAffiliationString = (str) => {
+  if (!str || typeof str !== 'string') return {};
+  const slashIdx = str.indexOf('/');
+  const thRaw = (slashIdx >= 0 ? str.slice(0, slashIdx) : str).trim();
+  const enRaw = (slashIdx >= 0 ? str.slice(slashIdx + 1) : '').trim();
+
+  const result = {};
+
+  if (thRaw) {
+    const abbrMatch = thRaw.match(/\(([^)]+)\)\s*$/);
+    let nameWithoutAbbr = thRaw;
+    if (abbrMatch) {
+      result.institutionAbbrTh = abbrMatch[1].trim();
+      nameWithoutAbbr = thRaw.replace(/\(([^)]+)\)\s*$/, '').trim();
+    }
+    const knownThTitles = ['ว่าที่ร้อยตรีหญิง', 'ว่าที่ร้อยตรี', 'นางสาว', 'นาย', 'นาง'];
+    let matchedTitle = '';
+    for (const t of knownThTitles) {
+      if (nameWithoutAbbr.startsWith(t)) {
+        matchedTitle = t;
+        nameWithoutAbbr = nameWithoutAbbr.slice(t.length).trim();
+        break;
+      }
+    }
+    if (matchedTitle) {
+      result.titleTh = matchedTitle;
+    }
+    const parts = nameWithoutAbbr.split(/\s+/).filter(Boolean);
+    if (parts.length > 0) result.firstNameTh = parts[0];
+    if (parts.length > 1) result.lastNameTh = parts.slice(1).join(' ');
+  }
+
+  if (enRaw) {
+    const abbrMatch = enRaw.match(/\(([^)]+)\)\s*$/);
+    let nameWithoutAbbr = enRaw;
+    if (abbrMatch) {
+      result.institutionAbbrEn = abbrMatch[1].trim();
+      nameWithoutAbbr = enRaw.replace(/\(([^)]+)\)\s*$/, '').trim();
+    }
+    const knownEnTitles = ['Act.2nd Lt. (W)', 'Act.2nd Lt.', 'Miss', 'Mrs.', 'Mr.', 'Ms.'];
+    let matchedTitle = '';
+    for (const t of knownEnTitles) {
+      if (nameWithoutAbbr.startsWith(t)) {
+        matchedTitle = t;
+        nameWithoutAbbr = nameWithoutAbbr.slice(t.length).trim();
+        break;
+      }
+    }
+    if (matchedTitle) {
+      result.titleEn = matchedTitle;
+    }
+    const parts = nameWithoutAbbr.split(/\s+/).filter(Boolean);
+    if (parts.length > 0) result.firstNameEn = parts[0];
+    if (parts.length > 1) result.lastNameEn = parts.slice(1).join(' ');
+  }
+
+  return result;
+};
+
 export default function RegisterView({ 
   user, 
   myRegistration, 
@@ -90,6 +243,72 @@ export default function RegisterView({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [fullNameAffiliation, setFullNameAffiliation] = useState('');
+
+  // Detailed Split Name State (Thai & English)
+  const [titleTh, setTitleTh] = useState('นาย');
+  const [titleOtherTh, setTitleOtherTh] = useState('');
+  const [firstNameTh, setFirstNameTh] = useState('');
+  const [lastNameTh, setLastNameTh] = useState('');
+  const [institutionAbbrTh, setInstitutionAbbrTh] = useState('มมส');
+
+  const [titleEn, setTitleEn] = useState('Mr.');
+  const [titleOtherEn, setTitleOtherEn] = useState('');
+  const [firstNameEn, setFirstNameEn] = useState('');
+  const [lastNameEn, setLastNameEn] = useState('');
+  const [institutionAbbrEn, setInstitutionAbbrEn] = useState('MSU');
+
+  const [isManualFullName, setIsManualFullName] = useState(false);
+
+  const handleTitleThChange = (newTitleTh) => {
+    setTitleTh(newTitleTh);
+    if (TITLE_TH_TO_EN_MAP[newTitleTh]) {
+      setTitleEn(TITLE_TH_TO_EN_MAP[newTitleTh]);
+    } else if (newTitleTh === 'อื่นๆ') {
+      setTitleEn('อื่นๆ');
+    }
+  };
+
+  const handleInstitutionSelect = (instName) => {
+    setInstitution(instName);
+    const mapped = INSTITUTION_ABBR_MAP[instName];
+    if (mapped) {
+      setInstitutionAbbrTh(mapped.th);
+      setInstitutionAbbrEn(mapped.en);
+    }
+  };
+
+  // Keep combined fullNameAffiliation in sync whenever split fields change
+  useEffect(() => {
+    if (!isManualFullName) {
+      const combined = buildFullNameAffiliation({
+        titleTh,
+        titleOtherTh,
+        firstNameTh,
+        lastNameTh,
+        institutionAbbrTh,
+        titleEn,
+        titleOtherEn,
+        firstNameEn,
+        lastNameEn,
+        institutionAbbrEn
+      });
+      setFullNameAffiliation(combined);
+      setFirstName(firstNameTh.trim());
+      setLastName(lastNameTh.trim());
+    }
+  }, [
+    titleTh,
+    titleOtherTh,
+    firstNameTh,
+    lastNameTh,
+    institutionAbbrTh,
+    titleEn,
+    titleOtherEn,
+    firstNameEn,
+    lastNameEn,
+    institutionAbbrEn,
+    isManualFullName
+  ]);
   const [nickname, setNickname] = useState('');
   const [callsign, setCallsign] = useState('');
   const [shirtSize, setShirtSize] = useState('L');
@@ -264,6 +483,16 @@ export default function RegisterView({
         if (savedDraft) {
           const d = JSON.parse(savedDraft);
           if (d.fullNameAffiliation) setFullNameAffiliation(d.fullNameAffiliation);
+          if (d.titleTh) setTitleTh(d.titleTh);
+          if (d.titleOtherTh) setTitleOtherTh(d.titleOtherTh);
+          if (d.firstNameTh) setFirstNameTh(d.firstNameTh);
+          if (d.lastNameTh) setLastNameTh(d.lastNameTh);
+          if (d.institutionAbbrTh) setInstitutionAbbrTh(d.institutionAbbrTh);
+          if (d.titleEn) setTitleEn(d.titleEn);
+          if (d.titleOtherEn) setTitleOtherEn(d.titleOtherEn);
+          if (d.firstNameEn) setFirstNameEn(d.firstNameEn);
+          if (d.lastNameEn) setLastNameEn(d.lastNameEn);
+          if (d.institutionAbbrEn) setInstitutionAbbrEn(d.institutionAbbrEn);
           if (d.firstName) setFirstName(d.firstName);
           if (d.lastName) setLastName(d.lastName);
           if (d.nickname) setNickname(d.nickname);
@@ -303,6 +532,16 @@ export default function RegisterView({
     if (!myRegistration) {
       const draftData = {
         fullNameAffiliation,
+        titleTh,
+        titleOtherTh,
+        firstNameTh,
+        lastNameTh,
+        institutionAbbrTh,
+        titleEn,
+        titleOtherEn,
+        firstNameEn,
+        lastNameEn,
+        institutionAbbrEn,
         firstName,
         lastName,
         nickname,
@@ -335,6 +574,16 @@ export default function RegisterView({
   }, [
     myRegistration,
     fullNameAffiliation,
+    titleTh,
+    titleOtherTh,
+    firstNameTh,
+    lastNameTh,
+    institutionAbbrTh,
+    titleEn,
+    titleOtherEn,
+    firstNameEn,
+    lastNameEn,
+    institutionAbbrEn,
     firstName,
     lastName,
     nickname,
@@ -443,6 +692,31 @@ export default function RegisterView({
   // Load existing data if registered
   useEffect(() => {
     if (myRegistration) {
+      if (myRegistration.first_name_th || myRegistration.title_th) {
+        setTitleTh(myRegistration.title_th || 'นาย');
+        setTitleOtherTh(myRegistration.title_other_th || '');
+        setFirstNameTh(myRegistration.first_name_th || myRegistration.first_name || '');
+        setLastNameTh(myRegistration.last_name_th || myRegistration.last_name || '');
+        setInstitutionAbbrTh(myRegistration.institution_abbr_th || 'มมส');
+
+        setTitleEn(myRegistration.title_en || 'Mr.');
+        setTitleOtherEn(myRegistration.title_other_en || '');
+        setFirstNameEn(myRegistration.first_name_en || '');
+        setLastNameEn(myRegistration.last_name_en || '');
+        setInstitutionAbbrEn(myRegistration.institution_abbr_en || 'MSU');
+      } else if (myRegistration.full_name_affiliation) {
+        const parsed = parseFullNameAffiliationString(myRegistration.full_name_affiliation);
+        if (parsed.titleTh) setTitleTh(parsed.titleTh);
+        if (parsed.firstNameTh) setFirstNameTh(parsed.firstNameTh);
+        if (parsed.lastNameTh) setLastNameTh(parsed.lastNameTh);
+        if (parsed.institutionAbbrTh) setInstitutionAbbrTh(parsed.institutionAbbrTh);
+
+        if (parsed.titleEn) setTitleEn(parsed.titleEn);
+        if (parsed.firstNameEn) setFirstNameEn(parsed.firstNameEn);
+        if (parsed.lastNameEn) setLastNameEn(parsed.lastNameEn);
+        if (parsed.institutionAbbrEn) setInstitutionAbbrEn(parsed.institutionAbbrEn);
+      }
+
       setFirstName(myRegistration.first_name || '');
       setLastName(myRegistration.last_name || '');
       setFullNameAffiliation(myRegistration.full_name_affiliation || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim());
@@ -485,8 +759,11 @@ export default function RegisterView({
       if (parts.length > 1) {
         setFirstName(parts[0]);
         setLastName(parts.slice(1).join(' '));
+        setFirstNameTh(parts[0]);
+        setLastNameTh(parts.slice(1).join(' '));
       } else {
         setFirstName(user.name);
+        setFirstNameTh(user.name);
       }
       if (!fullNameAffiliation) {
         setFullNameAffiliation(user.name);
@@ -498,6 +775,16 @@ export default function RegisterView({
   const ageResult = calculateAgeDetailed(birthYearBE, birthMonth, birthDay);
 
   const handleNextToStep2 = () => {
+    if (!firstNameTh.trim() || !lastNameTh.trim()) {
+      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน' });
+      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน', 'error');
+      return;
+    }
+    if (!firstNameEn.trim() || !lastNameEn.trim()) {
+      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน' });
+      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน', 'error');
+      return;
+    }
     if (!fullNameAffiliation.trim()) {
       setStatusMessage({ type: 'error', text: 'กรุณาระบุคำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน' });
       triggerToast('กรุณาระบุชื่อ-สกุล (สถาบัน) ภาษาไทยและอังกฤษ', 'error');
@@ -576,6 +863,21 @@ export default function RegisterView({
       return;
     }
 
+    // Split Name Validation (Thai & English)
+    if (!firstNameTh.trim() || !lastNameTh.trim()) {
+      setCurrentFormStep(1);
+      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน' });
+      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน', 'error');
+      return;
+    }
+
+    if (!firstNameEn.trim() || !lastNameEn.trim()) {
+      setCurrentFormStep(1);
+      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน' });
+      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน', 'error');
+      return;
+    }
+
     // Minimum 15 Years Old Enforcement
     if (ageResult.years < 15) {
       setCurrentFormStep(1);
@@ -644,8 +946,8 @@ export default function RegisterView({
     const formattedDob = `${birthYearBE}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`;
     const feeInfo = getRegistrationFeeDetails(institution);
 
-    let finalFirstName = firstName.trim();
-    let finalLastName = lastName.trim();
+    let finalFirstName = firstName.trim() || firstNameTh.trim();
+    let finalLastName = lastName.trim() || lastNameTh.trim();
     if (!finalFirstName && fullNameAffiliation) {
       const parts = fullNameAffiliation.trim().split(' ');
       finalFirstName = parts[0] || fullNameAffiliation;
@@ -658,6 +960,16 @@ export default function RegisterView({
       user_avatar: user.avatar,
       first_name: finalFirstName,
       last_name: finalLastName,
+      title_th: titleTh === 'อื่นๆ' ? titleOtherTh.trim() : titleTh,
+      title_other_th: titleOtherTh.trim(),
+      first_name_th: firstNameTh.trim(),
+      last_name_th: lastNameTh.trim(),
+      institution_abbr_th: institutionAbbrTh.trim(),
+      title_en: titleEn === 'อื่นๆ' ? titleOtherEn.trim() : titleEn,
+      title_other_en: titleOtherEn.trim(),
+      first_name_en: firstNameEn.trim(),
+      last_name_en: lastNameEn.trim(),
+      institution_abbr_en: institutionAbbrEn.trim(),
       full_name_affiliation: fullNameAffiliation.trim() || `${finalFirstName} ${finalLastName}`.trim(),
       nickname: nickname.trim(),
       callsign: callsign.trim(),
@@ -3026,27 +3338,257 @@ export default function RegisterView({
                 />
               </div>
 
-              {/* ฟิลด์ 1: คำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน * */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  <span>ใส่คำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน <span className="text-rose-400 font-bold">*</span></span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={fullNameAffiliation}
-                  onChange={e => {
-                    setFullNameAffiliation(e.target.value);
-                    const parts = e.target.value.trim().split(' ');
-                    if (parts.length > 0) setFirstName(parts[0]);
-                    if (parts.length > 1) setLastName(parts.slice(1).join(' '));
-                  }}
-                  placeholder="- นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU) - ตัวอย่าง"
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  ตัวอย่าง: - นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU)
-                </p>
+              {/* ฟิลด์ 1: คำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ แยกช่องกรอก */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-rescue-500 inline-block"></span>
+                      คำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย และ ภาษาอังกฤษ
+                      <span className="text-rose-400 font-bold">*</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      แยกช่องกรอกภาษาไทยและภาษาอังกฤษเพื่อความแม่นยำ ระบบจะรวมและจัดรูปแบบให้อัตโนมัติสำหรับจัดทำบัตรประจำตัว (ID Card) และเกียรติบัตร
+                    </p>
+                  </div>
+                </div>
+
+                {/* ส่วนที่ 1: ชื่อสกุลภาษาไทย */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                    <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-[10px]">🇹🇭 ภาษาไทย</span>
+                    <span>ชื่อ - สกุล และ ตัวย่อสถานศึกษา (ภาษาไทย)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    {/* คำนำหน้า (ไทย) */}
+                    <div className={titleTh === 'อื่นๆ' ? "sm:col-span-3" : "sm:col-span-3"}>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        คำนำหน้า <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        value={titleTh}
+                        onChange={(e) => handleTitleThChange(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-rescue-500 cursor-pointer font-medium"
+                      >
+                        {TITLE_THAI_OPTIONS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* กรณีเลือก 'อื่นๆ' ระบุคำนำหน้าไทย */}
+                    {titleTh === 'อื่นๆ' && (
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          ระบุคำนำหน้า <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={titleOtherTh}
+                          onChange={(e) => setTitleOtherTh(e.target.value)}
+                          placeholder="เช่น พ.ต.อ., ดร., อาจารย์"
+                          className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                        />
+                      </div>
+                    )}
+
+                    {/* ชื่อ (ไทย) */}
+                    <div className={titleTh === 'อื่นๆ' ? "sm:col-span-3" : "sm:col-span-4"}>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        ชื่อ (ภาษาไทย) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={firstNameTh}
+                        onChange={(e) => setFirstNameTh(e.target.value)}
+                        placeholder="เช่น ดีใจ"
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                      />
+                    </div>
+
+                    {/* นามสกุล (ไทย) */}
+                    <div className={titleTh === 'อื่นๆ' ? "sm:col-span-3" : "sm:col-span-5"}>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        นามสกุล (ภาษาไทย) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={lastNameTh}
+                        onChange={(e) => setLastNameTh(e.target.value)}
+                        placeholder="เช่น มากดีสุด"
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ตัวย่อสถานศึกษา (ไทย) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        ตัวย่อสถานศึกษา (ไทย) <span className="text-slate-400 font-normal">(เช่น มมส, มข, มทส)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={institutionAbbrTh}
+                        onChange={(e) => setInstitutionAbbrTh(e.target.value)}
+                        placeholder="เช่น มมส หรือเว้นว่างหากไม่มี"
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                      />
+                    </div>
+                    <div className="sm:col-span-6 flex items-center">
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        💡 ตัวย่อสถานศึกษาจะอัปเดตให้อัตโนมัติเมื่อเลือกสถาบันด้านล่าง หรือแก้ไขเพิ่มเติมได้เอง
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800/80"></div>
+
+                {/* ส่วนที่ 2: ชื่อสกุลภาษาอังกฤษ */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-sky-300">
+                    <span className="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/30 text-[10px]">🇬🇧 English</span>
+                    <span>Title, First Name - Last Name & Institution (English)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    {/* คำนำหน้า (EN) */}
+                    <div className={titleEn === 'อื่นๆ' ? "sm:col-span-3" : "sm:col-span-3"}>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Title (EN) <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        value={titleEn}
+                        onChange={(e) => setTitleEn(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer font-medium"
+                      >
+                        {TITLE_ENGLISH_OPTIONS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* กรณีเลือก 'อื่นๆ' ระบุ Title EN */}
+                    {titleEn === 'อื่นๆ' && (
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Specify Title <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={titleOtherEn}
+                          onChange={(e) => setTitleOtherEn(e.target.value)}
+                          placeholder="e.g. Dr., Prof."
+                          className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                        />
+                      </div>
+                    )}
+
+                    {/* First Name (EN) */}
+                    <div className={titleEn === 'อื่นๆ' ? "sm:col-span-3" : "sm:col-span-4"}>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        First Name (EN) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={firstNameEn}
+                        onChange={(e) => setFirstNameEn(e.target.value)}
+                        placeholder="e.g. Deejai"
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                      />
+                    </div>
+
+                    {/* Last Name (EN) */}
+                    <div className={titleEn === 'อื่นๆ' ? "sm:col-span-3" : "sm:col-span-5"}>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Last Name (EN) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={lastNameEn}
+                        onChange={(e) => setLastNameEn(e.target.value)}
+                        placeholder="e.g. Makdeesud"
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Institution Abbreviation (EN) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Institution Abbr. (EN) <span className="text-slate-400 font-normal">(e.g. MSU, KKU, SUT)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={institutionAbbrEn}
+                        onChange={(e) => setInstitutionAbbrEn(e.target.value)}
+                        placeholder="e.g. MSU or leave empty"
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                      />
+                    </div>
+                    <div className="sm:col-span-6 flex items-center">
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        🌐 ใช้ในการจัดทำบัตรประจำตัวผู้เข้ารับการฝึกอบรมและเอกสารรับรองมาตรฐาน
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800/80"></div>
+
+                {/* ส่วนที่ 3: พรีวิวข้อความรวมต่อกันอัตโนมัติ (Live Combined Preview) */}
+                <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-rescue-400" />
+                      ผลลัพธ์ข้อความรวมต่อกัน (สำหรับพิมพ์บนบัตรและเกียรติบัตร)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsManualFullName(!isManualFullName)}
+                      className="text-[11px] text-rescue-400 hover:text-rescue-300 underline font-medium cursor-pointer"
+                    >
+                      {isManualFullName ? '✓ กลับสู่โหมดรวมอัตโนมัติ' : '✏️ ปรับแก้ข้อความรวมด้วยตนเอง'}
+                    </button>
+                  </div>
+
+                  {isManualFullName ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={fullNameAffiliation}
+                        onChange={(e) => setFullNameAffiliation(e.target.value)}
+                        placeholder="- นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU)"
+                        className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rescue-500"
+                      />
+                      <p className="text-[10px] text-amber-400/90 mt-1">
+                        ⚠️ โหมดกำหนดเอง: หากต้องการให้ระบบคำนวณตามช่องด้านบนอัตโนมัติให้กด "กลับสู่โหมดรวมอัตโนมัติ"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-700/60 font-mono text-xs sm:text-sm text-emerald-300 break-all select-all flex items-center justify-between gap-2">
+                      <span>{fullNameAffiliation || <span className="text-slate-500 italic">รอการกรอกข้อมูลในช่องด้านบน...</span>}</span>
+                      {fullNameAffiliation && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                          Auto-generated
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-400">
+                    ตัวอย่างรูปแบบ: <span className="text-slate-300 font-mono text-[10px] sm:text-xs">นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU)</span>
+                  </p>
+                </div>
               </div>
 
               {/* ฟิลด์ 2 & ฟิลด์ 3: ชื่อเล่น & รหัสนามเรียกขาน */}
@@ -3097,7 +3639,7 @@ export default function RegisterView({
                     value={OFFICIAL_NETWORK_INSTITUTIONS.find(i => i.fullName === institution)?.fullName || ''}
                     onChange={e => {
                       if (e.target.value) {
-                        setInstitution(e.target.value);
+                        handleInstitutionSelect(e.target.value);
                       }
                     }}
                     className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium cursor-pointer"
@@ -3132,7 +3674,7 @@ export default function RegisterView({
                       <button
                         type="button"
                         key={inst.id}
-                        onClick={() => setInstitution(inst.fullName)}
+                        onClick={() => handleInstitutionSelect(inst.fullName)}
                         className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
                           isSelected
                             ? 'bg-rescue-500/25 text-orange-300 border-rescue-500 shadow-sm'

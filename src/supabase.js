@@ -126,6 +126,17 @@ const unpackRegistration = (row) => {
 const packRegistrationForSupabase = (fullData) => {
   const extra = {
     user_notes: fullData.special_notes || '',
+    full_name_affiliation: fullData.full_name_affiliation || '',
+    title_th: fullData.title_th || '',
+    title_other_th: fullData.title_other_th || '',
+    first_name_th: fullData.first_name_th || '',
+    last_name_th: fullData.last_name_th || '',
+    institution_abbr_th: fullData.institution_abbr_th || '',
+    title_en: fullData.title_en || '',
+    title_other_en: fullData.title_other_en || '',
+    first_name_en: fullData.first_name_en || '',
+    last_name_en: fullData.last_name_en || '',
+    institution_abbr_en: fullData.institution_abbr_en || '',
     nickname: fullData.nickname || '',
     callsign: fullData.callsign || '',
     shirt_size: fullData.shirt_size || '',
