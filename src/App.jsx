@@ -18,6 +18,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/router';
 import { decodeJwtResponse } from './utils/googleAuth';
+import { forceUnlockAll } from './utils/scrollLock';
 
 export default function App() {
   const [route, setRoute] = useState(parseCurrentRoute);
@@ -67,6 +68,11 @@ export default function App() {
       window.removeEventListener('hashchange', handleLocationChange);
     };
   }, []);
+
+  // Ensure body scrolling is always unlocked when route changes
+  useEffect(() => {
+    forceUnlockAll();
+  }, [route.mainTab, route.subRoute]);
 
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);

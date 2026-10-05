@@ -31,6 +31,19 @@ export default function AdminQRScannerModal({
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
   const [previewSlip, setPreviewSlip] = useState(null);
 
+  // Auto-dismiss success message and scan errors
+  useEffect(() => {
+    if (!actionSuccessMsg) return;
+    const timer = setTimeout(() => setActionSuccessMsg(''), 4500);
+    return () => clearTimeout(timer);
+  }, [actionSuccessMsg]);
+
+  useEffect(() => {
+    if (!scanError) return;
+    const timer = setTimeout(() => setScanError(''), 6000);
+    return () => clearTimeout(timer);
+  }, [scanError]);
+
   const scannerRef = useRef(null);
   const qrRegionId = 'admin-qr-reader-region';
 

@@ -274,6 +274,7 @@ export default function RegisterView({
 
   const handleInstitutionSelect = (instName) => {
     setInstitution(instName);
+    clearFieldError('institution');
     const mapped = INSTITUTION_ABBR_MAP[instName];
     if (mapped) {
       setInstitutionAbbrTh(mapped.th);
@@ -366,10 +367,32 @@ export default function RegisterView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
-  // In-App Toast Notification State
+  // Field-level validation errors state for jumping and marking missing fields
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const clearFieldError = (key) => {
+    setFieldErrors(prev => {
+      if (!prev || !prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  // Auto-dismiss statusMessage after 5 seconds
+  useEffect(() => {
+    if (statusMessage) {
+      const timer = setTimeout(() => {
+        setStatusMessage(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusMessage]);
+
+  // In-App Toast Notification State with auto-dismiss duration
   const [toast, setToast] = useState(null);
-  const triggerToast = (message, type = 'success') => {
-    setToast({ text: message, message, type });
+  const triggerToast = (message, type = 'success', duration = 3500) => {
+    setToast({ text: message, message, type, duration, key: Date.now() });
   };
 
   // In-App Document Preview Modal State
@@ -864,60 +887,83 @@ export default function RegisterView({
   const ageResult = calculateAgeDetailed(birthYearBE, birthMonth, birthDay);
   const feeInfo = getRegistrationFeeDetails(institution);
 
-  const handleNextToStep2 = () => {
-    if (!firstNameTh.trim() || !lastNameTh.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน' });
-      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน', 'error');
-      return;
-    }
-    if (!firstNameEn.trim() || !lastNameEn.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน' });
-      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน', 'error');
-      return;
-    }
-    if (!fullNameAffiliation.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุคำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน' });
-      triggerToast('กรุณาระบุชื่อ-สกุล (สถาบัน) ภาษาไทยและอังกฤษ', 'error');
-      return;
-    }
-    if (!nickname.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ' });
-      triggerToast('กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ', 'error');
-      return;
-    }
-    if (!callsign.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01' });
-      triggerToast('กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง', 'error');
-      return;
-    }
-    if (!institution.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย' });
-      triggerToast('กรุณาระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย', 'error');
-      return;
-    }
+  const validateStep1 = () => {
+    const errs = {};
+    if (!firstNameTh.trim()) errs.firstNameTh = 'กรุณากรอกชื่อภาษาไทยให้ครบถ้วน';
+    if (!lastNameTh.trim()) errs.lastNameTh = 'กรุณากรอกนามสกุลภาษาไทยให้ครบถ้วน';
+    if (titleTh === 'อื่นๆ' && !titleOtherTh.trim()) errs.titleOtherTh = 'กรุณาระบุคำนำหน้าภาษาไทย';
+
+    if (!firstNameEn.trim()) errs.firstNameEn = 'กรุณากรอกชื่อภาษาอังกฤษ (First Name) ให้ครบถ้วน';
+    if (!lastNameEn.trim()) errs.lastNameEn = 'กรุณากรอกนามสกุลภาษาอังกฤษ (Last Name) ให้ครบถ้วน';
+    if (titleEn === 'อื่นๆ' && !titleOtherEn.trim()) errs.titleOtherEn = 'กรุณาระบุ Title ภาษาอังกฤษ';
+
+    if (!fullNameAffiliation.trim()) errs.fullNameAffiliation = 'กรุณาระบุคำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน';
+    if (!nickname.trim()) errs.nickname = 'กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ';
+    if (!callsign.trim()) errs.callsign = 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01';
+    if (!institution.trim()) errs.institution = 'กรุณาระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย';
+
     if (ageResult.years < 15) {
-      setStatusMessage({
-        type: 'error',
-        text: `ไม่อนุญาตให้ดำเนินการต่อ: ผู้เข้าร่วมโครงการ JRE 2027 ต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไป (ปัจจุบันคำนวณได้ ${ageResult.years} ปี)`
-      });
-      triggerToast('ผู้สมัครต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไปเท่านั้น', 'error');
-      return;
+      errs.birthYearBE = `ไม่อนุญาตให้ดำเนินการต่อ: ผู้เข้าร่วมโครงการ JRE 2027 ต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไป (ปัจจุบันคำนวณได้ ${ageResult.years} ปี)`;
     }
     if (phone.length !== 10 || !/^0\d{9}$/.test(phone)) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุเบอร์โทรศัพท์มือถือให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)' });
-      triggerToast('เบอร์โทรศัพท์มือถือต้องมีครบ 10 หลักพอดี', 'error');
-      return;
+      errs.phone = 'กรุณาระบุเบอร์โทรศัพท์มือถือให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)';
     }
     if (!emergencyName.trim()) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุชื่อ-สกุล บุคคลติดต่อฉุกเฉิน' });
-      triggerToast('กรุณาระบุชื่อ-สกุล บุคคลติดต่อฉุกเฉิน', 'error');
-      return;
+      errs.emergencyName = 'กรุณาระบุชื่อ-สกุล บุคคลติดต่อฉุกเฉิน';
     }
     if (emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) {
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุเบอร์โทรศัพท์ติดต่อฉุกเฉินให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)' });
-      triggerToast('เบอร์โทรศัพท์ติดต่อฉุกเฉินต้องมีครบ 10 หลักพอดี', 'error');
+      errs.emergencyPhone = 'กรุณาระบุเบอร์โทรศัพท์ติดต่อฉุกเฉินให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)';
+    }
+    return errs;
+  };
+
+  const focusAndScrollToFirstError = (errs) => {
+    const fieldOrder = [
+      'titleOtherTh',
+      'firstNameTh',
+      'lastNameTh',
+      'titleOtherEn',
+      'firstNameEn',
+      'lastNameEn',
+      'fullNameAffiliation',
+      'nickname',
+      'callsign',
+      'institution',
+      'birthYearBE',
+      'phone',
+      'emergencyName',
+      'emergencyPhone',
+      'shirtSize',
+      'agreeCorrectInfo'
+    ];
+
+    const firstKey = fieldOrder.find(k => errs[k]);
+    if (firstKey) {
+      const targetId = (firstKey === 'agreeCorrectInfo' && currentFormStep === 4)
+        ? 'field-agreeCorrectInfo-step4'
+        : `field-${firstKey}`;
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          el.focus?.();
+        }, 250);
+      }
+    }
+    return firstKey;
+  };
+
+  const handleNextToStep2 = () => {
+    const errs = validateStep1();
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      const firstKey = focusAndScrollToFirstError(errs);
+      setStatusMessage({ type: 'error', text: errs[firstKey] });
+      triggerToast(errs[firstKey], 'error');
       return;
     }
+
+    setFieldErrors({});
     setStatusMessage(null);
     setCurrentFormStep(2);
     window.scrollTo({ top: 350, behavior: 'smooth' });
@@ -926,10 +972,19 @@ export default function RegisterView({
 
   const handleNextToStep3 = () => {
     if (!shirtSize) {
+      setFieldErrors({ shirtSize: 'กรุณาเลือกไซส์เสื้อฝึก JRE 2027 (บังคับเลือกเนื่องจากจัดทำแบบพรีออเดอร์)' });
+      setTimeout(() => {
+        const el = document.getElementById('field-shirtSize');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus?.();
+        }
+      }, 200);
       setStatusMessage({ type: 'error', text: 'กรุณาเลือกไซส์เสื้อฝึก JRE 2027 (บังคับเลือกเนื่องจากจัดทำแบบพรีออเดอร์)' });
       triggerToast('กรุณาเลือกขนาดไซส์เสื้อฝึก JRE 2027', 'error');
       return;
     }
+    setFieldErrors({});
     setStatusMessage(null);
     setCurrentFormStep(3);
     window.scrollTo({ top: 350, behavior: 'smooth' });
@@ -964,75 +1019,41 @@ export default function RegisterView({
       return;
     }
 
-    // Split Name Validation (Thai & English)
-    if (!firstNameTh.trim() || !lastNameTh.trim()) {
+    // Validate Step 1 fields
+    const step1Errs = validateStep1();
+    if (Object.keys(step1Errs).length > 0) {
       setCurrentFormStep(1);
-      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน' });
-      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาไทยให้ครบถ้วน', 'error');
+      setFieldErrors(step1Errs);
+      const firstKey = focusAndScrollToFirstError(step1Errs);
+      setStatusMessage({ type: 'error', text: step1Errs[firstKey] });
+      triggerToast(step1Errs[firstKey], 'error');
       return;
     }
 
-    if (!firstNameEn.trim() || !lastNameEn.trim()) {
-      setCurrentFormStep(1);
-      setStatusMessage({ type: 'error', text: 'กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน' });
-      triggerToast('กรุณากรอกชื่อและนามสกุลภาษาอังกฤษให้ครบถ้วน', 'error');
-      return;
-    }
-
-    // Minimum 15 Years Old Enforcement
-    if (ageResult.years < 15) {
-      setCurrentFormStep(1);
-      setStatusMessage({
-        type: 'error',
-        text: `ไม่อนุญาตให้ส่งใบสมัคร: ผู้เข้าร่วมโครงการฝึกอบรมเชิงปฏิบัติการกู้ภัย JRE 2027 ต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไป (ปัจจุบันคำนวณได้ ${ageResult.years} ปี ${ageResult.months} เดือน ยังไม่ถึงเกณฑ์ขั้นต่ำ)`
-      });
-      triggerToast('ผู้สมัครต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไปเท่านั้น', 'error');
-      return;
-    }
-
-    // Strict 10-Digit Mobile Phone Enforcement
-    if (phone.length !== 10 || !/^0\d{9}$/.test(phone)) {
-      setCurrentFormStep(1);
-      setStatusMessage({
-        type: 'error',
-        text: 'กรุณาระบุเบอร์โทรศัพท์มือถือให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0 และต้องมีตัวเลข 10 ตัวพอดี ห้ามขาดหรือเกิน)'
-      });
-      triggerToast('เบอร์โทรศัพท์มือถือต้องมีครบ 10 หลักพอดี (ห้ามขาดหรือเกิน)', 'error');
-      return;
-    }
-
-    if (emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) {
-      setCurrentFormStep(1);
-      setStatusMessage({
-        type: 'error',
-        text: 'กรุณาระบุเบอร์โทรศัพท์ติดต่อฉุกเฉินให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0 และต้องมีตัวเลข 10 ตัวพอดี ห้ามขาดหรือเกิน)'
-      });
-      triggerToast('เบอร์โทรศัพท์ติดต่อฉุกเฉินต้องมีครบ 10 หลักพอดี (ห้ามขาดหรือเกิน)', 'error');
-      return;
-    }
-
-    if (!nickname.trim()) {
-      setCurrentFormStep(1);
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ' });
-      triggerToast('กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ', 'error');
-      return;
-    }
-
-    if (!callsign.trim()) {
-      setCurrentFormStep(1);
-      setStatusMessage({ type: 'error', text: 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01' });
-      triggerToast('กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง', 'error');
-      return;
-    }
-
+    // Validate Step 2 Shirt Size
     if (!shirtSize) {
       setCurrentFormStep(2);
+      setFieldErrors({ shirtSize: 'กรุณาเลือกไซส์เสื้อฝึก JRE 2027 (บังคับเลือกเนื่องจากจัดทำแบบพรีออเดอร์)' });
+      setTimeout(() => {
+        const el = document.getElementById('field-shirtSize');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus?.();
+        }
+      }, 200);
       setStatusMessage({ type: 'error', text: 'กรุณาเลือกไซส์เสื้อฝึก JRE 2027 (บังคับเลือกเนื่องจากจัดทำแบบพรีออเดอร์)' });
       triggerToast('กรุณาเลือกไซส์เสื้อฝึก JRE 2027', 'error');
       return;
     }
 
+    // Validate Consent & PDPA
     if (!agreeCorrectInfo || !agreePDPAAndRules) {
+      setFieldErrors({ agreeCorrectInfo: 'กรุณาติ๊กยินยอมรับรองข้อมูลและนโยบาย PDPA' });
+      const targetId = currentFormStep === 4 ? 'field-agreeCorrectInfo-step4' : 'field-agreeCorrectInfo';
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       setStatusMessage({
         type: 'error',
         text: 'กรุณาติ๊กยินยอมว่าข้อมูลถูกต้อง และยินยอมปฏิบัติตามนโยบาย PDPA มมส และข้อตกลงโครงการก่อนบันทึกใบสมัคร'
@@ -3276,13 +3297,27 @@ export default function RegisterView({
       </div>
 
       {statusMessage && (
-        <div className={`p-4 rounded-2xl flex items-center gap-3 text-xs sm:text-sm border ${
+        <div className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-xs sm:text-sm border shadow-lg animate-in fade-in duration-200 ${
           statusMessage.type === 'success' 
             ? 'bg-emerald-950/80 border-emerald-700 text-emerald-200' 
             : 'bg-red-950/80 border-red-700 text-red-200'
         }`}>
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span>{statusMessage.text}</span>
+          <div className="flex items-center gap-3 min-w-0">
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
+            )}
+            <span className="leading-relaxed font-medium">{statusMessage.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStatusMessage(null)}
+            className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+            title="ปิดข้อความแจ้งเตือน"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -3724,13 +3759,27 @@ export default function RegisterView({
                           ระบุคำนำหน้า <span className="text-rose-400">*</span>
                         </label>
                         <input
+                          id="field-titleOtherTh"
                           type="text"
                           required
                           value={titleOtherTh}
-                          onChange={(e) => setTitleOtherTh(e.target.value)}
+                          onChange={(e) => {
+                            setTitleOtherTh(e.target.value);
+                            if (e.target.value.trim()) clearFieldError('titleOtherTh');
+                          }}
                           placeholder="เช่น พ.ต.อ., ดร., อาจารย์"
-                          className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                          className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 font-medium transition-all ${
+                            fieldErrors.titleOtherTh 
+                              ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                              : 'border-slate-700 focus:ring-rescue-500'
+                          }`}
                         />
+                        {fieldErrors.titleOtherTh && (
+                          <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{fieldErrors.titleOtherTh}</span>
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -3740,13 +3789,27 @@ export default function RegisterView({
                         ชื่อ (ภาษาไทย) <span className="text-rose-400">*</span>
                       </label>
                       <input
+                        id="field-firstNameTh"
                         type="text"
                         required
                         value={firstNameTh}
-                        onChange={(e) => setFirstNameTh(e.target.value)}
+                        onChange={(e) => {
+                          setFirstNameTh(e.target.value);
+                          if (e.target.value.trim()) clearFieldError('firstNameTh');
+                        }}
                         placeholder="เช่น ดีใจ"
-                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                        className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 font-medium transition-all ${
+                          fieldErrors.firstNameTh 
+                            ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                            : 'border-slate-700 focus:ring-rescue-500'
+                        }`}
                       />
+                      {fieldErrors.firstNameTh && (
+                        <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{fieldErrors.firstNameTh}</span>
+                        </p>
+                      )}
                     </div>
 
                     {/* นามสกุล (ไทย) */}
@@ -3755,13 +3818,27 @@ export default function RegisterView({
                         นามสกุล (ภาษาไทย) <span className="text-rose-400">*</span>
                       </label>
                       <input
+                        id="field-lastNameTh"
                         type="text"
                         required
                         value={lastNameTh}
-                        onChange={(e) => setLastNameTh(e.target.value)}
+                        onChange={(e) => {
+                          setLastNameTh(e.target.value);
+                          if (e.target.value.trim()) clearFieldError('lastNameTh');
+                        }}
                         placeholder="เช่น มากดีสุด"
-                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
+                        className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 font-medium transition-all ${
+                          fieldErrors.lastNameTh 
+                            ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                            : 'border-slate-700 focus:ring-rescue-500'
+                        }`}
                       />
+                      {fieldErrors.lastNameTh && (
+                        <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{fieldErrors.lastNameTh}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -3820,13 +3897,27 @@ export default function RegisterView({
                           Specify Title <span className="text-rose-400">*</span>
                         </label>
                         <input
+                          id="field-titleOtherEn"
                           type="text"
                           required
                           value={titleOtherEn}
-                          onChange={(e) => setTitleOtherEn(e.target.value)}
+                          onChange={(e) => {
+                            setTitleOtherEn(e.target.value);
+                            if (e.target.value.trim()) clearFieldError('titleOtherEn');
+                          }}
                           placeholder="e.g. Dr., Prof."
-                          className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                          className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 font-medium transition-all ${
+                            fieldErrors.titleOtherEn 
+                              ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                              : 'border-slate-700 focus:ring-sky-500'
+                          }`}
                         />
+                        {fieldErrors.titleOtherEn && (
+                          <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{fieldErrors.titleOtherEn}</span>
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -3836,13 +3927,27 @@ export default function RegisterView({
                         First Name (EN) <span className="text-rose-400">*</span>
                       </label>
                       <input
+                        id="field-firstNameEn"
                         type="text"
                         required
                         value={firstNameEn}
-                        onChange={(e) => setFirstNameEn(e.target.value)}
+                        onChange={(e) => {
+                          setFirstNameEn(e.target.value);
+                          if (e.target.value.trim()) clearFieldError('firstNameEn');
+                        }}
                         placeholder="e.g. Deejai"
-                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                        className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 font-medium transition-all ${
+                          fieldErrors.firstNameEn 
+                            ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                            : 'border-slate-700 focus:ring-sky-500'
+                        }`}
                       />
+                      {fieldErrors.firstNameEn && (
+                        <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{fieldErrors.firstNameEn}</span>
+                        </p>
+                      )}
                     </div>
 
                     {/* Last Name (EN) */}
@@ -3851,13 +3956,27 @@ export default function RegisterView({
                         Last Name (EN) <span className="text-rose-400">*</span>
                       </label>
                       <input
+                        id="field-lastNameEn"
                         type="text"
                         required
                         value={lastNameEn}
-                        onChange={(e) => setLastNameEn(e.target.value)}
+                        onChange={(e) => {
+                          setLastNameEn(e.target.value);
+                          if (e.target.value.trim()) clearFieldError('lastNameEn');
+                        }}
                         placeholder="e.g. Makdeesud"
-                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                        className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 font-medium transition-all ${
+                          fieldErrors.lastNameEn 
+                            ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                            : 'border-slate-700 focus:ring-sky-500'
+                        }`}
                       />
+                      {fieldErrors.lastNameEn && (
+                        <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{fieldErrors.lastNameEn}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -3886,7 +4005,11 @@ export default function RegisterView({
                 <div className="border-t border-slate-800/80"></div>
 
                 {/* ส่วนที่ 3: พรีวิวข้อความรวมต่อกันอัตโนมัติ (Live Combined Preview) */}
-                <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2">
+                <div className={`p-3.5 rounded-xl border space-y-2 transition-all ${
+                  fieldErrors.fullNameAffiliation 
+                    ? 'bg-rose-950/20 border-rose-500 ring-2 ring-rose-500/40' 
+                    : 'bg-slate-950/90 border-slate-800'
+                }`}>
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-rescue-400" />
@@ -3904,18 +4027,29 @@ export default function RegisterView({
                   {isManualFullName ? (
                     <div>
                       <input
+                        id="field-fullNameAffiliation"
                         type="text"
                         value={fullNameAffiliation}
-                        onChange={(e) => setFullNameAffiliation(e.target.value)}
+                        onChange={(e) => {
+                          setFullNameAffiliation(e.target.value);
+                          if (e.target.value.trim()) clearFieldError('fullNameAffiliation');
+                        }}
                         placeholder="- นายดีใจ มากดีสุด (มมส) / Mr. Deejai Makdeesud (MSU)"
-                        className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rescue-500"
+                        className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-2 ${
+                          fieldErrors.fullNameAffiliation
+                            ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/30'
+                            : 'border-amber-500/50 focus:ring-rescue-500'
+                        }`}
                       />
                       <p className="text-[10px] text-amber-400/90 mt-1">
                         ⚠️ โหมดกำหนดเอง: หากต้องการให้ระบบคำนวณตามช่องด้านบนอัตโนมัติให้กด "กลับสู่โหมดรวมอัตโนมัติ"
                       </p>
                     </div>
                   ) : (
-                    <div className="px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-700/60 font-mono text-xs sm:text-sm text-emerald-300 break-all select-all flex items-center justify-between gap-2">
+                    <div 
+                      id="field-fullNameAffiliation"
+                      className="px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-700/60 font-mono text-xs sm:text-sm text-emerald-300 break-all select-all flex items-center justify-between gap-2"
+                    >
                       <span>{fullNameAffiliation || <span className="text-slate-500 italic">รอการกรอกข้อมูลในช่องด้านบน...</span>}</span>
                       {fullNameAffiliation && (
                         <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
@@ -3923,6 +4057,13 @@ export default function RegisterView({
                         </span>
                       )}
                     </div>
+                  )}
+
+                  {fieldErrors.fullNameAffiliation && (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.fullNameAffiliation}</span>
+                    </p>
                   )}
 
                   <p className="text-[11px] text-slate-400">
@@ -3938,13 +4079,27 @@ export default function RegisterView({
                     <span>ชื่อเล่น ภาษาไทย เเละ อังกฤษ <span className="text-rose-400 font-bold">*</span></span>
                   </label>
                   <input
+                    id="field-nickname"
                     type="text"
                     required
                     value={nickname}
-                    onChange={e => setNickname(e.target.value)}
+                    onChange={e => {
+                      setNickname(e.target.value);
+                      if (e.target.value.trim()) clearFieldError('nickname');
+                    }}
                     placeholder="เช่น เจมส์ / James"
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
+                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-medium transition-all ${
+                      fieldErrors.nickname 
+                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                        : 'border-slate-700 focus:ring-rescue-500'
+                    }`}
                   />
+                  {fieldErrors.nickname && (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.nickname}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -3952,13 +4107,27 @@ export default function RegisterView({
                     <span>รหัสนามเรียกขานหน่วยตัวเอง <span className="text-rose-400 font-bold">*</span></span>
                   </label>
                   <input
+                    id="field-callsign"
                     type="text"
                     required
                     value={callsign}
-                    onChange={e => setCallsign(e.target.value)}
+                    onChange={e => {
+                      setCallsign(e.target.value);
+                      if (e.target.value.trim()) clearFieldError('callsign');
+                    }}
                     placeholder="RCPMSU 15-01 (ตัวอย่าง)"
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-mono font-medium"
+                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-mono font-medium transition-all ${
+                      fieldErrors.callsign 
+                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                        : 'border-slate-700 focus:ring-rescue-500'
+                    }`}
                   />
+                  {fieldErrors.callsign && (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.callsign}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -4069,13 +4238,27 @@ export default function RegisterView({
                 </div>
 
                 <input
+                  id="field-institution"
                   type="text"
                   required
                   value={institution}
-                  onChange={e => setInstitution(e.target.value)}
+                  onChange={e => {
+                    setInstitution(e.target.value);
+                    if (e.target.value.trim()) clearFieldError('institution');
+                  }}
                   placeholder="ระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, อาสาสมัครกู้ภัย มข ฯลฯ"
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
+                  className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-medium transition-all ${
+                    fieldErrors.institution 
+                      ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                      : 'border-slate-700 focus:ring-rescue-500'
+                  }`}
                 />
+                {fieldErrors.institution && (
+                  <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{fieldErrors.institution}</span>
+                  </p>
+                )}
 
                 {/* Quick Suggestions Pills */}
                 <div className="flex flex-wrap gap-1.5 pt-1">
@@ -4187,9 +4370,17 @@ export default function RegisterView({
                     <span className="text-[10px] text-rescue-400 font-bold">15 ปี+</span>
                   </label>
                   <select
+                    id="field-birthYearBE"
                     value={birthYearBE}
-                    onChange={e => setBirthYearBE(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
+                    onChange={e => {
+                      setBirthYearBE(e.target.value);
+                      clearFieldError('birthYearBE');
+                    }}
+                    className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-sm focus:ring-2 outline-none cursor-pointer transition-all ${
+                      fieldErrors.birthYearBE 
+                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                        : 'border-slate-700 focus:ring-rescue-500'
+                    }`}
                   >
                     {eligibleBirthYears.map(year => (
                       <option key={year} value={year.toString()}>
@@ -4199,6 +4390,13 @@ export default function RegisterView({
                   </select>
                 </div>
               </div>
+
+              {fieldErrors.birthYearBE && (
+                <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{fieldErrors.birthYearBE}</span>
+                </p>
+              )}
 
               {/* REAL-TIME CALCULATED AGE DISPLAY BOX */}
               <div className={`p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner border transition-all ${
@@ -4259,16 +4457,24 @@ export default function RegisterView({
                   </label>
                   <div className="relative">
                     <input
+                      id="field-phone"
                       type="tel"
                       inputMode="numeric"
                       pattern="[0-9]{10}"
                       maxLength={10}
                       required
                       value={phone}
-                      onChange={e => handlePhoneChange(e.target.value)}
+                      onChange={e => {
+                        handlePhoneChange(e.target.value);
+                        if (e.target.value.replace(/\D/g, '').length === 10) clearFieldError('phone');
+                      }}
                       placeholder="08XXXXXXXX"
-                      className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 font-mono text-sm pr-24 ${
-                        phone.length === 10 ? 'border-emerald-500/70 focus:ring-emerald-500' : 'border-slate-700 focus:ring-rescue-500'
+                      className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 font-mono text-sm pr-24 transition-all ${
+                        fieldErrors.phone
+                          ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40'
+                          : phone.length === 10 
+                          ? 'border-emerald-500/70 focus:ring-emerald-500' 
+                          : 'border-slate-700 focus:ring-rescue-500'
                       }`}
                     />
                     <span className={`absolute right-3 top-3 text-[11px] font-mono px-2 py-0.5 rounded-md font-bold select-none ${
@@ -4277,6 +4483,12 @@ export default function RegisterView({
                       {phone.length}/10 หลัก
                     </span>
                   </div>
+                  {fieldErrors.phone && (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.phone}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -4401,13 +4613,27 @@ export default function RegisterView({
                     ชื่อ - สกุล บุคคลติดต่อฉุกเฉิน <span className="text-rose-400 font-bold">*</span>
                   </label>
                   <input
+                    id="field-emergencyName"
                     type="text"
                     required
                     value={emergencyName}
-                    onChange={e => setEmergencyName(e.target.value)}
+                    onChange={e => {
+                      setEmergencyName(e.target.value);
+                      if (e.target.value.trim()) clearFieldError('emergencyName');
+                    }}
                     placeholder="ระบุชื่อและนามสกุล"
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm"
+                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm transition-all ${
+                      fieldErrors.emergencyName 
+                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                        : 'border-slate-700 focus:ring-rescue-500'
+                    }`}
                   />
+                  {fieldErrors.emergencyName && (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.emergencyName}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -4440,16 +4666,24 @@ export default function RegisterView({
                 </label>
                 <div className="relative">
                   <input
+                    id="field-emergencyPhone"
                     type="tel"
                     inputMode="numeric"
                     pattern="[0-9]{10}"
                     maxLength={10}
                     required
                     value={emergencyPhone}
-                    onChange={e => handleEmergencyPhoneChange(e.target.value)}
+                    onChange={e => {
+                      handleEmergencyPhoneChange(e.target.value);
+                      if (e.target.value.replace(/\D/g, '').length === 10) clearFieldError('emergencyPhone');
+                    }}
                     placeholder="08XXXXXXXX"
-                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 font-mono text-sm pr-24 ${
-                      emergencyPhone.length === 10 ? 'border-emerald-500/70 focus:ring-emerald-500' : 'border-slate-700 focus:ring-rescue-500'
+                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 font-mono text-sm pr-24 transition-all ${
+                      fieldErrors.emergencyPhone
+                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40'
+                        : emergencyPhone.length === 10 
+                        ? 'border-emerald-500/70 focus:ring-emerald-500' 
+                        : 'border-slate-700 focus:ring-rescue-500'
                     }`}
                   />
                   <span className={`absolute right-3 top-3 text-[11px] font-mono px-2 py-0.5 rounded-md font-bold select-none ${
@@ -4458,6 +4692,12 @@ export default function RegisterView({
                     {emergencyPhone.length}/10 หลัก
                   </span>
                 </div>
+                {fieldErrors.emergencyPhone && (
+                  <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{fieldErrors.emergencyPhone}</span>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
@@ -4595,9 +4835,23 @@ export default function RegisterView({
               </div>
 
               {/* Size Selector Buttons */}
-              <div>
-                <label className="block text-xs font-bold text-white mb-2">
-                  เลือกขนาดไซส์เสื้อฝึก JRE 2027 ของท่าน: <span className="text-rose-400 font-bold">*</span>
+              <div 
+                id="field-shirtSize"
+                tabIndex={-1}
+                className={`p-3 rounded-3xl transition-all ${
+                  fieldErrors.shirtSize 
+                    ? 'border-2 border-rose-500 ring-4 ring-rose-500/30 bg-rose-950/20 shadow-xl shadow-rose-950/50' 
+                    : ''
+                }`}
+              >
+                <label className="block text-xs font-bold text-white mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <span>เลือกขนาดไซส์เสื้อฝึก JRE 2027 ของท่าน: <span className="text-rose-400 font-bold">*</span></span>
+                  {fieldErrors.shirtSize && (
+                    <span className="text-xs text-rose-400 font-bold flex items-center gap-1 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.shirtSize}</span>
+                    </span>
+                  )}
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                   {SHIRT_SIZE_OPTIONS.map((opt) => {
@@ -4606,7 +4860,10 @@ export default function RegisterView({
                       <button
                         type="button"
                         key={opt.value}
-                        onClick={() => setShirtSize(opt.value)}
+                        onClick={() => {
+                          setShirtSize(opt.value);
+                          clearFieldError('shirtSize');
+                        }}
                         className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? 'bg-orange-500/20 border-orange-500 ring-2 ring-orange-500/30 text-white shadow-md'
@@ -4979,12 +5236,27 @@ export default function RegisterView({
             </div>
 
             {/* Consent and Agreement Checkboxes */}
-            <div className="p-5 sm:p-6 bg-slate-950/80 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
-              <div className="flex items-center gap-2.5 pb-2 border-b border-slate-800">
-                <ShieldCheck className="w-5 h-5 text-rescue-500" />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
-                </h3>
+            <div 
+              id="field-agreeCorrectInfo"
+              className={`p-5 sm:p-6 bg-slate-950/80 border rounded-3xl space-y-4 shadow-inner transition-all duration-300 ${
+                fieldErrors.agreeCorrectInfo
+                  ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20'
+                  : 'border-slate-800'
+              }`}
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="w-5 h-5 text-rescue-500" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
+                  </h3>
+                </div>
+                {fieldErrors.agreeCorrectInfo && (
+                  <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1 animate-pulse">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    กรุณาติ๊กยินยอมทั้ง 2 ข้อ
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3.5">
@@ -4994,7 +5266,12 @@ export default function RegisterView({
                     type="checkbox"
                     required
                     checked={agreeCorrectInfo}
-                    onChange={e => setAgreeCorrectInfo(e.target.checked)}
+                    onChange={e => {
+                      setAgreeCorrectInfo(e.target.checked);
+                      if (e.target.checked && agreePDPAAndRules) {
+                        clearFieldError('agreeCorrectInfo');
+                      }
+                    }}
                     className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
@@ -5008,7 +5285,12 @@ export default function RegisterView({
                     type="checkbox"
                     required
                     checked={agreePDPAAndRules}
-                    onChange={e => setAgreePDPAAndRules(e.target.checked)}
+                    onChange={e => {
+                      setAgreePDPAAndRules(e.target.checked);
+                      if (e.target.checked && agreeCorrectInfo) {
+                        clearFieldError('agreeCorrectInfo');
+                      }
+                    }}
                     className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <div className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
@@ -5030,30 +5312,19 @@ export default function RegisterView({
             </div>
 
             {/* Step 3 Bottom Action Buttons */}
-            <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentFormStep(2);
-                  window.scrollTo({ top: 350, behavior: 'smooth' });
-                }}
-                className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>ย้อนกลับไปแก้ไขไซส์เสื้อ (ขั้นตอนที่ 2)</span>
-              </button>
-
+            <div className="pt-4 space-y-3">
+              {/* Primary Action Button: Submit Application */}
               <button
                 type="submit"
-                disabled={isSubmitting || !agreeCorrectInfo || !agreePDPAAndRules}
-                className="flex-1 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full py-4 px-6 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                 ) : (
                   <>
-                    <Save className="w-5 h-5" />
-                    <span>
+                    <Save className="w-5 h-5 shrink-0" />
+                    <span className="text-center">
                       {isEditing
                         ? 'บันทึกการแก้ไขข้อมูลใบสมัคร'
                         : paymentPlan === 'full'
@@ -5068,30 +5339,45 @@ export default function RegisterView({
                 )}
               </button>
 
-              {/* Installment Plan: Advance to Step 4 Button */}
-              {paymentPlan === 'installment' && (
-                <button
-                  type="button"
-                  onClick={handleNextToStep4}
-                  className="px-6 py-4 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-2xl border border-sky-400/40 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-sky-600/20"
-                >
-                  <span>ถัดไป: ชำระรอบที่ 2 (คงค้าง)</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              )}
-
-              {isEditing && (
+              {/* Secondary Navigation Row */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsEditing(false);
-                    if (onSubRouteChange) onSubRouteChange('dashboard');
+                    setCurrentFormStep(2);
+                    window.scrollTo({ top: 350, behavior: 'smooth' });
                   }}
-                  className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95"
+                  className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-colors"
                 >
-                  ยกเลิก
+                  <ArrowLeft className="w-4 h-4 shrink-0" />
+                  <span>ย้อนกลับไปแก้ไขไซส์เสื้อ (ขั้นตอนที่ 2)</span>
                 </button>
-              )}
+
+                {/* Installment Plan: Advance to Step 4 Button */}
+                {paymentPlan === 'installment' && (
+                  <button
+                    type="button"
+                    onClick={handleNextToStep4}
+                    className="px-6 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-2xl border border-sky-400/40 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-sky-600/20 transition-colors"
+                  >
+                    <span>หรือแนบสลิปชำระรอบที่ 2 (คงค้าง)</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" />
+                  </button>
+                )}
+
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      if (onSubRouteChange) onSubRouteChange('dashboard');
+                    }}
+                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -5338,12 +5624,27 @@ export default function RegisterView({
             </div>
 
             {/* Consent and Agreement Checkboxes */}
-            <div className="p-5 sm:p-6 bg-slate-950/80 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
-              <div className="flex items-center gap-2.5 pb-2 border-b border-slate-800">
-                <ShieldCheck className="w-5 h-5 text-rescue-500" />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
-                </h3>
+            <div 
+              id="field-agreeCorrectInfo-step4"
+              className={`p-5 sm:p-6 bg-slate-950/80 border rounded-3xl space-y-4 shadow-inner transition-all duration-300 ${
+                fieldErrors.agreeCorrectInfo
+                  ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20'
+                  : 'border-slate-800'
+              }`}
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="w-5 h-5 text-rescue-500" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
+                  </h3>
+                </div>
+                {fieldErrors.agreeCorrectInfo && (
+                  <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1 animate-pulse">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    กรุณาติ๊กยินยอมทั้ง 2 ข้อ
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3.5">
@@ -5353,7 +5654,12 @@ export default function RegisterView({
                     type="checkbox"
                     required
                     checked={agreeCorrectInfo}
-                    onChange={e => setAgreeCorrectInfo(e.target.checked)}
+                    onChange={e => {
+                      setAgreeCorrectInfo(e.target.checked);
+                      if (e.target.checked && agreePDPAAndRules) {
+                        clearFieldError('agreeCorrectInfo');
+                      }
+                    }}
                     className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
@@ -5367,7 +5673,12 @@ export default function RegisterView({
                     type="checkbox"
                     required
                     checked={agreePDPAAndRules}
-                    onChange={e => setAgreePDPAAndRules(e.target.checked)}
+                    onChange={e => {
+                      setAgreePDPAAndRules(e.target.checked);
+                      if (e.target.checked && agreeCorrectInfo) {
+                        clearFieldError('agreeCorrectInfo');
+                      }
+                    }}
                     className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <div className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
@@ -5389,30 +5700,19 @@ export default function RegisterView({
             </div>
 
             {/* Step 4 Bottom Action Buttons */}
-            <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentFormStep(3);
-                  window.scrollTo({ top: 350, behavior: 'smooth' });
-                }}
-                className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>ย้อนกลับไปขั้นตอนที่ 3 (ชำระรอบที่ 1)</span>
-              </button>
-
+            <div className="pt-4 space-y-3">
+              {/* Primary Action Button: Submit with Round 2 */}
               <button
                 type="submit"
-                disabled={isSubmitting || !agreeCorrectInfo || !agreePDPAAndRules}
-                className="flex-1 py-4 bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white font-black rounded-2xl shadow-xl shadow-sky-600/30 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full py-4 px-6 bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white font-black rounded-2xl shadow-xl shadow-sky-600/30 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                 ) : (
                   <>
-                    <Save className="w-5 h-5" />
-                    <span>
+                    <Save className="w-5 h-5 shrink-0" />
+                    <span className="text-center">
                       {formSlipRound2 
                         ? `ยืนยันและส่งใบสมัคร + สลิปชำระครบ 2 รอบ (${feeInfo.totalFee} บ.) 💾` 
                         : `ยืนยันและส่งใบสมัคร (ค้างชำระงวดที่ 2 ${feeInfo.round2Amount} บ.) 📤`}
@@ -5421,18 +5721,33 @@ export default function RegisterView({
                 )}
               </button>
 
-              {isEditing && (
+              {/* Secondary Navigation Row */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsEditing(false);
-                    if (onSubRouteChange) onSubRouteChange('dashboard');
+                    setCurrentFormStep(3);
+                    window.scrollTo({ top: 350, behavior: 'smooth' });
                   }}
-                  className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95"
+                  className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-colors"
                 >
-                  ยกเลิก
+                  <ArrowLeft className="w-4 h-4 shrink-0" />
+                  <span>ย้อนกลับไปขั้นตอนที่ 3 (ชำระรอบที่ 1)</span>
                 </button>
-              )}
+
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      if (onSubRouteChange) onSubRouteChange('dashboard');
+                    }}
+                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

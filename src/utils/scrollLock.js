@@ -28,6 +28,7 @@ export function lockBodyScroll() {
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     document.body.classList.add('modal-scroll-locked');
+    document.documentElement.classList.add('modal-scroll-locked');
   }
 }
 
@@ -40,6 +41,7 @@ export function unlockBodyScroll() {
     document.documentElement.style.overflow = originalHtmlOverflow || '';
     document.body.style.paddingRight = originalBodyPaddingRight || '';
     document.body.classList.remove('modal-scroll-locked');
+    document.documentElement.classList.remove('modal-scroll-locked');
   }
 }
 
@@ -50,6 +52,7 @@ export function forceUnlockAll() {
   document.documentElement.style.overflow = originalHtmlOverflow || '';
   document.body.style.paddingRight = originalBodyPaddingRight || '';
   document.body.classList.remove('modal-scroll-locked');
+  document.documentElement.classList.remove('modal-scroll-locked');
 }
 
 /**

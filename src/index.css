@@ -42,3 +42,16 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #f97316;
 }
+
+/* Modal background scroll lock & overscroll containment */
+html.modal-scroll-locked,
+body.modal-scroll-locked {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: pan-y pinch-zoom;
+}
+
+.modal-portal-wrapper {
+  position: relative;
+  z-index: 9999;
+}

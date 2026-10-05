@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Eye, EyeOff, X, Lock, AlertCircle } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -8,6 +8,13 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-dismiss error message after 5 seconds
+  useEffect(() => {
+    if (!errorMsg) return;
+    const timer = setTimeout(() => setErrorMsg(''), 5000);
+    return () => clearTimeout(timer);
+  }, [errorMsg]);
 
   if (!isOpen) return null;
 

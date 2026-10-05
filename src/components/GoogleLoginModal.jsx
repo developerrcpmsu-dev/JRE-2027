@@ -64,6 +64,19 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     }
   }, [isOpen]);
 
+  // Auto-dismiss error & success alerts after 5 seconds
+  useEffect(() => {
+    if (!errorMsg) return;
+    const timer = setTimeout(() => setErrorMsg(null), 5000);
+    return () => clearTimeout(timer);
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (!successMsg) return;
+    const timer = setTimeout(() => setSuccessMsg(null), 5000);
+    return () => clearTimeout(timer);
+  }, [successMsg]);
+
   // Handle Google Profile Success
   const handleUserLoginSuccess = async (cleanName, cleanEmail, avatar) => {
     setIsLoading(true);
