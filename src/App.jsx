@@ -276,7 +276,7 @@ export default function App() {
     await DataService.deleteRegistration(userId);
     const updated = await DataService.getRegistrations();
     setRegistrations(updated);
-    if (user && user.id === userId) {
+    if (user && (user.id === userId || myRegistration?.user_id === userId)) {
       setMyRegistration(null);
     }
   };
@@ -398,6 +398,8 @@ export default function App() {
             myRegistration={myRegistration}
             onSaveRegistration={handleSaveRegistration}
             onUpdateRegistration={handleUpdateRegistration}
+            onDeleteRegistration={handleDeleteRegistration}
+            onUpdateUser={setUser}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             formsConfig={formsConfig}
             paymentConfig={paymentConfig}

@@ -49,7 +49,13 @@ import {
   Check,
   ArrowUp,
   ArrowDown,
-  GraduationCap
+  GraduationCap,
+  Lock,
+  Key,
+  Shield,
+  EyeOff,
+  UserPlus,
+  RefreshCw
 } from 'lucide-react';
 import { DataService } from '../supabase';
 import { 
@@ -90,6 +96,7 @@ export default function AdminDashboardView({
 }) {
   const resolveInitialTab = (tab) => {
     if (tab === 'payment') return 'payment_settings';
+    if (tab === 'users') return 'users';
     return tab || 'applicants';
   };
 
@@ -108,6 +115,9 @@ export default function AdminDashboardView({
     setActiveTab(tab);
     if (onTabChange) {
       onTabChange(tab === 'payment_settings' ? 'payment' : tab);
+    }
+    if (tab === 'users') {
+      loadUserAccounts();
     }
   };
 
@@ -245,6 +255,147 @@ export default function AdminDashboardView({
   const triggerToast = (msg) => {
     setAlertToast(msg);
     setTimeout(() => setAlertToast(null), 3500);
+  };
+
+  // User Accounts Management State
+  const [userAccounts, setUserAccounts] = useState([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userProviderFilter, setUserProviderFilter] = useState('all'); // all, email, google, both
+
+  // Modal states for user account management
+  const [selectedHashUser, setSelectedHashUser] = useState(null); // inspect password hash & salt
+  const [editingUserAccount, setEditingUserAccount] = useState(null); // edit user
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserRole, setEditUserRole] = useState('user');
+  const [editUserVerified, setEditUserVerified] = useState(true);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+
+  const [resetPassUser, setResetPassUser] = useState(null); // reset password
+  const [adminNewPassword, setAdminNewPassword] = useState('');
+  const [showAdminNewPass, setShowAdminNewPass] = useState(false);
+  const [isResettingUserPass, setIsResettingUserPass] = useState(false);
+
+  const [deletingUserAccount, setDeletingUserAccount] = useState(null); // delete user
+  const [isDeletingUserAccount, setIsDeletingUserAccount] = useState(false);
+
+  const loadUserAccounts = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const accs = await DataService.getUserAccounts();
+      setUserAccounts(accs || []);
+    } catch (err) {
+      console.error('Error loading user accounts:', err);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadUserAccounts();
+  }, []);
+
+  const handleSaveEditUser = async (e) => {
+    e.preventDefault();
+    if (!editingUserAccount) return;
+    setIsSavingUser(true);
+    try {
+      await DataService.adminUpdateUser(editingUserAccount.id, {
+        name: editUserName.trim(),
+        email: editUserEmail.trim().toLowerCase(),
+        role: editUserRole,
+        email_verified: editUserVerified
+      });
+      triggerToast('อัปเดตข้อมูลบัญชีผู้ใช้สำเร็จ');
+      setEditingUserAccount(null);
+      await loadUserAccounts();
+    } catch (err) {
+      console.error(err);
+      triggerToast(err.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลบัญชี');
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  const handleAdminResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetPassUser || !adminNewPassword) return;
+    if (adminNewPassword.length < 6) {
+      triggerToast('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+      return;
+    }
+    setIsResettingUserPass(true);
+    try {
+      await DataService.adminResetUserPassword(resetPassUser.id, adminNewPassword);
+      triggerToast(`รีเซ็ตรหัสผ่านสำหรับ ${resetPassUser.email} สำเร็จ (เข้ารหัส SHA-256 + Salt เรียบร้อย)`);
+      setResetPassUser(null);
+      setAdminNewPassword('');
+      await loadUserAccounts();
+    } catch (err) {
+      console.error(err);
+      triggerToast(err.message || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
+    } finally {
+      setIsResettingUserPass(false);
+    }
+  };
+
+  const handleDeleteUserAccount = async () => {
+    if (!deletingUserAccount) return;
+    setIsDeletingUserAccount(true);
+    try {
+      await DataService.adminDeleteUser(deletingUserAccount.id);
+      triggerToast(`ลบบัญชีผู้ใช้ ${deletingUserAccount.email} เรียบร้อยแล้ว`);
+      setDeletingUserAccount(null);
+      await loadUserAccounts();
+    } catch (err) {
+      console.error(err);
+      triggerToast(err.message || 'เกิดข้อผิดพลาดในการลบบัญชี');
+    } finally {
+      setIsDeletingUserAccount(false);
+    }
+  };
+
+  const handleExportUsersExcel = () => {
+    if (!userAccounts || userAccounts.length === 0) {
+      triggerToast('ยังไม่มีข้อมูลบัญชีผู้ใช้ในระบบ');
+      return;
+    }
+    const headers = [
+      'ลำดับ',
+      'รหัสผู้ใช้ (UID)',
+      'ชื่อ-นามสกุล (Name)',
+      'อีเมล (Email)',
+      'ยืนยันอีเมลแล้ว (Email Verified)',
+      'ผู้ให้บริการเข้าสู่ระบบ (Auth Provider)',
+      'เกลือสุ่ม 16-byte (Dynamic Salt Hex)',
+      'รหัสผ่านแฮช (Password Hash SHA-256)',
+      'บทบาทในระบบ (Role)',
+      'วันที่สร้างบัญชี (Created At)',
+      'อัปเดตล่าสุด (Updated At)'
+    ];
+
+    const dataRows = userAccounts.map((u, idx) => [
+      idx + 1,
+      u.id,
+      u.name,
+      u.email,
+      u.email_verified ? 'ยืนยันแล้ว' : 'ยังไม่ยืนยัน',
+      u.provider === 'both' ? 'Google + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
+      u.salt || 'N/A (Google OAuth)',
+      u.password_hash || 'N/A (Google OAuth)',
+      u.role || 'user',
+      u.created_at ? new Date(u.created_at).toLocaleString('th-TH') : '-',
+      u.updated_at ? new Date(u.updated_at).toLocaleString('th-TH') : '-'
+    ]);
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    worksheet['!cols'] = headers.map(h => ({ wch: Math.max(h.length * 2, 16) }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'บัญชีผู้ใช้งาน');
+    const fileName = `JRE2027_บัญชีผู้ใช้งานระบบ_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+    triggerToast(`ส่งออกรายชื่อผู้ใช้เป็น Excel สำเร็จ: ${fileName}`);
   };
 
   // Speakers Management State
@@ -1478,6 +1629,18 @@ export default function AdminDashboardView({
         >
           <Users className="w-4 h-4 text-blue-400" />
           <span>คณะดำเนินงาน & ทีมงาน ({localTeam.length})</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('users')}
+          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            activeTab === 'users'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <UserCheck className="w-4 h-4 text-emerald-400" />
+          <span>จัดการบัญชีผู้ใช้ ({userAccounts.length})</span>
         </button>
       </div>
 
@@ -4989,6 +5152,599 @@ export default function AdminDashboardView({
                   </div>
                 );
               })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 8: USER ACCOUNTS & AUTHENTICATION MANAGEMENT */}
+      {activeTab === 'users' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+            <div>
+              <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Authentication & User Accounts Management</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                จัดการบัญชีผู้ใช้งานระบบ ({userAccounts.length} บัญชี)
+              </h2>
+              <p className="text-slate-400 text-xs mt-1">
+                ตรวจสอบรายชื่อผู้ใช้งานทั้งหมด, บทบาทผู้ใช้ (Role-Based Access), วิธีการยืนยันตัวตน, และการตรวจสอบค่าเข้ารหัสรหัสผ่าน One-Way Cryptographic Hash (SHA-256 + Dynamic Salt 16-byte) ในฐานข้อมูล
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={loadUserAccounts}
+                disabled={isLoadingUsers}
+                className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="โหลดข้อมูลบัญชีผู้ใช้ใหม่"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin text-emerald-400' : ''}`} />
+                <span>รีเฟรช</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportUsersExcel}
+                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer"
+                title="ส่งออกรายชื่อผู้ใช้และค่าแฮชเป็นไฟล์ Excel (.xlsx)"
+              >
+                <FileDown className="w-4 h-4 text-emerald-100" />
+                <span>ส่งออกรายชื่อผู้ใช้เป็น Excel (.xlsx)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Academic Criteria & Security Feature Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
+                <span className="text-xs font-bold">ผู้ใช้ทั้งหมดในระบบ</span>
+                <Users className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="text-2xl font-black text-white">{userAccounts.length}</div>
+              <p className="text-[11px] text-slate-500 mt-1">Total registered accounts</p>
+            </div>
+
+            <div className="p-4 bg-slate-950 border border-emerald-900/40 rounded-2xl">
+              <div className="flex items-center justify-between text-emerald-400 mb-2">
+                <span className="text-xs font-bold">เกณฑ์ 1: Password Hashed</span>
+                <Lock className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-2xl font-black text-emerald-300">
+                {userAccounts.filter(u => u.password_hash).length}
+              </div>
+              <p className="text-[11px] text-emerald-400/80 mt-1">🔒 SHA-256 + 16-byte Dynamic Salt</p>
+            </div>
+
+            <div className="p-4 bg-slate-950 border border-indigo-900/40 rounded-2xl">
+              <div className="flex items-center justify-between text-indigo-400 mb-2">
+                <span className="text-xs font-bold">Google OAuth Users</span>
+                <Shield className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="text-2xl font-black text-indigo-300">
+                {userAccounts.filter(u => u.provider === 'google' || u.provider === 'both').length}
+              </div>
+              <p className="text-[11px] text-indigo-400/80 mt-1">🌐 Dual-Bypass Authentication</p>
+            </div>
+
+            <div className="p-4 bg-slate-950 border border-purple-900/40 rounded-2xl">
+              <div className="flex items-center justify-between text-purple-400 mb-2">
+                <span className="text-xs font-bold">อีเมลที่ยืนยันแล้ว</span>
+                <CheckCircle2 className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="text-2xl font-black text-purple-300">
+                {userAccounts.filter(u => u.email_verified).length}
+              </div>
+              <p className="text-[11px] text-purple-400/80 mt-1">✓ OTP Email Verification</p>
+            </div>
+          </div>
+
+          {/* Search & Provider Filter Toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={userSearchQuery}
+                onChange={e => setUserSearchQuery(e.target.value)}
+                placeholder="ค้นหาด้วยชื่อ, อีเมล, หรือ User ID..."
+                className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 shrink-0 font-semibold">ผู้ให้บริการ:</span>
+              <select
+                value={userProviderFilter}
+                onChange={e => setUserProviderFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+              >
+                <option value="all">ทั้งหมด (All Providers)</option>
+                <option value="email">Email & Password (มี Password Hash)</option>
+                <option value="google">Google OAuth</option>
+                <option value="both">Both (Google + Password)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Users Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-4">#</th>
+                  <th className="py-3 px-4">ผู้ใช้งาน (User Info)</th>
+                  <th className="py-3 px-4">อีเมล & สถานะ (Email)</th>
+                  <th className="py-3 px-4">ช่องทางยืนยันตัวตน</th>
+                  <th className="py-3 px-4">Cryptographic Hash (SHA-256 + Salt)</th>
+                  <th className="py-3 px-4">บทบาท (Role)</th>
+                  <th className="py-3 px-4">วันที่สมัคร</th>
+                  <th className="py-3 px-4 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
+                {userAccounts
+                  .filter(u => {
+                    if (userProviderFilter !== 'all') {
+                      if (userProviderFilter === 'email' && u.provider !== 'email') return false;
+                      if (userProviderFilter === 'google' && u.provider !== 'google') return false;
+                      if (userProviderFilter === 'both' && u.provider !== 'both') return false;
+                    }
+                    if (userSearchQuery.trim()) {
+                      const q = userSearchQuery.toLowerCase();
+                      const matchName = (u.name || '').toLowerCase().includes(q);
+                      const matchEmail = (u.email || '').toLowerCase().includes(q);
+                      const matchId = (u.id || '').toLowerCase().includes(q);
+                      return matchName || matchEmail || matchId;
+                    }
+                    return true;
+                  })
+                  .map((acc, index) => {
+                    const hasPassword = Boolean(acc.password_hash);
+                    return (
+                      <tr key={acc.id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono text-slate-500 font-bold">
+                          {index + 1}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={acc.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(acc.email || 'user')}`}
+                              alt="Avatar"
+                              className="w-9 h-9 rounded-xl object-cover border border-slate-700 shrink-0"
+                            />
+                            <div>
+                              <div className="font-bold text-white flex items-center gap-1.5">
+                                <span>{acc.name || 'ไม่ระบุชื่อ'}</span>
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-500 mt-0.5">
+                                UID: {acc.id.slice(0, 12)}...
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="font-mono text-slate-200 font-medium">
+                            {acc.email}
+                          </div>
+                          <div className="mt-1">
+                            {acc.email_verified ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                                <CheckCircle className="w-3 h-3" />
+                                <span>ยืนยันอีเมลแล้ว</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
+                                <Clock className="w-3 h-3" />
+                                <span>รอ OTP ยืนยัน</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          {acc.provider === 'both' ? (
+                            <span className="px-2.5 py-1 bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-[11px] font-bold inline-flex items-center gap-1">
+                              🌐 Google + 🔑 รหัสผ่าน
+                            </span>
+                          ) : acc.provider === 'email' ? (
+                            <span className="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-bold inline-flex items-center gap-1">
+                              🔑 Email & Password
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg text-[11px] font-bold inline-flex items-center gap-1">
+                              🌐 Google OAuth
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          {hasPassword ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedHashUser(acc)}
+                              className="group text-left p-2 bg-slate-950 border border-emerald-500/30 hover:border-emerald-500/70 rounded-xl transition-all cursor-pointer block max-w-[220px]"
+                              title="คลิกเพื่อตรวจสอบค่า Salt และ Password Hash ตัวเต็ม (เกณฑ์ 1: Password Hashing)"
+                            >
+                              <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-[10px] mb-1">
+                                <Lock className="w-3 h-3" />
+                                <span>SHA-256 + Salt (16-byte)</span>
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-400 truncate group-hover:text-emerald-300">
+                                Hash: {acc.password_hash.slice(0, 16)}...
+                              </div>
+                              <div className="font-mono text-[9px] text-slate-500 truncate mt-0.5">
+                                Salt: {acc.salt ? `${acc.salt.slice(0, 10)}...` : '-'}
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="p-2 bg-slate-950/50 border border-slate-800 rounded-xl text-[10px] text-slate-500 max-w-[200px]">
+                              <span>Google OAuth Token (Managed by Google)</span>
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            acc.role === 'admin' 
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          }`}>
+                            {acc.role || 'user'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                          {acc.created_at ? new Date(acc.created_at).toLocaleDateString('th-TH') : '-'}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingUserAccount(acc);
+                                setEditUserName(acc.name || '');
+                                setEditUserEmail(acc.email || '');
+                                setEditUserRole(acc.role || 'user');
+                                setEditUserVerified(Boolean(acc.email_verified));
+                              }}
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                              title="แก้ไขข้อมูลผู้ใช้ (Update)"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResetPassUser(acc);
+                                setAdminNewPassword('');
+                              }}
+                              className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors cursor-pointer"
+                              title="รีเซ็ตรหัสผ่าน (Reset Password with SHA-256 Hashing)"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setDeletingUserAccount(acc)}
+                              className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition-colors cursor-pointer"
+                              title="ลบบัญชีผู้ใช้ (Delete)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* PASSWORD HASH INSPECTOR MODAL (FOR PROFESSOR INSPECTION) */}
+      {selectedHashUser && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border-2 border-emerald-500/50 max-w-lg w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setSelectedHashUser(null)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  ตรวจสอบค่า Password Hashing ในฐานข้อมูล
+                </h3>
+                <p className="text-xs text-emerald-400 font-semibold">
+                  (เกณฑ์ที่ 1: การเก็บรหัสผ่านด้วย Password Hashing ตามมาตรฐานสากล)
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-slate-400 block mb-1">บัญชีผู้ใช้:</span>
+                <span className="font-mono text-white font-bold bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 block">
+                  {selectedHashUser.email} (UID: {selectedHashUser.id})
+                </span>
+              </div>
+
+              <div>
+                <span className="text-slate-400 block mb-1">อัลกอริทึม (Cryptographic Algorithm):</span>
+                <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-lg font-mono font-bold inline-block">
+                  SHA-256 + 16-byte Dynamic Hex Salt (Web Crypto API)
+                </span>
+              </div>
+
+              <div>
+                <span className="text-slate-400 block mb-1">Dynamic Salt (สุ่มค่าเฉพาะแต่ละบัญชี 16 Bytes Hex):</span>
+                <div className="font-mono text-[11px] text-amber-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800 break-all select-all">
+                  {selectedHashUser.salt || 'N/A'}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-slate-400 block mb-1">Stored Password Hash (ผลลัพธ์ Digest ที่จัดเก็บใน Database):</span>
+                <div className="font-mono text-[11px] text-emerald-400 bg-slate-950 p-2.5 rounded-xl border border-emerald-500/30 break-all select-all">
+                  {selectedHashUser.password_hash || 'N/A'}
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-300 leading-relaxed space-y-1">
+                <div className="font-bold text-amber-400 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>คำอธิบายเชิงวิชาการสำหรับนำเสนออาจารย์</span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  ระบบไม่ได้จัดเก็บ Plaintext Password ใดๆ ทั้งสิ้น แต่ใช้การสุ่ม Salt ขนาด 16 ไบต์ (32 hex characters) นำมาต่อกับรหัสผ่านแล้วส่งผ่านกระบวนการ SHA-256 Digest ทางเดียว (One-Way Hash) ทำให้แม้ฐานข้อมูลจะถูกโจมตี ผู้ไม่ประสงค์ดีก็ไม่สามารถย้อนกลับเป็นรหัสผ่านเดิมได้ ป้องกันการโจมตีแบบ Rainbow Table และ Dictionary Attack ได้อย่างสมบูรณ์
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedHashUser(null)}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              ปิดหน้าต่าง
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER ACCOUNT MODAL */}
+      {editingUserAccount && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setEditingUserAccount(null)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shrink-0">
+                <Edit3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">
+                  แก้ไขข้อมูลบัญชีผู้ใช้
+                </h3>
+                <p className="text-xs text-slate-400">
+                  UID: {editingUserAccount.id.slice(0, 14)}...
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditUser} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  ชื่อ-นามสกุล
+                </label>
+                <input
+                  type="text"
+                  value={editUserName}
+                  onChange={e => setEditUserName(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  อีเมล (Email)
+                </label>
+                <input
+                  type="email"
+                  value={editUserEmail}
+                  onChange={e => setEditUserEmail(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  บทบาท (Role)
+                </label>
+                <select
+                  value={editUserRole}
+                  onChange={e => setEditUserRole(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="user">User (ผู้ใช้ทั่วไป)</option>
+                  <option value="admin">Admin (ผู้ดูแลระบบ)</option>
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <input
+                  type="checkbox"
+                  checked={editUserVerified}
+                  onChange={e => setEditUserVerified(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-500 bg-slate-900 border-slate-700"
+                />
+                <span className="text-slate-300 font-semibold text-xs">
+                  ยืนยันอีเมลแล้ว (Email Verified)
+                </span>
+              </label>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingUserAccount(null)}
+                  disabled={isSavingUser}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingUser}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/30 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingUser ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN RESET PASSWORD MODAL */}
+      {resetPassUser && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border-2 border-amber-500/50 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setResetPassUser(null)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">
+                  รีเซ็ตรหัสผ่านผู้ใช้
+                </h3>
+                <p className="text-xs text-amber-400">
+                  {resetPassUser.email}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAdminResetPassword} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  รหัสผ่านใหม่ (กำหนดใหม่อย่างน้อย 6 ตัวอักษร)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showAdminNewPass ? 'text' : 'password'}
+                    value={adminNewPassword}
+                    onChange={e => setAdminNewPassword(e.target.value)}
+                    required
+                    placeholder="รหัสผ่านใหม่"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminNewPass(!showAdminNewPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showAdminNewPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 leading-relaxed">
+                <span>🔒 รหัสผ่านใหม่จะถูกนำไปสุ่ม 16-byte Salt และคำนวณ SHA-256 Digest ใหม่ทันทีเมื่อบันทึก</span>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setResetPassUser(null)}
+                  disabled={isResettingUserPass}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isResettingUserPass}
+                  className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-900/40 cursor-pointer disabled:opacity-50"
+                >
+                  {isResettingUserPass ? 'กำลังบันทึก...' : 'บันทึกรหัสผ่านใหม่'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE USER ACCOUNT MODAL */}
+      {deletingUserAccount && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border-2 border-rose-600/50 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-white">
+                ยืนยันลบบัญชีผู้ใช้?
+              </h3>
+              <p className="text-xs text-rose-300 font-semibold">
+                {deletingUserAccount.email}
+              </p>
+            </div>
+
+            <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-[11px] text-rose-200 leading-relaxed">
+              <span>⚠️ การลบบัญชีผู้ใช้นี้จะลบสิทธิ์การเข้าสู่ระบบ และข้อมูลใบสมัครที่ผูกไว้กับบัญชีนี้อย่างถาวร</span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingUserAccount(null)}
+                disabled={isDeletingUserAccount}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUserAccount}
+                disabled={isDeletingUserAccount}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-900/40 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingUserAccount ? 'กำลังลบ...' : 'ยืนยันลบบัญชี'}
+              </button>
+            </div>
           </div>
         </div>
       )}

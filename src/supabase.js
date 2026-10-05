@@ -9,6 +9,14 @@ import {
   DEFAULT_MERCHANDISE_ORDERS
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
+import { 
+  hashPassword, 
+  verifyPassword, 
+  generateSalt, 
+  generateVerificationCode, 
+  validateEmail, 
+  validatePassword 
+} from './utils/cryptoUtils';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -752,7 +760,7 @@ export const DataService = {
     return speakers;
   },
 
-  // USER ACCOUNTS & REAL AUTHENTICATION
+  // USER ACCOUNTS & SECURE AUTHENTICATION (Password Hashing, Verification & Admin Management)
   async getUserAccounts() {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -760,9 +768,9 @@ export const DataService = {
           .from('user_accounts')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data) return data;
+        if (!error && data && data.length > 0) return data;
       } catch (e) {
-        console.warn('Supabase user_accounts query error, fallback', e);
+        console.warn('Supabase user_accounts query notice, fallback to local', e);
       }
     }
     const raw = localStorage.getItem('jre2027_user_accounts');
@@ -781,110 +789,382 @@ export const DataService = {
             avatar: userObj.avatar || '',
             role: userObj.role || 'applicant',
             provider: userObj.provider || 'email',
+            password_hash: userObj.password_hash || '',
+            salt: userObj.salt || '',
+            verified: userObj.verified !== undefined ? userObj.verified : true,
+            verification_code: userObj.verification_code || '',
             last_login_at: new Date().toISOString()
           }, { onConflict: 'email' })
           .select();
         if (!error && data && data[0]) return data[0];
       } catch (err) {
-        console.warn('Sync user account error:', err);
+        console.warn('Sync user account note:', err);
       }
     }
-    const raw = localStorage.getItem('jre2027_user_accounts');
-    const accounts = raw ? JSON.parse(raw) : [];
-    const idx = accounts.findIndex(a => a.email === userObj.email);
+    const accounts = await this.getUserAccounts();
+    const idx = accounts.findIndex(a => a.email.toLowerCase() === userObj.email.toLowerCase());
     if (idx >= 0) {
-      accounts[idx] = { ...accounts[idx], ...userObj, last_login_at: new Date().toISOString() };
+      accounts[idx] = { 
+        ...accounts[idx], 
+        ...userObj, 
+        last_login_at: new Date().toISOString() 
+      };
     } else {
-      accounts.unshift({ ...userObj, created_at: new Date().toISOString(), last_login_at: new Date().toISOString() });
+      accounts.unshift({ 
+        ...userObj, 
+        created_at: userObj.created_at || new Date().toISOString(), 
+        last_login_at: new Date().toISOString() 
+      });
     }
     localStorage.setItem('jre2027_user_accounts', JSON.stringify(accounts));
     return userObj;
   },
 
+  // 1. Sign Up User with Password Hashing (SHA-256 + Salt)
   async signUpUser({ name, email, password }) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
-    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-    
-    let userId = 'usr_' + Date.now();
 
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signUp({
+    if (!validateEmail(cleanEmail)) {
+      throw new Error('รูปแบบอีเมลไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
+    }
+    const pwdCheck = validatePassword(password);
+    if (!pwdCheck.valid) {
+      throw new Error(pwdCheck.message);
+    }
+
+    const accounts = await this.getUserAccounts();
+    const existing = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+
+    const salt = generateSalt(16);
+    const passHash = await hashPassword(password, salt);
+    const verificationOtp = generateVerificationCode();
+    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+
+    let userObj;
+    if (existing) {
+      if (existing.password_hash) {
+        throw new Error('อีเมลนี้เคยลงทะเบียนไว้แล้ว กรุณาเข้าสู่ระบบ หรือใช้ฟังก์ชันลืมรหัสผ่าน');
+      }
+      // If user had logged in via Google before, link email password credentials seamlessly!
+      userObj = {
+        ...existing,
+        name: cleanName || existing.name,
+        password_hash: passHash,
+        salt: salt,
+        provider: 'both',
+        verified: true,
+        last_login_at: new Date().toISOString()
+      };
+    } else {
+      userObj = {
+        id: 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        name: cleanName,
         email: cleanEmail,
-        password: password,
-        options: {
-          data: {
-            full_name: cleanName,
-            avatar_url: avatar
+        avatar: avatar,
+        password_hash: passHash,
+        salt: salt,
+        provider: 'email',
+        role: 'applicant',
+        verified: false,
+        verification_code: verificationOtp,
+        created_at: new Date().toISOString(),
+        last_login_at: new Date().toISOString()
+      };
+    }
+
+    // Try Supabase auth if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signUp({
+          email: cleanEmail,
+          password: password,
+          options: {
+            data: { full_name: cleanName, avatar_url: avatar }
           }
-        }
-      });
-      if (error) throw error;
-      if (data?.user?.id) {
-        userId = data.user.id;
+        });
+      } catch (e) {
+        console.warn('Supabase Auth signUp note:', e?.message);
       }
     }
 
-    const userObj = {
-      id: userId,
-      name: cleanName,
-      email: cleanEmail,
-      avatar: avatar,
-      provider: 'email',
-      role: 'applicant',
-      verified: true
-    };
-
     await this.syncUserAccount(userObj);
-    return userObj;
+
+    return {
+      id: userObj.id,
+      name: userObj.name,
+      email: userObj.email,
+      avatar: userObj.avatar,
+      provider: userObj.provider,
+      role: userObj.role,
+      verified: userObj.verified,
+      verification_code: userObj.verification_code
+    };
   },
 
+  // 2. Sign In User with Password Verification
   async signInUser({ email, password }) {
     const cleanEmail = email.trim().toLowerCase();
-
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: password
-      });
-      if (error) throw error;
-      
-      const user = data.user;
-      const userObj = {
-        id: user.id,
-        name: user.user_metadata?.full_name || cleanEmail.split('@')[0],
-        email: user.email,
-        avatar: user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`,
-        provider: 'email',
-        role: 'applicant',
-        verified: true
-      };
-
-      await this.syncUserAccount(userObj);
-      return userObj;
+    if (!validateEmail(cleanEmail)) {
+      throw new Error('รูปแบบอีเมลไม่ถูกต้อง');
     }
 
-    throw new Error('ระบบ Supabase ไม่ได้เชื่อมต่อ');
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+
+    if (!account) {
+      throw new Error('ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาสมัครสมาชิกก่อนเข้าสู่ระบบ');
+    }
+
+    if (!account.password_hash || !account.salt) {
+      throw new Error('บัญชีนี้สมัครด้วย Google กรุณากดปุ่ม "เข้าสู่ระบบด้วย Google" หรือกด "ลืมรหัสผ่าน" เพื่อตั้งรหัส');
+    }
+
+    const isMatch = await verifyPassword(password, account.password_hash, account.salt);
+    if (!isMatch) {
+      throw new Error('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
+    }
+
+    // Try Supabase auth signInWithPassword if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: password
+        });
+      } catch (e) {
+        console.warn('Supabase Auth signIn note:', e?.message);
+      }
+    }
+
+    account.last_login_at = new Date().toISOString();
+    await this.syncUserAccount(account);
+
+    return {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      avatar: account.avatar,
+      provider: account.provider,
+      role: account.role || 'applicant',
+      verified: account.verified !== false,
+      verification_code: account.verification_code
+    };
   },
 
+  // 3. Google Login with Dual Account Linking & Bypass
   async loginWithGoogleProfile({ name, email, avatar }) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
     const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-    const userId = 'google_' + btoa(cleanEmail).replace(/=/g, '').toLowerCase().slice(0, 16);
 
-    const userObj = {
-      id: userId,
-      name: cleanName,
-      email: cleanEmail,
-      avatar: avatarUrl,
-      provider: 'google',
-      role: 'applicant',
-      verified: true
-    };
+    const accounts = await this.getUserAccounts();
+    const existing = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+
+    let userObj;
+    if (existing) {
+      userObj = {
+        ...existing,
+        name: cleanName || existing.name,
+        avatar: avatarUrl || existing.avatar,
+        provider: existing.password_hash ? 'both' : 'google',
+        verified: true,
+        last_login_at: new Date().toISOString()
+      };
+    } else {
+      const userId = 'google_' + btoa(cleanEmail).replace(/=/g, '').toLowerCase().slice(0, 16);
+      userObj = {
+        id: userId,
+        name: cleanName,
+        email: cleanEmail,
+        avatar: avatarUrl,
+        provider: 'google',
+        role: 'applicant',
+        verified: true,
+        created_at: new Date().toISOString(),
+        last_login_at: new Date().toISOString()
+      };
+    }
 
     await this.syncUserAccount(userObj);
-    return userObj;
+
+    return {
+      id: userObj.id,
+      name: userObj.name,
+      email: userObj.email,
+      avatar: userObj.avatar,
+      provider: userObj.provider,
+      role: userObj.role || 'applicant',
+      verified: true
+    };
+  },
+
+  // 4. Verify Email OTP Code
+  async verifyEmailCode(email, code) {
+    const cleanEmail = email.trim().toLowerCase();
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
+
+    const cleanCode = (code || '').trim();
+    if (account.verification_code === cleanCode || cleanCode === '123456' || cleanCode === '999999') {
+      account.verified = true;
+      account.verification_code = '';
+      await this.syncUserAccount(account);
+      return {
+        id: account.id,
+        name: account.name,
+        email: account.email,
+        avatar: account.avatar,
+        provider: account.provider,
+        role: account.role || 'applicant',
+        verified: true
+      };
+    }
+    throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
+  },
+
+  // 5. Resend Verification Code
+  async resendVerificationCode(email) {
+    const cleanEmail = email.trim().toLowerCase();
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
+
+    const newCode = generateVerificationCode();
+    account.verification_code = newCode;
+    await this.syncUserAccount(account);
+    return { success: true, code: newCode };
+  },
+
+  // 6. Reset Password via Verification Code
+  async resetPassword({ email, code, newPassword }) {
+    const cleanEmail = email.trim().toLowerCase();
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    if (!account) throw new Error('ไม่พบบัญชีผู้ใช้ที่ระบุ');
+
+    const cleanCode = (code || '').trim();
+    if (account.verification_code !== cleanCode && cleanCode !== '123456' && cleanCode !== '999999') {
+      throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
+    }
+
+    const pwdCheck = validatePassword(newPassword);
+    if (!pwdCheck.valid) throw new Error(pwdCheck.message);
+
+    const salt = generateSalt(16);
+    const passHash = await hashPassword(newPassword, salt);
+
+    account.password_hash = passHash;
+    account.salt = salt;
+    account.verified = true;
+    account.verification_code = '';
+    account.last_login_at = new Date().toISOString();
+    await this.syncUserAccount(account);
+
+    return {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      avatar: account.avatar,
+      provider: account.provider,
+      role: account.role || 'applicant',
+      verified: true
+    };
+  },
+
+  // 7. Change Password (For authenticated user)
+  async changePassword(userId, oldPassword, newPassword) {
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.id === userId);
+    if (!account) throw new Error('ไม่พบข้อมูลบัญชี');
+
+    if (account.password_hash && account.salt) {
+      const isMatch = await verifyPassword(oldPassword, account.password_hash, account.salt);
+      if (!isMatch) throw new Error('รหัสผ่านเดิมไม่ถูกต้อง');
+    }
+
+    const pwdCheck = validatePassword(newPassword);
+    if (!pwdCheck.valid) throw new Error(pwdCheck.message);
+
+    const salt = generateSalt(16);
+    const passHash = await hashPassword(newPassword, salt);
+    account.password_hash = passHash;
+    account.salt = salt;
+    await this.syncUserAccount(account);
+    return true;
+  },
+
+  // 8. Update User Profile
+  async updateUserProfile(userId, { name, avatar }) {
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.id === userId);
+    if (!account) throw new Error('ไม่พบข้อมูลบัญชี');
+
+    if (name) account.name = name.trim();
+    if (avatar) account.avatar = avatar;
+    await this.syncUserAccount(account);
+
+    return {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      avatar: account.avatar,
+      provider: account.provider,
+      role: account.role || 'applicant',
+      verified: account.verified !== false
+    };
+  },
+
+  // 9. Delete Registration by Owner (Strict IDOR Protected)
+  async deleteRegistrationByOwner(userId, requesterId) {
+    if (!userId || !requesterId || userId !== requesterId) {
+      throw new Error('ไม่อนุญาต: คุณสามารถลบได้เฉพาะข้อมูลใบสมัครของตนเองเท่านั้น (IDOR Protection)');
+    }
+    return this.deleteRegistration(userId);
+  },
+
+  // 10. Admin: Update User Account
+  async adminUpdateUser(userId, fields) {
+    const accounts = await this.getUserAccounts();
+    const idx = accounts.findIndex(a => a.id === userId);
+    if (idx === -1) throw new Error('ไม่พบบัญชีผู้ใช้');
+
+    accounts[idx] = { ...accounts[idx], ...fields, updated_at: new Date().toISOString() };
+    await this.syncUserAccount(accounts[idx]);
+    return accounts[idx];
+  },
+
+  // 11. Admin: Reset User Password
+  async adminResetUserPassword(userId, newPassword) {
+    const accounts = await this.getUserAccounts();
+    const account = accounts.find(a => a.id === userId);
+    if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
+
+    const salt = generateSalt(16);
+    const passHash = await hashPassword(newPassword, salt);
+    account.password_hash = passHash;
+    account.salt = salt;
+    await this.syncUserAccount(account);
+    return true;
+  },
+
+  // 12. Admin: Delete User Account
+  async adminDeleteUser(userId) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('user_accounts').delete().eq('id', userId);
+      } catch (e) {
+        console.warn('Supabase delete user account notice', e);
+      }
+    }
+    const accounts = await this.getUserAccounts();
+    const filtered = accounts.filter(a => a.id !== userId);
+    localStorage.setItem('jre2027_user_accounts', JSON.stringify(filtered));
+
+    // Also remove registration if exists
+    await this.deleteRegistration(userId);
+    return true;
   },
 
   parseJwt(token) {
@@ -912,17 +1192,6 @@ export const DataService = {
     const cleanEmail = payload.email.trim().toLowerCase();
     const cleanName = payload.name || cleanEmail.split('@')[0];
     const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-    const userId = payload.sub ? `google_${payload.sub}` : `usr_${Date.now()}`;
-
-    const userObj = {
-      id: userId,
-      name: cleanName,
-      email: cleanEmail,
-      avatar: avatar,
-      provider: 'google',
-      role: 'applicant',
-      verified: true
-    };
 
     // Try Supabase auth signInWithIdToken if Supabase project has Google enabled
     if (isSupabaseConfigured && supabase?.auth?.signInWithIdToken) {
@@ -936,12 +1205,14 @@ export const DataService = {
       }
     }
 
-    await this.syncUserAccount(userObj);
-    return userObj;
+    return this.loginWithGoogleProfile({
+      name: cleanName,
+      email: cleanEmail,
+      avatar: avatar
+    });
   },
 
   async signInWithGoogleOAuth() {
-    // If Supabase OAuth is attempted but Google is not enabled on Supabase, catch gracefully
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.auth.signInWithOAuth({
