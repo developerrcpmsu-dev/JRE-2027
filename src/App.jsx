@@ -13,6 +13,8 @@ import AdminDashboardView from './views/AdminDashboardView';
 import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/router';
 
@@ -508,6 +510,10 @@ export default function App() {
         onClose={() => setAdminModalOpen(false)}
         onLoginSuccess={handleAdminLoginSuccess}
       />
+
+      {/* Vercel Web Analytics & Speed Insights */}
+      <Analytics />
+      <SpeedInsights />
 
     </div>
   );
