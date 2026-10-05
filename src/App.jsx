@@ -182,6 +182,10 @@ export default function App() {
         if (storedUser) {
           const parsed = JSON.parse(storedUser);
           setUser(parsed);
+          if (parsed?.role === 'admin') {
+            setIsAdmin(true);
+            localStorage.setItem('jre2027_is_admin', 'true');
+          }
           const found = matchRegistration(parsed, regs);
           if (found) setMyRegistration(found);
         }
@@ -246,8 +250,13 @@ export default function App() {
   // Auth Handlers
   const handleGoogleLoginSuccess = (userObj) => {
     setUser(userObj);
-    setIsAdmin(false);
-    localStorage.removeItem('jre2027_is_admin');
+    if (userObj?.role === 'admin') {
+      setIsAdmin(true);
+      localStorage.setItem('jre2027_is_admin', 'true');
+    } else {
+      setIsAdmin(false);
+      localStorage.removeItem('jre2027_is_admin');
+    }
     const found = matchRegistration(userObj, registrations);
     if (found) setMyRegistration(found);
   };

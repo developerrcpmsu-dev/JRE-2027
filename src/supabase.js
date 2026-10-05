@@ -191,6 +191,115 @@ const packRegistrationForSupabase = (fullData) => {
 };
 
 /**
+ * Merges and deduplicates user accounts by normalized email address.
+ * Ensures that identical emails across Google OAuth and Password accounts
+ * are merged into 1 unified record with provider 'both', preserving password hash,
+ * setting email_verified: true for OAuth accounts, and eliminating duplicates.
+ */
+export function mergeAndDeduplicateAccounts(rawAccounts) {
+  if (!Array.isArray(rawAccounts)) return [];
+  const map = new Map();
+
+  for (const acc of rawAccounts) {
+    if (!acc) continue;
+    const cleanEmail = (acc.email || '').trim().toLowerCase();
+    const key = cleanEmail || acc.id || `unknown_${Math.random()}`;
+
+    const isGoogle = acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_'));
+    const isBoth = acc.provider === 'both';
+    const isVerified = Boolean(acc.email_verified || acc.verified || isGoogle || isBoth);
+
+    if (!map.has(key)) {
+      map.set(key, {
+        ...acc,
+        email: cleanEmail || acc.email,
+        email_verified: isVerified,
+        verified: isVerified,
+        provider: isBoth ? 'both' : (isGoogle ? 'google' : (acc.provider || 'email'))
+      });
+    } else {
+      const existing = map.get(key);
+      const isGoogleExisting = existing.provider === 'google' || existing.provider === 'both' || (typeof existing.id === 'string' && existing.id.startsWith('google_'));
+      const isGoogleThis = isGoogle;
+      
+      const hasPassThis = Boolean(acc.password_hash);
+      const hasPassExisting = Boolean(existing.password_hash);
+
+      const hasBoth = (isGoogleThis && (hasPassExisting || hasPassThis)) ||
+                      (isGoogleExisting && (hasPassThis || hasPassExisting)) ||
+                      existing.provider === 'both' || acc.provider === 'both';
+
+      const mergedVerified = Boolean(
+        existing.email_verified || existing.verified ||
+        acc.email_verified || acc.verified ||
+        isGoogleThis || isGoogleExisting || hasBoth
+      );
+
+      let mergedRole = existing.role || 'user';
+      if (existing.role === 'admin' || acc.role === 'admin') {
+        mergedRole = 'admin';
+      } else if (existing.role === 'applicant' || acc.role === 'applicant') {
+        mergedRole = 'applicant';
+      }
+
+      const chooseName = (n1, n2) => {
+        if (!n1) return n2 || '';
+        if (!n2) return n1;
+        if (/^\d+$/.test(n1) && !/^\d+$/.test(n2)) return n2;
+        if (/^\d+$/.test(n2) && !/^\d+$/.test(n1)) return n1;
+        return n2.length > n1.length ? n2 : n1;
+      };
+
+      const chooseAvatar = (a1, a2) => {
+        if (!a1) return a2 || '';
+        if (!a2) return a1;
+        if (a2.includes('googleusercontent.com')) return a2;
+        if (a1.includes('googleusercontent.com')) return a1;
+        return a2;
+      };
+
+      const createdDates = [existing.created_at, acc.created_at].filter(Boolean);
+      const earliestCreated = createdDates.length > 0 
+        ? createdDates.sort((a, b) => new Date(a) - new Date(b))[0] 
+        : new Date().toISOString();
+
+      const loginDates = [existing.last_login_at, acc.last_login_at].filter(Boolean);
+      const latestLogin = loginDates.length > 0 
+        ? loginDates.sort((a, b) => new Date(b) - new Date(a))[0] 
+        : existing.last_login_at || acc.last_login_at;
+
+      map.set(key, {
+        id: existing.id || acc.id,
+        name: chooseName(existing.name, acc.name),
+        email: cleanEmail || existing.email,
+        avatar: chooseAvatar(existing.avatar, acc.avatar),
+        role: mergedRole,
+        provider: hasBoth ? 'both' : (hasPassThis || hasPassExisting ? 'email' : 'google'),
+        password_hash: existing.password_hash || acc.password_hash || null,
+        salt: existing.salt || acc.salt || null,
+        verification_code: existing.verification_code || acc.verification_code || '',
+        verified: mergedVerified,
+        email_verified: mergedVerified,
+        created_at: earliestCreated,
+        last_login_at: latestLogin,
+        updated_at: new Date().toISOString()
+      });
+    }
+  }
+
+  // Guarantee unique IDs across distinct records
+  const result = Array.from(map.values());
+  const seenIds = new Set();
+  for (const item of result) {
+    if (seenIds.has(item.id)) {
+      item.id = `${item.id}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+    seenIds.add(item.id);
+  }
+  return result;
+}
+
+/**
  * Data Service API - bridges Supabase and LocalStorage smoothly
  */
 export const DataService = {
@@ -845,6 +954,7 @@ export const DataService = {
 
   // USER ACCOUNTS & SECURE AUTHENTICATION (Password Hashing, Verification & Admin Management)
   async getUserAccounts() {
+    let accounts = [];
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -853,35 +963,85 @@ export const DataService = {
           .eq('key', 'user_accounts')
           .maybeSingle();
         if (!error && data?.value && Array.isArray(data.value)) {
-          localStorage.setItem('jre2027_user_accounts', JSON.stringify(data.value));
-          return data.value;
+          accounts = data.value;
         }
       } catch (e) {
         console.warn('Supabase user_accounts query notice, fallback to local', e);
       }
     }
-    const raw = localStorage.getItem('jre2027_user_accounts');
-    return raw ? JSON.parse(raw) : [];
+
+    if (accounts.length === 0) {
+      const raw = localStorage.getItem('jre2027_user_accounts');
+      accounts = raw ? JSON.parse(raw) : [];
+    }
+
+    const deduped = mergeAndDeduplicateAccounts(accounts);
+
+    // If duplicate emails were merged or unverified Google accounts were updated, persist back to Supabase and LocalStorage
+    const needsSync = deduped.length !== accounts.length || 
+                      accounts.some(a => !a.email_verified && (a.provider === 'google' || (typeof a.id === 'string' && a.id.startsWith('google_')) || a.verified));
+    if (needsSync) {
+      localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase
+            .from('project_settings')
+            .upsert({
+              key: 'user_accounts',
+              value: deduped,
+              updated_at: new Date().toISOString()
+            });
+        } catch (e) {
+          console.warn('Supabase auto-deduplicate sync notice:', e);
+        }
+      }
+    } else {
+      localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
+    }
+
+    return deduped;
   },
 
   async syncUserAccount(userObj) {
     const accounts = await this.getUserAccounts();
-    const idx = accounts.findIndex(a => a.email.toLowerCase() === userObj.email.toLowerCase());
+    const cleanEmail = (userObj.email || '').trim().toLowerCase();
+
+    const idx = accounts.findIndex(a => (a.email || '').trim().toLowerCase() === cleanEmail);
     let updated;
     if (idx >= 0) {
-      updated = [...accounts];
-      updated[idx] = { 
-        ...updated[idx], 
-        ...userObj, 
-        last_login_at: new Date().toISOString() 
+      const existing = accounts[idx];
+      const hasGoogle = userObj.provider === 'google' || existing.provider === 'google' || (typeof userObj.id === 'string' && userObj.id.startsWith('google_')) || (typeof existing.id === 'string' && existing.id.startsWith('google_'));
+      const hasPass = Boolean(userObj.password_hash || existing.password_hash);
+      const isBoth = (hasGoogle && hasPass) || userObj.provider === 'both' || existing.provider === 'both';
+      const isVerified = Boolean(userObj.email_verified || existing.email_verified || userObj.verified || existing.verified || hasGoogle);
+
+      const mergedUser = {
+        ...existing,
+        ...userObj,
+        email: cleanEmail,
+        provider: isBoth ? 'both' : (hasPass ? 'email' : 'google'),
+        password_hash: userObj.password_hash || existing.password_hash || null,
+        salt: userObj.salt || existing.salt || null,
+        verified: isVerified,
+        email_verified: isVerified,
+        last_login_at: new Date().toISOString()
       };
+      updated = [...accounts];
+      updated[idx] = mergedUser;
     } else {
-      updated = [{ 
-        ...userObj, 
-        created_at: userObj.created_at || new Date().toISOString(), 
-        last_login_at: new Date().toISOString() 
-      }, ...accounts];
+      const isGoogle = userObj.provider === 'google' || (typeof userObj.id === 'string' && userObj.id.startsWith('google_'));
+      const newUser = {
+        ...userObj,
+        email: cleanEmail,
+        verified: Boolean(userObj.verified || isGoogle),
+        email_verified: Boolean(userObj.email_verified || userObj.verified || isGoogle),
+        created_at: userObj.created_at || new Date().toISOString(),
+        last_login_at: new Date().toISOString()
+      };
+      updated = [newUser, ...accounts];
     }
+
+    const deduped = mergeAndDeduplicateAccounts(updated);
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -889,7 +1049,7 @@ export const DataService = {
           .from('project_settings')
           .upsert({
             key: 'user_accounts',
-            value: updated,
+            value: deduped,
             updated_at: new Date().toISOString()
           });
       } catch (err) {
@@ -897,7 +1057,7 @@ export const DataService = {
       }
     }
 
-    localStorage.setItem('jre2027_user_accounts', JSON.stringify(updated));
+    localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
     return userObj;
   },
 
@@ -915,7 +1075,7 @@ export const DataService = {
     }
 
     const accounts = await this.getUserAccounts();
-    const existing = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    const existing = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     const salt = generateSalt(16);
     const passHash = await hashPassword(password, salt);
@@ -935,6 +1095,7 @@ export const DataService = {
         salt: salt,
         provider: 'both',
         verified: true,
+        email_verified: true,
         last_login_at: new Date().toISOString()
       };
     } else {
@@ -948,6 +1109,7 @@ export const DataService = {
         provider: 'email',
         role: 'applicant',
         verified: true,
+        email_verified: true,
         verification_code: verificationOtp,
         created_at: new Date().toISOString(),
         last_login_at: new Date().toISOString()
@@ -979,6 +1141,7 @@ export const DataService = {
       provider: userObj.provider,
       role: userObj.role,
       verified: userObj.verified,
+      email_verified: userObj.email_verified,
       verification_code: userObj.verification_code
     };
   },
@@ -991,7 +1154,7 @@ export const DataService = {
     }
 
     const accounts = await this.getUserAccounts();
-    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    const account = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     if (!account) {
       throw new Error('ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาสมัครสมาชิกก่อนเข้าสู่ระบบ');
@@ -1029,6 +1192,7 @@ export const DataService = {
       provider: account.provider,
       role: account.role || 'applicant',
       verified: account.verified !== false,
+      email_verified: Boolean(account.email_verified || account.verified || account.provider === 'google' || account.provider === 'both'),
       verification_code: account.verification_code
     };
   },
@@ -1040,7 +1204,7 @@ export const DataService = {
     const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 
     const accounts = await this.getUserAccounts();
-    const existing = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    const existing = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     let userObj;
     if (existing) {
@@ -1050,10 +1214,12 @@ export const DataService = {
         avatar: avatarUrl || existing.avatar,
         provider: existing.password_hash ? 'both' : 'google',
         verified: true,
+        email_verified: true,
         last_login_at: new Date().toISOString()
       };
     } else {
-      const userId = 'google_' + btoa(cleanEmail).replace(/=/g, '').toLowerCase().slice(0, 16);
+      const emailHash = cleanEmail.split('').reduce((acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0).toString(36).replace('-', 'z');
+      const userId = 'google_' + btoa(encodeURIComponent(cleanEmail)).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toLowerCase() + '_' + emailHash;
       userObj = {
         id: userId,
         name: cleanName,
@@ -1062,6 +1228,7 @@ export const DataService = {
         provider: 'google',
         role: 'applicant',
         verified: true,
+        email_verified: true,
         created_at: new Date().toISOString(),
         last_login_at: new Date().toISOString()
       };
@@ -1076,7 +1243,8 @@ export const DataService = {
       avatar: userObj.avatar,
       provider: userObj.provider,
       role: userObj.role || 'applicant',
-      verified: true
+      verified: true,
+      email_verified: true
     };
   },
 
@@ -1084,12 +1252,13 @@ export const DataService = {
   async verifyEmailCode(email, code) {
     const cleanEmail = email.trim().toLowerCase();
     const accounts = await this.getUserAccounts();
-    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    const account = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
 
     const cleanCode = (code || '').trim();
     if (account.verification_code === cleanCode || cleanCode === '123456' || cleanCode === '999999') {
       account.verified = true;
+      account.email_verified = true;
       account.verification_code = '';
       await this.syncUserAccount(account);
       return {
@@ -1099,7 +1268,8 @@ export const DataService = {
         avatar: account.avatar,
         provider: account.provider,
         role: account.role || 'applicant',
-        verified: true
+        verified: true,
+        email_verified: true
       };
     }
     throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
@@ -1140,6 +1310,7 @@ export const DataService = {
     account.salt = salt;
     account.provider = 'both'; // Enabled dual auth!
     account.verified = true;
+    account.email_verified = true;
     account.verification_code = '';
     account.last_login_at = new Date().toISOString();
     await this.syncUserAccount(account);
@@ -1151,7 +1322,8 @@ export const DataService = {
       avatar: account.avatar,
       provider: account.provider,
       role: account.role || 'applicant',
-      verified: true
+      verified: true,
+      email_verified: true
     };
   },
 
@@ -1234,7 +1406,9 @@ export const DataService = {
   // 12. Admin: Delete User Account
   async adminDeleteUser(userId) {
     const accounts = await this.getUserAccounts();
-    const filtered = accounts.filter(a => a.id !== userId);
+    const accountToDelete = accounts.find(a => a.id === userId);
+    const deleteEmail = (accountToDelete?.email || '').trim().toLowerCase();
+    const filtered = accounts.filter(a => a.id !== userId && (!deleteEmail || (a.email || '').trim().toLowerCase() !== deleteEmail));
 
     if (isSupabaseConfigured && supabase) {
       try {

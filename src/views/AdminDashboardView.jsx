@@ -60,7 +60,7 @@ import {
   Tag,
   ShoppingBag
 } from 'lucide-react';
-import { DataService } from '../supabase';
+import { DataService, mergeAndDeduplicateAccounts } from '../supabase';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
@@ -370,7 +370,8 @@ export default function AdminDashboardView({
     setIsLoadingUsers(true);
     try {
       const accs = await DataService.getUserAccounts();
-      setUserAccounts(accs || []);
+      const deduped = mergeAndDeduplicateAccounts ? mergeAndDeduplicateAccounts(accs || []) : (accs || []);
+      setUserAccounts(deduped);
     } catch (err) {
       console.error('Error loading user accounts:', err);
     } finally {
@@ -391,6 +392,7 @@ export default function AdminDashboardView({
         name: editUserName.trim(),
         email: editUserEmail.trim().toLowerCase(),
         role: editUserRole,
+        verified: editUserVerified,
         email_verified: editUserVerified
       });
       triggerToast('อัปเดตข้อมูลบัญชีผู้ใช้สำเร็จ');
@@ -461,13 +463,22 @@ export default function AdminDashboardView({
       'อัปเดตล่าสุด (Updated At)'
     ];
 
+    const getVerificationStatusText = (u) => {
+      if (u.provider === 'both') return 'ยืนยันแล้ว (Google + รหัสผ่าน)';
+      if (u.provider === 'google' || (typeof u.id === 'string' && u.id.startsWith('google_') && !u.password_hash)) {
+        return 'ยืนยันด้วย Google OAuth แล้ว';
+      }
+      if (u.email_verified || u.verified) return 'ยืนยันผ่าน OTP แล้ว';
+      return 'รอ OTP ยืนยัน';
+    };
+
     const dataRows = userAccounts.map((u, idx) => [
       idx + 1,
       u.id || '-',
       u.name || '-',
       u.email || '-',
-      u.email_verified ? 'ยืนยันแล้ว' : 'ยังไม่ยืนยัน',
-      u.provider === 'both' ? 'Google + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
+      getVerificationStatusText(u),
+      u.provider === 'both' ? 'Google OAuth + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
       u.salt || 'N/A (Google OAuth)',
       u.password_hash || 'N/A (Google OAuth)',
       u.role || 'user',
@@ -5376,9 +5387,9 @@ export default function AdminDashboardView({
                 <CheckCircle2 className="w-4 h-4 text-purple-400" />
               </div>
               <div className="text-2xl font-black text-purple-300">
-                {userAccounts.filter(u => u.email_verified).length}
+                {userAccounts.filter(u => Boolean(u.email_verified || u.verified || u.provider === 'google' || u.provider === 'both' || (typeof u.id === 'string' && u.id.startsWith('google_')))).length}
               </div>
-              <p className="text-[11px] text-purple-400/80 mt-1">✓ OTP Email Verification</p>
+              <p className="text-[11px] text-purple-400/80 mt-1">✓ Google OAuth & OTP Verification</p>
             </div>
           </div>
 
@@ -5445,7 +5456,7 @@ export default function AdminDashboardView({
                   .map((acc, index) => {
                     const hasPassword = Boolean(acc.password_hash);
                     return (
-                      <tr key={acc.id} className="hover:bg-slate-800/40 transition-colors">
+                      <tr key={acc.id || acc.email || index} className="hover:bg-slate-800/40 transition-colors">
                         <td className="py-3.5 px-4 font-mono text-slate-500 font-bold">
                           {index + 1}
                         </td>
@@ -5462,7 +5473,7 @@ export default function AdminDashboardView({
                                 <span>{acc.name || 'ไม่ระบุชื่อ'}</span>
                               </div>
                               <div className="font-mono text-[10px] text-slate-500 mt-0.5">
-                                UID: {acc.id.slice(0, 12)}...
+                                UID: {acc.id ? `${acc.id.slice(0, 12)}...` : '-'}
                               </div>
                             </div>
                           </div>
@@ -5473,14 +5484,24 @@ export default function AdminDashboardView({
                             {acc.email}
                           </div>
                           <div className="mt-1">
-                            {acc.email_verified ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
-                                <CheckCircle className="w-3 h-3" />
-                                <span>ยืนยันอีเมลแล้ว</span>
+                            {acc.provider === 'both' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <span>✓ ยืนยันแล้ว (Google + รหัสผ่าน)</span>
+                              </span>
+                            ) : (acc.provider === 'google' || (typeof acc.id === 'string' && acc.id.startsWith('google_'))) ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded-full text-[10px] font-bold">
+                                <CheckCircle2 className="w-3 h-3 text-sky-400" />
+                                <span>✓ ยืนยันด้วยการเข้าสู่ระบบด้วย Google</span>
+                              </span>
+                            ) : (acc.email_verified || acc.verified) ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                                <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                <span>✓ ยืนยันอีเมลแล้ว (OTP)</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
-                                <Clock className="w-3 h-3" />
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
+                                <Clock className="w-3 h-3 text-amber-400" />
                                 <span>รอ OTP ยืนยัน</span>
                               </span>
                             )}
@@ -5552,7 +5573,7 @@ export default function AdminDashboardView({
                                 setEditUserName(acc.name || '');
                                 setEditUserEmail(acc.email || '');
                                 setEditUserRole(acc.role || 'user');
-                                setEditUserVerified(Boolean(acc.email_verified));
+                                setEditUserVerified(Boolean(acc.email_verified || acc.verified || acc.provider === 'google' || acc.provider === 'both' || (typeof acc.id === 'string' && acc.id.startsWith('google_'))));
                               }}
                               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
                               title="แก้ไขข้อมูลผู้ใช้ (Update)"
