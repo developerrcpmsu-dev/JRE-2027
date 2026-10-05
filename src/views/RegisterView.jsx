@@ -49,7 +49,8 @@ import {
   Shield,
   ArrowLeft,
   QrCode,
-  Download
+  Download,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
@@ -712,6 +713,8 @@ export default function RegisterView({
   const handleFormSlipRound1Change = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    clearFieldError('slipRound1');
+    clearFieldError('slipFull');
     setIsProcessingFormSlip(true);
     try {
       const uploadResult = await DataService.uploadFile(file, 'slips');
@@ -723,10 +726,10 @@ export default function RegisterView({
         try {
           const ocr = await scanSlipImage(file, 400);
           setSlipOcrRound1(ocr);
-          triggerToast(`อัปโหลดและตรวจสแกนสลิปเรียบร้อย (${ocr.amountFormatted || '400 บาท'}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+          triggerToast(`อัปโหลดและตรวจสแกนสลิปมัดจำรอบ 1 เรียบร้อย (${ocr.amountFormatted || '400 บาท'}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
         } catch (ocrErr) {
           console.warn('Slip OCR notice:', ocrErr);
-          triggerToast('แนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท) เรียบร้อยแล้ว', 'success');
+          triggerToast('แนบหลักฐานการโอนเงิน รอบที่ 1 (มัดจำเสื้อ 400 บาท) เรียบร้อยแล้ว', 'success');
         }
       }
     } catch (err) {
@@ -742,6 +745,7 @@ export default function RegisterView({
   const handleFormSlipRound2Change = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    clearFieldError('slipRound2');
     setIsProcessingFormSlipRound2(true);
     const feeInfo = getRegistrationFeeDetails(institution);
     try {
@@ -773,6 +777,8 @@ export default function RegisterView({
   const handleFormSlipFullChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    clearFieldError('slipFull');
+    clearFieldError('slipRound1');
     setIsProcessingFormSlipFull(true);
     const feeInfo = getRegistrationFeeDetails(institution);
     try {
@@ -936,14 +942,22 @@ export default function RegisterView({
       'emergencyName',
       'emergencyPhone',
       'shirtSize',
+      'slipRound1',
+      'slipFull',
+      'slipRound2',
       'agreeCorrectInfo'
     ];
 
     const firstKey = fieldOrder.find(k => errs[k]);
     if (firstKey) {
-      const targetId = (firstKey === 'agreeCorrectInfo' && currentFormStep === 4)
-        ? 'field-agreeCorrectInfo-step4'
-        : `field-${firstKey}`;
+      let targetId = `field-${firstKey}`;
+      if (firstKey === 'agreeCorrectInfo' && currentFormStep === 4) {
+        targetId = 'field-agreeCorrectInfo-step4';
+      } else if (firstKey === 'slipRound1' || firstKey === 'slipFull') {
+        targetId = 'field-slip-upload-step3';
+      } else if (firstKey === 'slipRound2') {
+        targetId = 'field-slip-upload-step4';
+      }
       const el = document.getElementById(targetId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -998,10 +1012,22 @@ export default function RegisterView({
   };
 
   const handleNextToStep4 = () => {
+    const hasRound1Slip = Boolean(formSlipRound1 || (isEditing && (myRegistration?.installment_1_slip_url || myRegistration?.payment_slip_url || myRegistration?.slip_url)));
+    if (!hasRound1Slip) {
+      setFieldErrors(prev => ({ ...prev, slipRound1: 'กรุณาอัปโหลดสลิปชำระเงินรอบที่ 1 (มัดจำค่าจัดทำเสื้อ 400 บาท) ก่อนดำเนินการไปยังขั้นตอนชำระรอบที่ 2' }));
+      setStatusMessage({ type: 'error', text: 'กรุณาอัปโหลดสลิปชำระเงินรอบที่ 1 (มัดจำค่าจัดทำเสื้อ 400 บาท) ก่อน' });
+      triggerToast('กรุณาแนบสลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ก่อน', 'error');
+      setTimeout(() => {
+        const el = document.getElementById('field-slip-upload-step3');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+      return;
+    }
+    clearFieldError('slipRound1');
     setStatusMessage(null);
     setCurrentFormStep(4);
     window.scrollTo({ top: 350, behavior: 'smooth' });
-    triggerToast('ไปยังขั้นตอนที่ 4: สรุปยอดคงค้าง & ชำระเงินรอบที่ 2', 'info');
+    triggerToast('ไปยังขั้นตอนที่ 4: สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 (ยืนยันสิทธิ์สมบูรณ์)', 'info');
   };
 
   const handleSubmit = async (e) => {
@@ -1048,9 +1074,64 @@ export default function RegisterView({
       return;
     }
 
+    // Check if slip is currently being processed or scanned
+    if (isProcessingFormSlip || isProcessingFormSlipFull || isProcessingFormSlipRound2) {
+      setStatusMessage({ type: 'warning', text: 'ระบบกำลังประมวลผลและสแกนสลิปโอนเงิน กรุณารอสักครู่...' });
+      triggerToast('ระบบกำลังประมวลผลและสแกนสลิป กรุณารอสักครู่...', 'warning');
+      return;
+    }
+
+    // Validate Mandatory Payment Slip (ตามนโยบาย: ต้องแนบสลิปทุกครั้ง ห้ามส่งใบสมัครโดยไม่มีสลิป)
+    const feeInfo = getRegistrationFeeDetails(institution);
+    if (paymentPlan === 'full') {
+      const hasFullSlip = Boolean(formSlipFull || (isEditing && (myRegistration?.payment_slip_url || myRegistration?.slip_url)));
+      if (!hasFullSlip) {
+        setCurrentFormStep(3);
+        const err = { slipFull: `กรุณาอัปโหลดรูปภาพสลิปโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท) เพื่อส่งใบสมัครและยืนยันสิทธิ์เข้าร่วมโครงการ (ระบบไม่อนุญาตให้ส่งใบสมัครโดยไม่มีสลิปการชำระเงิน)` };
+        setFieldErrors(prev => ({ ...prev, ...err }));
+        setStatusMessage({ type: 'error', text: err.slipFull });
+        triggerToast(`กรุณาแนบสลิปโอนเงินเต็มจำนวน (${feeInfo.totalFee} บ.) ก่อนส่งใบสมัคร`, 'error');
+        setTimeout(() => {
+          const el = document.getElementById('field-slip-upload-step3');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+        return;
+      }
+    } else if (paymentPlan === 'installment') {
+      const hasRound1Slip = Boolean(formSlipRound1 || (isEditing && (myRegistration?.installment_1_slip_url || myRegistration?.payment_slip_url || myRegistration?.slip_url)));
+      if (!hasRound1Slip) {
+        setCurrentFormStep(3);
+        const err = { slipRound1: 'กรุณาอัปโหลดรูปภาพสลิปโอนเงินรอบที่ 1 (มัดจำค่าจัดทำเสื้อฝึกอบรม 400 บาท) เพื่อส่งใบสมัคร (ระบบไม่อนุญาตให้ส่งใบสมัครโดยไม่มีสลิปการชำระเงิน)' };
+        setFieldErrors(prev => ({ ...prev, ...err }));
+        setStatusMessage({ type: 'error', text: err.slipRound1 });
+        triggerToast('กรุณาแนบสลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ก่อนส่งใบสมัคร', 'error');
+        setTimeout(() => {
+          const el = document.getElementById('field-slip-upload-step3');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+        return;
+      }
+
+      // If submitting from Step 4, Round 2 slip is also required to confirm full slot
+      if (currentFormStep === 4) {
+        const hasRound2Slip = Boolean(formSlipRound2 || (isEditing && myRegistration?.installment_2_slip_url));
+        if (!hasRound2Slip) {
+          const err = { slipRound2: `กรุณาอัปโหลดรูปภาพสลิปโอนเงินรอบที่ 2 (${feeInfo.round2Amount} บาท) เพื่อยืนยันสิทธิ์ หรือกดย้อนกลับไปขั้นตอนที่ 3 หากต้องการส่งเฉพาะสลิปรอบแรก (มัดจำเสื้อ) ก่อน` };
+          setFieldErrors(prev => ({ ...prev, ...err }));
+          setStatusMessage({ type: 'error', text: err.slipRound2 });
+          triggerToast(`กรุณาแนบสลิปโอนเงินรอบที่ 2 (${feeInfo.round2Amount} บ.) หรือกดย้อนกลับไปขั้นตอนที่ 3`, 'error');
+          setTimeout(() => {
+            const el = document.getElementById('field-slip-upload-step4');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 150);
+          return;
+        }
+      }
+    }
+
     // Validate Consent & PDPA
     if (!agreeCorrectInfo || !agreePDPAAndRules) {
-      setFieldErrors({ agreeCorrectInfo: 'กรุณาติ๊กยินยอมรับรองข้อมูลและนโยบาย PDPA' });
+      setFieldErrors(prev => ({ ...prev, agreeCorrectInfo: 'กรุณาติ๊กยินยอมรับรองข้อมูลและนโยบาย PDPA' }));
       const targetId = currentFormStep === 4 ? 'field-agreeCorrectInfo-step4' : 'field-agreeCorrectInfo';
       const el = document.getElementById(targetId);
       if (el) {
@@ -1068,7 +1149,6 @@ export default function RegisterView({
     setStatusMessage(null);
 
     const formattedDob = `${birthYearBE}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`;
-    const feeInfo = getRegistrationFeeDetails(institution);
 
     let finalFirstName = firstName.trim() || firstNameTh.trim();
     let finalLastName = lastName.trim() || lastNameTh.trim();
@@ -1118,8 +1198,8 @@ export default function RegisterView({
       special_notes: myRegistration?.special_notes || '',
       payment_plan: paymentPlan,
       payment_status: paymentPlan === 'full'
-        ? (formSlipFull ? 'pending_review' : (myRegistration?.payment_status || 'unpaid'))
-        : ((formSlipRound1 && formSlipRound2) ? 'pending_review' : (formSlipRound1 ? 'partial_paid' : (myRegistration?.payment_status || 'unpaid'))),
+        ? 'pending_review'
+        : ((formSlipRound2 || (currentFormStep === 4 && myRegistration?.installment_2_slip_url)) ? 'pending_review' : 'partial_paid'),
       payment_amount: feeInfo.totalFee,
       payment_bank_info: `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
       payment_slip_url: paymentPlan === 'full' 
@@ -1128,7 +1208,7 @@ export default function RegisterView({
       payment_slip_date: (paymentPlan === 'full' ? formSlipFull : (formSlipRound2 || formSlipRound1)) 
         ? new Date().toISOString() 
         : (myRegistration?.payment_slip_date || ''),
-      installment_1_status: formSlipRound1 ? 'pending_review' : (myRegistration?.installment_1_status || 'unpaid'),
+      installment_1_status: formSlipRound1 ? 'pending_review' : (myRegistration?.installment_1_status || 'pending_review'),
       installment_1_amount: feeInfo.round1Amount,
       installment_1_due: feeInfo.round1Due,
       installment_1_slip_url: formSlipRound1 || myRegistration?.installment_1_slip_url || '',
@@ -1152,8 +1232,17 @@ export default function RegisterView({
       setHasDraftRestored(false);
       setIsEditing(false);
       if (onSubRouteChange) onSubRouteChange('dashboard');
-      setStatusMessage({ type: 'success', text: 'บันทึกข้อมูลแบบฟอร์มสมัครเข้าร่วมโครงการ JRE 2027 เรียบร้อยแล้ว!' });
-      triggerToast('บันทึกข้อมูลใบสมัคร JRE 2027 เรียบร้อยแล้ว', 'success');
+      
+      if (paymentPlan === 'full') {
+        setStatusMessage({ type: 'success', text: 'บันทึกใบสมัครและแนบสลิปชำระเงินเต็มจำนวนเรียบร้อยแล้ว! เจ้าหน้าที่จะตรวจสอบสลิปเพื่อยืนยันสิทธิ์ทันที' });
+        triggerToast('ส่งใบสมัครและสลิปเต็มจำนวนแล้ว (รอตรวจสลิปยืนยันสิทธิ์)', 'success');
+      } else if (formSlipRound2 || (currentFormStep === 4 && myRegistration?.installment_2_slip_url)) {
+        setStatusMessage({ type: 'success', text: 'บันทึกใบสมัครและแนบสลิปครบทั้ง 2 งวดเรียบร้อยแล้ว! เจ้าหน้าที่จะตรวจสอบยอดเงินเพื่อยืนยันสิทธิ์' });
+        triggerToast('ส่งใบสมัครและสลิปครบ 2 งวดแล้ว (รอตรวจสลิปยืนยันสิทธิ์)', 'success');
+      } else {
+        setStatusMessage({ type: 'success', text: 'บันทึกใบสมัครและแนบสลิปมัดจำค่าจัดทำเสื้อรอบที่ 1 (400 บ.) เรียบร้อยแล้ว! ท่านสามารถโอนรอบที่ 2 เพื่อยืนยันสิทธิ์สมบูรณ์ได้ในภายหลัง' });
+        triggerToast('ส่งใบสมัครและสลิปมัดจำรอบ 1 แล้ว (ล็อคไซส์เสื้อเรียบร้อย)', 'success');
+      }
       
       try {
         confetti({
@@ -5160,15 +5249,54 @@ export default function RegisterView({
                 </div>
               </div>
 
+              {/* Slip & Payment Policy Notice Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-amber-950/60 border border-amber-500/40 text-amber-200 text-xs space-y-2 shadow-lg">
+                <div className="flex items-center gap-2 font-black text-amber-300 text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>ข้อกำหนดสำคัญ: บังคับแนบสลิปหลักฐานการโอนเงินทุกครั้ง</span>
+                </div>
+                <div className="text-slate-300 leading-relaxed text-[11px] sm:text-xs space-y-1">
+                  {paymentPlan === 'full' ? (
+                    <p>
+                      • <strong className="text-emerald-400">ชำระเต็มจำนวน ({feeInfo.totalFee} บาท):</strong> จำเป็นต้องแนบสลิปเพื่อส่งใบสมัคร เมื่อเจ้าหน้าที่ตรวจสอบสลิปแล้ว <strong className="text-white underline">ระบบจะยืนยันสิทธิ์เข้าร่วมโครงการทันที</strong>
+                    </p>
+                  ) : (
+                    <>
+                      <p>
+                        • <strong className="text-amber-400">แบ่งชำระรอบที่ 1 (400 บาท):</strong> จำเป็นต้องแนบสลิปเพื่อ <strong className="text-white underline">มัดจำค่าจัดทำเสื้อฝึกอบรม & ล็อคไซส์เสื้อ</strong> ในขั้นตอนแรกนี้
+                      </p>
+                      <p>
+                        • <strong className="text-sky-400">การยืนยันสิทธิ์สมบูรณ์:</strong> จะเสร็จสิ้นเมื่อท่านแนบสลิปชำระรอบที่ 2 (ส่วนที่เหลือ {feeInfo.round2Amount} บาท) ครบถ้วน
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+
               {/* Slip Upload Area */}
-              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-4">
+              <div 
+                id="field-slip-upload-step3"
+                className={`p-4 bg-slate-950/80 border rounded-2xl space-y-4 transition-all duration-300 ${
+                  (fieldErrors.slipFull || fieldErrors.slipRound1)
+                    ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20'
+                    : 'border-slate-800'
+                }`}
+              >
+                {(fieldErrors.slipFull || fieldErrors.slipRound1) && (
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2 animate-pulse">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className="font-bold">
+                      {fieldErrors.slipFull || fieldErrors.slipRound1}
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="block text-xs font-bold text-white flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-amber-400" />
                     <span>
                       {paymentPlan === 'full' 
-                        ? `แนบสลิปหลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท)` 
-                        : 'แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (400 บาท)'}
+                        ? `แนบสลิปหลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท) *` 
+                        : 'แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (มัดจำเสื้อฝึก 400 บาท) *'}
                     </span>
                   </label>
                   <span className="text-[10px] text-amber-400 font-semibold">
@@ -5383,7 +5511,12 @@ export default function RegisterView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 px-6 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer ${
+                  ((paymentPlan === 'full' && !formSlipFull && !myRegistration?.payment_slip_url) ||
+                   (paymentPlan === 'installment' && !formSlipRound1 && !myRegistration?.installment_1_slip_url))
+                    ? 'bg-gradient-to-r from-amber-700 via-orange-700 to-amber-800 hover:from-amber-600 hover:to-orange-600 text-amber-100 shadow-amber-900/30 border border-amber-500/50'
+                    : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white shadow-rescue-600/30'
+                }`}
               >
                 {isSubmitting ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -5394,12 +5527,12 @@ export default function RegisterView({
                       {isEditing
                         ? 'บันทึกการแก้ไขข้อมูลใบสมัคร'
                         : paymentPlan === 'full'
-                        ? (formSlipFull 
-                            ? `ยืนยันและส่งใบสมัคร + สลิปชำระเต็มจำนวน (${feeInfo.totalFee} บ.) 💾` 
-                            : `ส่งใบสมัครไปยัง Admin ก่อน (ค้างชำระเต็มจำนวน ${feeInfo.totalFee} บ.) 📤`)
-                        : (formSlipRound1
-                            ? 'ยืนยันและส่งใบสมัคร + สลิปรอบที่ 1 (400 บ.) ไปยัง Admin 💾'
-                            : 'ส่งใบสมัครไปยัง Admin ก่อน (ค้างชำระงวดที่ 1 400 บ.) 📤')}
+                        ? (formSlipFull || myRegistration?.payment_slip_url
+                            ? `ยืนยันและส่งใบสมัคร + สลิปชำระเต็มจำนวน (${feeInfo.totalFee} บ.) 💾 [ยืนยันสิทธิ์ทันที]` 
+                            : `⚠️ กรุณาแนบสลิปโอนเงินเต็มจำนวน (${feeInfo.totalFee} บ.) ก่อนส่งใบสมัคร`)
+                        : (formSlipRound1 || myRegistration?.installment_1_slip_url
+                            ? 'ยืนยันและส่งใบสมัคร + สลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ไปยัง Admin 💾'
+                            : '⚠️ กรุณาแนบสลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ก่อนส่งใบสมัคร')}
                     </span>
                   </>
                 )}
@@ -5570,12 +5703,46 @@ export default function RegisterView({
                 </div>
               </div>
 
+              {/* Slip & Payment Policy Notice Banner for Step 4 */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-500/40 text-sky-200 text-xs space-y-2 shadow-lg">
+                <div className="flex items-center gap-2 font-black text-sky-300 text-sm">
+                  <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span>ขั้นตอนที่ 4: ชำระเงินรอบที่ 2 เพื่อยืนยันสิทธิ์เข้าร่วมโครงการฉบับสมบูรณ์</span>
+                </div>
+                <div className="text-slate-300 leading-relaxed text-[11px] sm:text-xs space-y-1">
+                  <p>
+                    • <strong className="text-amber-400">รอบที่ 1 (400 บาท):</strong> ได้แนบสลิปเพื่อมัดจำค่าจัดทำเสื้อและล็อคไซส์เสื้อเรียบร้อยแล้ว
+                  </p>
+                  <p>
+                    • <strong className="text-emerald-400">รอบที่ 2 ({feeInfo.round2Amount} บาท):</strong> เมื่อแนบสลิปและเจ้าหน้าที่ตรวจสอบแล้ว <strong className="text-white underline">จะเป็นการยืนยันสิทธิ์เข้าร่วมโครงการโดยสมบูรณ์ทันที</strong>
+                  </p>
+                  <p className="text-slate-400 text-[10px]">
+                    * หากต้องการส่งเฉพาะสลิปรอบแรก (มัดจำเสื้อ) ก่อน สามารถกดย้อนกลับไปขั้นตอนที่ 3 ด้านล่างได้
+                  </p>
+                </div>
+              </div>
+
               {/* Slip Upload Area for Round 2 */}
-              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-4">
+              <div 
+                id="field-slip-upload-step4"
+                className={`p-4 bg-slate-950/80 border rounded-2xl space-y-4 transition-all duration-300 ${
+                  fieldErrors.slipRound2
+                    ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20'
+                    : 'border-slate-800'
+                }`}
+              >
+                {fieldErrors.slipRound2 && (
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2 animate-pulse">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className="font-bold">
+                      {fieldErrors.slipRound2}
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="block text-xs font-bold text-white flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-sky-400" />
-                    <span>แนบสลิปหลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท)</span>
+                    <span>แนบสลิปหลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท) *</span>
                   </label>
                   <span className="text-[10px] text-sky-400 font-semibold">
                     (ระบบสแกน OCR ตรวจสอบเวลาโอนและยอดเงินอัตโนมัติ)
@@ -5771,7 +5938,11 @@ export default function RegisterView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 px-6 bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white font-black rounded-2xl shadow-xl shadow-sky-600/30 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer ${
+                  (!formSlipRound2 && !myRegistration?.installment_2_slip_url)
+                    ? 'bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-800 hover:from-sky-800 hover:to-indigo-800 text-sky-100 shadow-sky-950/40 border border-sky-500/50'
+                    : 'bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white shadow-sky-600/30'
+                }`}
               >
                 {isSubmitting ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -5779,9 +5950,9 @@ export default function RegisterView({
                   <>
                     <Save className="w-5 h-5 shrink-0" />
                     <span className="text-center">
-                      {formSlipRound2 
-                        ? `ยืนยันและส่งใบสมัคร + สลิปชำระครบ 2 รอบ (${feeInfo.totalFee} บ.) 💾` 
-                        : `ยืนยันและส่งใบสมัคร (ค้างชำระงวดที่ 2 ${feeInfo.round2Amount} บ.) 📤`}
+                      {(formSlipRound2 || myRegistration?.installment_2_slip_url)
+                        ? `ยืนยันและส่งใบสมัคร + สลิปชำระครบ 2 รอบ (${feeInfo.totalFee} บ.) 💾 [ยืนยันสิทธิ์ทันที]` 
+                        : `⚠️ กรุณาแนบสลิปโอนเงินรอบที่ 2 (${feeInfo.round2Amount} บ.) เพื่อยืนยันสิทธิ์`}
                     </span>
                   </>
                 )}
@@ -5798,7 +5969,7 @@ export default function RegisterView({
                   className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4 shrink-0" />
-                  <span>ย้อนกลับไปขั้นตอนที่ 3 (ชำระรอบที่ 1)</span>
+                  <span>ย้อนกลับไปขั้นตอนที่ 3 (ส่งเฉพาะสลิปรอบที่ 1 มัดจำเสื้อ)</span>
                 </button>
 
                 {isEditing && (
