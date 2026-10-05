@@ -4,6 +4,9 @@ import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 export default function Toast({ toast, onClose }) {
   if (!toast) return null;
 
+  const contentText = toast.text || toast.message || (typeof toast === 'string' ? toast : '');
+  if (!contentText || !contentText.trim()) return null;
+
   const isError = toast.type === 'error';
   const isInfo = toast.type === 'info';
 
@@ -26,7 +29,7 @@ export default function Toast({ toast, onClose }) {
           )}
         </div>
         <div className="flex-1 text-xs leading-relaxed font-medium">
-          {toast.text}
+          {contentText}
         </div>
         <button
           type="button"

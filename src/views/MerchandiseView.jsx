@@ -35,6 +35,7 @@ import PickupQRModal from '../components/PickupQRModal';
 
 export default function MerchandiseView({
   user,
+  myRegistration,
   merchandiseConfig,
   orders = [],
   onSaveOrder,
@@ -43,16 +44,28 @@ export default function MerchandiseView({
   initialTab = 'catalog',
   onTabChange
 }) {
-  const [activeTab, setActiveTab] = useState(initialTab || 'catalog'); // 'catalog' | 'cart' | 'my_orders'
+  const isRegistered = Boolean(myRegistration);
+  const [activeTab, setActiveTab] = useState(() => {
+    if (!isRegistered) return 'catalog';
+    return initialTab || 'catalog';
+  }); // 'catalog' | 'cart' | 'my_orders'
 
   // Sync activeTab when initialTab changes from URL
   useEffect(() => {
+    if (!isRegistered) {
+      if (activeTab !== 'catalog') setActiveTab('catalog');
+      return;
+    }
     if (initialTab && initialTab !== activeTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+  }, [initialTab, isRegistered]);
 
   const handleTabChange = (tab) => {
+    if (!isRegistered && tab !== 'catalog') {
+      if (onNavigateRegister) onNavigateRegister();
+      return;
+    }
     setActiveTab(tab);
     if (onTabChange) {
       onTabChange(tab);
@@ -322,26 +335,39 @@ export default function MerchandiseView({
 
           {/* Quick Stats or Actions */}
           <div className="flex items-center gap-2 self-start md:self-auto">
-            <button
-              onClick={() => handleTabChange('cart')}
-              className="relative px-4 py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>ตะกร้าสินค้า</span>
-              {cart.length > 0 && (
-                <span className="w-5 h-5 bg-white text-rescue-600 rounded-full text-[11px] font-black flex items-center justify-center shadow">
-                  {cart.reduce((sum, i) => sum + i.quantity, 0)}
-                </span>
-              )}
-            </button>
+            {isRegistered ? (
+              <>
+                <button
+                  onClick={() => handleTabChange('cart')}
+                  className="relative px-4 py-2.5 bg-rescue-600 hover:bg-rescue-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>ตะกร้าสินค้า</span>
+                  {cart.length > 0 && (
+                    <span className="w-5 h-5 bg-white text-rescue-600 rounded-full text-[11px] font-black flex items-center justify-center shadow">
+                      {cart.reduce((sum, i) => sum + i.quantity, 0)}
+                    </span>
+                  )}
+                </button>
 
-            <button
-              onClick={() => handleTabChange('my_orders')}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95 cursor-pointer"
-            >
-              <QrCode className="w-4 h-4 text-rescue-400" />
-              <span>ออเดอร์ & QR รับของ</span>
-            </button>
+                <button
+                  onClick={() => handleTabChange('my_orders')}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95 cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4 text-rescue-400" />
+                  <span>ออเดอร์ & QR รับของ</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => onNavigateRegister && onNavigateRegister()}
+                className="px-5 py-3 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer border border-amber-400/40"
+              >
+                <Shirt className="w-4 h-4" />
+                <span>สมัครเข้าร่วมโครงการ & สั่งเสื้อ (ขั้นตอนที่ 2)</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -419,37 +445,41 @@ export default function MerchandiseView({
           }`}
         >
           <Shirt className="w-4 h-4" />
-          <span>รายการเสื้อ & กางเกง</span>
+          <span>{isRegistered ? 'รายการเสื้อ & กางเกง' : 'ตัวอย่างรูปเสื้อ & ตารางไซส์เสื้อ (S–5XL)'}</span>
         </button>
 
-        <button
-          onClick={() => handleTabChange('cart')}
-          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all relative cursor-pointer ${
-            activeTab === 'cart'
-              ? 'border-rescue-500 text-rescue-400'
-              : 'border-transparent text-slate-400 hover:text-white'
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4" />
-          <span>ตะกร้าและชำระเงิน</span>
-          {cart.length > 0 && (
-            <span className="px-1.5 py-0.2 bg-rescue-500 text-white text-[10px] rounded-full font-black">
-              {cart.reduce((s, i) => s + i.quantity, 0)}
-            </span>
-          )}
-        </button>
+        {isRegistered && (
+          <>
+            <button
+              onClick={() => handleTabChange('cart')}
+              className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all relative cursor-pointer ${
+                activeTab === 'cart'
+                  ? 'border-rescue-500 text-rescue-400'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>ตะกร้าและชำระเงิน</span>
+              {cart.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-rescue-500 text-white text-[10px] rounded-full font-black">
+                  {cart.reduce((s, i) => s + i.quantity, 0)}
+                </span>
+              )}
+            </button>
 
-        <button
-          onClick={() => handleTabChange('my_orders')}
-          className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'my_orders'
-              ? 'border-rescue-500 text-rescue-400'
-              : 'border-transparent text-slate-400 hover:text-white'
-          }`}
-        >
-          <QrCode className="w-4 h-4" />
-          <span>คำสั่งซื้อของฉัน & QR รับของ</span>
-        </button>
+            <button
+              onClick={() => handleTabChange('my_orders')}
+              className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                activeTab === 'my_orders'
+                  ? 'border-rescue-500 text-rescue-400'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              <QrCode className="w-4 h-4" />
+              <span>คำสั่งซื้อของฉัน & QR รับของ</span>
+            </button>
+          </>
+        )}
       </div>
 
       {/* TAB 1: PRODUCT CATALOG */}
@@ -507,6 +537,31 @@ export default function MerchandiseView({
             </button>
           </div>
 
+          {/* NOTICE FOR GUESTS / APPLICANTS */}
+          {!isRegistered && (
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-950/60 via-slate-900 to-orange-950/60 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-start gap-3">
+                <Shirt className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <h4 className="text-xs sm:text-sm font-bold text-white">
+                    ℹ️ ตัวอย่างแบบเสื้อและตารางเทียบไซส์สำหรับผู้เข้าร่วมโครงการ JRE 2027
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    ระบบสั่งซื้อเสื้อรวมอยู่ใน <strong className="text-amber-300">ขั้นตอนที่ 2 ของการสมัครเข้าร่วมโครงการ</strong> (บังคับสั่งเสื้อพร้อมสมัคร / ไม่เปิดจำหน่ายแยกให้บุคคลภายนอก)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigateRegister && onNavigateRegister()}
+                className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shrink-0 shadow-md cursor-pointer active:scale-95"
+              >
+                <span>ไปกรอกใบสมัคร & สั่งเสื้อ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Products Grid or Empty Category State */}
           {filteredProducts.length === 0 ? (
             <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xl">
@@ -542,6 +597,8 @@ export default function MerchandiseView({
                 <ProductCard
                   key={product.id}
                   product={product}
+                  isRegistered={isRegistered}
+                  onNavigateRegister={onNavigateRegister}
                   onAddToCart={handleAddToCart}
                   onBuyNow={handleBuyNow}
                   onPreviewImage={setPreviewImage}
@@ -1258,7 +1315,15 @@ export default function MerchandiseView({
 }
 
 // PRODUCT CARD SUB-COMPONENT
-function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSizeChart }) {
+function ProductCard({ 
+  product, 
+  isRegistered, 
+  onNavigateRegister, 
+  onAddToCart, 
+  onBuyNow, 
+  onPreviewImage, 
+  onOpenSizeChart 
+}) {
   const sizes = product.sizes || [];
   const colors = product.colors || ['สีกรมท่ามาตรฐาน'];
   const isOrderAllowed = product.allow_order !== false;
@@ -1418,7 +1483,29 @@ function ProductCard({ product, onAddToCart, onBuyNow, onPreviewImage, onOpenSiz
       </div>
 
       {/* Bottom Buttons */}
-      {isOrderAllowed ? (
+      {!isRegistered ? (
+        <div className="pt-2 border-t border-slate-800/80 space-y-2">
+          <button
+            type="button"
+            onClick={() => onNavigateRegister && onNavigateRegister()}
+            className="w-full py-3 px-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-rescue-600/25 cursor-pointer border border-amber-400/30"
+          >
+            <Shirt className="w-4 h-4" />
+            <span>สั่งซื้อเสื้อในขั้นตอนที่ 2 ของการสมัคร (ไปที่หน้าสมัคร)</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+            <span>🔒 บังคับสั่งเสื้อพร้อมสมัคร (ไม่จำหน่ายแยก)</span>
+            <button
+              type="button"
+              onClick={onOpenSizeChart}
+              className="text-rescue-400 hover:underline font-bold cursor-pointer"
+            >
+              ตารางไซส์ 📐
+            </button>
+          </div>
+        </div>
+      ) : isOrderAllowed ? (
         <div className="flex gap-2 pt-2 border-t border-slate-800/80">
           <button
             type="button"

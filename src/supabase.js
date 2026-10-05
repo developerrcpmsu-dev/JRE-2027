@@ -151,7 +151,10 @@ const packRegistrationForSupabase = (fullData) => {
     installment_2_status: fullData.installment_2_status,
     installment_2_due: fullData.installment_2_due,
     installment_2_slip_url: fullData.installment_2_slip_url,
-    installment_2_slip_date: fullData.installment_2_slip_date
+    installment_2_slip_date: fullData.installment_2_slip_date,
+    slip_ocr_round1: fullData.slip_ocr_round1 || null,
+    slip_ocr_round2: fullData.slip_ocr_round2 || null,
+    slip_ocr_full: fullData.slip_ocr_full || null
   };
 
   const payload = {};
@@ -780,10 +783,14 @@ export const DataService = {
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
-          .from('user_accounts')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) return data;
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'user_accounts')
+          .maybeSingle();
+        if (!error && data?.value && Array.isArray(data.value)) {
+          localStorage.setItem('jre2027_user_accounts', JSON.stringify(data.value));
+          return data.value;
+        }
       } catch (e) {
         console.warn('Supabase user_accounts query notice, fallback to local', e);
       }
@@ -793,45 +800,39 @@ export const DataService = {
   },
 
   async syncUserAccount(userObj) {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .upsert({
-            id: userObj.id,
-            name: userObj.name,
-            email: userObj.email,
-            avatar: userObj.avatar || '',
-            role: userObj.role || 'applicant',
-            provider: userObj.provider || 'email',
-            password_hash: userObj.password_hash || '',
-            salt: userObj.salt || '',
-            verified: userObj.verified !== undefined ? userObj.verified : true,
-            verification_code: userObj.verification_code || '',
-            last_login_at: new Date().toISOString()
-          }, { onConflict: 'email' })
-          .select();
-        if (!error && data && data[0]) return data[0];
-      } catch (err) {
-        console.warn('Sync user account note:', err);
-      }
-    }
     const accounts = await this.getUserAccounts();
     const idx = accounts.findIndex(a => a.email.toLowerCase() === userObj.email.toLowerCase());
+    let updated;
     if (idx >= 0) {
-      accounts[idx] = { 
-        ...accounts[idx], 
+      updated = [...accounts];
+      updated[idx] = { 
+        ...updated[idx], 
         ...userObj, 
         last_login_at: new Date().toISOString() 
       };
     } else {
-      accounts.unshift({ 
+      updated = [{ 
         ...userObj, 
         created_at: userObj.created_at || new Date().toISOString(), 
         last_login_at: new Date().toISOString() 
-      });
+      }, ...accounts];
     }
-    localStorage.setItem('jre2027_user_accounts', JSON.stringify(accounts));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({
+            key: 'user_accounts',
+            value: updated,
+            updated_at: new Date().toISOString()
+          });
+      } catch (err) {
+        console.warn('Sync user account note:', err);
+      }
+    }
+
+    localStorage.setItem('jre2027_user_accounts', JSON.stringify(updated));
     return userObj;
   },
 
@@ -1167,15 +1168,22 @@ export const DataService = {
 
   // 12. Admin: Delete User Account
   async adminDeleteUser(userId) {
+    const accounts = await this.getUserAccounts();
+    const filtered = accounts.filter(a => a.id !== userId);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('user_accounts').delete().eq('id', userId);
+        await supabase
+          .from('project_settings')
+          .upsert({
+            key: 'user_accounts',
+            value: filtered,
+            updated_at: new Date().toISOString()
+          });
       } catch (e) {
         console.warn('Supabase delete user account notice', e);
       }
     }
-    const accounts = await this.getUserAccounts();
-    const filtered = accounts.filter(a => a.id !== userId);
     localStorage.setItem('jre2027_user_accounts', JSON.stringify(filtered));
 
     // Also remove registration if exists

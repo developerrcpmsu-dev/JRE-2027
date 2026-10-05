@@ -29,7 +29,14 @@ export function initGoogleIdentityServices(clientId, onCredential) {
   }
 
   // Update the global active credential callback
-  window.__jreGoogleCredentialCallback = onCredential;
+  if (onCredential) {
+    window.__jreGoogleCredentialCallback = onCredential;
+  }
+
+  // If already initialized once, just return true
+  if (window.__jreGsiInitialized) {
+    return true;
+  }
 
   // Protect against multiple initialize calls by wrapping initialize method
   if (!window.__jreGsiHooked) {
@@ -65,6 +72,7 @@ export function initGoogleIdentityServices(clientId, onCredential) {
       cancel_on_tap_outside: true,
       context: 'signin'
     });
+    window.__jreGsiInitialized = true;
   } catch (e) {
     console.warn('Google Identity Services initialization notice:', e);
   }

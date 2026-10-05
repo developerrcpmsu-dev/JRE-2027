@@ -431,6 +431,7 @@ export default function App() {
         {(currentTab === 'merchandise' || currentTab === 'shop' || currentTab === 'store') && (
           <MerchandiseView
             user={user}
+            myRegistration={myRegistration}
             merchandiseConfig={merchandiseConfig}
             orders={merchandiseOrders}
             onSaveOrder={handleSaveMerchandiseOrder}

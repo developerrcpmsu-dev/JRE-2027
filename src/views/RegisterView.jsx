@@ -46,7 +46,8 @@ import {
   Key,
   EyeOff,
   UserCheck,
-  Shield
+  Shield,
+  ArrowLeft
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
@@ -54,6 +55,7 @@ import { DataService } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import { scanSlipImage } from '../utils/slipOcr';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   OFFICIAL_NETWORK_INSTITUTIONS,
@@ -365,7 +367,7 @@ export default function RegisterView({
   // In-App Toast Notification State
   const [toast, setToast] = useState(null);
   const triggerToast = (message, type = 'success') => {
-    setToast({ message, type });
+    setToast({ text: message, message, type });
   };
 
   // In-App Document Preview Modal State
@@ -375,11 +377,22 @@ export default function RegisterView({
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [previewSlipModal, setPreviewSlipModal] = useState(null);
 
-  // 2-Round Installments State
-  const [paymentPlan, setPaymentPlan] = useState('installment'); // default installment for 2 rounds
+  // 2-Round Installments & Full Payment State
+  const [paymentPlan, setPaymentPlan] = useState('installment'); // 'installment' (4 steps) | 'full' (3 steps)
   const [isUploadingRound1, setIsUploadingRound1] = useState(false);
   const [isUploadingRound2, setIsUploadingRound2] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
+
+  // Slips & OCR States for Full & 2-Round Installments
+  const [formSlipFull, setFormSlipFull] = useState('');
+  const [formSlipFullFileName, setFormSlipFullFileName] = useState('');
+  const [formSlipRound2, setFormSlipRound2] = useState('');
+  const [formSlipRound2FileName, setFormSlipRound2FileName] = useState('');
+  const [isProcessingFormSlipRound2, setIsProcessingFormSlipRound2] = useState(false);
+  const [isProcessingFormSlipFull, setIsProcessingFormSlipFull] = useState(false);
+  const [slipOcrRound1, setSlipOcrRound1] = useState(null);
+  const [slipOcrRound2, setSlipOcrRound2] = useState(null);
+  const [slipOcrFull, setSlipOcrFull] = useState(null);
 
   // Document Upload State
   const [uploadingDocId, setUploadingDocId] = useState(null);
@@ -668,7 +681,7 @@ export default function RegisterView({
     }
   };
 
-  // Upload Form Round 1 Slip Handler
+  // Upload Form Round 1 Slip Handler with Automatic OCR Scan
   const handleFormSlipRound1Change = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -678,13 +691,87 @@ export default function RegisterView({
       if (uploadResult?.url) {
         setFormSlipRound1(uploadResult.url);
         setFormSlipRound1FileName(file.name);
-        triggerToast('แนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท) เรียบร้อยแล้ว', 'success');
+        
+        // Run Slip OCR Scan
+        try {
+          const ocr = await scanSlipImage(file, 400);
+          setSlipOcrRound1(ocr);
+          triggerToast(`อัปโหลดและตรวจสแกนสลิปเรียบร้อย (${ocr.amountFormatted || '400 บาท'}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+        } catch (ocrErr) {
+          console.warn('Slip OCR notice:', ocrErr);
+          triggerToast('แนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท) เรียบร้อยแล้ว', 'success');
+        }
       }
     } catch (err) {
       console.error(err);
       triggerToast('เกิดข้อผิดพลาดในการอัปโหลดสลิป', 'error');
     } finally {
       setIsProcessingFormSlip(false);
+      e.target.value = '';
+    }
+  };
+
+  // Upload Form Round 2 Slip Handler with Automatic OCR Scan
+  const handleFormSlipRound2Change = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingFormSlipRound2(true);
+    const feeInfo = getRegistrationFeeDetails(institution);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'slips');
+      if (uploadResult?.url) {
+        setFormSlipRound2(uploadResult.url);
+        setFormSlipRound2FileName(file.name);
+        
+        // Run Slip OCR Scan
+        try {
+          const ocr = await scanSlipImage(file, feeInfo.round2Amount);
+          setSlipOcrRound2(ocr);
+          triggerToast(`อัปโหลดและตรวจสแกนสลิปรอบที่ 2 เรียบร้อย (${ocr.amountFormatted}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+        } catch (ocrErr) {
+          console.warn('Slip OCR notice:', ocrErr);
+          triggerToast(`แนบหลักฐานการโอนเงิน รอบที่ 2 (${feeInfo.round2Amount} บาท) เรียบร้อยแล้ว`, 'success');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดสลิปรอบที่ 2', 'error');
+    } finally {
+      setIsProcessingFormSlipRound2(false);
+      e.target.value = '';
+    }
+  };
+
+  // Upload Full Payment Slip Handler with Automatic OCR Scan
+  const handleFormSlipFullChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingFormSlipFull(true);
+    const feeInfo = getRegistrationFeeDetails(institution);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'slips');
+      if (uploadResult?.url) {
+        setFormSlipFull(uploadResult.url);
+        setFormSlipFullFileName(file.name);
+        setFormSlipRound1(uploadResult.url);
+        setFormSlipRound1FileName(file.name);
+        
+        // Run Slip OCR Scan
+        try {
+          const ocr = await scanSlipImage(file, feeInfo.totalFee);
+          setSlipOcrFull(ocr);
+          setSlipOcrRound1(ocr);
+          triggerToast(`อัปโหลดและตรวจสแกนสลิปเต็มจำนวนเรียบร้อย (${ocr.amountFormatted}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+        } catch (ocrErr) {
+          console.warn('Slip OCR notice:', ocrErr);
+          triggerToast(`แนบหลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท) เรียบร้อยแล้ว`, 'success');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปโหลดสลิป', 'error');
+    } finally {
+      setIsProcessingFormSlipFull(false);
       e.target.value = '';
     }
   };
@@ -773,6 +860,7 @@ export default function RegisterView({
 
   // Compute calculated age dynamically in real-time
   const ageResult = calculateAgeDetailed(birthYearBE, birthMonth, birthDay);
+  const feeInfo = getRegistrationFeeDetails(institution);
 
   const handleNextToStep2 = () => {
     if (!firstNameTh.trim() || !lastNameTh.trim()) {
@@ -843,7 +931,18 @@ export default function RegisterView({
     setStatusMessage(null);
     setCurrentFormStep(3);
     window.scrollTo({ top: 350, behavior: 'smooth' });
-    triggerToast('ไปยังขั้นตอนที่ 3: สรุปค่าสมัคร & ชำระเงินรอบที่ 1', 'info');
+    if (paymentPlan === 'full') {
+      triggerToast('ไปยังขั้นตอนที่ 3: สรุปค่าสมัคร & ชำระเงินเต็มจำนวน (3 ขั้นตอน)', 'info');
+    } else {
+      triggerToast('ไปยังขั้นตอนที่ 3: สรุปค่าสมัคร & ชำระเงินรอบที่ 1 (มัดจำ 400.-)', 'info');
+    }
+  };
+
+  const handleNextToStep4 = () => {
+    setStatusMessage(null);
+    setCurrentFormStep(4);
+    window.scrollTo({ top: 350, behavior: 'smooth' });
+    triggerToast('ไปยังขั้นตอนที่ 4: สรุปยอดคงค้าง & ชำระเงินรอบที่ 2', 'info');
   };
 
   const handleSubmit = async (e) => {
@@ -992,22 +1091,31 @@ export default function RegisterView({
       room_assigned: myRegistration?.room_assigned || '',
       is_special_care: myRegistration?.is_special_care || false,
       special_notes: myRegistration?.special_notes || '',
-      payment_plan: 'installment',
-      payment_status: formSlipRound1 ? 'pending_review' : (myRegistration?.payment_status || 'unpaid'),
+      payment_plan: paymentPlan,
+      payment_status: paymentPlan === 'full'
+        ? (formSlipFull ? 'pending_review' : (myRegistration?.payment_status || 'unpaid'))
+        : ((formSlipRound1 && formSlipRound2) ? 'pending_review' : (formSlipRound1 ? 'partial_paid' : (myRegistration?.payment_status || 'unpaid'))),
       payment_amount: feeInfo.totalFee,
       payment_bank_info: `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
-      payment_slip_url: formSlipRound1 || myRegistration?.payment_slip_url || '',
-      payment_slip_date: formSlipRound1 ? new Date().toISOString() : (myRegistration?.payment_slip_date || ''),
+      payment_slip_url: paymentPlan === 'full' 
+        ? (formSlipFull || myRegistration?.payment_slip_url || '') 
+        : (formSlipRound2 || formSlipRound1 || myRegistration?.payment_slip_url || ''),
+      payment_slip_date: (paymentPlan === 'full' ? formSlipFull : (formSlipRound2 || formSlipRound1)) 
+        ? new Date().toISOString() 
+        : (myRegistration?.payment_slip_date || ''),
       installment_1_status: formSlipRound1 ? 'pending_review' : (myRegistration?.installment_1_status || 'unpaid'),
       installment_1_amount: feeInfo.round1Amount,
       installment_1_due: feeInfo.round1Due,
       installment_1_slip_url: formSlipRound1 || myRegistration?.installment_1_slip_url || '',
       installment_1_slip_date: formSlipRound1 ? new Date().toISOString() : (myRegistration?.installment_1_slip_date || ''),
-      installment_2_status: myRegistration?.installment_2_status || 'unpaid',
+      installment_2_status: formSlipRound2 ? 'pending_review' : (myRegistration?.installment_2_status || 'unpaid'),
       installment_2_amount: feeInfo.round2Amount,
       installment_2_due: feeInfo.round2Due,
-      installment_2_slip_url: myRegistration?.installment_2_slip_url || '',
-      installment_2_slip_date: myRegistration?.installment_2_slip_date || '',
+      installment_2_slip_url: formSlipRound2 || myRegistration?.installment_2_slip_url || '',
+      installment_2_slip_date: formSlipRound2 ? new Date().toISOString() : (myRegistration?.installment_2_slip_date || ''),
+      slip_ocr_round1: slipOcrRound1 || myRegistration?.slip_ocr_round1 || null,
+      slip_ocr_round2: slipOcrRound2 || myRegistration?.slip_ocr_round2 || null,
+      slip_ocr_full: slipOcrFull || myRegistration?.slip_ocr_full || null,
       admin_messages: myRegistration?.admin_messages || [],
       requested_docs: myRegistration?.requested_docs || [],
       status: 'confirmed'
@@ -1046,15 +1154,21 @@ export default function RegisterView({
     try {
       const uploadResult = await DataService.uploadFile(file, 'slips');
       if (uploadResult?.url) {
+        let ocrInfo = null;
+        try {
+          ocrInfo = await scanSlipImage(file, feeInfo.totalFee);
+        } catch (ocrErr) {}
+
         await DataService.submitPaymentSlip(myRegistration.user_id, uploadResult.url);
         if (onUpdateRegistration) {
           await onUpdateRegistration(myRegistration.user_id, {
             payment_slip_url: uploadResult.url,
             payment_slip_date: new Date().toISOString(),
-            payment_status: 'pending_review'
+            payment_status: 'pending_review',
+            slip_ocr_full: ocrInfo
           });
         }
-        triggerToast('อัปโหลดสลิปการโอนเงินเรียบร้อยแล้ว เจ้าหน้าที่จะทำการตรวจสอบยอดเงิน', 'success');
+        triggerToast(`อัปโหลดและสแกนสลิปเรียบร้อย (${ocrInfo?.amountFormatted || `${feeInfo.totalFee} บ.`}) เจ้าหน้าที่จะทำการตรวจสอบ`, 'success');
       }
     } catch (err) {
       console.error(err);
@@ -1076,20 +1190,27 @@ export default function RegisterView({
     try {
       const uploadResult = await DataService.uploadFile(file, 'slips');
       if (uploadResult?.url) {
+        let ocrInfo = null;
+        try {
+          const expectedAmount = round === 1 ? 400 : feeInfo.round2Amount;
+          ocrInfo = await scanSlipImage(file, expectedAmount);
+        } catch (ocrErr) {}
+
         await DataService.submitInstallmentSlip(myRegistration.user_id, round, uploadResult.url);
         if (onUpdateRegistration) {
           const update = {
             payment_plan: 'installment',
             [`installment_${round}_slip_url`]: uploadResult.url,
             [`installment_${round}_slip_date`]: new Date().toISOString(),
-            [`installment_${round}_status`]: 'pending_review'
+            [`installment_${round}_status`]: 'pending_review',
+            [`slip_ocr_round${round}`]: ocrInfo
           };
           if (round === 1 && myRegistration.installment_2_status !== 'paid') {
             update.payment_status = 'pending_review';
           }
           await onUpdateRegistration(myRegistration.user_id, update);
         }
-        triggerToast(`อัปโหลดสลิปงวดที่ ${round} เรียบร้อยแล้ว เจ้าหน้าที่จะตรวจสอบยอดเงิน`, 'success');
+        triggerToast(`อัปโหลดและสแกนสลิปงวดที่ ${round} เรียบร้อย (${ocrInfo?.amountFormatted || ''}) เจ้าหน้าที่จะตรวจสอบยอดเงิน`, 'success');
       }
     } catch (err) {
       console.error(err);
@@ -1658,6 +1779,11 @@ export default function RegisterView({
                         <span className="text-[10px] text-emerald-400 font-bold block truncate">
                           ✓ แนบสลิปแล้ว
                         </span>
+                        {myRegistration.slip_ocr_round1 && (
+                          <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round1.uploadTimeStr}>
+                            โอน: {myRegistration.slip_ocr_round1.transferDateTimeStr || myRegistration.slip_ocr_round1.uploadTimeStr} ({myRegistration.slip_ocr_round1.amountFormatted || `${myRegistration.slip_ocr_round1.amount} บ.`})
+                          </span>
+                        )}
                         {myRegistration.installment_1_status !== 'paid' && (
                           <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
                             <span>ส่งสลิปใหม่ทดแทน</span>
@@ -1725,6 +1851,11 @@ export default function RegisterView({
                         <span className="text-[10px] text-emerald-400 font-bold block truncate">
                           ✓ แนบสลิปแล้ว
                         </span>
+                        {myRegistration.slip_ocr_round2 && (
+                          <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>
+                            โอน: {myRegistration.slip_ocr_round2.transferDateTimeStr || myRegistration.slip_ocr_round2.uploadTimeStr} ({myRegistration.slip_ocr_round2.amountFormatted || `${myRegistration.slip_ocr_round2.amount} บ.`})
+                          </span>
+                        )}
                         {myRegistration.installment_2_status !== 'paid' && (
                           <label className="text-[10px] text-sky-400 hover:underline cursor-pointer block">
                             <span>ส่งสลิปใหม่ทดแทน</span>
@@ -2383,6 +2514,11 @@ export default function RegisterView({
                         <span className="text-[10px] text-slate-500 block">
                           ส่งเมื่อ: {myRegistration.payment_slip_date ? new Date(myRegistration.payment_slip_date).toLocaleString('th-TH') : '-'}
                         </span>
+                        {myRegistration.slip_ocr_full && (
+                          <span className="text-[10px] text-amber-300 font-mono block">
+                            โอน: {myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} ({myRegistration.slip_ocr_full.amountFormatted || `${myRegistration.slip_ocr_full.amount} บ.`})
+                          </span>
+                        )}
                         {myRegistration.payment_status === 'paid' ? (
                           <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
                             <CheckCircle className="w-3.5 h-3.5" /> ตรวจสอบและอนุมัติยอดเงินแล้ว (ล็อคสลิป)
@@ -3098,61 +3234,97 @@ export default function RegisterView({
             </p>
           </div>
 
-          {/* 💰 การชำระค่าใช้จ่ายแบ่งออกเป็น 2 รอบ Box */}
+          {/* 💰 เลือกรูปแบบการชำระค่าใช้จ่าย (จ่ายครั้งเดียวเลย 3 ขั้นตอน หรือ แบ่งจ่าย 2 รอบ 4 ขั้นตอน) */}
           <div className="w-full max-w-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-amber-500/40 rounded-3xl p-5 sm:p-6 text-left shadow-2xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <h3 className="text-sm font-black text-amber-300 flex items-center gap-2">
                 <span>💰</span>
-                <span>การชำระค่าใช้จ่ายแบ่งออกเป็น 2 รอบ</span>
+                <span>เลือกรูปแบบการชำระค่าลงทะเบียนโครงการ</span>
               </h3>
               <span className="text-[11px] px-3 py-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-full font-bold self-start sm:self-auto">
-                รอบที่ 1 ชำระ 400 บ. พร้อมสมัคร
+                {paymentPlan === 'full' ? '🌟 จ่ายครบครั้งเดียว (3 ขั้นตอน)' : '💳 แบ่งจ่าย 2 รอบ (4 ขั้นตอน)'}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
-              {/* Round 1 Card */}
-              <div className="p-4 bg-slate-900/90 rounded-2xl border border-amber-500/30 space-y-2">
+            {/* Interactive Payment Plan Chooser */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Option 1: จ่ายครั้งเดียวเลย (Full Payment: 3 Steps) */}
+              <div 
+                onClick={() => {
+                  setPaymentPlan('full');
+                  if (currentFormStep === 4) setCurrentFormStep(3);
+                  triggerToast('เลือกรูปแบบ: จ่ายครั้งเดียวเลยทั้งหมด (3 ขั้นตอน: 1, 2, 3)', 'info');
+                }}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 select-none ${
+                  paymentPlan === 'full'
+                    ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/30 shadow-lg shadow-amber-500/10'
+                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-amber-400 text-xs">รอบที่ 1 (ชำระพร้อมการสมัคร)</span>
-                  <span className="font-black text-amber-300 text-sm">💵 400 บาท</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🌟</span>
+                    <span className="font-black text-white text-sm">จ่ายครบครั้งเดียวทั้งหมด</span>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                    paymentPlan === 'full' ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    3 ขั้นตอน (1, 2, 3)
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-200 font-semibold text-[11px]">
-                  <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>📅 วันที่ 15–20 ตุลาคม 2569</span>
-                </div>
-                <p className="text-slate-400 leading-snug text-[11px]">
-                  สำหรับการสมัครและดำเนินการจัดทำเสื้อโครงการแบบพรีออเดอร์ (เสื้อฝึกคอเต่าซิป แขนสั้น โทนสีเทา–ดำ)
+                <p className="text-slate-300 text-xs leading-snug">
+                  ชำระค่าลงทะเบียนและค่าเสื้อเต็มจำนวนในคราวเดียว ({feeInfo.isMsu ? 'นิสิต มมส 650 บ.' : 'ต่างมหาวิทยาลัย 850 บ.'}) รวดเร็ว สบายใจ และส่งตรวจสอบได้ทันที
                 </p>
+                <div className="text-[11px] text-amber-300 font-semibold pt-1 border-t border-slate-800/80 flex items-center justify-between">
+                  <span>💵 ยอดชำระเต็มจำนวน:</span>
+                  <span className="font-black text-sm text-white">{feeInfo.totalFee} บาท</span>
+                </div>
               </div>
 
-              {/* Round 2 Card */}
-              <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-2">
+              {/* Option 2: แบ่งจ่าย 2 รอบ (Installments: 4 Steps) */}
+              <div 
+                onClick={() => {
+                  setPaymentPlan('installment');
+                  triggerToast('เลือกรูปแบบ: แบ่งจ่าย 2 รอบ (4 ขั้นตอน: 1, 2, 3, 4)', 'info');
+                }}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 select-none ${
+                  paymentPlan === 'installment'
+                    ? 'bg-sky-500/15 border-sky-500 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
+                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-sky-400 text-xs">รอบที่ 2 (ชำระก่อนเข้าฝึก)</span>
-                  <span className="font-black text-sky-300 text-sm">💵 450 / 250 บาท</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">💳</span>
+                    <span className="font-black text-white text-sm">แบ่งจ่าย 2 รอบ</span>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                    paymentPlan === 'installment' ? 'bg-sky-500 text-slate-950 border-sky-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    4 ขั้นตอน (1, 2, 3, 4)
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-200 font-semibold text-[11px]">
-                  <Calendar className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                  <span>📅 วันที่ 1–5 พฤศจิกายน 2569</span>
-                </div>
-                <p className="text-slate-400 leading-snug text-[11px]">
-                  สำหรับค่าใช้จ่ายด้านที่พักและอาหาร (ต่างมหาวิทยาลัย 450 บ. / นิสิต มมส 250 บ.)
+                <p className="text-slate-300 text-xs leading-snug">
+                  รอบที่ 1 มัดจำค่าจัดทำเสื้อ 400 บ. (15–20 ต.ค. 69) และรอบที่ 2 ชำระส่วนที่เหลือ ({feeInfo.round2Amount} บ. วันที่ 1–5 พ.ย. 69)
                 </p>
+                <div className="text-[11px] text-sky-300 font-semibold pt-1 border-t border-slate-800/80 flex items-center justify-between">
+                  <span>รอบ 1: 400 บ.</span>
+                  <span>รอบ 2: {feeInfo.round2Amount} บ.</span>
+                </div>
               </div>
             </div>
 
             {/* Total Fee & Notice */}
             <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="space-y-1">
-                <span className="text-[11px] text-slate-400 block font-medium">💵 รวมค่าใช้จ่ายทั้งสิ้น:</span>
+                <span className="text-[11px] text-slate-400 block font-medium">💵 สรุปค่าใช้จ่ายโครงการ:</span>
                 <p className="text-white font-bold leading-relaxed">
-                  • ต่างมหาวิทยาลัย: <span className="text-amber-400 font-black">850 บาท/คน</span> (รวมค่าที่พักหอพักกุดรัง มมส)<br className="hidden sm:inline" />
-                  • นิสิตมหาวิทยาลัยมหาสารคาม (มมส): <span className="text-emerald-400 font-black">650 บาท/คน</span> (ไม่มีค่าใช้จ่ายด้านที่พัก)
+                  • ต่างมหาวิทยาลัย: <span className="text-amber-400 font-black">850 บาท/คน</span> (รวมค่าที่พักหอพักกุดรัง มมส & เสื้อ)<br className="hidden sm:inline" />
+                  • นิสิตมหาวิทยาลัยมหาสารคาม (มมส): <span className="text-emerald-400 font-black">650 บาท/คน</span> (ไม่มีค่าใช้จ่ายด้านที่พัก & รวมเสื้อ)
                 </p>
               </div>
               <div className="text-left sm:text-right shrink-0">
-                <span className="text-slate-400 block text-[11px]">☎️ สอบถามรายละเอียดเพิ่มเติม:</span>
+                <span className="text-slate-400 block text-[11px]">☎️ สอบถามผู้จัดโครงการ:</span>
                 <a href="tel:0983296762" className="text-amber-400 font-black text-xs hover:underline inline-flex items-center gap-1">
                   <Phone className="w-3 h-3" />
                   <span>098-329-6762</span>
@@ -3184,18 +3356,18 @@ export default function RegisterView({
           </div>
         </div>
 
-        {/* 3-Step Wizard Navigation Stepper Header */}
+        {/* Dynamic Wizard Navigation Stepper Header (3 steps for Full / 4 steps for Installment) */}
         <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl">
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80">
             <span className="text-[11px] font-black uppercase tracking-wider text-rescue-400 flex items-center gap-1.5">
-              <span>🚀</span> ขั้นตอนการสมัครและสั่งซื้อเสื้อ (3 ขั้นตอน)
+              <span>🚀</span> ขั้นตอนการสมัครและชำระค่าใช้จ่าย ({paymentPlan === 'full' ? '3 ขั้นตอน (จ่ายครั้งเดียว)' : '4 ขั้นตอน (แบ่งจ่าย 2 รอบ)'})
             </span>
             <span className="text-[10px] text-slate-400">
-              ขั้นตอนที่ {currentFormStep} จาก 3
+              ขั้นตอนที่ {currentFormStep} จาก {paymentPlan === 'full' ? 3 : 4}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className={`grid gap-2 sm:gap-3 ${paymentPlan === 'full' ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
             {/* Step 1 Button */}
             <button
               type="button"
@@ -3274,29 +3446,70 @@ export default function RegisterView({
               onClick={() => {
                 if (currentFormStep === 1) handleNextToStep2();
                 else if (currentFormStep === 2) handleNextToStep3();
+                else {
+                  setCurrentFormStep(3);
+                  window.scrollTo({ top: 350, behavior: 'smooth' });
+                }
               }}
               className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all flex items-center gap-2 sm:gap-3 cursor-pointer ${
                 currentFormStep === 3
                   ? 'bg-amber-500/20 border-amber-500 text-white shadow-lg shadow-amber-500/10'
+                  : currentFormStep > 3
+                  ? 'bg-slate-900 border-emerald-500/40 text-emerald-300 hover:border-emerald-400'
                   : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
               }`}
             >
               <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-transform ${
                 currentFormStep === 3
                   ? 'bg-amber-500 text-white scale-105 shadow'
+                  : currentFormStep > 3
+                  ? 'bg-emerald-500 text-white'
                   : 'bg-slate-800 text-slate-400'
               }`}>
-                3
+                {currentFormStep > 3 ? <Check className="w-4 h-4" /> : '3'}
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">
                   ขั้นตอนที่ 3
                 </p>
                 <p className="text-xs sm:text-sm font-black truncate">
-                  สรุป & ส่ง Admin
+                  {paymentPlan === 'full' ? 'สรุป & ชำระเต็มจำนวน' : 'ชำระรอบ 1 (มัดจำ 400.-)'}
                 </p>
               </div>
             </button>
+
+            {/* Step 4 Button (Installment Only) */}
+            {paymentPlan === 'installment' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (currentFormStep === 1) handleNextToStep2();
+                  else if (currentFormStep === 2) handleNextToStep3();
+                  else handleNextToStep4();
+                }}
+                className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all flex items-center gap-2 sm:gap-3 cursor-pointer ${
+                  currentFormStep === 4
+                    ? 'bg-sky-500/20 border-sky-500 text-white shadow-lg shadow-sky-500/10'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-transform ${
+                  currentFormStep === 4
+                    ? 'bg-sky-500 text-white scale-105 shadow'
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  4
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">
+                    ขั้นตอนที่ 4
+                  </p>
+                  <p className="text-xs sm:text-sm font-black truncate">
+                    ชำระรอบ 2 (คงค้าง)
+                  </p>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 
@@ -4249,7 +4462,11 @@ export default function RegisterView({
                 onClick={handleNextToStep3}
                 className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-orange-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>ถัดไป: สรุปค่าสมัคร & ชำระเงินรอบที่ 1 (ขั้นตอนที่ 3)</span>
+                <span>
+                  {paymentPlan === 'full' 
+                    ? 'ถัดไป: สรุปค่าสมัคร & ชำระเงินเต็มจำนวน (ขั้นตอนที่ 3) →' 
+                    : 'ถัดไป: สรุปค่าสมัคร & ชำระเงินรอบที่ 1 (ขั้นตอนที่ 3) →'}
+                </span>
                 <ArrowRight className="w-5 h-5" />
               </button>
             </div>
@@ -4257,7 +4474,7 @@ export default function RegisterView({
         )}
 
         {/* ========================================================
-            STEP 3: สรุปค่าสมัคร & ชำระเงินรอบที่ 1 / ส่ง Admin ทันที
+            STEP 3: สรุป & ชำระเงินเต็มจำนวน (Full) หรือ รอบที่ 1 (Installment)
             ======================================================== */}
         {currentFormStep === 3 && (
           <div className="space-y-8 animate-in fade-in duration-200">
@@ -4267,11 +4484,13 @@ export default function RegisterView({
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-indigo-400" />
                   <h3 className="text-sm sm:text-base font-black text-white">
-                    สรุปรายการข้อมูลใบสมัคร & การสั่งเสื้อโครงการ JRE 2027
+                    {paymentPlan === 'full' 
+                      ? 'สรุปรายการใบสมัคร & ชำระเงินเต็มจำนวน (ขั้นตอนที่ 3 จาก 3)' 
+                      : 'สรุปรายการใบสมัคร & ชำระเงินรอบที่ 1 (ขั้นตอนที่ 3 จาก 4)'}
                   </h3>
                 </div>
                 <span className="text-[11px] text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full font-bold border border-indigo-500/30">
-                  ขั้นตอนสุดท้าย
+                  {paymentPlan === 'full' ? 'ขั้นตอนสุดท้าย (3/3)' : 'ขั้นตอนที่ 3 จาก 4'}
                 </span>
               </div>
 
@@ -4307,20 +4526,17 @@ export default function RegisterView({
                 </div>
 
                 <div className="bg-slate-900/90 p-3 rounded-xl border border-amber-500/40">
-                  {(() => {
-                    const fee = getRegistrationFeeDetails(institution);
-                    return (
-                      <>
-                        <span className="text-[10px] text-amber-300 block mb-0.5 font-semibold">ยอดค่าใช้จ่ายรวม:</span>
-                        <p className="font-black text-amber-300 text-sm">
-                          💵 {fee.totalFee} บาท
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          รอบ 1: 400 บ. / รอบ 2: {fee.round2Amount} บ.
-                        </p>
-                      </>
-                    );
-                  })()}
+                  <span className="text-[10px] text-amber-300 block mb-0.5 font-semibold">
+                    {paymentPlan === 'full' ? 'ยอดชำระเต็มจำนวน:' : 'ยอดรอบที่ 1 / ยอดรวม:'}
+                  </span>
+                  <p className="font-black text-amber-300 text-sm">
+                    💵 {paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : '400 บาท'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {paymentPlan === 'full' 
+                      ? 'ชำระครบถ้วนในรอบเดียว' 
+                      : `รอบ 2 คงค้าง: ${feeInfo.round2Amount} บ. (รวม ${feeInfo.totalFee} บ.)`}
+                  </p>
                 </div>
               </div>
             </div>
@@ -4330,23 +4546,25 @@ export default function RegisterView({
               <Sparkles className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <h4 className="text-xs sm:text-sm font-bold text-blue-300">
-                  💡 ระบบรองรับการส่งข้อมูลให้ Admin ก่อนได้ทันที (ผ่อนชำระ & แนบสลิปภายหลังได้)
+                  💡 ส่งข้อมูลให้ Admin ตรวจสอบก่อนได้ (แนบสลิปตอนนี้ หรือมาแนบภายหลังได้)
                 </h4>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  หากท่านยังไม่สะดวกโอนเงินในตอนนี้ ท่านสามารถกดปุ่ม <strong className="text-white">“ส่งใบสมัครและรายการสั่งเสื้อไปยัง Admin ก่อน”</strong> ด้านล่างได้เลย ระบบจะบันทึกข้อมูลและรายการเสื้อของท่านไว้ในระบบ และแสดงสถานะ <span className="text-amber-300 font-bold">“ค้างชำระงวดที่ 1 จำนวน 400 บาท”</span> ในหน้าสถานะของท่าน เพื่อให้ท่านสามารถกลับมาแนบสลิปภายหลังได้ตลอดเวลา
+                  หากท่านยังไม่สะดวกโอนเงินในตอนนี้ สามารถกดปุ่ม <strong className="text-white">“ส่งใบสมัครและรายการสั่งเสื้อไปยัง Admin ก่อน”</strong> ด้านล่างได้เลย ระบบจะบันทึกข้อมูลและรายการเสื้อของท่านไว้ และแสดงสถานะรอแนบสลิปในหน้าแดชบอร์ด เพื่อให้กลับมาแนบสลิปภายหลังได้ตลอดเวลา
                 </p>
               </div>
             </div>
 
-            {/* Section 5: แนบหลักฐานการโอนเงิน รอบที่ 1 (400 บาท) */}
+            {/* Section 5: บัญชีธนาคาร & หลักฐานการโอนเงิน (เต็มจำนวน หรือ รอบที่ 1) */}
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-amber-500" />
-                  บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 1 (400 บาท)
+                  {paymentPlan === 'full' 
+                    ? `บัญชีธนาคาร & หลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท)` 
+                    : 'บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 1 (400 บาท)'}
                 </h3>
                 <span className="text-[11px] text-amber-300 font-bold">
-                  ยอดชำระรอบนี้: 400 บาท
+                  ยอดชำระ: {paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : '400 บาท'}
                 </span>
               </div>
 
@@ -4357,7 +4575,7 @@ export default function RegisterView({
                     <span>🏦</span> บัญชีธนาคารสำหรับโอนเงินค่าลงทะเบียน:
                   </span>
                   <span className="text-[10px] text-amber-300 font-bold">
-                    รอบที่ 1: 400 บาท (15–20 ต.ค. 2569)
+                    {paymentPlan === 'full' ? `ยอดเต็มจำนวน: ${feeInfo.totalFee} บาท` : 'รอบที่ 1: 400 บาท (15–20 ต.ค. 2569)'}
                   </span>
                 </div>
 
@@ -4413,25 +4631,29 @@ export default function RegisterView({
               </div>
 
               {/* Slip Upload Area */}
-              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="block text-xs font-bold text-white flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-amber-400" />
-                    <span>แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (400 บาท)</span>
+                    <span>
+                      {paymentPlan === 'full' 
+                        ? `แนบสลิปหลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท)` 
+                        : 'แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (400 บาท)'}
+                    </span>
                   </label>
                   <span className="text-[10px] text-amber-400 font-semibold">
-                    (แนบตอนนี้ หรือกดส่งข้อมูลก่อนแล้วมาแนบทีหลังได้)
+                    (ระบบสแกน OCR ตรวจสอบเวลาโอนและยอดเงินอัตโนมัติ)
                   </span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
                   {/* Slip Preview Box */}
                   <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
-                    {formSlipRound1 ? (
+                    {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) ? (
                       <>
                         <img 
-                          src={formSlipRound1} 
-                          alt="สลิปโอนเงินรอบที่ 1" 
+                          src={paymentPlan === 'full' ? formSlipFull : formSlipRound1} 
+                          alt="สลิปโอนเงิน" 
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -4450,33 +4672,44 @@ export default function RegisterView({
                   <div className="flex-1 w-full space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
-                        isProcessingFormSlip ? 'opacity-50 pointer-events-none' : ''
+                        (paymentPlan === 'full' ? isProcessingFormSlipFull : isProcessingFormSlip) ? 'opacity-50 pointer-events-none' : ''
                       }`}>
-                        {isProcessingFormSlip ? (
+                        {(paymentPlan === 'full' ? isProcessingFormSlipFull : isProcessingFormSlip) ? (
                           <>
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>กำลังประมวลผลสลิป...</span>
+                            <span>กำลังสแกน OCR สลิป...</span>
                           </>
                         ) : (
                           <>
                             <Upload className="w-3.5 h-3.5" />
-                            <span>{formSlipRound1 ? 'เปลี่ยนไฟล์สลิป' : 'อัปโหลดสลิปโอนเงิน (400 บ.)'}</span>
+                            <span>
+                              {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) 
+                                ? 'เปลี่ยนไฟล์สลิป' 
+                                : `อัปโหลดสลิปโอนเงิน (${paymentPlan === 'full' ? `${feeInfo.totalFee} บ.` : '400 บ.'})`}
+                            </span>
                           </>
                         )}
                         <input
                           type="file"
                           accept="image/*,.pdf"
-                          onChange={handleFormSlipRound1Change}
+                          onChange={paymentPlan === 'full' ? handleFormSlipFullChange : handleFormSlipRound1Change}
                           className="hidden"
                         />
                       </label>
 
-                      {formSlipRound1 && (
+                      {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) && (
                         <button
                           type="button"
                           onClick={() => {
-                            setFormSlipRound1('');
-                            setFormSlipRound1FileName('');
+                            if (paymentPlan === 'full') {
+                              setFormSlipFull('');
+                              setFormSlipFullFileName('');
+                              setSlipOcrFull(null);
+                            } else {
+                              setFormSlipRound1('');
+                              setFormSlipRound1FileName('');
+                              setSlipOcrRound1(null);
+                            }
                           }}
                           className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
                         >
@@ -4486,14 +4719,55 @@ export default function RegisterView({
                       )}
                     </div>
 
-                    {formSlipRound1FileName && (
+                    {(paymentPlan === 'full' ? formSlipFullFileName : formSlipRound1FileName) && (
                       <p className="text-[11px] text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" />
-                        <span className="truncate max-w-xs">{formSlipRound1FileName}</span>
+                        <span className="truncate max-w-xs">{paymentPlan === 'full' ? formSlipFullFileName : formSlipRound1FileName}</span>
                       </p>
                     )}
                   </div>
                 </div>
+
+                {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD */}
+                {((paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)) && (
+                  <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/50 rounded-2xl space-y-2.5 animate-in fade-in shadow-inner">
+                    <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                      <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        ผลการสแกนสลิปอัจฉริยะ (Smart Slip OCR)
+                      </span>
+                      <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30">
+                        ✓ ตรวจพบข้อมูลในรูปภาพ
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">⏰ เวลาที่อัปโหลดสลิป:</span>
+                        <span className="font-bold text-white text-[11px]">
+                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.uploadTimeStr}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">📅 วันเวลาที่โอนเงิน (จากสลิป):</span>
+                        <span className="font-bold text-amber-300 text-[11px]">
+                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.transferDateTimeStr || (paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.uploadTimeStr}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-emerald-500/30">
+                        <span className="text-[10px] text-emerald-300 block mb-0.5 font-semibold">💵 ยอดเงินที่ตรวจพบ (จากสลิป):</span>
+                        <span className="font-black text-emerald-400 text-sm">
+                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.amountFormatted || `${(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.amount} บาท`}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">🏦 ธนาคาร / ช่องทาง:</span>
+                        <span className="font-bold text-sky-300 text-[11px] truncate block">
+                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.bankDetected}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4559,7 +4833,7 @@ export default function RegisterView({
                 className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>ย้อนกลับไปแก้ไขไซส์เสื้อ</span>
+                <span>ย้อนกลับไปแก้ไขไซส์เสื้อ (ขั้นตอนที่ 2)</span>
               </button>
 
               <button
@@ -4575,9 +4849,366 @@ export default function RegisterView({
                     <span>
                       {isEditing
                         ? 'บันทึกการแก้ไขข้อมูลใบสมัคร'
-                        : formSlipRound1
-                        ? 'ยืนยันและส่งใบสมัคร + สลิปโอนเงินรอบที่ 1 (400 บ.) ไปยัง Admin 💾'
-                        : 'ส่งใบสมัครและรายการสั่งเสื้อไปยัง Admin ก่อน (ค้างชำระงวดที่ 1 400 บ.) 📤'}
+                        : paymentPlan === 'full'
+                        ? (formSlipFull 
+                            ? `ยืนยันและส่งใบสมัคร + สลิปชำระเต็มจำนวน (${feeInfo.totalFee} บ.) 💾` 
+                            : `ส่งใบสมัครไปยัง Admin ก่อน (ค้างชำระเต็มจำนวน ${feeInfo.totalFee} บ.) 📤`)
+                        : (formSlipRound1
+                            ? 'ยืนยันและส่งใบสมัคร + สลิปรอบที่ 1 (400 บ.) ไปยัง Admin 💾'
+                            : 'ส่งใบสมัครไปยัง Admin ก่อน (ค้างชำระงวดที่ 1 400 บ.) 📤')}
+                    </span>
+                  </>
+                )}
+              </button>
+
+              {/* Installment Plan: Advance to Step 4 Button */}
+              {paymentPlan === 'installment' && (
+                <button
+                  type="button"
+                  onClick={handleNextToStep4}
+                  className="px-6 py-4 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-2xl border border-sky-400/40 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-sky-600/20"
+                >
+                  <span>ถัดไป: ชำระรอบที่ 2 (คงค้าง)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false);
+                    if (onSubRouteChange) onSubRouteChange('dashboard');
+                  }}
+                  className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95"
+                >
+                  ยกเลิก
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            STEP 4: ชำระเงินรอบที่ 2 (คงค้าง) สำหรับแบบแบ่งจ่าย 2 รอบ
+            ======================================================== */}
+        {paymentPlan === 'installment' && currentFormStep === 4 && (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* Step 4 Summary Card */}
+            <div className="p-5 sm:p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950/40 border border-sky-500/40 rounded-3xl space-y-4 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-sky-400" />
+                  <h3 className="text-sm sm:text-base font-black text-white">
+                    ขั้นตอนที่ 4 จาก 4: สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 ({feeInfo.round2Amount} บาท)
+                  </h3>
+                </div>
+                <span className="text-[11px] text-sky-300 bg-sky-500/20 px-3 py-1 rounded-full font-bold border border-sky-500/30">
+                  ขั้นตอนสุดท้าย (4/4)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/30 space-y-1">
+                  <span className="text-[10px] text-slate-400 block font-medium">รอบที่ 1 (มัดจำเสื้อโครงการ):</span>
+                  <p className="font-black text-amber-300 text-sm">💵 400 บาท</p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                    formSlipRound1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  }`}>
+                    {formSlipRound1 ? '✓ แนบสลิปรอบ 1 แล้ว' : 'รอแนบสลิป'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/90 p-3.5 rounded-xl border border-sky-500/40 space-y-1">
+                  <span className="text-[10px] text-sky-300 block font-semibold">รอบที่ 2 (ชำระรอบนี้):</span>
+                  <p className="font-black text-sky-400 text-sm">💵 {feeInfo.round2Amount} บาท</p>
+                  <span className="text-[10px] text-slate-300 block">
+                    📅 กำหนดชำระ: วันที่ 1–5 พ.ย. 2569 (ค่าที่พักและอาหาร)
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-400 block font-medium">💵 ยอดรวมทั้งโครงการ:</span>
+                  <p className="font-black text-white text-sm">{feeInfo.totalFee} บาท</p>
+                  <span className="text-[10px] text-emerald-400 font-bold block">
+                    {feeInfo.isMsu ? 'นิสิต มมส (ไม่มีค่าที่พัก)' : 'ต่างสถาบัน (รวมที่พักหอกุดรัง มมส)'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Card for Round 2 */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 className="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-sky-400" />
+                  บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท)
+                </h3>
+                <span className="text-[11px] text-sky-300 font-bold">
+                  ยอดชำระ: {feeInfo.round2Amount} บาท
+                </span>
+              </div>
+
+              {/* Official Bank Account Information Card */}
+              <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-sky-500/40 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <span>🏦</span> บัญชีธนาคารสำหรับโอนเงินรอบที่ 2:
+                  </span>
+                  <span className="text-[10px] text-sky-300 font-bold">
+                    ยอดชำระ: {feeInfo.round2Amount} บาท (1–5 พ.ย. 2569)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  {/* Account Number Card */}
+                  <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 block font-medium">ธนาคารไทยพาณิชย์ (SCB)</span>
+                      <span className="font-mono font-black text-amber-300 text-sm tracking-wide block truncate">594-264865-5</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText('594-264865-5', 'form_bank_acc_r2', 'เลขบัญชี')}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      {copiedKey === 'form_bank_acc_r2' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedKey === 'form_bank_acc_r2' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                    </button>
+                  </div>
+
+                  {/* Account Name Card */}
+                  <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 block font-medium">ชื่อบัญชี</span>
+                      <span className="font-bold text-white text-xs block truncate" title="นางสาวมัญชุพร ยังเหล็ก">นางสาวมัญชุพร ยังเหล็ก</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText('นางสาวมัญชุพร ยังเหล็ก', 'form_bank_name_r2', 'ชื่อบัญชี')}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      {copiedKey === 'form_bank_name_r2' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedKey === 'form_bank_name_r2' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                    </button>
+                  </div>
+
+                  {/* Phone / PromptPay */}
+                  <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400 block font-medium">เบอร์ติดต่อ / พร้อมเพย์</span>
+                      <span className="font-mono font-bold text-sky-300 text-xs block truncate">098-329-6762</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText('098-329-6762', 'form_prompt_r2', 'เบอร์ติดต่อ')}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      {copiedKey === 'form_prompt_r2' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedKey === 'form_prompt_r2' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Slip Upload Area for Round 2 */}
+              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                    <Upload className="w-4 h-4 text-sky-400" />
+                    <span>แนบสลิปหลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท)</span>
+                  </label>
+                  <span className="text-[10px] text-sky-400 font-semibold">
+                    (ระบบสแกน OCR ตรวจสอบเวลาโอนและยอดเงินอัตโนมัติ)
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                  {/* Slip Preview Box */}
+                  <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                    {formSlipRound2 ? (
+                      <>
+                        <img 
+                          src={formSlipRound2} 
+                          alt="สลิปโอนเงินรอบที่ 2" 
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[10px] text-white font-bold">เปลี่ยนสลิป</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center p-2 text-slate-500">
+                        <FileText className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                        <span className="text-[10px] block">ยังไม่แนบสลิป</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Input & Actions */}
+                  <div className="flex-1 w-full space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
+                        isProcessingFormSlipRound2 ? 'opacity-50 pointer-events-none' : ''
+                      }`}>
+                        {isProcessingFormSlipRound2 ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>กำลังสแกน OCR สลิป...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{formSlipRound2 ? 'เปลี่ยนไฟล์สลิป' : `อัปโหลดสลิปโอนเงิน (${feeInfo.round2Amount} บ.)`}</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={handleFormSlipRound2Change}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {formSlipRound2 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormSlipRound2('');
+                            setFormSlipRound2FileName('');
+                            setSlipOcrRound2(null);
+                          }}
+                          className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ลบสลิป</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {formSlipRound2FileName && (
+                      <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span className="truncate max-w-xs">{formSlipRound2FileName}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD FOR ROUND 2 */}
+                {slipOcrRound2 && (
+                  <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/50 rounded-2xl space-y-2.5 animate-in fade-in shadow-inner">
+                    <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                      <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        ผลการสแกนสลิปอัจฉริยะ (Smart Slip OCR รอบที่ 2)
+                      </span>
+                      <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30">
+                        ✓ ตรวจพบข้อมูลในรูปภาพ
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">⏰ เวลาที่อัปโหลดสลิป:</span>
+                        <span className="font-bold text-white text-[11px]">{slipOcrRound2.uploadTimeStr}</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">📅 วันเวลาที่โอนเงิน (จากสลิป):</span>
+                        <span className="font-bold text-amber-300 text-[11px]">{slipOcrRound2.transferDateTimeStr || slipOcrRound2.uploadTimeStr}</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-emerald-500/30">
+                        <span className="text-[10px] text-emerald-300 block mb-0.5 font-semibold">💵 ยอดเงินที่ตรวจพบ (จากสลิป):</span>
+                        <span className="font-black text-emerald-400 text-sm">{slipOcrRound2.amountFormatted || `${slipOcrRound2.amount} บาท`}</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">🏦 ธนาคาร / ช่องทาง:</span>
+                        <span className="font-bold text-sky-300 text-[11px] truncate block">{slipOcrRound2.bankDetected}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Consent and Agreement Checkboxes */}
+            <div className="p-5 sm:p-6 bg-slate-950/80 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-slate-800">
+                <ShieldCheck className="w-5 h-5 text-rescue-500" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
+                </h3>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* Checkbox 1: Correct Info Confirmation */}
+                <label className="flex items-start gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={agreeCorrectInfo}
+                    onChange={e => setAgreeCorrectInfo(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+                  />
+                  <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
+                    <strong className="text-white font-semibold">การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ ขนาดไซส์เสื้อ และหลักฐานการโอนเงินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
+                  </span>
+                </label>
+
+                {/* Checkbox 2: PDPA and Project Rules */}
+                <label className="flex items-start gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={agreePDPAAndRules}
+                    onChange={e => setAgreePDPAAndRules(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+                  />
+                  <div className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
+                    <strong className="text-white font-semibold">นโยบาย PDPA และข้อตกลงโครงการ:</strong> ข้าพเจ้ายินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) มหาวิทยาลัยมหาสารคาม และตกลงที่จะปฏิบัติตามกฎระเบียบ ข้อตกลง และคำสั่งความปลอดภัยของโครงการ JRE 2027 ตลอดระยะเวลาการฝึกอบรมทุกประการ <span className="text-rose-400 font-bold">*</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowPdpaModal(true);
+                      }}
+                      className="ml-2 text-rescue-400 hover:text-rescue-300 underline font-semibold inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      [อ่านนโยบายข้อมูลส่วนบุคคล PDPA มมส]
+                    </button>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Step 4 Bottom Action Buttons */}
+            <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentFormStep(3);
+                  window.scrollTo({ top: 350, behavior: 'smooth' });
+                }}
+                className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>ย้อนกลับไปขั้นตอนที่ 3 (ชำระรอบที่ 1)</span>
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSubmitting || !agreeCorrectInfo || !agreePDPAAndRules}
+                className="flex-1 py-4 bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white font-black rounded-2xl shadow-xl shadow-sky-600/30 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    <span>
+                      {formSlipRound2 
+                        ? `ยืนยันและส่งใบสมัคร + สลิปชำระครบ 2 รอบ (${feeInfo.totalFee} บ.) 💾` 
+                        : `ยืนยันและส่งใบสมัคร (ค้างชำระงวดที่ 2 ${feeInfo.round2Amount} บ.) 📤`}
                     </span>
                   </>
                 )}
