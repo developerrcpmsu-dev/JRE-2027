@@ -295,21 +295,31 @@ export default function App() {
   };
 
   const handleUpdateAllocation = async (userId, allocations) => {
-    await DataService.updateRegistrationAllocations(userId, allocations);
-    const updated = await DataService.getRegistrations();
-    setRegistrations(updated);
-    if (user && (user.id === userId || user.email === updated.find(r => r.user_id === userId)?.user_email)) {
-      setMyRegistration(updated.find(r => r.user_id === userId));
+    // 1. Instant optimistic update in React state (0ms)
+    setRegistrations(prev => prev.map(r => 
+      (r.user_id === userId || r.id === userId || (r.user_email && r.user_email === userId))
+        ? { ...r, ...allocations, updated_at: new Date().toISOString() }
+        : r
+    ));
+    if (user && (user.id === userId || myRegistration?.user_id === userId || myRegistration?.id === userId)) {
+      setMyRegistration(prev => prev ? { ...prev, ...allocations } : prev);
     }
+    // 2. Persist in background
+    await DataService.updateRegistrationAllocations(userId, allocations);
   };
 
   const handleUpdateRegistration = async (userId, updates) => {
-    await DataService.updateRegistrationDetails(userId, updates);
-    const updated = await DataService.getRegistrations();
-    setRegistrations(updated);
-    if (user && (user.id === userId || user.email === updated.find(r => r.user_id === userId)?.user_email)) {
-      setMyRegistration(updated.find(r => r.user_id === userId));
+    // 1. Instant optimistic update in React state (0ms)
+    setRegistrations(prev => prev.map(r => 
+      (r.user_id === userId || r.id === userId || (r.user_email && r.user_email === userId))
+        ? { ...r, ...updates, updated_at: new Date().toISOString() }
+        : r
+    ));
+    if (user && (user.id === userId || myRegistration?.user_id === userId || myRegistration?.id === userId)) {
+      setMyRegistration(prev => prev ? { ...prev, ...updates } : prev);
     }
+    // 2. Persist in background
+    await DataService.updateRegistrationDetails(userId, updates);
   };
 
   const handleDeleteRegistration = async (userId) => {
@@ -372,15 +382,33 @@ export default function App() {
   };
 
   const handleVerifyOrderPayment = async (orderId, isApproved, adminNotes) => {
+    // 1. Instant optimistic update in React state (0ms)
+    setMerchandiseOrders(prev => prev.map(o => 
+      (o.id === orderId || o.order_number === orderId)
+        ? { 
+            ...o, 
+            payment_status: isApproved ? 'paid_verified' : 'rejected', 
+            slip_admin_notes: adminNotes, 
+            pickup_status: isApproved ? 'ready' : 'pending', 
+            updated_at: new Date().toISOString() 
+          }
+        : o
+    ));
+    // 2. Persist in background
     await DataService.verifyOrderPayment(orderId, isApproved, adminNotes);
-    const updated = await DataService.getMerchandiseOrders();
-    setMerchandiseOrders(updated);
   };
 
   const handleMarkOrderReceived = async (orderId, adminName, status = 'received') => {
+    // 1. Instant optimistic update in React state (0ms)
+    const now = status === 'received' ? new Date().toISOString() : null;
+    const admin = status === 'received' ? (adminName || 'Admin JRE 2027') : null;
+    setMerchandiseOrders(prev => prev.map(o => 
+      (o.id === orderId || o.order_number === orderId)
+        ? { ...o, pickup_status: status, pickup_at: now, pickup_by_admin: admin, updated_at: new Date().toISOString() }
+        : o
+    ));
+    // 2. Persist in background
     await DataService.markOrderReceived(orderId, adminName, status);
-    const updated = await DataService.getMerchandiseOrders();
-    setMerchandiseOrders(updated);
   };
 
   if (loading) {

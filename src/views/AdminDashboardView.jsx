@@ -229,7 +229,8 @@ export default function AdminDashboardView({
 
       return {
         id: `reg_shirt_${r.id || r.user_id}`,
-        user_id: r.user_id,
+        user_id: r.user_id || r.id,
+        reg_id: r.id || r.user_id,
         source: 'registration',
         source_label: '📋 เสื้อฝึกผู้สมัคร (รวมในค่าสมัคร)',
         order_number: orderNumber,
@@ -498,6 +499,7 @@ export default function AdminDashboardView({
   const [previewSlipUrl, setPreviewSlipUrl] = useState(null);
 
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [handoverLoadingId, setHandoverLoadingId] = useState(null);
 
   // Announcement Form Modal State
   const [showAnnModal, setShowAnnModal] = useState(false);
@@ -4655,25 +4657,44 @@ export default function AdminDashboardView({
                             {!isReceived ? (
                               <button
                                 type="button"
+                                disabled={handoverLoadingId === item.id}
                                 onClick={async () => {
-                                  if (isReg) {
-                                    if (onUpdateAllocation) {
-                                      await onUpdateAllocation(item.user_id, {
-                                        shirt_pickup_status: 'received',
-                                        shirt_received: true,
-                                        shirt_received_date: new Date().toISOString()
-                                      });
-                                      triggerToast(`บันทึกส่งมอบเสื้อฝึก (ไซส์ ${item.size}) แก่คุณ ${item.customer_name} เรียบร้อยแล้ว`);
+                                  setHandoverLoadingId(item.id);
+                                  try {
+                                    if (isReg) {
+                                      const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || item.id?.replace('reg_shirt_', '');
+                                      if (onUpdateAllocation) {
+                                        await onUpdateAllocation(targetUserId, {
+                                          shirt_pickup_status: 'received',
+                                          shirt_received: true,
+                                          shirt_received_date: new Date().toISOString()
+                                        });
+                                        triggerToast(`บันทึกส่งมอบเสื้อฝึก (ไซส์ ${item.size}) แก่คุณ ${item.customer_name} เรียบร้อยแล้ว`);
+                                      }
+                                    } else {
+                                      await onMarkOrderReceived(item.id, 'Admin JRE 2027');
+                                      triggerToast(`บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว`);
                                     }
-                                  } else {
-                                    await onMarkOrderReceived(item.id, 'Admin JRE 2027');
-                                    triggerToast(`บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว`);
+                                  } catch (err) {
+                                    console.error('Error confirming handover:', err);
+                                    triggerToast('เกิดข้อผิดพลาดในการบันทึกส่งมอบเสื้อ', 'error');
+                                  } finally {
+                                    setHandoverLoadingId(null);
                                   }
                                 }}
-                                className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
+                                className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
                               >
-                                <PackageCheck className="w-4 h-4" />
-                                <span>บันทึกส่งมอบเสื้อแล้ว</span>
+                                {handoverLoadingId === item.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>กำลังบันทึกส่งมอบ...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <PackageCheck className="w-4 h-4" />
+                                    <span>บันทึกส่งมอบเสื้อแล้ว</span>
+                                  </>
+                                )}
                               </button>
                             ) : (
                               <div className="space-y-1">
@@ -4683,24 +4704,41 @@ export default function AdminDashboardView({
                                 </div>
                                 <button
                                   type="button"
+                                  disabled={handoverLoadingId === item.id}
                                   onClick={async () => {
-                                    if (isReg) {
-                                      if (onUpdateAllocation) {
-                                        await onUpdateAllocation(item.user_id, {
-                                          shirt_pickup_status: 'pending',
-                                          shirt_received: false,
-                                          shirt_received_date: null
-                                        });
-                                        triggerToast(`ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                                    setHandoverLoadingId(item.id);
+                                    try {
+                                      if (isReg) {
+                                        const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || item.id?.replace('reg_shirt_', '');
+                                        if (onUpdateAllocation) {
+                                          await onUpdateAllocation(targetUserId, {
+                                            shirt_pickup_status: 'pending',
+                                            shirt_received: false,
+                                            shirt_received_date: null
+                                          });
+                                          triggerToast(`ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                                        }
+                                      } else {
+                                        await onMarkOrderReceived(item.id, null, 'pending');
+                                        triggerToast(`ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
                                       }
-                                    } else {
-                                      await onMarkOrderReceived(item.id, null, 'pending');
-                                      triggerToast(`ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
+                                    } catch (err) {
+                                      console.error('Error canceling handover:', err);
+                                      triggerToast('เกิดข้อผิดพลาดในการยกเลิกสถานะส่งมอบ', 'error');
+                                    } finally {
+                                      setHandoverLoadingId(null);
                                     }
                                   }}
-                                  className="w-full text-center py-0.5 text-[10px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                  className="w-full text-center py-0.5 text-[10px] text-slate-500 hover:text-rose-400 disabled:opacity-50 transition-colors cursor-pointer flex items-center justify-center gap-1"
                                 >
-                                  ยกเลิก (เปลี่ยนเป็นรอรับ)
+                                  {handoverLoadingId === item.id ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+                                      <span>กำลังยกเลิก...</span>
+                                    </>
+                                  ) : (
+                                    <span>ยกเลิก (เปลี่ยนเป็นรอรับ)</span>
+                                  )}
                                 </button>
                               </div>
                             )}

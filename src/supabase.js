@@ -397,25 +397,61 @@ export const DataService = {
   },
 
   async updateRegistrationDetails(userId, fields) {
-    if (isSupabaseConfigured) {
+    if (!userId) return false;
+
+    // 1. Read from local cache for instant zero-latency lookup
+    let regs = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
+      regs = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      regs = [];
+    }
+
+    const target = regs.find(r => 
+      r.user_id === userId || 
+      r.id === userId || 
+      (r.user_email && r.user_email.toLowerCase() === String(userId).toLowerCase())
+    );
+
+    const targetUserId = target?.user_id || userId;
+    const targetId = target?.id;
+
+    // 2. Immediately update local storage so local UI state is always 100% updated in 0ms
+    const updated = regs.map(r => {
+      if (
+        r.user_id === targetUserId || 
+        r.id === targetId || 
+        r.user_id === userId || 
+        r.id === userId ||
+        (target?.user_email && r.user_email === target.user_email)
+      ) {
+        return { ...r, ...fields, updated_at: new Date().toISOString() };
+      }
+      return r;
+    });
+    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
+
+    // 3. Persist to Supabase in the background
+    if (isSupabaseConfigured && supabase) {
       try {
-        const current = await this.getRegistrationByUserId(userId);
-        const merged = { ...(current || {}), ...fields };
+        const merged = { ...(target || {}), ...fields };
         const payload = packRegistrationForSupabase(merged);
-        const { error } = await supabase
-          .from('registrations')
-          .update(payload)
-          .eq('user_id', userId);
-        if (error) {
-          console.warn('Supabase update details returned error:', error);
+
+        let updateQuery = supabase.from('registrations').update(payload);
+        if (targetUserId) {
+          updateQuery = updateQuery.eq('user_id', targetUserId);
+        } else if (targetId) {
+          updateQuery = updateQuery.eq('id', targetId);
+        }
+        const { error } = await updateQuery;
+        if (error && targetId && targetId !== targetUserId) {
+          await supabase.from('registrations').update(payload).eq('id', targetId);
         }
       } catch (e) {
         console.warn('Supabase update details failed, fallback to local', e);
       }
     }
-    const regs = await this.getRegistrations();
-    const updated = regs.map(r => r.user_id === userId ? { ...r, ...fields, updated_at: new Date().toISOString() } : r);
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     return true;
   },
 

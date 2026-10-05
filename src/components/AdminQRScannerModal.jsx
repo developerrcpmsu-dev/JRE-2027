@@ -14,7 +14,8 @@ import {
   QrCode,
   ShieldCheck,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -32,6 +33,7 @@ export default function AdminQRScannerModal({
   const [scannedOrder, setScannedOrder] = useState(null);
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
   const [previewSlip, setPreviewSlip] = useState(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Auto-dismiss success message and scan errors
   useEffect(() => {
@@ -110,7 +112,7 @@ export default function AdminQRScannerModal({
 
       return {
         id: `reg_shirt_${matchedReg.id || matchedReg.user_id}`,
-        user_id: matchedReg.user_id,
+        user_id: matchedReg.user_id || matchedReg.id,
         itemType: 'registration',
         order_number: orderNumber,
         customer_name: matchedReg.full_name_affiliation || `${matchedReg.first_name || ''} ${matchedReg.last_name || ''}`.trim() || matchedReg.user_email || 'ผู้เข้ารับการฝึกอบรม',
@@ -228,33 +230,40 @@ export default function AdminQRScannerModal({
   };
 
   const handleConfirmReceived = async () => {
-    if (!scannedOrder) return;
+    if (!scannedOrder || isActionLoading) return;
+    setIsActionLoading(true);
     try {
+      const targetUserId = scannedOrder.user_id || scannedOrder.id?.replace('reg_shirt_', '');
       if (scannedOrder.itemType === 'registration') {
         if (onMarkRegistrationShirtReceived) {
-          await onMarkRegistrationShirtReceived(scannedOrder.user_id, true);
+          await onMarkRegistrationShirtReceived(targetUserId, true);
         }
         setActionSuccessMsg(`✓ บันทึกส่งมอบเสื้อฝึก (ไซส์ ${scannedOrder.shirt_size}) ให้แก่คุณ ${scannedOrder.customer_name} เรียบร้อยแล้ว!`);
       } else {
         await onMarkReceived(scannedOrder.id, 'Admin JRE 2027');
         setActionSuccessMsg(`✓ บันทึกส่งมอบสินค้าออเดอร์ ${scannedOrder.order_number} เรียบร้อยแล้ว!`);
       }
-      setScannedOrder({
-        ...scannedOrder,
+      setScannedOrder(prev => ({
+        ...prev,
         pickup_status: 'received',
         pickup_at: new Date().toISOString()
-      });
+      }));
     } catch (err) {
+      console.error('Error confirming handover:', err);
       alert('เกิดข้อผิดพลาดในการบันทึกสถานะ');
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const handleUndoReceived = async () => {
-    if (!scannedOrder) return;
+    if (!scannedOrder || isActionLoading) return;
+    setIsActionLoading(true);
     try {
+      const targetUserId = scannedOrder.user_id || scannedOrder.id?.replace('reg_shirt_', '');
       if (scannedOrder.itemType === 'registration') {
         if (onMarkRegistrationShirtReceived) {
-          await onMarkRegistrationShirtReceived(scannedOrder.user_id, false);
+          await onMarkRegistrationShirtReceived(targetUserId, false);
         }
         setActionSuccessMsg(`ยกเลิกการส่งมอบเสื้อฝึกคุณ ${scannedOrder.customer_name} เรียบร้อยแล้ว`);
       } else {
@@ -263,13 +272,16 @@ export default function AdminQRScannerModal({
         }
         setActionSuccessMsg(`ยกเลิกการส่งมอบออเดอร์ ${scannedOrder.order_number} เรียบร้อยแล้ว`);
       }
-      setScannedOrder({
-        ...scannedOrder,
+      setScannedOrder(prev => ({
+        ...prev,
         pickup_status: 'pending',
         pickup_at: null
-      });
+      }));
     } catch (err) {
+      console.error('Error undoing handover:', err);
       alert('เกิดข้อผิดพลาดในการยกเลิกสถานะ');
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -561,19 +573,31 @@ export default function AdminQRScannerModal({
                   <button
                     type="button"
                     onClick={handleUndoReceived}
-                    className="w-full py-1 text-slate-400 hover:text-rose-400 text-[11px] font-semibold transition-colors text-center cursor-pointer"
+                    disabled={isActionLoading}
+                    className="w-full py-1.5 text-slate-400 hover:text-rose-400 disabled:opacity-50 text-[11px] font-semibold transition-colors text-center cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    ยกเลิกสถานะส่งมอบ (เปลี่ยนกลับเป็นยังไม่ได้รับ)
+                    {isActionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>ยกเลิกสถานะส่งมอบ (เปลี่ยนกลับเป็นยังไม่ได้รับ)</span>
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={handleConfirmReceived}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
+                  disabled={isActionLoading}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
                 >
-                  <PackageCheck className="w-5 h-5" />
-                  <span>ยืนยันส่งมอบเสื้อ ไซส์ {scannedOrder.shirt_size} ให้ผู้รับเรียบร้อย</span>
+                  {isActionLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>กำลังบันทึกส่งมอบ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PackageCheck className="w-5 h-5" />
+                      <span>ยืนยันส่งมอบเสื้อ ไซส์ {scannedOrder.shirt_size} ให้ผู้รับเรียบร้อย</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
