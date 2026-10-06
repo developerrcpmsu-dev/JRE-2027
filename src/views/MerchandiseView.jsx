@@ -127,6 +127,7 @@ export default function MerchandiseView({
                         (myRegistration.payment_plan !== 'installment' && myRegistration.payment_status === 'paid');
 
     const orderNumber = `JRE27-SHIRT-${(myRegistration.id || myRegistration.user_id || 'REG').slice(0, 6).toUpperCase()}`;
+    const isShirtReceived = myRegistration.shirt_pickup_status === 'received' || myRegistration.shirt_received === true;
 
     return {
       id: `reg_shirt_${myRegistration.id || myRegistration.user_id}`,
@@ -137,7 +138,8 @@ export default function MerchandiseView({
       pickup_method: 'pickup',
       pickup_location: 'อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (13 ก.พ. 2570)',
       payment_status: isFullyPaid ? 'paid_verified' : (isRound1Paid ? 'paid_verified' : 'pending_verification'),
-      pickup_status: myRegistration.shirt_pickup_status || 'pending',
+      pickup_status: isShirtReceived ? 'received' : 'pending',
+      pickup_at: myRegistration.shirt_received_date || myRegistration.shirt_pickup_at || null,
       total_amount: fee.totalFee,
       is_msu: isMsu,
       shirt_size: myRegistration.shirt_size || 'L',
@@ -669,17 +671,29 @@ export default function MerchandiseView({
 
                 {/* Status Badges */}
                 <div className="flex flex-col sm:items-end gap-1.5 self-start sm:self-auto">
-                  {applicantShirtOrder.isFullyPaid ? (
-                    <span className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow">
-                      <CheckCircle2 className="w-4 h-4" /> ชำระครบถ้วน 2 งวดแล้ว
-                    </span>
-                  ) : applicantShirtOrder.installment_1_status === 'paid' ? (
-                    <span className="px-3 py-1.5 bg-blue-500/20 text-blue-400 border border-blue-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow">
-                      <CheckCircle2 className="w-4 h-4" /> งวด 1 ชำระแล้ว (รอชำระงวด 2)
+                  {/* Delivery Status Badge */}
+                  {applicantShirtOrder.pickup_status === 'received' ? (
+                    <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full text-xs font-black flex items-center gap-1.5 shadow">
+                      <PackageCheck className="w-4 h-4 text-emerald-400" /> รับเสื้อแล้ว (ส่งมอบแล้ว)
                     </span>
                   ) : (
-                    <span className="px-3 py-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow animate-pulse">
-                      <Clock className="w-4 h-4" /> รอตรวจสอบการชำระเงิน
+                    <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-black flex items-center gap-1.5 shadow">
+                      <Clock className="w-4 h-4 text-amber-400" /> ยังไม่ได้รับเสื้อ (รอรับของ)
+                    </span>
+                  )}
+
+                  {/* Payment Status Badge */}
+                  {applicantShirtOrder.isFullyPaid ? (
+                    <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> ชำระครบถ้วน 2 งวดแล้ว
+                    </span>
+                  ) : applicantShirtOrder.installment_1_status === 'paid' ? (
+                    <span className="px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> งวด 1 ชำระแล้ว (รอชำระงวด 2)
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" /> รอตรวจสอบการชำระเงิน
                     </span>
                   )}
                   <span className="text-[11px] text-slate-400">
@@ -714,12 +728,29 @@ export default function MerchandiseView({
 
                 {/* Details Column */}
                 <div className="md:col-span-8 space-y-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
                     <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                       <span className="text-[10px] text-slate-400 block mb-0.5">ขนาดไซส์เสื้อ:</span>
                       <strong className="text-base text-amber-300 font-black">
                         ไซส์ {applicantShirtOrder.shirt_size}
                       </strong>
+                    </div>
+
+                    <div className={`p-3 rounded-xl border ${
+                      applicantShirtOrder.pickup_status === 'received'
+                        ? 'bg-emerald-950/40 border-emerald-500/40'
+                        : 'bg-amber-950/20 border-amber-500/30'
+                    }`}>
+                      <span className="text-[10px] text-slate-400 block mb-0.5">สถานะการรับของ:</span>
+                      {applicantShirtOrder.pickup_status === 'received' ? (
+                        <strong className="text-xs text-emerald-300 font-bold flex items-center gap-1">
+                          <PackageCheck className="w-3.5 h-3.5 text-emerald-400" /> รับเสื้อแล้ว
+                        </strong>
+                      ) : (
+                        <strong className="text-xs text-amber-300 font-bold flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-400" /> ยังไม่ได้รับ
+                        </strong>
+                      )}
                     </div>
 
                     <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
@@ -736,7 +767,7 @@ export default function MerchandiseView({
                       </strong>
                     </div>
 
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 col-span-2 sm:col-span-1">
                       <span className="text-[10px] text-slate-400 block mb-0.5">สถานที่รับของ:</span>
                       <strong className="text-xs text-slate-200 block truncate" title="อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม">
                         อาคารพลศึกษา มมส
@@ -880,19 +911,28 @@ export default function MerchandiseView({
                           </h4>
                         </div>
 
-                        {isReceived ? (
-                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] rounded-full font-bold flex items-center gap-1">
-                            <PackageCheck className="w-3 h-3" /> รับสินค้าแล้ว
-                          </span>
-                        ) : isVerified ? (
-                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] rounded-full font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> ชำระแล้ว
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] rounded-full font-bold flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> รอตรวจสลิป
-                          </span>
-                        )}
+                        {/* Status Badges */}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {isReceived ? (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] rounded-full font-black flex items-center gap-1">
+                              <PackageCheck className="w-3 h-3 text-emerald-400" /> รับสินค้าแล้ว
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] rounded-full font-black flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400" /> ยังไม่ได้รับสินค้า
+                            </span>
+                          )}
+
+                          {isVerified ? (
+                            <span className="text-[10px] text-blue-400 font-semibold flex items-center gap-0.5">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> ชำระแล้ว
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+                              <Clock className="w-2.5 h-2.5" /> รอตรวจสลิป
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800/80 text-xs space-y-1">
