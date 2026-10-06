@@ -160,6 +160,17 @@ const unpackRegistration = (row) => {
     }
   }
 
+  if (typeof unpacked.admin_messages === 'string') {
+    try {
+      unpacked.admin_messages = JSON.parse(unpacked.admin_messages);
+    } catch (e) {
+      unpacked.admin_messages = [];
+    }
+  }
+  if (!Array.isArray(unpacked.admin_messages)) {
+    unpacked.admin_messages = [];
+  }
+
   return unpacked;
 };
 
@@ -491,13 +502,14 @@ export const DataService = {
   // Send Admin Message to User
   async sendAdminMessage(userId, messageText, extraData = {}) {
     const regs = await this.getRegistrations();
-    const target = regs.find(r => r.user_id === userId);
+    const target = regs.find(r => r.user_id === userId || r.id === userId);
     const existingMessages = Array.isArray(target?.admin_messages) ? target.admin_messages : [];
     
     const newMsg = {
-      id: 'msg-' + Date.now(),
+      id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       text: messageText,
       created_at: new Date().toISOString(),
+      read: false,
       ...extraData
     };
 
@@ -515,6 +527,46 @@ export const DataService = {
     }
 
     return this.updateRegistrationDetails(userId, updatePayload);
+  },
+
+  // Mark admin message(s) as read
+  async markAdminMessageRead(userId, messageId = 'all') {
+    const regs = await this.getRegistrations();
+    const target = regs.find(r => r.user_id === userId || r.id === userId);
+    if (!target) return false;
+    const existingMessages = Array.isArray(target.admin_messages) ? target.admin_messages : [];
+    const updatedMessages = existingMessages.map(m => {
+      if (messageId === 'all' || m.id === messageId) {
+        return { ...m, read: true };
+      }
+      return m;
+    });
+    return this.updateRegistrationDetails(userId, { admin_messages: updatedMessages });
+  },
+
+  // Toggle admin message read status
+  async toggleAdminMessageRead(userId, messageId) {
+    const regs = await this.getRegistrations();
+    const target = regs.find(r => r.user_id === userId || r.id === userId);
+    if (!target) return false;
+    const existingMessages = Array.isArray(target.admin_messages) ? target.admin_messages : [];
+    const updatedMessages = existingMessages.map(m => {
+      if (m.id === messageId) {
+        return { ...m, read: !m.read };
+      }
+      return m;
+    });
+    return this.updateRegistrationDetails(userId, { admin_messages: updatedMessages });
+  },
+
+  // Delete an admin message
+  async deleteAdminMessage(userId, messageId) {
+    const regs = await this.getRegistrations();
+    const target = regs.find(r => r.user_id === userId || r.id === userId);
+    if (!target) return false;
+    const existingMessages = Array.isArray(target.admin_messages) ? target.admin_messages : [];
+    const updatedMessages = messageId === 'all' ? [] : existingMessages.filter(m => m.id !== messageId);
+    return this.updateRegistrationDetails(userId, { admin_messages: updatedMessages });
   },
 
   // Request or update documents checklist

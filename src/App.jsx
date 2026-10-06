@@ -5,6 +5,7 @@ import Footer from './components/Footer';
 import FormsBanner from './components/FormsBanner';
 import GoogleLoginModal from './components/GoogleLoginModal';
 import AdminLoginModal from './components/AdminLoginModal';
+import UserNotificationsModal from './components/UserNotificationsModal';
 import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
 import RegisterView from './views/RegisterView';
@@ -84,6 +85,7 @@ export default function App() {
   // Modals
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [userNotificationsOpen, setUserNotificationsOpen] = useState(false);
 
   // Data
   const [registrations, setRegistrations] = useState([]);
@@ -437,6 +439,7 @@ export default function App() {
         onLogout={handleLogout}
         myRegistration={myRegistration}
         formsConfig={formsConfig}
+        onOpenNotifications={() => setUserNotificationsOpen(true)}
       />
 
       {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
@@ -590,6 +593,14 @@ export default function App() {
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
         onLoginSuccess={handleAdminLoginSuccess}
+      />
+
+      {/* Participant Notification Inbox Modal */}
+      <UserNotificationsModal
+        isOpen={userNotificationsOpen}
+        onClose={() => setUserNotificationsOpen(false)}
+        myRegistration={myRegistration}
+        onUpdateRegistration={handleUpdateRegistration}
       />
 
       {/* Vercel Web Analytics & Speed Insights */}

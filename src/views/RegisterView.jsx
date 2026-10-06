@@ -50,7 +50,11 @@ import {
   ArrowLeft,
   QrCode,
   Download,
-  AlertTriangle
+  AlertTriangle,
+  Bell,
+  BellOff,
+  CheckCheck,
+  ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
@@ -58,6 +62,7 @@ import { DataService, ensureHostedUrl } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
+import UserNotificationsModal from '../components/UserNotificationsModal';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import { scanSlipImage } from '../utils/slipOcr';
@@ -433,6 +438,9 @@ export default function RegisterView({
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [isDeletingReg, setIsDeletingReg] = useState(false);
 
+  // User Notifications Modal state
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+
   // User Profile & Password Change state
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [accountDisplayName, setAccountDisplayName] = useState(user?.name || '');
@@ -515,6 +523,46 @@ export default function RegisterView({
       setAccountError(err.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล');
     } finally {
       setIsSavingAccount(false);
+    }
+  };
+
+  // Notification Message Handlers
+  const handleToggleAdminMessageRead = async (msgId) => {
+    if (!myRegistration) return;
+    const targetId = myRegistration.user_id || myRegistration.id;
+    const currentMsgs = Array.isArray(myRegistration.admin_messages) ? [...myRegistration.admin_messages] : [];
+    const updated = currentMsgs.map(m => m.id === msgId ? { ...m, read: !m.read } : m);
+    if (onUpdateRegistration) {
+      await onUpdateRegistration(targetId, { admin_messages: updated });
+    }
+  };
+
+  const handleMarkAllAdminMessagesRead = async () => {
+    if (!myRegistration) return;
+    const targetId = myRegistration.user_id || myRegistration.id;
+    const currentMsgs = Array.isArray(myRegistration.admin_messages) ? [...myRegistration.admin_messages] : [];
+    const updated = currentMsgs.map(m => ({ ...m, read: true }));
+    if (onUpdateRegistration) {
+      await onUpdateRegistration(targetId, { admin_messages: updated });
+    }
+  };
+
+  const handleDeleteAdminMessage = async (msgId) => {
+    if (!myRegistration) return;
+    const confirmed = await askConfirm({
+      title: 'ยืนยันลบข้อความแจ้งเตือน',
+      message: 'คุณต้องการลบข้อความนี้ออกจากกล่องข้อความใช่หรือไม่? (การกระทำนี้ไม่สามารถย้อนกลับได้)',
+      confirmText: 'ลบข้อความ',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
+
+    const targetId = myRegistration.user_id || myRegistration.id;
+    const currentMsgs = Array.isArray(myRegistration.admin_messages) ? [...myRegistration.admin_messages] : [];
+    const updated = currentMsgs.filter(m => m.id !== msgId);
+    if (onUpdateRegistration) {
+      await onUpdateRegistration(targetId, { admin_messages: updated });
     }
   };
 
@@ -1556,6 +1604,7 @@ export default function RegisterView({
   if (myRegistration && !isEditing) {
     const paymentStatus = myRegistration.payment_status || 'unpaid';
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
+    const unreadMessagesCount = adminMessages.filter(m => !m.read).length;
     const requestedDocs = Array.isArray(myRegistration.requested_docs) ? myRegistration.requested_docs : [];
 
     const participantFee = getRegistrationFeeDetails(myRegistration.institution);
@@ -1730,6 +1779,29 @@ export default function RegisterView({
 
               <button
                 type="button"
+                onClick={() => setShowNotificationsModal(true)}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer relative ${
+                  unreadMessagesCount > 0
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 ring-2 ring-amber-500/40 shadow-amber-500/20'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                }`}
+                title={`กล่องข้อความและการแจ้งเตือนจาก Admin (${unreadMessagesCount} ยังไม่อ่าน)`}
+              >
+                <Bell className={`w-3.5 h-3.5 ${unreadMessagesCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                <span>ข้อความแจ้งเตือน</span>
+                {unreadMessagesCount > 0 ? (
+                  <span className="px-1.5 py-0.2 bg-red-500 text-white text-[10px] font-black rounded-full shadow animate-pulse">
+                    {unreadMessagesCount}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400">
+                    ({adminMessages.length})
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setShowDeleteConfirmModal(true)}
                 className="px-3.5 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 border border-rose-600/40 hover:border-rose-500 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
                 title="ยกเลิกใบสมัครและลบข้อมูลของฉันออกจากฐานข้อมูล (Delete with Ownership Check)"
@@ -1739,6 +1811,40 @@ export default function RegisterView({
               </button>
             </div>
           </div>
+
+          {/* NOTIFICATION HERO ALERT BANNER (If there are unread messages) */}
+          {unreadMessagesCount > 0 && (
+            <div 
+              onClick={() => setShowNotificationsModal(true)}
+              className="mt-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950/70 via-purple-950/60 to-slate-900 border-2 border-amber-500/60 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-400 transition-all group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+                  <Bell className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm sm:text-base font-black text-amber-300">
+                      มี {unreadMessagesCount} ข้อความแจ้งเตือนใหม่จากฝ่ายประสานงาน & การเงิน JRE 2027
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-500 text-white font-black animate-pulse">
+                      ยังไม่อ่าน
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5 line-clamp-1">
+                    {adminMessages.find(m => !m.read)?.text || 'คลิกที่นี่เพื่อเปิดอ่านข้อความและการแจ้งเตือน'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <span className="text-xs font-bold text-amber-400 underline group-hover:text-amber-300">
+                  เปิดอ่านข้อความแจ้งเตือน
+                </span>
+                <ChevronRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          )}
 
           {/* OVERALL PAYMENT STATUS HERO BANNER */}
           <div className="mt-8">
@@ -2851,28 +2957,137 @@ export default function RegisterView({
           </div>
 
           {/* SECTION: ข้อความแจ้งเตือนจาก Admin (Admin Direct Messages) */}
-          {adminMessages.length > 0 && (
-            <div className="mt-6 p-5 rounded-2xl border bg-slate-950/70 border-slate-800 space-y-3">
-              <div className="flex items-center gap-2 text-indigo-400">
-                <MessageSquare className="w-4 h-4" />
-                <h3 className="font-bold text-white text-sm">
-                  ข้อความและการแจ้งเตือนจากผู้ดูแลระบบ ({adminMessages.length} ข้อความ)
-                </h3>
+          {adminMessages.length > 0 ? (
+            <div className="mt-6 p-5 sm:p-6 rounded-3xl border bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-slate-800 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                    <Bell className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-white text-sm sm:text-base">
+                        ข้อความและการแจ้งเตือนจากผู้ดูแลระบบ ({adminMessages.length} ข้อความ)
+                      </h3>
+                      {unreadMessagesCount > 0 && (
+                        <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
+                          {unreadMessagesCount} ยังไม่อ่าน
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">ส่งตรงจากฝ่ายประสานงาน & การเงินโครงการ JRE 2027</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                  {unreadMessagesCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllAdminMessagesRead}
+                      className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="ทำเครื่องหมายว่าอ่านทุกข้อความแล้ว"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>อ่านทั้งหมดแล้ว</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowNotificationsModal(true)}
+                    className="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>เปิดแบบป๊อปอัป</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                {adminMessages.map((msg, idx) => (
-                  <div key={msg.id || idx} className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-xs">
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-                      <span className="font-semibold text-purple-400">ฝ่ายประสานงาน JRE 2027</span>
-                      <span>{msg.created_at ? new Date(msg.created_at).toLocaleString('th-TH') : ''}</span>
+              <div className="space-y-3">
+                {adminMessages.map((msg, idx) => {
+                  const isUnread = !msg.read;
+                  return (
+                    <div 
+                      key={msg.id || idx} 
+                      className={`p-4 rounded-2xl border transition-all text-xs space-y-2.5 ${
+                        isUnread
+                          ? 'bg-gradient-to-r from-purple-950/30 via-slate-900 to-slate-900 border-purple-500/50 shadow-md ring-1 ring-purple-500/20'
+                          : 'bg-slate-900/90 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-purple-400">ฝ่ายประสานงาน JRE 2027</span>
+                          {isUnread ? (
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
+                              🔴 ยังไม่อ่าน
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                              ✓ อ่านแล้ว
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-slate-500 text-[10px] flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-500" />
+                          {msg.created_at ? new Date(msg.created_at).toLocaleString('th-TH') : ''}
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line select-text">
+                        {msg.text}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAdminMessageRead(msg.id)}
+                          className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isUnread
+                              ? 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40'
+                              : 'bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border border-slate-700'
+                          }`}
+                        >
+                          {isUnread ? (
+                            <>
+                              <CheckCheck className="w-3.5 h-3.5 text-purple-400" />
+                              <span>ทำเครื่องหมายว่าอ่านแล้ว</span>
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                              <span>เปลี่ยนเป็นยังไม่อ่าน</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAdminMessage(msg.id)}
+                          className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl font-medium flex items-center gap-1 transition-all cursor-pointer"
+                          title="ลบข้อความแจ้งเตือนนี้"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ลบ</span>
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-slate-200 whitespace-pre-line leading-relaxed">
-                      {msg.text}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+            </div>
+          ) : (
+            <div className="mt-6 p-4 rounded-2xl border border-slate-800 bg-slate-950/40 flex items-center justify-between gap-3 text-xs text-slate-400">
+              <div className="flex items-center gap-2.5">
+                <Bell className="w-4 h-4 text-slate-500" />
+                <span>กล่องข้อความและการแจ้งเตือน: ไม่มีข้อความใหม่จากผู้ดูแลระบบ</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNotificationsModal(true)}
+                className="text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+              >
+                เปิดกล่องข้อความ
+              </button>
             </div>
           )}
 
@@ -3491,6 +3706,14 @@ export default function RegisterView({
           isOpen={Boolean(previewDocModal)}
           onClose={() => setPreviewDocModal(null)}
           doc={previewDocModal}
+        />
+
+        {/* PARTICIPANT NOTIFICATIONS POPUP MODAL */}
+        <UserNotificationsModal
+          isOpen={showNotificationsModal}
+          onClose={() => setShowNotificationsModal(false)}
+          myRegistration={myRegistration}
+          onUpdateRegistration={onUpdateRegistration}
         />
 
         {/* TOAST NOTIFICATION */}

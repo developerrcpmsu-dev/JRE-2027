@@ -1490,6 +1490,32 @@ export default function AdminDashboardView({
     }
   };
 
+  // Delete Direct Message (Admin Side)
+  const handleDeleteAdminMsgFromAdmin = async (msgId) => {
+    if (!profileModalReg) return;
+    const ok = await askConfirm({
+      title: 'ยืนยันการลบข้อความ',
+      message: 'คุณต้องการลบข้อความนี้ออกจากประวัติใช่หรือไม่? (ข้อความจะถูกลบออกจากฝั่งผู้สมัครด้วย)',
+      confirmText: 'ลบข้อความ',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await DataService.deleteAdminMessage(profileModalReg.user_id, msgId);
+      const updatedRegs = await DataService.getRegistrations();
+      const updatedTarget = updatedRegs.find(r => r.user_id === profileModalReg.user_id);
+      if (updatedTarget) {
+        setProfileModalReg(updatedTarget);
+      }
+      triggerToast('ลบข้อความแจ้งเตือนสำเร็จ');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการลบข้อความ');
+    }
+  };
+
   // Add Document Request
   const handleAddDocRequest = async (e) => {
     e.preventDefault();
@@ -4133,23 +4159,44 @@ export default function AdminDashboardView({
                   </div>
                 </form>
 
-                {/* History of messages sent */}
-                <div className="space-y-2.5">
-                  <h5 className="font-bold text-slate-300 text-xs">ประวัติข้อความที่ส่งหาผู้สมัครคนนี้:</h5>
-                  {Array.isArray(profileModalReg.admin_messages) && profileModalReg.admin_messages.length > 0 ? (
-                    profileModalReg.admin_messages.map((m, idx) => (
-                      <div key={m.id || idx} className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
-                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                          <span className="font-semibold text-purple-400">ผู้ดูแลระบบ JRE 2027</span>
-                          <span>{m.created_at ? new Date(m.created_at).toLocaleString('th-TH') : ''}</span>
+                  {/* History of messages sent */}
+                  <div className="space-y-2.5">
+                    <h5 className="font-bold text-slate-300 text-xs">ประวัติข้อความที่ส่งหาผู้สมัครคนนี้ ({Array.isArray(profileModalReg.admin_messages) ? profileModalReg.admin_messages.length : 0} ข้อความ):</h5>
+                    {Array.isArray(profileModalReg.admin_messages) && profileModalReg.admin_messages.length > 0 ? (
+                      profileModalReg.admin_messages.map((m, idx) => (
+                        <div key={m.id || idx} className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] text-slate-500">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-purple-400">ผู้ดูแลระบบ JRE 2027</span>
+                              {m.read ? (
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold">
+                                  ✓ ผู้สมัครเปิดอ่านแล้ว
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold">
+                                  ⏳ ผู้สมัครยังไม่อ่าน
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span>{m.created_at ? new Date(m.created_at).toLocaleString('th-TH') : ''}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAdminMsgFromAdmin(m.id || idx)}
+                                className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                                title="ลบข้อความนี้"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-slate-200 whitespace-pre-line text-xs">{m.text}</p>
                         </div>
-                        <p className="text-slate-200 whitespace-pre-line">{m.text}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-slate-500 italic">ยังไม่มีประวัติการส่งข้อความ</p>
-                  )}
-                </div>
+                      ))
+                    ) : (
+                      <p className="text-slate-500 italic">ยังไม่มีประวัติการส่งข้อความ</p>
+                    )}
+                  </div>
               </div>
             )}
 
