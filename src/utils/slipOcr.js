@@ -21,11 +21,12 @@ export function formatThaiDateTime(date = new Date()) {
 }
 
 /**
- * Parse EMVCo / PromptPay QR Payload (Tags 54 is Amount in Baht)
+ * Parse EMVCo / PromptPay QR Payload (Tag 54 is Amount in Baht)
+ * or SlipVerify Mini QR codes
  */
 function parsePromptPayQr(qrText) {
   if (!qrText || typeof qrText !== 'string') return null;
-  const result = { isPromptPay: false, amount: null, ref: null };
+  const result = { isPromptPay: false, isSlipVerify: false, amount: null, ref: null };
 
   if (qrText.startsWith('000201')) {
     result.isPromptPay = true;
@@ -39,45 +40,146 @@ function parsePromptPayQr(qrText) {
         result.amount = num;
       }
     }
-  } else if (qrText.includes('http') || qrText.includes('scb') || qrText.includes('kbank') || qrText.includes('ktb')) {
+  } else if (/^(?:0046|0049|0054)/.test(qrText) || qrText.includes('promptpay') || qrText.includes('scb') || qrText.includes('kbank') || qrText.includes('ktb') || qrText.includes('bbl')) {
+    result.isSlipVerify = true;
     result.ref = qrText;
   }
+
   return result;
+}
+
+/**
+ * Ensure an offscreen DOM element exists so Html5Qrcode constructor doesn't throw
+ */
+function getOrCreateQrSandbox() {
+  if (typeof document === 'undefined') return null;
+  const id = 'qr-reader-hidden-scan-sandbox';
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.style.position = 'fixed';
+    el.style.top = '-9999px';
+    el.style.left = '-9999px';
+    el.style.width = '100px';
+    el.style.height = '100px';
+    el.style.opacity = '0';
+    el.style.pointerEvents = 'none';
+    document.body.appendChild(el);
+  }
+  return id;
+}
+
+/**
+ * Extract time from slip text safely without matching decimal numbers (e.g. 650.00)
+ */
+function extractTime(str) {
+  if (!str) return null;
+  // 1. Colon separated: 00:13 or 14:35:20
+  const m1 = str.match(/\b([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(?:น\.|น|am|pm)?\b/i);
+  if (m1) return m1[0].trim();
+
+  // 2. Dot separated only if followed by น. or am/pm to avoid matching decimal amounts like 400.00
+  const m2 = str.match(/\b([01]?\d|2[0-3])\.([0-5]\d)\s*(?:น\.|น|am|pm)\b/i);
+  if (m2) return m2[0].trim();
+
+  return null;
+}
+
+/**
+ * Extract date from slip text (Thai and International formats)
+ */
+function extractDate(str) {
+  if (!str) return null;
+  // 1. Thai date: e.g. 07 ต.ค. 2569 or 7 ต.ค. 69
+  const mThai = str.match(/([0-3]?\d\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(?:25)?\d{2})/);
+  if (mThai) return mThai[1].trim();
+
+  // 2. English date: e.g. 07 Oct 2026 or 7 October 2026
+  const mEng = str.match(/([0-3]?\d\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*(?:20)?\d{2})/i);
+  if (mEng) return mEng[1].trim();
+
+  // 3. Numeric date: e.g. 07/10/2026 or 07-10-2569
+  const mNum = str.match(/\b([0-3]?\d[\/\-][01]?\d[\/\-](?:25\d{2}|20\d{2}|\d{2}))\b/);
+  if (mNum) return mNum[1].trim();
+
+  return null;
 }
 
 /**
  * Parse OCR raw text to find transfer amount, date, time and bank
  */
-function parseSlipText(text) {
-  if (!text) return {};
-  const cleaned = text.replace(/\r\n/g, '\n');
+export function parseSlipText(text, expectedAmount = null) {
+  if (!text || typeof text !== 'string') {
+    return {
+      isBankSlip: false,
+      bankDetected: null,
+      detectedAmount: null,
+      transferDate: null,
+      transferTime: null
+    };
+  }
+
+  const cleaned = text.replace(/\r\n/g, '\n').trim();
 
   // 1. Detect Bank
-  let bankDetected = 'สลิปการโอนเงินธนาคาร';
-  if (/krungthai|กรุงไทย|ktb/i.test(cleaned)) bankDetected = 'ธนาคารกรุงไทย (Krungthai NEXT)';
-  else if (/kbank|กสิกร|k plus/i.test(cleaned)) bankDetected = 'ธนาคารกสิกรไทย (K PLUS)';
+  let bankDetected = null;
+  if (/krungthai|กรุงไทย|ktb|next/i.test(cleaned)) bankDetected = 'ธนาคารกรุงไทย (Krungthai NEXT)';
+  else if (/kbank|กสิกร|k plus|kasikorn/i.test(cleaned)) bankDetected = 'ธนาคารกสิกรไทย (K PLUS)';
   else if (/scb|ไทยพาณิชย์|easy/i.test(cleaned)) bankDetected = 'ธนาคารไทยพาณิชย์ (SCB EASY)';
-  else if (/bangkok\s*bank|กรุงเทพ|bbl/i.test(cleaned)) bankDetected = 'ธนาคารกรุงเทพ (BBL)';
-  else if (/ttb|ทหารไทยธนชาต/i.test(cleaned)) bankDetected = 'ธนาคารทหารไทยธนชาต (ttb)';
-  else if (/gsb|ออมสิน/i.test(cleaned)) bankDetected = 'ธนาคารออมสิน (MyMo)';
+  else if (/bangkok\s*bank|กรุงเทพ|bbl|bualuang/i.test(cleaned)) bankDetected = 'ธนาคารกรุงเทพ (BBL)';
+  else if (/ttb|ทหารไทยธนชาต|thanachart/i.test(cleaned)) bankDetected = 'ธนาคารทหารไทยธนชาต (ttb)';
+  else if (/gsb|ออมสิน|mymo/i.test(cleaned)) bankDetected = 'ธนาคารออมสิน (MyMo)';
+  else if (/bay|krungsri|กรุงศรี/i.test(cleaned)) bankDetected = 'ธนาคารกรุงศรีอยุธยา (KMA)';
   else if (/promptpay|พร้อมเพย์/i.test(cleaned)) bankDetected = 'พร้อมเพย์ (PromptPay)';
 
-  // 2. Detect Amount
-  // Common slip patterns: "จำนวนเงิน 400.00", "Amount 400.00 THB", "400.00 บาท", "400.00"
-  let detectedAmount = null;
-  const amountPatterns = [
-    /(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|amount|transferred)\s*[:\s]?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i,
-    /([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))\s*(?:บาท|thb|baht)/i,
-    /\b(400(?:\.00)?|700(?:\.00)?|800(?:\.00)?|300(?:\.00)?|350(?:\.00)?|750(?:\.00)?)\b/
-  ];
+  // General transfer indicators in Thai bank slips
+  const hasTransferKeyword = /โอนเงิน|โอนสำเร็จ|สำเร็จ|รายการสำเร็จ|ผู้รับเงิน|ผู้โอน|ยอดโอน|จำนวนเงิน|ยอดเงิน|รหัสอ้างอิง|เลขที่รายการ|transfer|transferred|successful|success|payment|paid|bscan|slip/i.test(cleaned);
 
-  for (const regex of amountPatterns) {
-    const match = cleaned.match(regex);
-    if (match && match[1]) {
-      const num = parseFloat(match[1].replace(/,/g, ''));
-      if (!isNaN(num) && num >= 50 && num <= 50000) {
-        detectedAmount = num;
-        break;
+  const isBankSlip = Boolean(bankDetected || hasTransferKeyword);
+
+  if (isBankSlip && !bankDetected) {
+    bankDetected = 'สลิปการโอนเงินธนาคาร';
+  }
+
+  // 2. Detect Amount (ONLY IF this has bank/transfer context or clear amount indicators)
+  let detectedAmount = null;
+
+  if (isBankSlip) {
+    // A. Explicit amount keywords: "จำนวนเงิน 400.00", "Amount 400.00 THB", "400.00 บาท"
+    const explicitAmountPatterns = [
+      /(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|ยอดชำระ|amount|transferred|paid)\s*[:\s-]*\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/i,
+      /([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)\s*(?:บาท|thb|baht)\b/i
+    ];
+
+    for (const regex of explicitAmountPatterns) {
+      const match = cleaned.match(regex);
+      if (match && match[1]) {
+        const num = parseFloat(match[1].replace(/,/g, ''));
+        if (!isNaN(num) && num >= 50 && num <= 50000) {
+          detectedAmount = num;
+          break;
+        }
+      }
+    }
+
+    // B. Check if expectedAmount matches numbers in text
+    if (!detectedAmount && expectedAmount) {
+      const numExpected = Number(expectedAmount);
+      const expectedRegex = new RegExp(`(?:^|\\D)${numExpected}(?:\\.00)?(?:$|\\D)`);
+      if (expectedRegex.test(cleaned)) {
+        detectedAmount = numExpected;
+      }
+    }
+
+    // C. Decimal currency amount: e.g. 400.00, 650.00
+    if (!detectedAmount) {
+      const decimalMatch = cleaned.match(/\b([1-9][0-9]{1,4}\.[0-9]{2})\b/);
+      if (decimalMatch && decimalMatch[1]) {
+        const num = parseFloat(decimalMatch[1]);
+        if (!isNaN(num) && num >= 50 && num <= 50000) {
+          detectedAmount = num;
+        }
       }
     }
   }
@@ -86,25 +188,13 @@ function parseSlipText(text) {
   let transferDate = null;
   let transferTime = null;
 
-  // Time pattern e.g. 10:45 or 10:45:12 or 10.45 น.
-  const timeMatch = cleaned.match(/(\d{1,2}[:.]\d{2}(?:[:.]\d{2})?)\s*(?:น\.|น|am|pm)?/i);
-  if (timeMatch) {
-    transferTime = timeMatch[1].replace('.', ':') + ' น.';
-  }
-
-  // Date pattern e.g. 05 ต.ค. 2569 or 05/10/2026 or 05-10-2569
-  const thaiMonthsRegex = /(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)/;
-  const dateThaiMatch = cleaned.match(new RegExp(`(\\d{1,2}\\s*${thaiMonthsRegex.source}\\s*\\d{2,4})`, 'i'));
-  if (dateThaiMatch) {
-    transferDate = dateThaiMatch[1];
-  } else {
-    const numDateMatch = cleaned.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
-    if (numDateMatch) {
-      transferDate = numDateMatch[1];
-    }
+  if (isBankSlip) {
+    transferTime = extractTime(cleaned);
+    transferDate = extractDate(cleaned);
   }
 
   return {
+    isBankSlip,
     bankDetected,
     detectedAmount,
     transferDate,
@@ -113,9 +203,27 @@ function parseSlipText(text) {
 }
 
 /**
- * Scan slip image using combined QR code detection and OCR with instant fallback
+ * Reusable singleton Tesseract worker for high performance
+ */
+let sharedTesseractWorker = null;
+
+async function getSharedWorker() {
+  if (!sharedTesseractWorker) {
+    try {
+      const worker = await createWorker('eng');
+      sharedTesseractWorker = worker;
+    } catch (err) {
+      console.warn('Worker initialization error:', err);
+      sharedTesseractWorker = null;
+    }
+  }
+  return sharedTesseractWorker;
+}
+
+/**
+ * Scan slip image using combined QR code detection and OCR without fake hallucinated values
  * @param {File|Blob} file The uploaded image file
- * @param {number} expectedAmount Optional expected amount (e.g. 400 or 700 or 800)
+ * @param {number} expectedAmount Optional expected amount (e.g. 400 or 650 or 250)
  */
 export async function scanSlipImage(file, expectedAmount = null) {
   const uploadTime = new Date();
@@ -123,6 +231,9 @@ export async function scanSlipImage(file, expectedAmount = null) {
 
   const result = {
     isScanned: true,
+    isDetected: false,        // True ONLY if real amount or bank slip was verified
+    isBankSlip: false,        // True if bank/transfer context found
+    status: 'unverified',     // 'verified' | 'mismatch' | 'unverified'
     uploadedAt: uploadTime.toISOString(),
     uploadTimeStr,
     amount: null,
@@ -130,7 +241,7 @@ export async function scanSlipImage(file, expectedAmount = null) {
     transferDate: null,
     transferTime: null,
     transferDateTimeStr: null,
-    bankDetected: 'สลิปการโอนเงิน (ระบบตรวจสอบแล้ว)',
+    bankDetected: null,
     qrDetected: false,
     rawText: '',
     matchExpected: null,
@@ -139,85 +250,105 @@ export async function scanSlipImage(file, expectedAmount = null) {
 
   if (!file) return result;
 
-  // 1. Try QR Code scan first (Super fast: ~100ms)
+  // 1. Try QR Code scan first
   try {
-    const html5QrCode = new Html5Qrcode('qr-reader-hidden-scan-' + Date.now(), { verbose: false });
-    const qrResult = await html5QrCode.scanFile(file, false);
-    if (qrResult) {
-      result.qrDetected = true;
-      const parsed = parsePromptPayQr(qrResult);
-      if (parsed?.amount) {
-        result.amount = parsed.amount;
-        result.amountFormatted = `${parsed.amount.toFixed(2)} บาท`;
+    const sandboxId = getOrCreateQrSandbox();
+    if (sandboxId) {
+      const html5QrCode = new Html5Qrcode(sandboxId, { verbose: false });
+      const qrResult = await html5QrCode.scanFile(file, false);
+      if (qrResult) {
+        result.qrDetected = true;
+        result.isBankSlip = true;
+        const parsed = parsePromptPayQr(qrResult);
+        if (parsed?.amount) {
+          result.amount = parsed.amount;
+        }
+        if (parsed?.isPromptPay) {
+          result.bankDetected = 'สลิปพร้อมเพย์ / PromptPay QR';
+        } else if (parsed?.isSlipVerify) {
+          result.bankDetected = 'สลิปธนาคาร (SlipVerify QR)';
+        }
       }
-      if (parsed?.isPromptPay) {
-        result.bankDetected = 'สลิปพร้อมเพย์ / PromptPay QR';
-      }
+      try { await html5QrCode.clear(); } catch (e) {}
     }
   } catch (qrErr) {
-    // QR code not present or not decodable, perfectly normal for slips
+    // Normal if image is not a QR code or doesn't have decodable QR
   }
 
-  // 2. Try lightweight OCR using Tesseract (with 4-second timeout to never block user)
+  // 2. Try OCR using Tesseract (with timeout so UI is never blocked)
   try {
     const ocrPromise = (async () => {
-      let worker = null;
-      try {
-        worker = await createWorker('eng');
-        const ret = await worker.recognize(file);
-        await worker.terminate();
-        return ret?.data?.text || '';
-      } catch (err) {
-        if (worker) {
-          try { await worker.terminate(); } catch (e) {}
-        }
-        return '';
-      }
+      const worker = await getSharedWorker();
+      if (!worker) return '';
+      const ret = await worker.recognize(file);
+      return ret?.data?.text || '';
     })();
 
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(''), 4500));
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(''), 5500));
     const ocrText = await Promise.race([ocrPromise, timeoutPromise]);
 
     if (ocrText) {
       result.rawText = ocrText;
-      const parsed = parseSlipText(ocrText);
-      if (parsed.bankDetected && result.bankDetected.startsWith('สลิปการโอนเงิน')) {
-        result.bankDetected = parsed.bankDetected;
+      const parsed = parseSlipText(ocrText, expectedAmount);
+      
+      if (parsed.isBankSlip) {
+        result.isBankSlip = true;
+        if (parsed.bankDetected && (!result.bankDetected || result.bankDetected.includes('SlipVerify'))) {
+          result.bankDetected = parsed.bankDetected;
+        }
+        if (!result.amount && parsed.detectedAmount) {
+          result.amount = parsed.detectedAmount;
+        }
+        result.transferDate = parsed.transferDate;
+        result.transferTime = parsed.transferTime;
       }
-      if (!result.amount && parsed.detectedAmount) {
-        result.amount = parsed.detectedAmount;
-        result.amountFormatted = `${parsed.detectedAmount.toFixed(2)} บาท`;
-      }
-      result.transferDate = parsed.transferDate;
-      result.transferTime = parsed.transferTime;
     }
   } catch (ocrErr) {
     console.warn('OCR processing notice:', ocrErr);
   }
 
-  // 3. Fallback defaults if OCR didn't catch specific numbers
-  if (!result.amount && expectedAmount) {
-    result.amount = expectedAmount;
-    result.amountFormatted = `${Number(expectedAmount).toFixed(2)} บาท`;
-  } else if (!result.amount) {
-    result.amountFormatted = 'ตรวจพบหลักฐานการโอนเงินเรียบร้อย';
+  // 3. Format Date/Time (Truthful, DO NOT hallucinate current time!)
+  if (result.transferDate && result.transferTime) {
+    result.transferDateTimeStr = `${result.transferDate} เวลา ${result.transferTime}`;
+  } else if (result.transferDate) {
+    result.transferDateTimeStr = result.transferDate;
+  } else if (result.transferTime) {
+    result.transferDateTimeStr = result.transferTime;
+  } else {
+    result.transferDateTimeStr = null;
   }
 
-  if (!result.transferTime) {
-    const hours = String(uploadTime.getHours()).padStart(2, '0');
-    const minutes = String(uploadTime.getMinutes()).padStart(2, '0');
-    result.transferTime = `${hours}:${minutes} น.`;
-  }
-  if (!result.transferDate) {
-    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-    result.transferDate = `${uploadTime.getDate()} ${thaiMonths[uploadTime.getMonth()]} ${uploadTime.getFullYear() + 543}`;
-  }
+  // 4. Evaluate Detection Status and Validation
+  if (result.amount) {
+    result.isDetected = true;
+    result.isBankSlip = true;
+    result.amountFormatted = `${Number(result.amount).toFixed(2)} บาท`;
 
-  result.transferDateTimeStr = `${result.transferDate} เวลา ${result.transferTime}`;
-
-  // 4. Validate against expected amount if provided
-  if (expectedAmount && result.amount) {
-    result.matchExpected = Math.abs(result.amount - expectedAmount) < 1;
+    if (expectedAmount) {
+      const numExpected = Number(expectedAmount);
+      const isMatch = Math.abs(result.amount - numExpected) < 1;
+      result.matchExpected = isMatch;
+      if (isMatch) {
+        result.status = 'verified';
+        result.message = `สแกนพบยอดเงิน ${result.amountFormatted} ตรงตามที่กำหนดเรียบร้อย`;
+      } else {
+        result.status = 'mismatch';
+        result.message = `ตรวจพบยอดเงิน ${result.amountFormatted} (ต่างจากยอดที่กำหนด ${numExpected.toFixed(2)} บาท) เจ้าหน้าที่จะตรวจสอบสลิป`;
+      }
+    } else {
+      result.status = 'verified';
+      result.matchExpected = true;
+      result.message = `สแกนพบยอดเงิน ${result.amountFormatted} ในสลิปเรียบร้อย`;
+    }
+  } else {
+    // No amount detected: HONEST result, no fake fallback
+    result.isDetected = false;
+    result.status = 'unverified';
+    result.amountFormatted = 'ไม่พบตัวเลขยอดเงินในรูปภาพ';
+    result.matchExpected = null;
+    result.message = result.isBankSlip
+      ? 'ตรวจพบสลิปการโอนเงิน แต่ไม่สามารถอ่านตัวเลขยอดเงินได้ชัดเจน (รอเจ้าหน้าที่ตรวจสอบสลิปด้วยตนเอง)'
+      : 'ไม่พบข้อมูลสลิปโอนเงินหรือตัวเลขยอดเงินในรูปภาพที่แนบ (รอเจ้าหน้าที่ตรวจสอบสลิปด้วยตนเอง)';
   }
 
   return result;

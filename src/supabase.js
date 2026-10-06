@@ -636,37 +636,7 @@ export const DataService = {
       processedFile = file;
     }
 
-    // 1. Try Supabase Storage first
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const cleanName = (processedFile.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
-        const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${cleanName}`;
-        
-        const { data, error } = await supabase.storage
-          .from('announcements')
-          .upload(filePath, processedFile, {
-            cacheControl: '3600',
-            upsert: true
-          });
-
-        if (!error && data) {
-          const { data: urlData } = supabase.storage
-            .from('announcements')
-            .getPublicUrl(filePath);
-
-          if (urlData?.publicUrl) {
-            return {
-              url: urlData.publicUrl,
-              name: processedFile.name,
-              size: processedFile.size,
-              type: processedFile.type
-            };
-          }
-        }
-      } catch (err) {
-        console.warn('Supabase storage upload notice:', err);
-      }
-    }
+    // 1. Direct permanent hosting via Supabase project_settings (avoids missing storage bucket 400 errors)
 
     // 2. Read as Base64 Data URL and host permanently in Supabase project_settings
     const base64Data = await new Promise((resolve, reject) => {

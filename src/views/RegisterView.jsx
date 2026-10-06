@@ -726,7 +726,11 @@ export default function RegisterView({
         try {
           const ocr = await scanSlipImage(file, 400);
           setSlipOcrRound1(ocr);
-          triggerToast(`อัปโหลดและตรวจสแกนสลิปมัดจำรอบ 1 เรียบร้อย (${ocr.amountFormatted || '400 บาท'}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+          if (ocr.isDetected) {
+            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปมัดจำรอบ 1 เรียบร้อย (${ocr.amountFormatted})`, 'success');
+          } else {
+            triggerToast('แนบรูปหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
+          }
         } catch (ocrErr) {
           console.warn('Slip OCR notice:', ocrErr);
           triggerToast('แนบหลักฐานการโอนเงิน รอบที่ 1 (มัดจำเสื้อ 400 บาท) เรียบร้อยแล้ว', 'success');
@@ -758,7 +762,11 @@ export default function RegisterView({
         try {
           const ocr = await scanSlipImage(file, feeInfo.round2Amount);
           setSlipOcrRound2(ocr);
-          triggerToast(`อัปโหลดและตรวจสแกนสลิปรอบที่ 2 เรียบร้อย (${ocr.amountFormatted}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+          if (ocr.isDetected) {
+            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปรอบที่ 2 เรียบร้อย (${ocr.amountFormatted})`, 'success');
+          } else {
+            triggerToast('แนบรูปหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
+          }
         } catch (ocrErr) {
           console.warn('Slip OCR notice:', ocrErr);
           triggerToast(`แนบหลักฐานการโอนเงิน รอบที่ 2 (${feeInfo.round2Amount} บาท) เรียบร้อยแล้ว`, 'success');
@@ -794,7 +802,11 @@ export default function RegisterView({
           const ocr = await scanSlipImage(file, feeInfo.totalFee);
           setSlipOcrFull(ocr);
           setSlipOcrRound1(ocr);
-          triggerToast(`อัปโหลดและตรวจสแกนสลิปเต็มจำนวนเรียบร้อย (${ocr.amountFormatted}) เมื่อ ${ocr.uploadTimeStr}`, 'success');
+          if (ocr.isDetected) {
+            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปเต็มจำนวนเรียบร้อย (${ocr.amountFormatted})`, 'success');
+          } else {
+            triggerToast('แนบรูปหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
+          }
         } catch (ocrErr) {
           console.warn('Slip OCR notice:', ocrErr);
           triggerToast(`แนบหลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท) เรียบร้อยแล้ว`, 'success');
@@ -1282,7 +1294,11 @@ export default function RegisterView({
             slip_ocr_full: ocrInfo
           });
         }
-        triggerToast(`อัปโหลดและสแกนสลิปเรียบร้อย (${ocrInfo?.amountFormatted || `${feeInfo.totalFee} บ.`}) เจ้าหน้าที่จะทำการตรวจสอบ`, 'success');
+        if (ocrInfo?.isDetected) {
+          triggerToast(`อัปโหลดและสแกนสลิปเรียบร้อย (${ocrInfo.amountFormatted}) เจ้าหน้าที่จะทำการตรวจสอบ`, 'success');
+        } else {
+          triggerToast('อัปโหลดหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -1324,7 +1340,11 @@ export default function RegisterView({
           }
           await onUpdateRegistration(myRegistration.user_id, update);
         }
-        triggerToast(`อัปโหลดและสแกนสลิปงวดที่ ${round} เรียบร้อย (${ocrInfo?.amountFormatted || ''}) เจ้าหน้าที่จะตรวจสอบยอดเงิน`, 'success');
+        if (ocrInfo?.isDetected) {
+          triggerToast(`อัปโหลดและสแกนสลิปงวดที่ ${round} เรียบร้อย (${ocrInfo.amountFormatted}) เจ้าหน้าที่จะตรวจสอบยอดเงิน`, 'success');
+        } else {
+          triggerToast(`อัปโหลดหลักฐานงวดที่ ${round} เรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)`, 'info');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -1920,7 +1940,9 @@ export default function RegisterView({
                           </span>
                           {myRegistration.slip_ocr_full && (
                             <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_full.uploadTimeStr}>
-                              โอน: {myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} ({myRegistration.slip_ocr_full.amountFormatted || `${myRegistration.slip_ocr_full.amount} บ.`})
+                              {myRegistration.slip_ocr_full.isDetected 
+                                ? `โอน: ${myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} (${myRegistration.slip_ocr_full.amountFormatted})`
+                                : `อัปโหลด: ${myRegistration.slip_ocr_full.uploadTimeStr} (รอตรวจยอด)`}
                             </span>
                           )}
                           {!isFullyPaid && (
@@ -1993,7 +2015,9 @@ export default function RegisterView({
                             </span>
                             {myRegistration.slip_ocr_round1 && (
                               <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round1.uploadTimeStr}>
-                                โอน: {myRegistration.slip_ocr_round1.transferDateTimeStr || myRegistration.slip_ocr_round1.uploadTimeStr} ({myRegistration.slip_ocr_round1.amountFormatted || `${myRegistration.slip_ocr_round1.amount} บ.`})
+                                {myRegistration.slip_ocr_round1.isDetected 
+                                  ? `โอน: ${myRegistration.slip_ocr_round1.transferDateTimeStr || myRegistration.slip_ocr_round1.uploadTimeStr} (${myRegistration.slip_ocr_round1.amountFormatted})`
+                                  : `อัปโหลด: ${myRegistration.slip_ocr_round1.uploadTimeStr} (รอตรวจยอด)`}
                               </span>
                             )}
                             {(!isFullyPaid && myRegistration.installment_1_status !== 'paid') && (
@@ -2065,7 +2089,9 @@ export default function RegisterView({
                             </span>
                             {myRegistration.slip_ocr_round2 && (
                               <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>
-                                โอน: {myRegistration.slip_ocr_round2.transferDateTimeStr || myRegistration.slip_ocr_round2.uploadTimeStr} ({myRegistration.slip_ocr_round2.amountFormatted || `${myRegistration.slip_ocr_round2.amount} บ.`})
+                                {myRegistration.slip_ocr_round2.isDetected 
+                                  ? `โอน: ${myRegistration.slip_ocr_round2.transferDateTimeStr || myRegistration.slip_ocr_round2.uploadTimeStr} (${myRegistration.slip_ocr_round2.amountFormatted})`
+                                  : `อัปโหลด: ${myRegistration.slip_ocr_round2.uploadTimeStr} (รอตรวจยอด)`}
                               </span>
                             )}
                             {(!isFullyPaid && myRegistration.installment_2_status !== 'paid') && (
@@ -2730,7 +2756,9 @@ export default function RegisterView({
                         </span>
                         {myRegistration.slip_ocr_full && (
                           <span className="text-[10px] text-amber-300 font-mono block">
-                            โอน: {myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} ({myRegistration.slip_ocr_full.amountFormatted || `${myRegistration.slip_ocr_full.amount} บ.`})
+                            {myRegistration.slip_ocr_full.isDetected 
+                              ? `โอน: ${myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} (${myRegistration.slip_ocr_full.amountFormatted})`
+                              : `อัปโหลด: ${myRegistration.slip_ocr_full.uploadTimeStr} (รอตรวจยอด)`}
                           </span>
                         )}
                         {myRegistration.payment_status === 'paid' ? (
@@ -5387,45 +5415,99 @@ export default function RegisterView({
                 </div>
 
                 {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD */}
-                {((paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)) && (
-                  <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/50 rounded-2xl space-y-2.5 animate-in fade-in shadow-inner">
-                    <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
-                      <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
-                        ผลการสแกนสลิปอัจฉริยะ (Smart Slip OCR)
-                      </span>
-                      <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30">
-                        ✓ ตรวจพบข้อมูลในรูปภาพ
-                      </span>
+                {((paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)) && (() => {
+                  const ocr = paymentPlan === 'full' ? slipOcrFull : slipOcrRound1;
+                  const isVerified = ocr?.isDetected && (ocr?.matchExpected === true || ocr?.matchExpected === null);
+                  const isMismatch = ocr?.isDetected && ocr?.matchExpected === false;
+
+                  return (
+                    <div className={`p-3.5 rounded-2xl space-y-2.5 animate-in fade-in shadow-inner border transition-all ${
+                      isVerified
+                        ? 'bg-emerald-950/40 border-emerald-500/50'
+                        : isMismatch
+                          ? 'bg-amber-950/40 border-amber-500/50'
+                          : 'bg-slate-900/90 border-slate-700/80'
+                    }`}>
+                      <div className={`flex items-center justify-between pb-2 border-b ${
+                        isVerified
+                          ? 'border-emerald-500/20'
+                          : isMismatch
+                            ? 'border-amber-500/20'
+                            : 'border-slate-800'
+                      }`}>
+                        <span className={`text-xs font-black flex items-center gap-1.5 ${
+                          isVerified ? 'text-emerald-300' : isMismatch ? 'text-amber-300' : 'text-slate-300'
+                        }`}>
+                          <Sparkles className={`w-4 h-4 ${
+                            isVerified ? 'text-emerald-400' : isMismatch ? 'text-amber-400' : 'text-slate-400'
+                          }`} />
+                          ผลการสแกนสลิปอัจฉริยะ (Smart Slip OCR)
+                        </span>
+
+                        {isVerified && (
+                          <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            ✓ ตรวจพบยอดเงินตรงตามกำหนด
+                          </span>
+                        )}
+                        {isMismatch && (
+                          <span className="text-[10px] px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full font-bold border border-amber-500/30 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-400" />
+                            ⚠️ ยอดเงินไม่ตรง (รอแอดมินตรวจ)
+                          </span>
+                        )}
+                        {!ocr?.isDetected && (
+                          <span className="text-[10px] px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full font-bold border border-slate-700 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-400" />
+                            รอเจ้าหน้าที่ตรวจสอบสลิป
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                        <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">⏰ เวลาที่อัปโหลดไฟล์:</span>
+                          <span className="font-bold text-white text-[11px]">
+                            {ocr?.uploadTimeStr}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">📅 วันเวลาที่โอนเงิน (จากสลิป):</span>
+                          <span className={`font-bold text-[11px] ${ocr?.transferDateTimeStr ? 'text-amber-300' : 'text-slate-400'}`}>
+                            {ocr?.transferDateTimeStr || 'ไม่พบระบุในสลิป (ตรวจหน้างาน)'}
+                          </span>
+                        </div>
+                        <div className={`p-2.5 bg-slate-900/80 rounded-xl border ${
+                          isVerified ? 'border-emerald-500/30' : isMismatch ? 'border-amber-500/30' : 'border-slate-800'
+                        }`}>
+                          <span className={`text-[10px] block mb-0.5 font-semibold ${
+                            isVerified ? 'text-emerald-300' : isMismatch ? 'text-amber-300' : 'text-slate-400'
+                          }`}>
+                            💵 ยอดเงินที่ตรวจพบ (จากสลิป):
+                          </span>
+                          <span className={`text-sm font-black ${
+                            isVerified ? 'text-emerald-400' : isMismatch ? 'text-amber-400' : 'text-slate-400 text-xs font-medium'
+                          }`}>
+                            {ocr?.isDetected ? ocr.amountFormatted : 'ไม่พบตัวเลขยอดเงิน (รอแอดมินตรวจ)'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">🏦 ธนาคาร / ช่องทาง:</span>
+                          <span className={`font-bold text-[11px] truncate block ${ocr?.bankDetected ? 'text-sky-300' : 'text-slate-400'}`}>
+                            {ocr?.bankDetected || 'ไม่พบข้อมูลในรูปภาพ'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {ocr?.message && (
+                        <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>{ocr.message}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">⏰ เวลาที่อัปโหลดสลิป:</span>
-                        <span className="font-bold text-white text-[11px]">
-                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.uploadTimeStr}
-                        </span>
-                      </div>
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">📅 วันเวลาที่โอนเงิน (จากสลิป):</span>
-                        <span className="font-bold text-amber-300 text-[11px]">
-                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.transferDateTimeStr || (paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.uploadTimeStr}
-                        </span>
-                      </div>
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-emerald-500/30">
-                        <span className="text-[10px] text-emerald-300 block mb-0.5 font-semibold">💵 ยอดเงินที่ตรวจพบ (จากสลิป):</span>
-                        <span className="font-black text-emerald-400 text-sm">
-                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.amountFormatted || `${(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.amount} บาท`}
-                        </span>
-                      </div>
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">🏦 ธนาคาร / ช่องทาง:</span>
-                        <span className="font-bold text-sky-300 text-[11px] truncate block">
-                          {(paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)?.bankDetected}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
 
@@ -5822,37 +5904,97 @@ export default function RegisterView({
                 </div>
 
                 {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD FOR ROUND 2 */}
-                {slipOcrRound2 && (
-                  <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/50 rounded-2xl space-y-2.5 animate-in fade-in shadow-inner">
-                    <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
-                      <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
-                        ผลการสแกนสลิปอัจฉริยะ (Smart Slip OCR รอบที่ 2)
-                      </span>
-                      <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30">
-                        ✓ ตรวจพบข้อมูลในรูปภาพ
-                      </span>
+                {slipOcrRound2 && (() => {
+                  const ocr = slipOcrRound2;
+                  const isVerified = ocr?.isDetected && (ocr?.matchExpected === true || ocr?.matchExpected === null);
+                  const isMismatch = ocr?.isDetected && ocr?.matchExpected === false;
+
+                  return (
+                    <div className={`p-3.5 rounded-2xl space-y-2.5 animate-in fade-in shadow-inner border transition-all ${
+                      isVerified
+                        ? 'bg-emerald-950/40 border-emerald-500/50'
+                        : isMismatch
+                          ? 'bg-amber-950/40 border-amber-500/50'
+                          : 'bg-slate-900/90 border-slate-700/80'
+                    }`}>
+                      <div className={`flex items-center justify-between pb-2 border-b ${
+                        isVerified
+                          ? 'border-emerald-500/20'
+                          : isMismatch
+                            ? 'border-amber-500/20'
+                            : 'border-slate-800'
+                      }`}>
+                        <span className={`text-xs font-black flex items-center gap-1.5 ${
+                          isVerified ? 'text-emerald-300' : isMismatch ? 'text-amber-300' : 'text-slate-300'
+                        }`}>
+                          <Sparkles className={`w-4 h-4 ${
+                            isVerified ? 'text-emerald-400' : isMismatch ? 'text-amber-400' : 'text-slate-400'
+                          }`} />
+                          ผลการสแกนสลิปอัจฉริยะ (Smart Slip OCR รอบที่ 2)
+                        </span>
+
+                        {isVerified && (
+                          <span className="text-[10px] px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            ✓ ตรวจพบยอดเงินตรงตามกำหนด
+                          </span>
+                        )}
+                        {isMismatch && (
+                          <span className="text-[10px] px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full font-bold border border-amber-500/30 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-400" />
+                            ⚠️ ยอดเงินไม่ตรง (รอแอดมินตรวจ)
+                          </span>
+                        )}
+                        {!ocr?.isDetected && (
+                          <span className="text-[10px] px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full font-bold border border-slate-700 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-400" />
+                            รอเจ้าหน้าที่ตรวจสอบสลิป
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                        <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">⏰ เวลาที่อัปโหลดไฟล์:</span>
+                          <span className="font-bold text-white text-[11px]">{ocr.uploadTimeStr}</span>
+                        </div>
+                        <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">📅 วันเวลาที่โอนเงิน (จากสลิป):</span>
+                          <span className={`font-bold text-[11px] ${ocr.transferDateTimeStr ? 'text-amber-300' : 'text-slate-400'}`}>
+                            {ocr.transferDateTimeStr || 'ไม่พบระบุในสลิป (ตรวจหน้างาน)'}
+                          </span>
+                        </div>
+                        <div className={`p-2.5 bg-slate-900/80 rounded-xl border ${
+                          isVerified ? 'border-emerald-500/30' : isMismatch ? 'border-amber-500/30' : 'border-slate-800'
+                        }`}>
+                          <span className={`text-[10px] block mb-0.5 font-semibold ${
+                            isVerified ? 'text-emerald-300' : isMismatch ? 'text-amber-300' : 'text-slate-400'
+                          }`}>
+                            💵 ยอดเงินที่ตรวจพบ (จากสลิป):
+                          </span>
+                          <span className={`text-sm font-black ${
+                            isVerified ? 'text-emerald-400' : isMismatch ? 'text-amber-400' : 'text-slate-400 text-xs font-medium'
+                          }`}>
+                            {ocr.isDetected ? ocr.amountFormatted : 'ไม่พบตัวเลขยอดเงิน (รอแอดมินตรวจ)'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">🏦 ธนาคาร / ช่องทาง:</span>
+                          <span className={`font-bold text-[11px] truncate block ${ocr.bankDetected ? 'text-sky-300' : 'text-slate-400'}`}>
+                            {ocr.bankDetected || 'ไม่พบข้อมูลในรูปภาพ'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {ocr.message && (
+                        <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>{ocr.message}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">⏰ เวลาที่อัปโหลดสลิป:</span>
-                        <span className="font-bold text-white text-[11px]">{slipOcrRound2.uploadTimeStr}</span>
-                      </div>
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">📅 วันเวลาที่โอนเงิน (จากสลิป):</span>
-                        <span className="font-bold text-amber-300 text-[11px]">{slipOcrRound2.transferDateTimeStr || slipOcrRound2.uploadTimeStr}</span>
-                      </div>
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-emerald-500/30">
-                        <span className="text-[10px] text-emerald-300 block mb-0.5 font-semibold">💵 ยอดเงินที่ตรวจพบ (จากสลิป):</span>
-                        <span className="font-black text-emerald-400 text-sm">{slipOcrRound2.amountFormatted || `${slipOcrRound2.amount} บาท`}</span>
-                      </div>
-                      <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">🏦 ธนาคาร / ช่องทาง:</span>
-                        <span className="font-bold text-sky-300 text-[11px] truncate block">{slipOcrRound2.bankDetected}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
 
