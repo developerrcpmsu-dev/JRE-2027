@@ -2463,26 +2463,33 @@ export default function RegisterView({
                   </button>
                 </div>
 
-                {/* PromptPay */}
+                {/* Contact Phone (No PromptPay) */}
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block">พร้อมเพย์ (PromptPay)</span>
-                    <span className="font-mono font-bold text-sky-300 text-sm truncate block">
-                      {dashboardPaymentConfig.bank_promptpay || '-'}
+                    <span className="text-[10px] text-amber-300 block flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-amber-400" />
+                      ☎️ สอบถามเพิ่มเติม (ไม่มีพร้อมเพย์)
+                    </span>
+                    <span className="font-mono font-bold text-white text-sm truncate block mt-0.5">
+                      {dashboardPaymentConfig.contact_phone || '098-329-6762'}
                     </span>
                   </div>
-                  {dashboardPaymentConfig.bank_promptpay && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopyText(dashboardPaymentConfig.bank_promptpay, 'bank_prompt', 'พร้อมเพย์')}
-                      className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
-                      title="คัดลอกพร้อมเพย์"
-                    >
-                      {copiedKey === 'bank_prompt' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedKey === 'bank_prompt' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
-                    </button>
-                  )}
+                  <a
+                    href={`tel:${(dashboardPaymentConfig.contact_phone || '098-329-6762').replace(/[^0-9]/g, '')}`}
+                    className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px] font-semibold"
+                    title="โทรสอบถาม"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>โทรติดต่อ</span>
+                  </a>
                 </div>
+              </div>
+
+              <div className="mt-3 text-[11px] bg-rose-950/40 border border-rose-500/40 text-rose-200 p-2.5 rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>
+                  <strong>ข้อควรระวัง:</strong> รับโอนเงินเฉพาะบัญชี <strong>ธนาคารไทยพาณิชย์ 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก)</strong> เท่านั้น • <u>ไม่มีระบบพร้อมเพย์ (PromptPay)</u> (เบอร์ 098-329-6762 มีไว้สำหรับสอบถามข้อมูลเท่านั้น ห้ามโอนเงินผ่านเบอร์โทร)
+                </span>
               </div>
 
               {myRegistration.payment_notes && (
@@ -5259,21 +5266,31 @@ export default function RegisterView({
                     </button>
                   </div>
 
-                  {/* Phone / PromptPay */}
+                  {/* Contact Phone (No PromptPay) */}
                   <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
                     <div className="min-w-0">
-                      <span className="text-[10px] text-slate-400 block font-medium">เบอร์ติดต่อ / พร้อมเพย์</span>
-                      <span className="font-mono font-bold text-sky-300 text-xs block truncate">098-329-6762</span>
+                      <span className="text-[10px] text-amber-300 block font-medium flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-amber-400 shrink-0" />
+                        ☎️ สอบถามเพิ่มเติม (ไม่มีพร้อมเพย์)
+                      </span>
+                      <span className="font-mono font-bold text-white text-xs block truncate mt-0.5">098-329-6762</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyText('098-329-6762', 'form_prompt', 'เบอร์ติดต่อ')}
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                    <a
+                      href="tel:0983296762"
+                      className="p-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                      title="โทรสอบถามรายละเอียด"
                     >
-                      {copiedKey === 'form_prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedKey === 'form_prompt' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
-                    </button>
+                      <Phone className="w-3 h-3" />
+                      <span>โทรสอบถาม</span>
+                    </a>
                   </div>
+                </div>
+
+                <div className="mt-2.5 text-[11px] bg-rose-950/40 border border-rose-500/40 text-rose-200 p-2.5 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>
+                    <strong>ข้อควรระวัง:</strong> รับโอนเงินเข้าบัญชี <strong>ธ.ไทยพาณิชย์ 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก)</strong> เท่านั้น • <u>ไม่มีระบบพร้อมเพย์ (PromptPay)</u> (เบอร์โทรมีไว้สำหรับโทรสอบถามเท่านั้น ห้ามโอนเงินผ่านเบอร์โทร)
+                  </span>
                 </div>
               </div>
 
@@ -5767,21 +5784,31 @@ export default function RegisterView({
                     </button>
                   </div>
 
-                  {/* Phone / PromptPay */}
+                  {/* Contact Phone (No PromptPay) */}
                   <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-1.5">
                     <div className="min-w-0">
-                      <span className="text-[10px] text-slate-400 block font-medium">เบอร์ติดต่อ / พร้อมเพย์</span>
-                      <span className="font-mono font-bold text-sky-300 text-xs block truncate">098-329-6762</span>
+                      <span className="text-[10px] text-amber-300 block font-medium flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-amber-400 shrink-0" />
+                        ☎️ สอบถามเพิ่มเติม (ไม่มีพร้อมเพย์)
+                      </span>
+                      <span className="font-mono font-bold text-white text-xs block truncate mt-0.5">098-329-6762</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyText('098-329-6762', 'form_prompt_r2', 'เบอร์ติดต่อ')}
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                    <a
+                      href="tel:0983296762"
+                      className="p-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                      title="โทรสอบถามรายละเอียด"
                     >
-                      {copiedKey === 'form_prompt_r2' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedKey === 'form_prompt_r2' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
-                    </button>
+                      <Phone className="w-3 h-3" />
+                      <span>โทรสอบถาม</span>
+                    </a>
                   </div>
+                </div>
+
+                <div className="mt-2.5 text-[11px] bg-rose-950/40 border border-rose-500/40 text-rose-200 p-2.5 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>
+                    <strong>ข้อควรระวัง:</strong> รับโอนเงินเข้าบัญชี <strong>ธ.ไทยพาณิชย์ 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก)</strong> เท่านั้น • <u>ไม่มีระบบพร้อมเพย์ (PromptPay)</u> (เบอร์โทรมีไว้สำหรับโทรสอบถามเท่านั้น ห้ามโอนเงินผ่านเบอร์โทร)
+                  </span>
                 </div>
               </div>
 

@@ -556,7 +556,7 @@ export const DEFAULT_PAYMENT_CONFIG = {
   bank_name: 'ธนาคารไทยพาณิชย์',
   bank_account_number: '594-264865-5',
   bank_account_name: 'นางสาวมัญชุพร ยังเหล็ก',
-  bank_promptpay: '098-329-6762',
+  bank_promptpay: '',
   contact_phone: '098-329-6762',
   allow_installments: true,
   installment_round1_amount: 400,
@@ -629,7 +629,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
     bank_name: 'ธนาคารไทยพาณิชย์',
     account_number: '594-264865-5',
     account_name: 'นางสาวมัญชุพร ยังเหล็ก',
-    promptpay: '098-329-6762',
+    promptpay: '',
     contact_phone: '098-329-6762',
     note: 'กรุณาโอนเงินตามยอดที่ระบุและแนบหลักฐานสลิปโอนเงินทุกครั้ง'
   },

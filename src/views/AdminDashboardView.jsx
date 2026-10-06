@@ -438,7 +438,7 @@ export default function AdminDashboardView({
     const bankName = localPayment?.bank_name || 'ธนาคารไทยพาณิชย์';
     const accNumber = localPayment?.bank_account_number || '594-264865-5';
     const accName = localPayment?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก';
-    const promptpay = localPayment?.bank_promptpay || '098-329-6762';
+    const promptpay = localPayment?.bank_promptpay || '';
     const phone = localPayment?.contact_phone || '098-329-6762';
     
     setLocalMerchConfig(prev => ({
@@ -560,7 +560,7 @@ export default function AdminDashboardView({
           bank_name: localPayment.bank_name || 'ธนาคารไทยพาณิชย์',
           account_number: localPayment.bank_account_number || '594-264865-5',
           account_name: localPayment.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก',
-          promptpay: localPayment.bank_promptpay || '098-329-6762',
+          promptpay: localPayment.bank_promptpay || '',
           contact_phone: localPayment.contact_phone || '098-329-6762',
           note: localMerchConfig.payment?.note || 'กรุณาโอนเงินตามยอดที่ระบุและแนบหลักฐานสลิปโอนเงินทุกครั้ง'
         }
@@ -3378,17 +3378,22 @@ export default function AdminDashboardView({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    หมายเลขพร้อมเพย์ / เบอร์ติดต่อ:
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-amber-400" />
+                    <span>เบอร์โทรสอบถามรายละเอียดเพิ่มเติม:</span>
+                    <span className="text-rose-400 font-normal text-[11px]">(ไม่มีระบบพร้อมเพย์)</span>
                   </label>
                   <input
                     type="text"
-                    value={localPayment.bank_promptpay ?? '098-329-6762'}
-                    onChange={e => setLocalPayment(prev => ({ ...prev, bank_promptpay: e.target.value }))}
+                    value={localPayment.contact_phone ?? '098-329-6762'}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, contact_phone: e.target.value, bank_promptpay: '' }))}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                     placeholder="098-329-6762"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">เบอร์สอบถามรายละเอียดและรับโอน: 098-329-6762</p>
+                  <p className="text-[11px] text-amber-300/80 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>รับโอนเฉพาะบัญชี ธ.ไทยพาณิชย์ 594-264865-5 เท่านั้น • ไม่มีระบบพร้อมเพย์ (PromptPay)</span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -4947,7 +4952,7 @@ export default function AdminDashboardView({
                     </span>
                   </div>
                   <p className="text-xs text-slate-300">
-                    <strong className="text-white">{localPayment?.bank_name || 'ธนาคารไทยพาณิชย์'}</strong> • เลขที่บัญชี: <span className="font-mono font-bold text-amber-300">{localPayment?.bank_account_number || '594-264865-5'}</span> • ชื่อบัญชี: <strong className="text-white">{localPayment?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก'}</strong> • พร้อมเพย์/เบอร์ติดต่อ: <span className="font-mono text-purple-300">{localPayment?.bank_promptpay || '098-329-6762'}</span>
+                    <strong className="text-white">{localPayment?.bank_name || 'ธนาคารไทยพาณิชย์'}</strong> • เลขที่บัญชี: <span className="font-mono font-bold text-amber-300">{localPayment?.bank_account_number || '594-264865-5'}</span> • ชื่อบัญชี: <strong className="text-white">{localPayment?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก'}</strong> • ☎️ สอบถามเพิ่มเติม: <span className="font-mono text-amber-300">{localPayment?.contact_phone || '098-329-6762'} (ไม่มีพร้อมเพย์)</span>
                   </p>
                   <p className="text-[11px] text-slate-400">
                     ระบบคำสั่งซื้อเสื้อและกางเกงโครงการ JRE 2027 ใช้บัญชีธนาคารกลางร่วมกับระบบค่าลงทะเบียนหลักโดยอัตโนมัติ (แก้ไขข้อมูลบัญชีได้ที่เมนู "ตั้งค่าค่าสมัคร & ผ่อนชำระ")
