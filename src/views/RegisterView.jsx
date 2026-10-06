@@ -1565,8 +1565,9 @@ export default function RegisterView({
     const round2Amount = participantFee.round2Amount;
 
     // Detect if single payment was approved OR if both installments were approved
-    const isSinglePaid = myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified';
-    const isInstallmentsBothPaid = myRegistration.installment_1_status === 'paid' && myRegistration.installment_2_status === 'paid';
+    const isSinglePaid = myRegistration.payment_plan !== 'installment' && (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified');
+    const isRound2Paid = myRegistration.installment_2_status === 'paid' && Boolean(myRegistration.installment_2_slip_url);
+    const isInstallmentsBothPaid = (myRegistration.installment_1_status === 'paid') && isRound2Paid;
     const isFullyPaid = isSinglePaid || isInstallmentsBothPaid;
 
     let paidAmount = 0;
@@ -1574,7 +1575,7 @@ export default function RegisterView({
       paidAmount = totalFee;
     } else if (myRegistration.payment_plan === 'installment') {
       if (myRegistration.installment_1_status === 'paid') paidAmount += round1Amount;
-      if (myRegistration.installment_2_status === 'paid') paidAmount += round2Amount;
+      if (isRound2Paid) paidAmount += round2Amount;
     } else {
       if (isSinglePaid) paidAmount = totalFee;
     }
@@ -2081,7 +2082,7 @@ export default function RegisterView({
 
                   {/* Step 4 Card: งวดที่ 2 (450 หรือ 250 บาท) */}
                   <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
-                    (isFullyPaid || myRegistration.installment_2_status === 'paid')
+                    (isFullyPaid || isRound2Paid)
                       ? 'border-emerald-500/40 bg-emerald-950/10'
                       : myRegistration.installment_2_status === 'pending_review'
                       ? 'border-amber-500/40 bg-amber-950/10'
@@ -2092,7 +2093,7 @@ export default function RegisterView({
                         <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
                           <CreditCard className="w-3.5 h-3.5 text-sky-400" /> ขั้นตอนที่ 4 (งวด 2)
                         </span>
-                        {(isFullyPaid || myRegistration.installment_2_status === 'paid') ? (
+                        {(isFullyPaid || isRound2Paid) ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                             ✓ ชำระแล้ว
                           </span>
@@ -2126,7 +2127,7 @@ export default function RegisterView({
                           </div>
                           <div className="min-w-0 flex-1">
                             <span className="text-[10px] text-emerald-400 font-bold block truncate">
-                              {(isFullyPaid || myRegistration.installment_2_status === 'paid') ? '✓ อนุมัติงวด 2 แล้ว' : '✓ แนบสลิปแล้ว'}
+                              {(isFullyPaid || isRound2Paid) ? '✓ อนุมัติงวด 2 แล้ว' : '✓ แนบสลิปแล้ว'}
                             </span>
                             {myRegistration.slip_ocr_round2 && (
                               <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>

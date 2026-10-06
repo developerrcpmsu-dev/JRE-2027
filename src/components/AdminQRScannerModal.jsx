@@ -107,7 +107,7 @@ export default function AdminQRScannerModal({
 
     if (matchedReg) {
       const isRound1Paid = matchedReg.installment_1_status === 'paid' || matchedReg.payment_status === 'paid' || matchedReg.payment_status === 'full';
-      const isFullyPaid = matchedReg.payment_status === 'paid' || matchedReg.payment_status === 'full' || (matchedReg.installment_1_status === 'paid' && matchedReg.installment_2_status === 'paid');
+      const isFullyPaid = matchedReg.payment_status === 'paid' || matchedReg.payment_status === 'full' || (matchedReg.installment_1_status === 'paid' && matchedReg.installment_2_status === 'paid' && Boolean(matchedReg.installment_2_slip_url));
       const isReceived = matchedReg.shirt_pickup_status === 'received' || matchedReg.shirt_received === true;
       const orderNumber = `JRE27-SHIRT-${(matchedReg.id || matchedReg.user_id || 'REG').slice(0, 6).toUpperCase()}`;
 

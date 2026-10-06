@@ -271,7 +271,8 @@ export default function AdminDashboardView({
     return (registrations || []).map((r) => {
       const { firstName, lastName } = resolveFirstAndLastName(r);
       const isRound1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid' || r.payment_status === 'full';
-      const isFullyPaid = r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && r.installment_2_status === 'paid');
+      const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
+      const isFullyPaid = r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && isR2Paid);
       const isReceived = r.shirt_pickup_status === 'received' || r.shirt_received === true;
       const rawSize = (r.shirt_size || 'L').trim();
       const normSize = normalizeSize(rawSize);
@@ -1317,8 +1318,34 @@ export default function AdminDashboardView({
     setModalMedical(reg.medical_history || '');
     setModalAllergy(reg.food_allergy || '');
     setModalTraining(reg.previous_training || '');
-    setModalPaymentStatus(reg.payment_status || 'unpaid');
-    setModalPaymentAmount(reg.payment_amount || (reg.is_msu ? 650 : 850));
+    const isMsu = isMsuInstitution(reg.institution);
+    const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+    const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+    const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url) || Boolean(reg.installment_2_slip_url);
+    const isR1Paid = reg.installment_1_status === 'paid';
+    const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
+    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid');
+
+    let effStatus = reg.payment_status || 'unpaid';
+    let effAmount = reg.payment_amount;
+
+    if (isInstallment) {
+      if (isBothPaid) {
+        effStatus = 'paid';
+        effAmount = 0;
+      } else if (isR1Paid) {
+        effStatus = reg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
+        effAmount = round2Fee;
+      } else {
+        effStatus = reg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+        effAmount = totalFee;
+      }
+    } else {
+      effAmount = reg.payment_amount || totalFee;
+    }
+
+    setModalPaymentStatus(effStatus);
+    setModalPaymentAmount(effAmount);
     setModalPaymentBank(reg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
     setModalPaymentNotes(reg.payment_notes || '');
     setNewMsgText('');
@@ -1342,8 +1369,35 @@ export default function AdminDashboardView({
         setModalMedical(profileModalReg.medical_history || '');
         setModalAllergy(profileModalReg.food_allergy || '');
         setModalTraining(profileModalReg.previous_training || '');
-        setModalPaymentStatus(profileModalReg.payment_status || 'unpaid');
-        setModalPaymentAmount(profileModalReg.payment_amount || (profileModalReg.is_msu ? 650 : 850));
+        
+        const isMsu = isMsuInstitution(profileModalReg.institution);
+        const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+        const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+        const isInstallment = profileModalReg.payment_plan === 'installment' || Boolean(profileModalReg.installment_1_slip_url) || Boolean(profileModalReg.installment_2_slip_url);
+        const isR1Paid = profileModalReg.installment_1_status === 'paid';
+        const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+        const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (profileModalReg.payment_status === 'paid');
+
+        let effStatus = profileModalReg.payment_status || 'unpaid';
+        let effAmount = profileModalReg.payment_amount;
+
+        if (isInstallment) {
+          if (isBothPaid) {
+            effStatus = 'paid';
+            effAmount = 0;
+          } else if (isR1Paid) {
+            effStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
+            effAmount = round2Fee;
+          } else {
+            effStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+            effAmount = totalFee;
+          }
+        } else {
+          effAmount = profileModalReg.payment_amount || totalFee;
+        }
+
+        setModalPaymentStatus(effStatus);
+        setModalPaymentAmount(effAmount);
         setModalPaymentBank(profileModalReg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
         setModalPaymentNotes(profileModalReg.payment_notes || '');
         setIsEditingProfileModal(false);
@@ -1389,7 +1443,7 @@ export default function AdminDashboardView({
         food_allergy: modalAllergy.trim(),
         previous_training: modalTraining.trim(),
         payment_status: modalPaymentStatus,
-        payment_amount: Number(modalPaymentAmount) || (profileModalReg.is_msu ? 650 : 850),
+        payment_amount: Number(modalPaymentAmount) || (isMsuInstitution(profileModalReg.institution) ? 650 : 850),
         payment_bank_info: modalPaymentBank.trim(),
         payment_notes: modalPaymentNotes.trim()
       };
@@ -1415,7 +1469,7 @@ export default function AdminDashboardView({
     setIsSendingMsg(true);
     try {
       await DataService.sendAdminMessage(profileModalReg.user_id, newMsgText.trim(), {
-        payment_amount: Number(modalPaymentAmount) || (profileModalReg.is_msu ? 650 : 850),
+        payment_amount: Number(modalPaymentAmount) || (isMsuInstitution(profileModalReg.institution) ? 650 : 850),
         payment_bank_info: modalPaymentBank.trim(),
         payment_status: modalPaymentStatus
       });
@@ -1608,9 +1662,11 @@ export default function AdminDashboardView({
       const round2Amount = isMsu ? 250 : 450;
 
       let paidAmount = 0;
+      const isR1Paid = r.installment_1_status === 'paid';
+      const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
       if (r.payment_plan === 'installment') {
-        if (r.installment_1_status === 'paid') paidAmount += round1Amount;
-        if (r.installment_2_status === 'paid') paidAmount += round2Amount;
+        if (isR1Paid) paidAmount += round1Amount;
+        if (isR2Paid) paidAmount += round2Amount;
       } else {
         if (r.payment_status === 'paid') paidAmount = totalFee;
       }
@@ -1618,9 +1674,9 @@ export default function AdminDashboardView({
 
       let paymentStatusDesc = '';
       if (r.payment_plan === 'installment') {
-        if (r.installment_1_status === 'paid' && r.installment_2_status === 'paid') {
+        if (isR1Paid && isR2Paid) {
           paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
-        } else if (r.installment_1_status === 'paid') {
+        } else if (isR1Paid) {
           paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
         } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
           paymentStatusDesc = 'ผ่อนชำระ (รอตรวจสอบสลิป)';
@@ -1679,7 +1735,7 @@ export default function AdminDashboardView({
       if (r.payment_plan === 'installment') {
         if (r.installment_2_slip_date) {
           paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
-        } else if (r.installment_2_status === 'paid') {
+        } else if (isR2Paid) {
           paidRound2Date = 'ชำระแล้ว';
         } else {
           paidRound2Date = 'ยังไม่ชำระ';
@@ -1690,9 +1746,9 @@ export default function AdminDashboardView({
 
       let paidRound2Amount = '-';
       if (r.payment_plan === 'installment') {
-        if (r.installment_2_status === 'paid') {
+        if (isR2Paid) {
           paidRound2Amount = `${round2Amount} บาท`;
-        } else if (r.installment_2_status === 'pending_review') {
+        } else if (r.installment_2_status === 'pending_review' && r.installment_2_slip_url) {
           paidRound2Amount = `${round2Amount} บาท (รอตรวจสอบ)`;
         } else {
           paidRound2Amount = `${round2Amount} บาท (ยังไม่ชำระ)`;
@@ -2583,39 +2639,53 @@ export default function AdminDashboardView({
 
                         {/* Payment Status & Slip */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          {reg.payment_plan === 'installment' || reg.installment_1_slip_url || reg.installment_2_slip_url ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenProfileModal(reg, 'payment')}
-                              className="text-left group cursor-pointer block hover:opacity-90"
-                            >
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <span className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[9px] font-bold">
-                                  แบ่งจ่าย 2 งวด
-                                </span>
-                                {paymentStatus === 'paid' ? (
-                                  <span className="text-[10px] text-emerald-400 font-bold">✓ ครบ 2 งวด</span>
-                                ) : (
-                                  <span className="text-[10px] text-amber-300 font-medium">(คลิกตรวจ)</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-[10px]">
-                                <span className={reg.installment_1_status === 'paid' ? 'text-emerald-400 font-bold' : reg.installment_1_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
-                                  งวด 1: {reg.installment_1_status === 'paid' ? '✓ ชำระแล้ว' : reg.installment_1_status === 'pending_review' ? '🟡 รอตรวจ' : '🔴 ค้าง'}
-                                </span>
-                                <span className="text-slate-600">|</span>
-                                <span className={reg.installment_2_status === 'paid' ? 'text-emerald-400 font-bold' : reg.installment_2_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
-                                  งวด 2: {reg.installment_2_status === 'paid' ? '✓ ชำระแล้ว' : reg.installment_2_status === 'pending_review' ? '🟡 รอตรวจ' : '🔴 ค้าง'}
-                                </span>
-                              </div>
-                            </button>
-                          ) : paymentStatus === 'paid' ? (
+                          {reg.payment_plan === 'installment' || reg.installment_1_slip_url || reg.installment_2_slip_url ? (() => {
+                            const isMsu = isMsuInstitution(reg.institution);
+                            const round2Amount = isMsu 
+                              ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                              : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                            const isR1Paid = reg.installment_1_status === 'paid';
+                            const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
+                            const isBothPaid = isR1Paid && isR2Paid;
+
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProfileModal(reg, 'payment')}
+                                className="text-left group cursor-pointer block hover:opacity-90"
+                              >
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[9px] font-bold">
+                                    แบ่งจ่าย 2 งวด
+                                  </span>
+                                  {isBothPaid ? (
+                                    <span className="text-[10px] text-emerald-400 font-bold">✓ ครบ 2 งวด</span>
+                                  ) : isR1Paid ? (
+                                    <span className="text-[10px] text-amber-300 font-bold">ชำระงวด 1 แล้ว (ค้าง {round2Amount} บ.)</span>
+                                  ) : (reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review') ? (
+                                    <span className="text-[10px] text-amber-300 font-medium">⏳ รอตรวจสลิป</span>
+                                  ) : (
+                                    <span className="text-[10px] text-rose-400 font-medium">🔴 ค้างชำระ</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px]">
+                                  <span className={isR1Paid ? 'text-emerald-400 font-bold' : reg.installment_1_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
+                                    งวด 1: {isR1Paid ? '✓ ชำระแล้ว' : reg.installment_1_status === 'pending_review' ? '🟡 รอตรวจ' : '🔴 ค้าง'}
+                                  </span>
+                                  <span className="text-slate-600">|</span>
+                                  <span className={isR2Paid ? 'text-emerald-400 font-bold' : reg.installment_2_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
+                                    งวด 2: {isR2Paid ? '✓ ชำระแล้ว' : reg.installment_2_status === 'pending_review' ? '🟡 รอตรวจ' : !reg.installment_2_slip_url ? '⚪ ยังไม่ส่งสลิป' : '🔴 ค้าง'}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })() : paymentStatus === 'paid' ? (
                             <button
                               type="button"
                               onClick={() => handleOpenProfileModal(reg, 'payment')}
                               className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
                             >
-                              <CheckCircle className="w-3 h-3" /> ชำระแล้ว ({reg.payment_amount || localPayment.fee_total || 650} บ.)
+                              <CheckCircle className="w-3 h-3" /> ชำระแล้ว ({reg.payment_amount || (isMsuInstitution(reg.institution) ? 650 : 850)} บ.)
                             </button>
                           ) : paymentStatus === 'pending_review' ? (
                             <button
@@ -2631,7 +2701,7 @@ export default function AdminDashboardView({
                               onClick={() => handleOpenProfileModal(reg, 'payment')}
                               className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
                             >
-                              <AlertCircle className="w-3 h-3" /> ค้างชำระ ({reg.payment_amount || localPayment.fee_total || 650} บ.)
+                              <AlertCircle className="w-3 h-3" /> ค้างชำระ ({reg.payment_amount || (isMsuInstitution(reg.institution) ? 650 : 850)} บ.)
                             </button>
                           )}
                         </td>
@@ -2839,19 +2909,72 @@ export default function AdminDashboardView({
                       ⭐ ผู้เข้าร่วมดูแลเป็นพิเศษ
                     </span>
                   )}
-                  {modalPaymentStatus === 'paid' ? (
-                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
-                      ✓ ชำระเงินแล้ว
-                    </span>
-                  ) : modalPaymentStatus === 'pending_review' ? (
-                    <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
-                      ⏳ รอตรวจสลิป
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
-                      🔴 ค้างชำระ ({modalPaymentAmount} บ.)
-                    </span>
-                  )}
+                  {(() => {
+                    const isInstallment = profileModalReg.payment_plan === 'installment' || Boolean(profileModalReg.installment_1_slip_url) || Boolean(profileModalReg.installment_2_slip_url);
+                    const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                    const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+                    const isBothPaid = isR1Paid && isR2Paid;
+                    const isMsu = isMsuInstitution(profileModalReg.institution);
+                    const round2Amount = isMsu 
+                      ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                      : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+
+                    if (isInstallment) {
+                      if (isBothPaid || modalPaymentStatus === 'paid') {
+                        return (
+                          <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                            ✓ ชำระครบ 2 งวดแล้ว
+                          </span>
+                        );
+                      }
+                      if (isR1Paid) {
+                        if (profileModalReg.installment_2_status === 'pending_review') {
+                          return (
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                              ⏳ รอตรวจสลิปงวดที่ 2 (ชำระงวด 1 แล้ว)
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
+                            🟡 ชำระงวด 1 แล้ว (ค้างงวด 2: {round2Amount} บ.)
+                          </span>
+                        );
+                      }
+                      if (profileModalReg.installment_1_status === 'pending_review') {
+                        return (
+                          <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                            ⏳ รอตรวจสลิปงวดที่ 1
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                          🔴 ค้างชำระ ({modalPaymentAmount} บ.)
+                        </span>
+                      );
+                    }
+
+                    if (modalPaymentStatus === 'paid') {
+                      return (
+                        <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                          ✓ ชำระเงินแล้ว
+                        </span>
+                      );
+                    }
+                    if (modalPaymentStatus === 'pending_review') {
+                      return (
+                        <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                          ⏳ รอตรวจสลิป
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                        🔴 ค้างชำระ ({modalPaymentAmount} บ.)
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {profileModalReg.full_name_affiliation && (
@@ -3424,12 +3547,35 @@ export default function AdminDashboardView({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  const isBothPaid = profileModalReg.installment_2_status === 'paid';
+                                  const isMsu = isMsuInstitution(profileModalReg.institution);
+                                  const round2Fee = isMsu 
+                                    ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                    : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                  const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+                                  
                                   const updates = {
                                     installment_1_status: 'paid',
-                                    installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย',
-                                    ...(isBothPaid ? { payment_status: 'paid' } : {})
+                                    installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
                                   };
+
+                                  if (isR2Paid) {
+                                    updates.payment_status = 'paid';
+                                    updates.payment_amount = 0;
+                                    updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                    setModalPaymentStatus('paid');
+                                    setModalPaymentAmount(0);
+                                    setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
+                                  } else {
+                                    const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                    const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
+                                    updates.payment_status = nextStatus;
+                                    updates.payment_amount = round2Fee;
+                                    updates.payment_notes = nextNotes;
+                                    setModalPaymentStatus(nextStatus);
+                                    setModalPaymentAmount(round2Fee);
+                                    setModalPaymentNotes(nextNotes);
+                                  }
+
                                   await onUpdateAllocation(profileModalReg.user_id, updates);
                                   setProfileModalReg(prev => ({ ...prev, ...updates }));
                                   triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
@@ -3451,11 +3597,18 @@ export default function AdminDashboardView({
                                     cancelText: 'ยกเลิก'
                                   });
                                   if (reason) {
+                                    const isMsu = isMsuInstitution(profileModalReg.institution);
+                                    const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
                                     const updates = {
                                       installment_1_status: 'unpaid',
                                       installment_1_notes: reason,
-                                      payment_status: 'unpaid'
+                                      payment_status: 'unpaid',
+                                      payment_amount: totalFee,
+                                      payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
                                     };
+                                    setModalPaymentStatus('unpaid');
+                                    setModalPaymentAmount(totalFee);
+                                    setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
                                     await onUpdateAllocation(profileModalReg.user_id, updates);
                                     setProfileModalReg(prev => ({ ...prev, ...updates }));
                                     triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
@@ -3479,9 +3632,9 @@ export default function AdminDashboardView({
                       <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-purple-300 text-xs">
-                            งวดที่ 2: {profileModalReg?.is_msu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท ({profileModalReg?.is_msu ? 'นิสิต มมส' : 'ต่างสถาบัน'})
+                            งวดที่ 2: {isMsuInstitution(profileModalReg?.institution) ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท ({isMsuInstitution(profileModalReg?.institution) ? 'นิสิต มมส' : 'ต่างสถาบัน'})
                           </span>
-                          {profileModalReg.installment_2_status === 'paid' ? (
+                          {profileModalReg.installment_2_slip_url && profileModalReg.installment_2_status === 'paid' ? (
                             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
                               ✓ อนุมัติแล้ว
                             </span>
@@ -3551,15 +3704,36 @@ export default function AdminDashboardView({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  const isBothPaid = profileModalReg.installment_1_status === 'paid';
+                                  const isMsu = isMsuInstitution(profileModalReg.institution);
+                                  const round1Fee = paymentConfig?.installment_round1_amount || 400;
+                                  const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                  
                                   const updates = {
                                     installment_2_status: 'paid',
-                                    installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย',
-                                    ...(isBothPaid ? { payment_status: 'paid' } : {})
+                                    installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
                                   };
+
+                                  if (isR1Paid) {
+                                    updates.payment_status = 'paid';
+                                    updates.payment_amount = 0;
+                                    updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                    setModalPaymentStatus('paid');
+                                    setModalPaymentAmount(0);
+                                    setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
+                                  } else {
+                                    const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                    const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
+                                    updates.payment_status = nextStatus;
+                                    updates.payment_amount = round1Fee;
+                                    updates.payment_notes = nextNotes;
+                                    setModalPaymentStatus(nextStatus);
+                                    setModalPaymentAmount(round1Fee);
+                                    setModalPaymentNotes(nextNotes);
+                                  }
+
                                   await onUpdateAllocation(profileModalReg.user_id, updates);
                                   setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                  triggerToast('อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
+                                  triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
                                 }}
                                 className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                               >
@@ -3578,10 +3752,23 @@ export default function AdminDashboardView({
                                     cancelText: 'ยกเลิก'
                                   });
                                   if (reason) {
+                                    const isMsu = isMsuInstitution(profileModalReg.institution);
+                                    const round2Fee = isMsu 
+                                      ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                      : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                    const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                    const isR1Paid = profileModalReg.installment_1_status === 'paid';
+
                                     const updates = {
                                       installment_2_status: 'unpaid',
-                                      installment_2_notes: reason
+                                      installment_2_notes: reason,
+                                      payment_status: 'unpaid',
+                                      payment_amount: isR1Paid ? round2Fee : totalFee,
+                                      payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
                                     };
+                                    setModalPaymentStatus('unpaid');
+                                    setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                    setModalPaymentNotes(updates.payment_notes);
                                     await onUpdateAllocation(profileModalReg.user_id, updates);
                                     setProfileModalReg(prev => ({ ...prev, ...updates }));
                                     triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
@@ -3663,14 +3850,19 @@ export default function AdminDashboardView({
                           <button
                             type="button"
                             onClick={async () => {
-                              setModalPaymentStatus('paid');
-                              setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
+                              const isInstallment = profileModalReg.payment_plan === 'installment';
                               const fullApprovalUpdates = {
                                 payment_status: 'paid',
-                                installment_1_status: 'paid',
-                                installment_2_status: 'paid',
+                                payment_amount: 0,
                                 payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
                               };
+                              if (isInstallment) {
+                                fullApprovalUpdates.installment_1_status = 'paid';
+                                fullApprovalUpdates.installment_2_status = 'paid';
+                              }
+                              setModalPaymentStatus('paid');
+                              setModalPaymentAmount(0);
+                              setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
                               await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
                               setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
                               triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
@@ -3694,13 +3886,25 @@ export default function AdminDashboardView({
                                 cancelText: 'ยกเลิก'
                               });
                               if (reason) {
+                                const isMsu = isMsuInstitution(profileModalReg.institution);
+                                const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                const isInstallment = profileModalReg.payment_plan === 'installment';
+                                const round2Fee = isMsu 
+                                  ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                  : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                const remaining = (isInstallment && isR1Paid) ? round2Fee : totalFee;
+
                                 setModalPaymentStatus('unpaid');
+                                setModalPaymentAmount(remaining);
                                 setModalPaymentNotes(reason);
-                                await onUpdateAllocation(profileModalReg.user_id, {
+                                const rejectUpdates = {
                                   payment_status: 'unpaid',
+                                  payment_amount: remaining,
                                   payment_notes: reason
-                                });
-                                setProfileModalReg(prev => ({ ...prev, payment_status: 'unpaid', payment_notes: reason }));
+                                };
+                                await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
                                 triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
                               }
                             }}

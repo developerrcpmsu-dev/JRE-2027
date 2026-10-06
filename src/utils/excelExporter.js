@@ -179,9 +179,11 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     const round2Amount = isMsu ? 250 : 450;
 
     let paidAmount = 0;
+    const isR1Paid = r.installment_1_status === 'paid';
+    const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
     if (r.payment_plan === 'installment') {
-      if (r.installment_1_status === 'paid') paidAmount += round1Amount;
-      if (r.installment_2_status === 'paid') paidAmount += round2Amount;
+      if (isR1Paid) paidAmount += round1Amount;
+      if (isR2Paid) paidAmount += round2Amount;
     } else {
       if (r.payment_status === 'paid') paidAmount = totalFee;
     }
@@ -189,9 +191,9 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     let paymentStatusDesc = '';
     if (r.payment_plan === 'installment') {
-      if (r.installment_1_status === 'paid' && r.installment_2_status === 'paid') {
+      if (isR1Paid && isR2Paid) {
         paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
-      } else if (r.installment_1_status === 'paid') {
+      } else if (isR1Paid) {
         paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
       } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
         paymentStatusDesc = 'ผ่อนชำระ (รอตรวจสอบสลิป)';
@@ -250,7 +252,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     if (r.payment_plan === 'installment') {
       if (r.installment_2_slip_date) {
         paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
-      } else if (r.installment_2_status === 'paid') {
+      } else if (isR2Paid) {
         paidRound2Date = 'ชำระแล้ว';
       } else {
         paidRound2Date = 'ยังไม่ชำระ';
@@ -261,9 +263,9 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     let paidRound2Amount = '-';
     if (r.payment_plan === 'installment') {
-      if (r.installment_2_status === 'paid') {
+      if (isR2Paid) {
         paidRound2Amount = `${round2Amount} บาท`;
-      } else if (r.installment_2_status === 'pending_review') {
+      } else if (r.installment_2_status === 'pending_review' && r.installment_2_slip_url) {
         paidRound2Amount = `${round2Amount} บาท (รอตรวจสอบ)`;
       } else {
         paidRound2Amount = `${round2Amount} บาท (ยังไม่ชำระ)`;

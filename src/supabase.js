@@ -139,11 +139,28 @@ const unpackRegistration = (row) => {
       }
     } catch (e) {}
   }
-  return {
+  const unpacked = {
     ...extra,
     ...row,
     special_notes: extra.user_notes !== undefined ? extra.user_notes : row.special_notes
   };
+
+  // Guard against phantom approval for round 2 if no slip has been uploaded
+  if (unpacked.payment_plan === 'installment') {
+    if (!unpacked.installment_2_slip_url && unpacked.installment_2_status === 'paid') {
+      unpacked.installment_2_status = 'unpaid';
+    }
+    // For 2-round installments, overall payment_status is 'paid' ONLY IF both rounds are verified
+    const isR1Paid = unpacked.installment_1_status === 'paid';
+    const isR2Paid = unpacked.installment_2_status === 'paid' && Boolean(unpacked.installment_2_slip_url);
+    if (!isR1Paid || !isR2Paid) {
+      if (unpacked.payment_status === 'paid') {
+        unpacked.payment_status = 'unpaid';
+      }
+    }
+  }
+
+  return unpacked;
 };
 
 const packRegistrationForSupabase = (fullData) => {
