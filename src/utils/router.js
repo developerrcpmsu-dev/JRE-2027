@@ -63,21 +63,29 @@ export function parseCurrentRoute() {
 
   // Standalone shortcuts for announcements
   if (first === 'pr') {
-    return { mainTab: 'announcements', subRoute: 'public', canonicalPath: '/announcements/pr' };
+    const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
+    return { mainTab: 'announcements', subRoute: 'public', postId: queryId, canonicalPath: queryId ? `/announcements/pr?id=${queryId}` : '/announcements/pr' };
   }
   if (first === 'orders') {
-    return { mainTab: 'announcements', subRoute: 'members', canonicalPath: '/announcements/orders' };
+    const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
+    return { mainTab: 'announcements', subRoute: 'members', postId: queryId, canonicalPath: queryId ? `/announcements/orders?id=${queryId}` : '/announcements/orders' };
   }
 
   // Announcements main & sub-pages
   if (first === 'announcements' || first === 'news' || first === 'posts') {
+    const queryId = url.searchParams.get('id') || url.searchParams.get('annId');
     if (second === 'pr' || second === 'public') {
-      return { mainTab: 'announcements', subRoute: 'public', canonicalPath: '/announcements/pr' };
+      const third = segments[2] || queryId || null;
+      return { mainTab: 'announcements', subRoute: 'public', postId: third, canonicalPath: third ? `/announcements/pr?id=${third}` : '/announcements/pr' };
     }
     if (second === 'orders' || second === 'members') {
-      return { mainTab: 'announcements', subRoute: 'members', canonicalPath: '/announcements/orders' };
+      const third = segments[2] || queryId || null;
+      return { mainTab: 'announcements', subRoute: 'members', postId: third, canonicalPath: third ? `/announcements/orders?id=${third}` : '/announcements/orders' };
     }
-    return { mainTab: 'announcements', subRoute: 'all', canonicalPath: '/announcements' };
+    if (second && second !== 'all') {
+      return { mainTab: 'announcements', subRoute: 'all', postId: second, canonicalPath: `/announcements?id=${second}` };
+    }
+    return { mainTab: 'announcements', subRoute: 'all', postId: queryId || null, canonicalPath: queryId ? `/announcements?id=${queryId}` : '/announcements' };
   }
 
   // Merchandise & Sub-pages
@@ -149,7 +157,7 @@ export function getPathForRoute(mainTab, subRoute) {
   }
 }
 
-export function syncUrlToRoute(mainTab, subRoute, replace = false) {
+export function syncUrlToRoute(mainTab, subRoute, replace = false, options = {}) {
   if (typeof window === 'undefined') return;
 
   const targetPath = getPathForRoute(mainTab, subRoute);
@@ -160,6 +168,16 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false) {
   currentParams.delete('tab');
   currentParams.delete('type');
   currentParams.delete('view');
+
+  // If navigating away from announcements or clearing postId
+  if (mainTab !== 'announcements' || options.clearPostId) {
+    currentParams.delete('id');
+    currentParams.delete('annId');
+  }
+
+  if (options.postId) {
+    currentParams.set('id', options.postId);
+  }
 
   const queryString = currentParams.toString();
   const fullTarget = queryString ? `${targetPath}?${queryString}` : targetPath;
@@ -172,3 +190,4 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false) {
     }
   }
 }
+

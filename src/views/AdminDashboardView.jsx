@@ -4696,9 +4696,19 @@ export default function AdminDashboardView({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`/announcements/${ann.category === 'pr' ? 'pr' : 'orders'}?id=${ann.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-rescue-400 rounded-xl transition-colors text-xs flex items-center gap-1 cursor-pointer"
+                    title="เปิดดูหน้าเฉพาะของประกาศนี้ในแท็บใหม่"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>เปิดดู</span>
+                  </a>
                   <button
                     onClick={() => handleOpenAnnModal(ann)}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors text-xs flex items-center gap-1"
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors text-xs flex items-center gap-1 cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>แก้ไข</span>

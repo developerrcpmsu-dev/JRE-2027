@@ -27,7 +27,7 @@ export default function App() {
   const currentTab = route.mainTab;
   const currentSubRoute = route.subRoute;
 
-  const setCurrentTab = (newTab, newSubRoute = null) => {
+  const setCurrentTab = (newTab, newSubRoute = null, options = {}) => {
     let main = newTab;
     let sub = newSubRoute;
 
@@ -48,8 +48,8 @@ export default function App() {
       sub = newSubRoute;
     }
 
-    syncUrlToRoute(main, sub);
-    setRoute({ mainTab: main, subRoute: sub, canonicalPath: getPathForRoute(main, sub) });
+    syncUrlToRoute(main, sub, false, options);
+    setRoute(parseCurrentRoute());
   };
 
   // Sync browser back/forward buttons and hash navigation
@@ -486,10 +486,11 @@ export default function App() {
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
             initialScope={currentSubRoute === 'public' || currentTab === 'pr' ? 'public' : currentSubRoute === 'members' || currentTab === 'orders' ? 'members' : 'all'}
+            initialPostId={route.postId || null}
             onScopeChange={(scope) => {
-              if (scope === 'public') setCurrentTab('announcements', 'public');
-              else if (scope === 'members') setCurrentTab('announcements', 'members');
-              else setCurrentTab('announcements', 'all');
+              if (scope === 'public') setCurrentTab('announcements', 'public', { clearPostId: true });
+              else if (scope === 'members') setCurrentTab('announcements', 'members', { clearPostId: true });
+              else setCurrentTab('announcements', 'all', { clearPostId: true });
             }}
           />
         )}
