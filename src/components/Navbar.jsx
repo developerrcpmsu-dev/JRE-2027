@@ -171,8 +171,8 @@ export default function Navbar({
               </button>
             )}
 
-            {/* Admin Panel Tab if logged in as Admin */}
-            {isAdmin && (
+            {/* Admin Panel Tab in Nav ONLY if user profile is also active on right */}
+            {isAdmin && user && (
               <button
                 onClick={() => handleNav('admin')}
                 className={`px-2.5 xl:px-3 py-1.5 xl:py-2 rounded-2xl text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
@@ -181,7 +181,8 @@ export default function Navbar({
                     : 'bg-purple-950/60 text-purple-300 border border-purple-800/60 hover:bg-purple-900/80'
                 }`}
               >
-                <Award className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <Award className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0 text-amber-300" />
                 <span>ระบบ Admin</span>
               </button>
             )}
@@ -222,15 +223,29 @@ export default function Navbar({
                 </button>
               </div>
             ) : isAdmin ? (
-              <div className="flex items-center gap-2.5 bg-purple-950/60 border border-purple-800/80 px-2.5 py-1.5 rounded-2xl shrink-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="text-xs font-bold text-purple-200 whitespace-nowrap">Admin Mode</span>
+              <div className={`flex items-center gap-1.5 p-1 pl-3 rounded-2xl border transition-all shrink-0 ${
+                currentTab === 'admin'
+                  ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-600/40 ring-2 ring-purple-400'
+                  : 'bg-purple-950/80 hover:bg-purple-900/80 border-purple-800/80 text-purple-200 shadow-sm'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => handleNav('admin')}
+                  className="flex items-center gap-2 text-xs xl:text-sm font-bold cursor-pointer"
+                  title="เข้าสู่ระบบ Admin Console"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <Award className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0 text-amber-300" />
+                  <span className="whitespace-nowrap font-black">ระบบ Admin</span>
+                  <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full font-bold border border-purple-400/30 hidden sm:inline-block">Admin Mode</span>
+                </button>
+                <div className="w-[1px] h-4 bg-purple-700/60 mx-0.5 shrink-0" />
                 <button
                   onClick={onLogout}
                   title="ออกจากระบบแอดมิน"
-                  className="p-1 text-purple-300 hover:text-red-400 hover:bg-purple-900/50 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-purple-300 hover:text-red-400 hover:bg-purple-900/60 rounded-xl transition-colors cursor-pointer shrink-0"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
                 </button>
               </div>
             ) : (

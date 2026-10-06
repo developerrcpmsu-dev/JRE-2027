@@ -1177,12 +1177,14 @@ function ProductCardShowcase({
             <Maximize2 className="w-4 h-4" />
           </button>
           
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
-            <span className="px-3 py-1 bg-slate-900/85 backdrop-blur-sm rounded-full border border-slate-700/80 text-[11px] font-black text-rescue-400">
-              {product.category === 'shirt' ? 'เสื้อปฏิบัติการกู้ภัยทางการ' : 'กางเกงกู้ภัย'}
+          <div className="absolute top-3 left-3 flex items-center gap-2 flex-wrap drop-shadow-md">
+            <span className="px-3 py-1.5 bg-slate-950/95 backdrop-blur-md rounded-full border border-slate-700/80 text-xs font-black text-white shadow-lg flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-orange-500 shadow-sm shadow-orange-500/50 shrink-0"></span>
+              <span>{product.category === 'shirt' ? 'เสื้อปฏิบัติการกู้ภัยทางการ' : 'กางเกงกู้ภัย'}</span>
             </span>
-            <span className="px-2.5 py-1 bg-amber-500/20 backdrop-blur-sm rounded-full border border-amber-500/40 text-[10px] font-black text-amber-300">
-              สั่งพรีออเดอร์พร้อมสมัคร
+            <span className="px-3 py-1.5 bg-amber-400 text-slate-950 shadow-lg rounded-full border border-amber-300 text-xs font-black flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+              <span>สั่งพรีออเดอร์พร้อมสมัคร</span>
             </span>
           </div>
         </div>
