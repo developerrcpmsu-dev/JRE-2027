@@ -64,7 +64,7 @@ import {
   Filter
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
-import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel } from '../utils/excelExporter';
+import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
@@ -269,6 +269,7 @@ export default function AdminDashboardView({
   // Trainee registrations unified as official training shirt records
   const traineeShirtRecords = React.useMemo(() => {
     return (registrations || []).map((r) => {
+      const { firstName, lastName } = resolveFirstAndLastName(r);
       const isRound1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid' || r.payment_status === 'full';
       const isFullyPaid = r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && r.installment_2_status === 'paid');
       const isReceived = r.shirt_pickup_status === 'received' || r.shirt_received === true;
@@ -283,7 +284,9 @@ export default function AdminDashboardView({
         source: 'registration',
         source_label: '📋 เสื้อฝึกผู้สมัคร (รวมในค่าสมัคร)',
         order_number: orderNumber,
-        customer_name: r.full_name_affiliation || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.user_email || 'ผู้สมัคร JRE 2027',
+        first_name: firstName,
+        last_name: lastName,
+        customer_name: r.full_name_affiliation || `${firstName} ${lastName}`.trim() || r.user_email || 'ผู้สมัคร JRE 2027',
         nickname: r.nickname || '-',
         callsign: r.callsign || '-',
         institution: r.institution || '-',
@@ -312,6 +315,7 @@ export default function AdminDashboardView({
   // Merchandise store orders records
   const merchandiseStoreRecords = React.useMemo(() => {
     return (merchandiseOrders || []).map((ord) => {
+      const { firstName, lastName } = resolveFirstAndLastName(ord);
       const isVerified = ord.payment_status === 'paid_verified';
       const isReceived = ord.pickup_status === 'received';
       const totalQty = (ord.items || []).reduce((sum, it) => sum + (it.quantity || 1), 0);
@@ -324,6 +328,8 @@ export default function AdminDashboardView({
         source: 'merchandise',
         source_label: '🛍️ สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
         order_number: ord.order_number,
+        first_name: firstName,
+        last_name: lastName,
         customer_name: ord.customer_name || 'ลูกค้าหน้าร้าน',
         nickname: '-',
         callsign: '-',
@@ -1550,41 +1556,193 @@ export default function AdminDashboardView({
     }
 
     const headers = [
-      'ชื่อ-สกุล', 'ชื่อเต็ม/สถาบัน (ไทย-อังกฤษ)', 'ชื่อเล่น', 'รหัสนามเรียกขาน', 'ไซส์เสื้อ (บังคับ)', 'สังกัด/มหาวิทยาลัย',
-      'เรทค่าสมัคร', 'วันเกิด', 'อายุ', 'กรุ๊ปเลือด', 'เบอร์โทร',
-      'ติดต่อฉุกเฉิน', 'เบอร์ฉุกเฉิน', 'กลุ่มฝึก', 'ห้องนอน', 'สถานะการชำระเงิน', 'ยอดเงิน',
-      'สถานะงวด 1', 'สลิปงวด 1 (รูปภาพ)', 'สลิปงวด 1 (URL ลิงก์ตรง)',
-      'สถานะงวด 2', 'สลิปงวด 2 (รูปภาพ)', 'สลิปงวด 2 (URL ลิงก์ตรง)',
-      'สลิปเต็มจำนวน (รูปภาพ)', 'สลิปเต็มจำนวน (URL ลิงก์ตรง)',
-      'รูปถ่าย ID Card (รูปภาพ)', 'รูปถ่าย ID Card (URL ลิงก์ตรง)',
-      'ดูแลพิเศษ', 'หมายเหตุพิเศษ'
+      'ลำดับ',
+      'ชื่อ',
+      'สกุล',
+      'หน่วยงาน',
+      'รหัสนามเรียกขาน',
+      'เบอร์โทร',
+      'ชื่อสกุลผู้ที่ติดต่อได้',
+      'เบอร์โทรผู้ที่ติดต่อได้',
+      'โรคประจำตัว / ข้อจำกัดทางกาย',
+      'ประวัติการแพ้ยา / แพ้อาหาร',
+      'ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา',
+      'สถานะการชำระเงิน',
+      'จ่ายครั้งแรกวันที่',
+      'จำนวนเงินงวดที่ 1',
+      'ครั้งที่ 2 วันที่',
+      'จำนวนเงินงวดที่ 2',
+      'มียอดค้างชำระไหม',
+      'รูปทำบัตร ID Card (สูตรแสดงภาพ =IMAGE)',
+      'รูปทำบัตร ID Card (URL ลิงก์ตรง)',
+      'ไซส์เสื้อฝึก JRE 2027',
+      'กลุ่มฝึกที่จัดสรร',
+      'ห้องนอนที่จัดสรร',
+      'ชื่อเล่น',
+      'อีเมล Google',
+      'วันเกิด',
+      'อายุ',
+      'กรุ๊ปเลือด',
+      'ความสัมพันธ์ผู้ติดต่อฉุกเฉิน',
+      'ประเภทสถาบัน',
+      'ยอดค่าสมัครรวม (บาท)',
+      'ยอดที่ชำระแล้ว (บาท)',
+      'ยอดค้างชำระ (บาท)',
+      'สถานะงวด 1',
+      'สลิปงวด 1 (สูตร =IMAGE)',
+      'สลิปงวด 1 (URL ลิงก์ตรง)',
+      'สถานะงวด 2',
+      'สลิปงวด 2 (สูตร =IMAGE)',
+      'สลิปงวด 2 (URL ลิงก์ตรง)',
+      'สลิปเต็มจำนวน (สูตร =IMAGE)',
+      'สลิปเต็มจำนวน (URL ลิงก์ตรง)',
+      'ดูแลพิเศษ',
+      'หมายเหตุพิเศษ'
     ];
 
-    const rows = await Promise.all(registrations.map(async (r) => {
+    const rows = await Promise.all(registrations.map(async (r, idx) => {
+      const { firstName, lastName } = resolveFirstAndLastName(r);
       const isMsu = isMsuInstitution(r.institution);
+      const totalFee = isMsu ? 650 : 850;
+      const round1Amount = 400;
+      const round2Amount = isMsu ? 250 : 450;
+
+      let paidAmount = 0;
+      if (r.payment_plan === 'installment') {
+        if (r.installment_1_status === 'paid') paidAmount += round1Amount;
+        if (r.installment_2_status === 'paid') paidAmount += round2Amount;
+      } else {
+        if (r.payment_status === 'paid') paidAmount = totalFee;
+      }
+      const remainingAmount = Math.max(0, totalFee - paidAmount);
+
+      let paymentStatusDesc = '';
+      if (r.payment_plan === 'installment') {
+        if (r.installment_1_status === 'paid' && r.installment_2_status === 'paid') {
+          paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
+        } else if (r.installment_1_status === 'paid') {
+          paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
+        } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
+          paymentStatusDesc = 'ผ่อนชำระ (รอตรวจสอบสลิป)';
+        } else {
+          paymentStatusDesc = 'ผ่อนชำระ (ยังไม่ชำระ)';
+        }
+      } else {
+        if (r.payment_status === 'paid') {
+          paymentStatusDesc = 'จ่ายครบ (ชำระเต็มจำนวน)';
+        } else if (r.payment_status === 'pending_review') {
+          paymentStatusDesc = 'จ่ายครบ (รอตรวจสอบสลิป)';
+        } else {
+          paymentStatusDesc = 'ชำระเต็มจำนวน (ยังไม่ชำระ)';
+        }
+      }
+
+      let paidRound1Date = '-';
+      if (r.payment_plan === 'installment') {
+        if (r.installment_1_slip_date) {
+          paidRound1Date = new Date(r.installment_1_slip_date).toLocaleString('th-TH');
+        } else if (r.installment_1_status === 'paid') {
+          paidRound1Date = 'ชำระแล้ว';
+        } else {
+          paidRound1Date = 'ยังไม่ชำระ';
+        }
+      } else {
+        if (r.payment_slip_date) {
+          paidRound1Date = new Date(r.payment_slip_date).toLocaleString('th-TH');
+        } else if (r.payment_status === 'paid') {
+          paidRound1Date = 'ชำระแล้ว';
+        } else {
+          paidRound1Date = 'ยังไม่ชำระ';
+        }
+      }
+
+      let paidRound1Amount = '';
+      if (r.payment_plan === 'installment') {
+        if (r.installment_1_status === 'paid') {
+          paidRound1Amount = '400 บาท';
+        } else if (r.installment_1_status === 'pending_review') {
+          paidRound1Amount = '400 บาท (รอตรวจสอบ)';
+        } else {
+          paidRound1Amount = '400 บาท (ยังไม่ชำระ)';
+        }
+      } else {
+        if (r.payment_status === 'paid') {
+          paidRound1Amount = `${totalFee} บาท (จ่ายครบเต็มจำนวน)`;
+        } else if (r.payment_status === 'pending_review') {
+          paidRound1Amount = `${totalFee} บาท (รอตรวจสอบ)`;
+        } else {
+          paidRound1Amount = `${totalFee} บาท (ยังไม่ชำระ)`;
+        }
+      }
+
+      let paidRound2Date = '-';
+      if (r.payment_plan === 'installment') {
+        if (r.installment_2_slip_date) {
+          paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
+        } else if (r.installment_2_status === 'paid') {
+          paidRound2Date = 'ชำระแล้ว';
+        } else {
+          paidRound2Date = 'ยังไม่ชำระ';
+        }
+      } else {
+        paidRound2Date = '-';
+      }
+
+      let paidRound2Amount = '-';
+      if (r.payment_plan === 'installment') {
+        if (r.installment_2_status === 'paid') {
+          paidRound2Amount = `${round2Amount} บาท`;
+        } else if (r.installment_2_status === 'pending_review') {
+          paidRound2Amount = `${round2Amount} บาท (รอตรวจสอบ)`;
+        } else {
+          paidRound2Amount = `${round2Amount} บาท (ยังไม่ชำระ)`;
+        }
+      } else {
+        paidRound2Amount = '-';
+      }
+
+      const remainingBalanceStatus = remainingAmount === 0 
+        ? 'ไม่มี (ชำระครบถ้วนแล้ว)' 
+        : `มียอดค้างชำระ ${remainingAmount} บาท`;
+
       const s1 = r.installment_1_slip_url ? await ensureHostedUrl(r.installment_1_slip_url, 'slip-round1.jpg') : '';
       const s2 = r.installment_2_slip_url ? await ensureHostedUrl(r.installment_2_slip_url, 'slip-round2.jpg') : '';
       const sFull = r.payment_slip_url ? await ensureHostedUrl(r.payment_slip_url, 'slip-full.jpg') : '';
       const idPhoto = r.id_card_photo ? await ensureHostedUrl(r.id_card_photo, 'id-card.jpg') : '';
 
       return [
-        `"${r.first_name || ''} ${r.last_name || ''}"`,
-        `"${(r.full_name_affiliation || '').replace(/"/g, '""')}"`,
-        `"${r.nickname || ''}"`,
-        `"${r.callsign || ''}"`,
-        `"${r.shirt_size || ''}"`,
-        `"${(r.institution || '').replace(/"/g, '""')}"`,
-        `"${isMsu ? 'นิสิต มมส (650 บ.)' : 'ต่างสถาบัน (850 บ.)'}"`,
-        `"${r.dob || ''}"`,
-        `"${r.age_years || 0} ปี ${r.age_months || 0} เดือน"`,
-        `"${r.blood_group || ''}"`,
-        `"${r.phone || ''}"`,
-        `"${r.emergency_name || ''}"`,
-        `"${r.emergency_phone || ''}"`,
+        idx + 1,
+        `"${firstName.replace(/"/g, '""')}"`,
+        `"${lastName.replace(/"/g, '""')}"`,
+        `"${(r.institution || '-').replace(/"/g, '""')}"`,
+        `"${r.callsign || '-'}"`,
+        `"${r.phone || '-'}"`,
+        `"${(r.emergency_name || '-').replace(/"/g, '""')}"`,
+        `"${r.emergency_phone || '-'}"`,
+        `"${(r.medical_history && r.medical_history.trim() !== '' ? r.medical_history.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
+        `"${(r.food_allergy && r.food_allergy.trim() !== '' ? r.food_allergy.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
+        `"${(r.previous_training && r.previous_training.trim() !== '' ? r.previous_training.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
+        `"${paymentStatusDesc}"`,
+        `"${paidRound1Date}"`,
+        `"${paidRound1Amount}"`,
+        `"${paidRound2Date}"`,
+        `"${paidRound2Amount}"`,
+        `"${remainingBalanceStatus}"`,
+        `"${idPhoto ? `=IMAGE(""${idPhoto}"")` : 'ยังไม่แนบ'}"`,
+        `"${idPhoto || 'ยังไม่แนบ'}"`,
+        `"${r.shirt_size || 'L'}"`,
         `"${r.group_assigned || 'ยังไม่จัดสรร'}"`,
         `"${r.room_assigned || 'ยังไม่จัดสรร'}"`,
-        `"${r.payment_status === 'paid' ? 'ชำระแล้ว' : r.payment_status === 'pending_review' ? 'รอตรวจสลิป' : 'ค้างชำระ'}"`,
-        `"${r.payment_amount || (isMsu ? 650 : 850)}"`,
+        `"${r.nickname || '-'}"`,
+        `"${r.user_email || '-'}"`,
+        `"${r.dob || '-'}"`,
+        `"${r.age_years || 0} ปี ${r.age_months || 0} เดือน"`,
+        `"${r.blood_group || '-'}"`,
+        `"${r.emergency_relation || '-'}"`,
+        `"${isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)'}"`,
+        `"${totalFee}"`,
+        `"${paidAmount}"`,
+        `"${remainingAmount}"`,
         `"${r.installment_1_status || '-'}"`,
         `"${s1 ? `=IMAGE(""${s1}"")` : 'ยังไม่แนบ'}"`,
         `"${s1 || 'ยังไม่แนบ'}"`,
@@ -1593,8 +1751,6 @@ export default function AdminDashboardView({
         `"${s2 || 'ยังไม่แนบ'}"`,
         `"${sFull ? `=IMAGE(""${sFull}"")` : 'ยังไม่แนบ'}"`,
         `"${sFull || 'ยังไม่แนบ'}"`,
-        `"${idPhoto ? `=IMAGE(""${idPhoto}"")` : 'ยังไม่แนบ'}"`,
-        `"${idPhoto || 'ยังไม่แนบ'}"`,
         `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
         `"${(r.special_notes || '').replace(/"/g, '""')}"`
       ];
@@ -1640,13 +1796,30 @@ export default function AdminDashboardView({
     }
 
     const headers = [
-      'ลำดับ', 'ประเภทรายการ', 'รหัสออเดอร์', 'ชื่อ-นามสกุล', 'ชื่อเล่น', 'รหัสนามเรียกขาน',
-      'สังกัด/มหาวิทยาลัย', 'เบอร์โทร', 'อีเมล', 'ไซส์เสื้อ', 'รายการสินค้า',
-      'ยอดรวม (บาท)', 'สถานะการชำระเงิน', 'รูปสลิป (แสดงในชีต)', 'สลิปโอนเงิน (URL ลิงก์ตรง)',
-      'สถานะการส่งมอบ', 'วันเวลาที่ส่งมอบ', 'กลุ่มฝึก', 'ห้องนอน'
+      'ลำดับ',
+      'ชื่อ',
+      'สกุล',
+      'เบอร์โทร',
+      'หน่วยงาน',
+      'ไซต์เสื้อ',
+      'รหัสนามเรียกขาน',
+      'ชื่อเล่น',
+      'ประเภทรายการ',
+      'รหัสออเดอร์',
+      'รายละเอียดสินค้า',
+      'ยอดรวม (บาท)',
+      'สถานะการชำระเงิน',
+      'รูปสลิป (สูตรแสดงภาพ =IMAGE)',
+      'สลิปโอนเงิน (URL ลิงก์ตรง)',
+      'สถานะการส่งมอบ',
+      'วันเวลาที่ส่งมอบ',
+      'กลุ่มฝึก',
+      'ห้องนอน',
+      'อีเมล'
     ];
 
     const rows = await Promise.all(filteredShirtItems.map(async (it, idx) => {
+      const { firstName, lastName } = resolveFirstAndLastName(it);
       const isReg = it.source === 'registration' || it.itemType === 'registration';
       const isReceived = it.pickup_status === 'received';
       const isPaid = it.payment_status === 'paid_verified' || it.payment_status === 'paid';
@@ -1658,15 +1831,15 @@ export default function AdminDashboardView({
 
       return [
         idx + 1,
+        `"${firstName.replace(/"/g, '""')}"`,
+        `"${lastName.replace(/"/g, '""')}"`,
+        `"${(it.customer_phone || it.phone || '-').replace(/"/g, '""')}"`,
+        `"${(it.institution || '-').replace(/"/g, '""')}"`,
+        `"${it.shirt_size || it.size || 'L'}"`,
+        `"${it.callsign || ''}"`,
+        `"${it.nickname || ''}"`,
         `"${isReg ? 'เสื้อฝึกในใบสมัคร' : 'สั่งซื้อหน้าร้าน'}"`,
         `"${it.order_number || `ORD-${(it.id || '').slice(0, 8)}`}"`,
-        `"${(it.customer_name || '').replace(/"/g, '""')}"`,
-        `"${it.nickname || ''}"`,
-        `"${it.callsign || ''}"`,
-        `"${(it.institution || '').replace(/"/g, '""')}"`,
-        `"${it.customer_phone || ''}"`,
-        `"${it.user_email || ''}"`,
-        `"${it.shirt_size || it.size || 'L'}"`,
         `"${itemsSummary.replace(/"/g, '""')}"`,
         `"${it.total_amount || 0}"`,
         `"${isPaid ? 'ชำระแล้ว (อนุมัติ)' : (it.payment_status === 'pending_verification' ? 'รอตรวจสลิป' : 'ค้างชำระ')}"`,
@@ -1675,7 +1848,8 @@ export default function AdminDashboardView({
         `"${isReceived ? 'ส่งมอบแล้ว' : 'รอรับ'}"`,
         `"${it.pickup_at ? new Date(it.pickup_at).toLocaleString('th-TH') : '-'}"`,
         `"${it.group_assigned || 'ยังไม่จัดสรร'}"`,
-        `"${it.room_assigned || 'ยังไม่จัดสรร'}"`
+        `"${it.room_assigned || 'ยังไม่จัดสรร'}"`,
+        `"${it.user_email || ''}"`
       ];
     }));
 
