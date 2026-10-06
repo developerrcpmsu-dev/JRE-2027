@@ -120,8 +120,8 @@ export default function AdminDashboardView({
     }
   }, [initialTab]);
 
-  // In-app Popup Modal for Confirmations & Alerts
-  const { confirmModalProps, askConfirm, askAlert } = useConfirmModal();
+  // In-app Popup Modal for Confirmations, Alerts & Prompts
+  const { confirmModalProps, askConfirm, askAlert, askPrompt } = useConfirmModal();
 
   // Edit Safeguard States (Locked / View-Only by default to prevent accidental edits)
   const [isEditingProfileModal, setIsEditingProfileModal] = useState(false);
@@ -3441,7 +3441,15 @@ export default function AdminDashboardView({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  const reason = prompt('ระบุเหตุผลที่ปฏิเสธสลิปงวด 1:', 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่');
+                                  const reason = await askPrompt({
+                                    title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
+                                    message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                    defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                    placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                    variant: 'danger',
+                                    confirmText: 'ตกลง',
+                                    cancelText: 'ยกเลิก'
+                                  });
                                   if (reason) {
                                     const updates = {
                                       installment_1_status: 'unpaid',
@@ -3560,7 +3568,15 @@ export default function AdminDashboardView({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  const reason = prompt('ระบุเหตุผลที่ปฏิเสธสลิปงวด 2:', 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่');
+                                  const reason = await askPrompt({
+                                    title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
+                                    message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                    defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                    placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                    variant: 'danger',
+                                    confirmText: 'ตกลง',
+                                    cancelText: 'ยกเลิก'
+                                  });
                                   if (reason) {
                                     const updates = {
                                       installment_2_status: 'unpaid',
@@ -3668,7 +3684,15 @@ export default function AdminDashboardView({
                           <button
                             type="button"
                             onClick={async () => {
-                              const reason = prompt('ระบุเหตุผลที่ปฏิเสธสลิป (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):', 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่');
+                              const reason = await askPrompt({
+                                title: 'ระบุเหตุผลที่ปฏิเสธสลิป',
+                                message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
+                                defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                variant: 'danger',
+                                confirmText: 'ตกลง',
+                                cancelText: 'ยกเลิก'
+                              });
                               if (reason) {
                                 setModalPaymentStatus('unpaid');
                                 setModalPaymentNotes(reason);
@@ -3882,8 +3906,16 @@ export default function AdminDashboardView({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                const reason = prompt('ระบุเหตุผลที่ให้ส่งเอกสารใหม่:', 'เอกสารไม่ชัดเจน');
+                              onClick={async () => {
+                                const reason = await askPrompt({
+                                  title: 'ระบุเหตุผลที่ให้ส่งเอกสารใหม่',
+                                  message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและแนบเอกสารใหม่:',
+                                  defaultValue: 'เอกสารไม่ชัดเจน',
+                                  placeholder: 'ระบุเหตุผล...',
+                                  variant: 'warning',
+                                  confirmText: 'ตกลง',
+                                  cancelText: 'ยกเลิก'
+                                });
                                 if (reason) handleVerifyDoc(doc.id, 'rejected', reason);
                               }}
                               className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
@@ -5857,7 +5889,15 @@ export default function AdminDashboardView({
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    const note = prompt('ระบุเหตุผลที่ปฏิเสธสลิป:', 'ยอดเงินไม่ถูกต้อง กรุณาแนบสลิปใหม่');
+                                    const note = await askPrompt({
+                                      title: 'ระบุเหตุผลที่ปฏิเสธสลิปสั่งซื้อเสื้อ',
+                                      message: 'แจ้งเหตุผลเพื่อให้ลูกค้าทราบและแนบสลิปใหม่:',
+                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาแนบสลิปใหม่',
+                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                      variant: 'danger',
+                                      confirmText: 'ตกลง',
+                                      cancelText: 'ยกเลิก'
+                                    });
                                     if (note !== null) {
                                       await onVerifyOrderPayment(item.id, false, note);
                                       triggerToast(`ปฏิเสธสลิปออเดอร์ ${item.order_number}`);

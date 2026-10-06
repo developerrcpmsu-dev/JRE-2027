@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   AlertTriangle, 
   AlertOctagon, 
@@ -6,14 +6,15 @@ import {
   CheckCircle2, 
   X, 
   Trash2, 
-  HelpCircle 
+  HelpCircle,
+  MessageSquare
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
 /**
  * ConfirmModal
- * In-app beautiful, accessible popup modal for user confirmation & alerts,
- * replacing native browser window.confirm() and window.alert().
+ * In-app beautiful, accessible popup modal for user confirmation, alerts & text prompts,
+ * replacing native browser window.confirm(), window.alert(), and window.prompt().
  */
 export default function ConfirmModal({
   isOpen = false,
@@ -23,10 +24,32 @@ export default function ConfirmModal({
   cancelText = 'ยกเลิก',
   variant = 'warning', // 'warning' | 'danger' | 'info' | 'success'
   showCancel = true,
+  isPrompt = false,
+  multiline = false,
+  defaultValue = '',
+  placeholder = 'พิมพ์ข้อความที่นี่...',
   onConfirm,
   onCancel,
   icon
 }) {
+  const [inputValue, setInputValue] = useState(defaultValue || '');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setInputValue(defaultValue || '');
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          if (typeof inputRef.current.select === 'function') {
+            inputRef.current.select();
+          }
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, defaultValue]);
+
   if (!isOpen) return null;
 
   const handleCancelClick = (e) => {
@@ -36,7 +59,19 @@ export default function ConfirmModal({
 
   const handleConfirmClick = (e) => {
     e?.stopPropagation?.();
-    if (onConfirm) onConfirm();
+    if (onConfirm) {
+      onConfirm(isPrompt ? inputValue : true);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelClick(e);
+    } else if (e.key === 'Enter' && !multiline && isPrompt) {
+      e.preventDefault();
+      handleConfirmClick(e);
+    }
   };
 
   const getVariantStyles = () => {
@@ -48,8 +83,9 @@ export default function ConfirmModal({
           badgeBg: 'bg-rose-500/20',
           badgeBorder: 'border-rose-500/40',
           badgeText: 'text-rose-400',
+          inputFocus: 'focus:border-rose-400 focus:ring-rose-400/20',
           btnConfirm: 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-600/30',
-          defaultIcon: <Trash2 className="w-6 h-6 text-rose-400" />
+          defaultIcon: isPrompt ? <AlertOctagon className="w-6 h-6 text-rose-400" /> : <Trash2 className="w-6 h-6 text-rose-400" />
         };
       case 'info':
         return {
@@ -58,8 +94,9 @@ export default function ConfirmModal({
           badgeBg: 'bg-sky-500/20',
           badgeBorder: 'border-sky-500/40',
           badgeText: 'text-sky-400',
+          inputFocus: 'focus:border-sky-400 focus:ring-sky-400/20',
           btnConfirm: 'bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white shadow-sky-600/30',
-          defaultIcon: <Info className="w-6 h-6 text-sky-400" />
+          defaultIcon: isPrompt ? <MessageSquare className="w-6 h-6 text-sky-400" /> : <Info className="w-6 h-6 text-sky-400" />
         };
       case 'success':
         return {
@@ -68,6 +105,7 @@ export default function ConfirmModal({
           badgeBg: 'bg-emerald-500/20',
           badgeBorder: 'border-emerald-500/40',
           badgeText: 'text-emerald-400',
+          inputFocus: 'focus:border-emerald-400 focus:ring-emerald-400/20',
           btnConfirm: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30',
           defaultIcon: <CheckCircle2 className="w-6 h-6 text-emerald-400" />
         };
@@ -79,6 +117,7 @@ export default function ConfirmModal({
           badgeBg: 'bg-amber-500/20',
           badgeBorder: 'border-amber-500/40',
           badgeText: 'text-amber-400',
+          inputFocus: 'focus:border-amber-400 focus:ring-amber-400/20',
           btnConfirm: 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black shadow-amber-500/30',
           defaultIcon: <AlertTriangle className="w-6 h-6 text-amber-400" />
         };
@@ -122,10 +161,51 @@ export default function ConfirmModal({
               <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
                 {title}
               </h3>
-              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
-                {message}
-              </p>
+              {message && (
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
+                  {message}
+                </p>
+              )}
             </div>
+
+            {/* Prompt Input Box */}
+            {isPrompt && (
+              <div className="space-y-1.5 pt-1">
+                <div className="relative">
+                  {multiline ? (
+                    <textarea
+                      ref={inputRef}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={placeholder}
+                      rows={3}
+                      className={`w-full px-4 py-3 bg-slate-950/90 border border-slate-700/90 ${currentStyles.inputFocus} focus:ring-2 rounded-2xl text-sm text-white placeholder-slate-500 outline-none transition-all resize-none shadow-inner`}
+                    />
+                  ) : (
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={placeholder}
+                      className={`w-full px-4 py-3 pr-10 bg-slate-950/90 border border-slate-700/90 ${currentStyles.inputFocus} focus:ring-2 rounded-2xl text-sm text-white placeholder-slate-500 outline-none transition-all shadow-inner`}
+                    />
+                  )}
+                  {inputValue && !multiline && (
+                    <button
+                      type="button"
+                      onClick={() => setInputValue('')}
+                      className="absolute right-3 top-3 text-slate-500 hover:text-slate-300 p-0.5 rounded-full hover:bg-slate-800 transition-colors cursor-pointer"
+                      title="ล้างข้อความ"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Buttons Row */}
             <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
@@ -155,28 +235,19 @@ export default function ConfirmModal({
 
 /**
  * useConfirmModal Hook
- * Provides an easy promise- and callback-based API to trigger custom confirmation & alert popups.
+ * Provides an easy promise- and callback-based API to trigger custom confirmation, alert, & prompt popups.
  * 
  * Usage:
- * const { confirmModalProps, askConfirm, askAlert } = useConfirmModal();
+ * const { confirmModalProps, askConfirm, askAlert, askPrompt } = useConfirmModal();
  * 
- * const handleAction = async () => {
- *   const ok = await askConfirm({
- *     title: 'ยืนยันการลบ',
- *     message: 'ต้องการลบข้อมูลนี้หรือไม่?',
- *     variant: 'danger',
- *     confirmText: 'ลบข้อมูล'
+ * const handlePrompt = async () => {
+ *   const result = await askPrompt({
+ *     title: 'ระบุเหตุผล',
+ *     defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+ *     variant: 'danger'
  *   });
- *   if (!ok) return;
- *   // perform action
+ *   if (result !== null) { ... }
  * };
- * 
- * return (
- *   <>
- *     ...
- *     <ConfirmModal {...confirmModalProps} />
- *   </>
- * );
  */
 export function useConfirmModal() {
   const [modalState, setModalState] = useState({
@@ -187,6 +258,10 @@ export function useConfirmModal() {
     cancelText: 'ยกเลิก',
     variant: 'warning',
     showCancel: true,
+    isPrompt: false,
+    multiline: false,
+    defaultValue: '',
+    placeholder: '',
     icon: null,
     onConfirm: null,
     onCancel: null
@@ -200,6 +275,7 @@ export function useConfirmModal() {
     return new Promise((resolve) => {
       setModalState({
         isOpen: true,
+        isPrompt: false,
         title: options.title || 'ยืนยันการดำเนินการ',
         message: options.message || '',
         confirmText: options.confirmText || 'ยืนยัน',
@@ -225,6 +301,7 @@ export function useConfirmModal() {
     return new Promise((resolve) => {
       setModalState({
         isOpen: true,
+        isPrompt: false,
         title: options.title || 'แจ้งเตือน',
         message: typeof options === 'string' ? options : (options.message || ''),
         confirmText: options.confirmText || 'ตกลง',
@@ -246,10 +323,44 @@ export function useConfirmModal() {
     });
   }, [close]);
 
+  const askPrompt = useCallback((options = {}, defaultArg = '') => {
+    return new Promise((resolve) => {
+      const opt = typeof options === 'string' 
+        ? { title: options, defaultValue: defaultArg } 
+        : options;
+
+      setModalState({
+        isOpen: true,
+        isPrompt: true,
+        title: opt.title || 'กรุณาระบุข้อมูล',
+        message: opt.message || '',
+        defaultValue: opt.defaultValue || '',
+        placeholder: opt.placeholder || 'พิมพ์ข้อความที่นี่...',
+        multiline: Boolean(opt.multiline),
+        confirmText: opt.confirmText || 'ตกลง',
+        cancelText: opt.cancelText || 'ยกเลิก',
+        variant: opt.variant || 'warning',
+        showCancel: true,
+        icon: opt.icon || null,
+        onConfirm: (val) => {
+          close();
+          if (opt.onConfirm) opt.onConfirm(val);
+          resolve(val);
+        },
+        onCancel: () => {
+          close();
+          if (opt.onCancel) opt.onCancel();
+          resolve(null);
+        }
+      });
+    });
+  }, [close]);
+
   return {
     confirmModalProps: modalState,
     askConfirm,
     askAlert,
+    askPrompt,
     closeConfirmModal: close
   };
 }
