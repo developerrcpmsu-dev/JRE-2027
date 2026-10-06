@@ -22,7 +22,8 @@ import {
   ArrowLeft,
   AlertCircle,
   Layers,
-  Sparkles
+  Sparkles,
+  Link as LinkIcon
 } from 'lucide-react';
 import ModalPortal from '../components/ModalPortal';
 
@@ -124,10 +125,73 @@ export default function AnnouncementsView({
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://jre-2027.vercel.app';
 
+  // Helper to obtain the shortest clean identifier for an announcement:
+  // Priority: 1) custom slug, 2) short_id, 3) n1, n2, n3... index, 4) fallback id
+  const getPostIdentifier = (item, idx = null) => {
+    if (!item) return '';
+    if (item.slug && item.slug.trim()) return item.slug.trim();
+    if (item.short_id && item.short_id.trim()) return item.short_id.trim();
+    if (typeof idx === 'number' && idx >= 0) return `n${idx + 1}`;
+    const foundIndex = announcements.findIndex(a => String(a.id) === String(item.id));
+    if (foundIndex >= 0) return `n${foundIndex + 1}`;
+    return item.id;
+  };
+
+  // Helper to locate an announcement by ANY identifier:
+  // Custom slug, short_id, n1/n2/n3 index, full UUID, or UUID prefix
+  const findAnnouncement = (query) => {
+    if (!query || !Array.isArray(announcements) || announcements.length === 0) return null;
+    const clean = decodeURIComponent(String(query).trim().toLowerCase());
+
+    // 1. Exact match on custom slug
+    let found = announcements.find(a => a.slug && a.slug.trim().toLowerCase() === clean);
+    if (found) return found;
+
+    // 2. Exact match on short_id
+    found = announcements.find(a => a.short_id && a.short_id.trim().toLowerCase() === clean);
+    if (found) return found;
+
+    // 3. Short format: n1, n2, n3, n4...
+    const nMatch = clean.match(/^n(\d+)$/i);
+    if (nMatch) {
+      const idx = parseInt(nMatch[1], 10) - 1;
+      if (idx >= 0 && idx < announcements.length) {
+        return announcements[idx];
+      }
+    }
+
+    // 4. Exact match on full id (UUID or string ID)
+    found = announcements.find(a => String(a.id).toLowerCase() === clean);
+    if (found) return found;
+
+    // 5. Match if UUID begins with query prefix (e.g. 11111111 or a0000000)
+    if (clean.length >= 4) {
+      found = announcements.find(a => String(a.id).toLowerCase().startsWith(clean));
+      if (found) return found;
+    }
+
+    return null;
+  };
+
   // Find currently selected single post if selectedPostId is set
-  const currentPost = selectedPostId 
-    ? announcements.find(a => String(a.id) === String(selectedPostId))
-    : null;
+  const currentPost = selectedPostId ? findAnnouncement(selectedPostId) : null;
+  const currentPostIdentifier = currentPost ? getPostIdentifier(currentPost) : '';
+
+  // Auto-normalize address bar URL to clean short ID if user arrived with long UUID
+  useEffect(() => {
+    if (currentPost && selectedPostId) {
+      const ident = getPostIdentifier(currentPost);
+      const scopePath = currentPost.category === 'pr' ? '/announcements/pr' : '/announcements/orders';
+      const cleanUrl = `${scopePath}?id=${ident}`;
+      try {
+        const url = new URL(window.location.href);
+        const queryId = url.searchParams.get('id') || url.searchParams.get('annId');
+        if (queryId && queryId !== ident && (String(currentPost.id).toLowerCase() === queryId.toLowerCase() || String(currentPost.id).toLowerCase().startsWith(queryId.toLowerCase()))) {
+          window.history.replaceState({ postId: ident }, '', cleanUrl);
+        }
+      } catch (e) {}
+    }
+  }, [currentPost, selectedPostId]);
 
   // Dynamic Browser Title
   useEffect(() => {
@@ -145,16 +209,17 @@ export default function AnnouncementsView({
     };
   }, [selectedPostId, currentPost, activeScope]);
 
-  // Handle switching to a single post view
-  const handleSelectPost = (item) => {
-    setSelectedPostId(item.id);
+  // Handle switching to a single post view using clean short identifier
+  const handleSelectPost = (item, idx = null) => {
+    const ident = getPostIdentifier(item, idx);
+    setSelectedPostId(ident);
     const scopePath = item.category === 'pr' 
       ? '/announcements/pr' 
       : (activeScope === 'members' || item.category === 'order' || item.category === 'payment') 
       ? '/announcements/orders' 
       : '/announcements';
-    const targetUrl = `${scopePath}?id=${item.id}`;
-    window.history.pushState({ postId: item.id }, '', targetUrl);
+    const targetUrl = `${scopePath}?id=${ident}`;
+    window.history.pushState({ postId: ident }, '', targetUrl);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -278,7 +343,7 @@ export default function AnnouncementsView({
       );
     }
 
-    // If announcement was not found by ID
+    // If announcement was not found by slug, short_id, or ID
     if (!currentPost) {
       return (
         <div className="max-w-xl mx-auto py-16 px-6 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-5 shadow-2xl animate-in zoom-in-95 duration-200">
@@ -288,7 +353,7 @@ export default function AnnouncementsView({
           <div className="space-y-2">
             <h2 className="text-xl font-black text-white">ไม่พบประกาศนี้ในระบบ</h2>
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
-              ลิงก์ประกาศที่คุณเปิด (ID: <span className="font-mono text-slate-300">{selectedPostId}</span>) อาจไม่ถูกต้อง หรือประกาศนี้อาจถูกย้าย/นำออกจากระบบแล้ว
+              ลิงก์ประกาศที่คุณเปิด (รหัส/Slug: <span className="font-mono text-rescue-400 font-bold">{selectedPostId}</span>) อาจไม่ถูกต้อง หรือประกาศนี้อาจถูกย้าย/นำออกจากระบบแล้ว
             </p>
           </div>
           <button
@@ -304,7 +369,8 @@ export default function AnnouncementsView({
     }
 
     const currentPostImages = Array.isArray(currentPost.images) ? currentPost.images : [];
-    const singlePostUrl = `${currentOrigin}${currentPost.category === 'pr' ? '/announcements/pr' : '/announcements/orders'}?id=${currentPost.id}`;
+    const scopePath = currentPost.category === 'pr' ? '/announcements/pr' : '/announcements/orders';
+    const singlePostUrl = `${currentOrigin}${scopePath}?id=${currentPostIdentifier}`;
     
     // Other announcements to display at the bottom (excluding current post)
     const otherAnnouncements = announcements
@@ -343,7 +409,7 @@ export default function AnnouncementsView({
           </div>
         </div>
 
-        {/* Dedicated Post Share Bar with 1-Click Copy & Social Buttons */}
+        {/* Dedicated Post Share Bar with Short URL & Social Buttons */}
         <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-rescue-500/40 shadow-xl space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
@@ -352,12 +418,12 @@ export default function AnnouncementsView({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs sm:text-sm font-bold text-white">ลิงก์ URL เฉพาะของโพสต์นี้ (Direct Post Link)</h3>
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    หน้าเดี่ยว
+                  <h3 className="text-xs sm:text-sm font-bold text-white">ลิงก์ URL สั้นเฉพาะโพสต์นี้ (Short URL)</h3>
+                  <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    ?id={currentPostIdentifier}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 font-mono mt-0.5 break-all select-all">
+                <p className="text-[11px] text-slate-300 font-mono mt-0.5 break-all select-all font-semibold text-rescue-300">
                   {singlePostUrl}
                 </p>
               </div>
@@ -375,7 +441,7 @@ export default function AnnouncementsView({
                 className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-rescue-600 to-amber-600 hover:from-rescue-500 hover:to-amber-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
               >
                 {copiedPostUrl ? <Check className="w-3.5 h-3.5 text-emerald-200" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedPostUrl ? 'คัดลอก URL สำเร็จ!' : 'คัดลอกลิงก์โพสต์'}</span>
+                <span>{copiedPostUrl ? 'คัดลอก URL สำเร็จ!' : 'คัดลอกลิงก์สั้น'}</span>
               </button>
 
               {/* Share to LINE */}
@@ -435,6 +501,9 @@ export default function AnnouncementsView({
                 </span>
               )}
               {getCategoryBadge(currentPost.category)}
+              <span className="px-2.5 py-0.5 bg-rescue-500/10 text-rescue-400 border border-rescue-500/30 text-xs rounded-full font-mono font-bold">
+                URL: ?id={currentPostIdentifier}
+              </span>
             </div>
 
             <div className="flex items-center gap-2 text-slate-400 text-xs">
@@ -592,33 +661,41 @@ export default function AnnouncementsView({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              {otherAnnouncements.map(item => (
-                <div
-                  key={item.id}
-                  onClick={() => handleSelectPost(item)}
-                  className="bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-rescue-500/50 p-4 rounded-2xl cursor-pointer transition-all flex flex-col justify-between group shadow-lg"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-1">
-                      {getCategoryBadge(item.category)}
-                      <span className="text-[10px] text-slate-400">
-                        {item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }) : ''}
-                      </span>
+              {otherAnnouncements.map((item, idx) => {
+                const itemIdent = getPostIdentifier(item);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleSelectPost(item)}
+                    className="bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-rescue-500/50 p-4 rounded-2xl cursor-pointer transition-all flex flex-col justify-between group shadow-lg"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5">
+                          {getCategoryBadge(item.category)}
+                          <span className="text-[10px] font-mono text-slate-400">
+                            ?id={itemIdent}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">
+                          {item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }) : ''}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-white group-hover:text-rescue-400 transition-colors line-clamp-2 leading-snug">
+                        {item.title}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                        {item.content}
+                      </p>
                     </div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-rescue-400 transition-colors line-clamp-2 leading-snug">
-                      {item.title}
-                    </h4>
-                    <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                      {item.content}
-                    </p>
-                  </div>
 
-                  <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-rescue-400 font-bold group-hover:translate-x-1 transition-transform">
-                    <span>อ่านประกาศนี้</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-rescue-400 font-bold group-hover:translate-x-1 transition-transform">
+                      <span>อ่านประกาศนี้</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Big Return Button to Full Board */}
@@ -968,11 +1045,12 @@ export default function AnnouncementsView({
             <p className="text-slate-400 text-sm">ไม่พบประกาศในหมวดหมู่ที่เลือก</p>
           </div>
         ) : (
-          filtered.map(item => {
+          filtered.map((item, idx) => {
             const images = Array.isArray(item.images) ? item.images : [];
             const hasPdf = Boolean(item.pdf_url);
             const scopePath = item.category === 'pr' ? '/announcements/pr' : '/announcements/orders';
-            const itemDirectUrl = `${currentOrigin}${scopePath}?id=${item.id}`;
+            const itemIdentifier = getPostIdentifier(item, idx);
+            const itemDirectUrl = `${currentOrigin}${scopePath}?id=${itemIdentifier}`;
 
             return (
               <article
@@ -992,13 +1070,16 @@ export default function AnnouncementsView({
                       </span>
                     )}
                     {getCategoryBadge(item.category)}
+                    <span className="px-2 py-0.5 bg-rescue-500/10 text-rescue-400 border border-rescue-500/30 rounded-full text-[10px] font-mono font-bold">
+                      ?id={itemIdentifier}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-2">
                     {/* View Single Post Button */}
                     <button
                       type="button"
-                      onClick={() => handleSelectPost(item)}
+                      onClick={() => handleSelectPost(item, idx)}
                       className="px-3 py-1 bg-rescue-500/10 hover:bg-rescue-500/20 text-rescue-400 hover:text-rescue-300 border border-rescue-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
                       title="เปิดดูหน้าเฉพาะของโพสต์นี้"
                     >
@@ -1006,7 +1087,7 @@ export default function AnnouncementsView({
                       <span>เปิดดูหน้านี้</span>
                     </button>
 
-                    {/* Share Button */}
+                    {/* Share Button with Short URL */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1015,7 +1096,7 @@ export default function AnnouncementsView({
                         setTimeout(() => setCopiedId(null), 2000);
                       }}
                       className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors border border-slate-700 cursor-pointer active:scale-95"
-                      title="คัดลอกลิงก์เฉพาะโพสต์นี้"
+                      title="คัดลอกลิงก์สั้นเฉพาะโพสต์นี้"
                     >
                       {copiedId === item.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3 text-rescue-400" />}
                       <span>{copiedId === item.id ? 'คัดลอกแล้ว' : 'แชร์โพสต์นี้'}</span>
@@ -1036,7 +1117,7 @@ export default function AnnouncementsView({
 
                 {/* Clickable Title that navigates to dedicated view */}
                 <h2 
-                  onClick={() => handleSelectPost(item)}
+                  onClick={() => handleSelectPost(item, idx)}
                   className="text-lg sm:text-xl font-bold text-white mb-2 leading-snug hover:text-rescue-400 transition-colors cursor-pointer"
                   title="คลิกเพื่อเปิดหน้าเฉพาะของประกาศนี้"
                 >
@@ -1056,15 +1137,15 @@ export default function AnnouncementsView({
                     </div>
                     
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-                      {images.map((imgUrl, idx) => (
+                      {images.map((imgUrl, photoIdx) => (
                         <div
-                          key={idx}
-                          onClick={() => handleOpenLightbox(images, idx)}
+                          key={photoIdx}
+                          onClick={() => handleOpenLightbox(images, photoIdx)}
                           className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer border border-slate-800 hover:border-rescue-500 transition-all bg-slate-900"
                         >
                           <img
                             src={imgUrl}
-                            alt={`ประกาศรูปที่ ${idx + 1}`}
+                            alt={`ประกาศรูปที่ ${photoIdx + 1}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading="lazy"
                           />
@@ -1138,7 +1219,7 @@ export default function AnnouncementsView({
 
                   <button
                     type="button"
-                    onClick={() => handleSelectPost(item)}
+                    onClick={() => handleSelectPost(item, idx)}
                     className="text-xs text-rescue-400 hover:text-rescue-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <span>อ่านฉบับเต็มและแชร์เฉพาะหน้านี้</span>

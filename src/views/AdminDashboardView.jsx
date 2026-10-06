@@ -562,6 +562,7 @@ export default function AdminDashboardView({
   const [annImages, setAnnImages] = useState([]); // Array of string URLs
   const [annPdfUrl, setAnnPdfUrl] = useState('');
   const [annPdfName, setAnnPdfName] = useState('');
+  const [annSlug, setAnnSlug] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
 
@@ -1936,6 +1937,7 @@ export default function AdminDashboardView({
       setAnnTitle(item.title || '');
       setAnnContent(item.content || '');
       setAnnCategory(item.category || 'general');
+      setAnnSlug(item.slug || '');
       setAnnUrl(item.action_url || '');
       setAnnLabel(item.action_label || '');
       setAnnPinned(Boolean(item.pinned));
@@ -1947,6 +1949,7 @@ export default function AdminDashboardView({
       setAnnTitle('');
       setAnnContent('');
       setAnnCategory('general');
+      setAnnSlug('');
       setAnnUrl('');
       setAnnLabel('');
       setAnnPinned(false);
@@ -2026,11 +2029,13 @@ export default function AdminDashboardView({
 
   const handleSaveAnn = async (e) => {
     e.preventDefault();
+    const cleanSlug = annSlug.trim().toLowerCase().replace(/[\s/]+/g, '-');
     const payload = {
       ...(editingAnn?.id ? { id: editingAnn.id } : {}),
       title: annTitle.trim(),
       content: annContent.trim(),
       category: annCategory,
+      slug: cleanSlug,
       action_url: annUrl.trim(),
       action_label: annLabel.trim(),
       pinned: annPinned,
@@ -4655,7 +4660,9 @@ export default function AdminDashboardView({
           </div>
 
           <div className="space-y-4">
-            {announcements.map(ann => (
+            {announcements.map((ann, idx) => {
+              const shortSlug = ann.slug || ann.short_id || (`n${idx + 1}`);
+              return (
               <div
                 key={ann.id}
                 className="bg-slate-950/70 border border-slate-800 hover:border-slate-700 p-5 rounded-2xl flex flex-col sm:flex-row items-start justify-between gap-4 transition-all"
@@ -4669,6 +4676,9 @@ export default function AdminDashboardView({
                     )}
                     <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-semibold rounded-md border border-slate-700">
                       หมวด: {ann.category}
+                    </span>
+                    <span className="px-2 py-0.5 bg-rescue-500/15 text-rescue-400 border border-rescue-500/30 text-[10px] font-mono font-bold rounded-md">
+                      URL: ?id={shortSlug}
                     </span>
                     {Array.isArray(ann.images) && ann.images.length > 0 && (
                       <span className="px-2 py-0.5 bg-blue-900/60 text-blue-300 text-[10px] font-semibold rounded-md border border-blue-700/50 flex items-center gap-1">
@@ -4697,7 +4707,7 @@ export default function AdminDashboardView({
 
                 <div className="flex items-center gap-2 shrink-0">
                   <a
-                    href={`/announcements/${ann.category === 'pr' ? 'pr' : 'orders'}?id=${ann.id}`}
+                    href={`/announcements/${ann.category === 'pr' ? 'pr' : 'orders'}?id=${shortSlug}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-rescue-400 rounded-xl transition-colors text-xs flex items-center gap-1 cursor-pointer"
@@ -4722,7 +4732,8 @@ export default function AdminDashboardView({
                   </button>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
 
         </div>
@@ -4777,6 +4788,27 @@ export default function AdminDashboardView({
                   <option value="order">คำสั่ง / ข้อปฏิบัติ (Order)</option>
                   <option value="change">แจ้งเปลี่ยนแปลง (Update)</option>
                 </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    ชื่อ URL สั้น / ตัวระบุเฉพาะ (Custom Slug / Short ID)
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    (เช่น payment, curriculum, n1, n2 - เว้นว่างได้)
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={annSlug}
+                  onChange={e => setAnnSlug(e.target.value)}
+                  placeholder="เช่น payment, schedule, rules, n1 (ถ้าไม่กรอก ระบบจะใช้ n1, n2 อัตโนมัติ)"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono placeholder:font-sans"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  URL เฉพาะของโพสต์นี้: <span className="text-rescue-400 font-mono">/announcements/{annCategory === 'pr' ? 'pr' : 'orders'}?id={annSlug.trim() || `n${editingAnn ? (announcements.findIndex(a => a.id === editingAnn.id) + 1 || 1) : (announcements.length + 1)}`}</span>
+                </p>
               </div>
 
               <div>

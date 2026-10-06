@@ -567,11 +567,13 @@ export const DataService = {
   },
 
   async saveAnnouncement(announcement) {
+    const cleanSlug = announcement.slug ? announcement.slug.trim().toLowerCase().replace(/[\s/]+/g, '-') : '';
     const annToSave = {
       ...announcement,
       images: Array.isArray(announcement.images) ? announcement.images : [],
       pdf_url: announcement.pdf_url || '',
-      pdf_name: announcement.pdf_name || ''
+      pdf_name: announcement.pdf_name || '',
+      slug: cleanSlug
     };
 
     if (isSupabaseConfigured) {
@@ -580,8 +582,17 @@ export const DataService = {
           .from('announcements')
           .upsert(annToSave)
           .select();
-        if (!error && data && data.length > 0) return data[0];
-        if (error) console.warn('Supabase announcement save error details:', error);
+        if (!error && data && data.length > 0) return { ...data[0], slug: cleanSlug };
+        if (error) {
+          console.warn('Supabase announcement save error details:', error);
+          if (error.message && (error.message.includes('slug') || error.code === '42703')) {
+            const { slug, ...withoutSlug } = annToSave;
+            const retryRes = await supabase.from('announcements').upsert(withoutSlug).select();
+            if (!retryRes.error && retryRes.data && retryRes.data.length > 0) {
+              return { ...retryRes.data[0], slug: cleanSlug };
+            }
+          }
+        }
       } catch (e) {
         console.warn('Supabase announcement save error', e);
       }

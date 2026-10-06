@@ -336,6 +336,8 @@ export const SCHEDULE_DAYS = [
 export const DEFAULT_ANNOUNCEMENTS = [
   {
     id: '11111111-1111-1111-1111-111111111111',
+    slug: 'payment',
+    short_id: 'n1',
     title: '📢 แจ้งสมาชิกภาคีเครือข่ายทุกสถาบัน: เรื่อง การสมัครและกำหนดการชำระค่าใช้จ่าย JRE 2027',
     content: `📢 แจ้งสมาชิกภาคีเครือข่ายทุกสถาบัน
 
@@ -374,6 +376,8 @@ export const DEFAULT_ANNOUNCEMENTS = [
   },
   {
     id: 'a0000000-0000-0000-0000-000000000003',
+    slug: 'curriculum',
+    short_id: 'n2',
     title: '🚨 หัวข้อการเรียนรู้และการฝึกอบรม JRE 2027 (Learning & Training Curriculum)',
     content: `🚨 หัวข้อการเรียนรู้และการฝึกอบรม
 
@@ -431,6 +435,8 @@ export const DEFAULT_ANNOUNCEMENTS = [
   },
   {
     id: 'a0000000-0000-0000-0000-000000000004',
+    slug: 'accommodation',
+    short_id: 'n3',
     title: '🏢 ข้อมูลหอพักและตัวอย่างรูปห้องพัก: หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)',
     content: `🏢 ข้อมูลที่พักค้างแรมและสิ่งอำนวยความสะดวก
 
@@ -458,6 +464,8 @@ export const DEFAULT_ANNOUNCEMENTS = [
   },
   {
     id: 'a0000000-0000-0000-0000-000000000001',
+    slug: 'pr',
+    short_id: 'n4',
     title: '🚨 เตรียมพบกับ โครงการ Joint Response Exercise (JRE 2027) 🚨',
     content: `📢 ขออนุญาตประชาสัมพันธ์
 
@@ -495,6 +503,8 @@ export const DEFAULT_ANNOUNCEMENTS = [
   },
   {
     id: 'ann-2',
+    slug: 'line-group',
+    short_id: 'n5',
     title: '💬 ประกาศลิงก์เข้าร่วม Line OpenChat ประจำรุ่น JRE 2027',
     content: 'สำหรับผู้สมัครทุกคน โปรดเข้าร่วมกลุ่ม Line OpenChat "JRE 2027 เครือข่ายกู้ภัยนักศึกษาทั่วประเทศ (ทุกภูมิภาค)" เพื่อรับการแจ้งเตือนด่วน สรุปเอกสารการฝึก และประสานงานเรื่องการเดินทางและที่พัก',
     category: 'line_group',
@@ -505,6 +515,8 @@ export const DEFAULT_ANNOUNCEMENTS = [
   },
   {
     id: 'ann-3',
+    slug: 'gear-list',
+    short_id: 'n6',
     title: '📋 ประกาศคำสั่งโครงการและรายการอุปกรณ์ประจำกายที่ต้องจัดเตรียม',
     content: 'ผู้เข้าร่วมอบรมต้องจัดเตรียม: 1. กางเกงขายาวผ้าหนาสำหรับฝึก 2. รองเท้าหุ้มส้นหรือรองเท้าเซฟตี้ 3. ถุงมือผ้าหรือถุงมือหนัง 4. ไฟฉายส่องสว่างส่วนบุคคล 5. ยาประจำตัวและของใช้ส่วนตัวสำหรับพักค้างแรม 1 คืน',
     category: 'order',
@@ -515,6 +527,8 @@ export const DEFAULT_ANNOUNCEMENTS = [
   },
   {
     id: 'ann-4',
+    slug: 'venue',
+    short_id: 'n7',
     title: '⚡ ประกาศการเปลี่ยนแปลงจุดรวมพลพิธีเปิด (Update)',
     content: 'แจ้งเปลี่ยนแปลงจุดรวมพลพิธีเปิดในวันที่ 14 พ.ย. 2569 ณ อาคารพัฒนานิสิต กองกิจการนิสิต มหาวิทยาลัยมหาสารคาม เพื่อความสะดวกรวดเร็วในการลงทะเบียนและรับฟังการบรรยาย',
     category: 'change',
