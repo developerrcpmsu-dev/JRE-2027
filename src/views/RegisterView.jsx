@@ -821,70 +821,100 @@ export default function RegisterView({
     }
   };
 
+  // Reusable populate function to restore registration form data
+  const populateFormFromRegistration = (reg) => {
+    if (!reg) return;
+    if (reg.first_name_th || reg.title_th) {
+      setTitleTh(reg.title_th || 'นาย');
+      setTitleOtherTh(reg.title_other_th || '');
+      setFirstNameTh(reg.first_name_th || reg.first_name || '');
+      setLastNameTh(reg.last_name_th || reg.last_name || '');
+      setInstitutionAbbrTh(reg.institution_abbr_th || 'มมส');
+
+      setTitleEn(reg.title_en || 'Mr.');
+      setTitleOtherEn(reg.title_other_en || '');
+      setFirstNameEn(reg.first_name_en || '');
+      setLastNameEn(reg.last_name_en || '');
+      setInstitutionAbbrEn(reg.institution_abbr_en || 'MSU');
+    } else if (reg.full_name_affiliation) {
+      const parsed = parseFullNameAffiliationString(reg.full_name_affiliation);
+      if (parsed.titleTh) setTitleTh(parsed.titleTh);
+      if (parsed.firstNameTh) setFirstNameTh(parsed.firstNameTh);
+      if (parsed.lastNameTh) setLastNameTh(parsed.lastNameTh);
+      if (parsed.institutionAbbrTh) setInstitutionAbbrTh(parsed.institutionAbbrTh);
+
+      if (parsed.titleEn) setTitleEn(parsed.titleEn);
+      if (parsed.firstNameEn) setFirstNameEn(parsed.firstNameEn);
+      if (parsed.lastNameEn) setLastNameEn(parsed.lastNameEn);
+      if (parsed.institutionAbbrEn) setInstitutionAbbrEn(parsed.institutionAbbrEn);
+    }
+
+    setFirstName(reg.first_name || '');
+    setLastName(reg.last_name || '');
+    setFullNameAffiliation(reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim());
+    setNickname(reg.nickname || '');
+    setCallsign(reg.callsign || '');
+    setShirtSize(reg.shirt_size || 'L');
+    setIdCardPhoto(reg.id_card_photo || reg.id_card_url || '');
+    setBloodGroup(reg.blood_group || 'O');
+    setPhone(reg.phone || '');
+    setInstitution(reg.institution || 'มหาวิทยาลัยมหาสารคาม (มมส)');
+    setEmergencyName(reg.emergency_name ? reg.emergency_name.split(' (')[0] : '');
+    setEmergencyPhone(reg.emergency_phone || '');
+    setMedicalHistory(reg.medical_history || '');
+    setFoodAllergy(reg.food_allergy || '');
+    setPreviousTraining(reg.previous_training || '');
+    setPaymentPlan(reg.payment_plan || 'installment');
+    
+    // Parse relation if present
+    if (reg.emergency_name && reg.emergency_name.includes('(')) {
+      const relMatch = reg.emergency_name.match(/\((.*?)\)/);
+      if (relMatch && relMatch[1]) {
+        setEmergencyRelation(relMatch[1]);
+      }
+    }
+
+    // Parse DOB
+    if (reg.dob) {
+      const parts = reg.dob.split('-');
+      if (parts.length === 3) {
+        setBirthYearBE(parts[0]);
+        setBirthMonth(parseInt(parts[1], 10).toString());
+        setBirthDay(parseInt(parts[2], 10).toString());
+      }
+    }
+    setAgreeCorrectInfo(true);
+    setAgreePDPAAndRules(true);
+  };
+
+  const handleCancelEditRegistration = () => {
+    if (window.confirm('คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัคร ต้องการยกเลิกและละทิ้งการเปลี่ยนแปลงทั้งหมดใช่หรือไม่? (ข้อมูลเดิมจะถูกนำกลับมา)')) {
+      if (myRegistration) {
+        populateFormFromRegistration(myRegistration);
+      }
+      setIsEditing(false);
+      if (onSubRouteChange) onSubRouteChange('dashboard');
+      triggerToast('ยกเลิกการแก้ไขและคืนค่าข้อมูลเดิมเรียบร้อยแล้ว', 'info');
+    }
+  };
+
+  // Window beforeunload safeguard when user is editing form
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isEditing) {
+        e.preventDefault();
+        e.returnValue = 'คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัครและยังไม่ได้บันทึก หากออกจากหน้านี้ การเปลี่ยนแปลงจะสูญหาย';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isEditing]);
+
   // Load existing data if registered
   useEffect(() => {
     if (myRegistration) {
-      if (myRegistration.first_name_th || myRegistration.title_th) {
-        setTitleTh(myRegistration.title_th || 'นาย');
-        setTitleOtherTh(myRegistration.title_other_th || '');
-        setFirstNameTh(myRegistration.first_name_th || myRegistration.first_name || '');
-        setLastNameTh(myRegistration.last_name_th || myRegistration.last_name || '');
-        setInstitutionAbbrTh(myRegistration.institution_abbr_th || 'มมส');
-
-        setTitleEn(myRegistration.title_en || 'Mr.');
-        setTitleOtherEn(myRegistration.title_other_en || '');
-        setFirstNameEn(myRegistration.first_name_en || '');
-        setLastNameEn(myRegistration.last_name_en || '');
-        setInstitutionAbbrEn(myRegistration.institution_abbr_en || 'MSU');
-      } else if (myRegistration.full_name_affiliation) {
-        const parsed = parseFullNameAffiliationString(myRegistration.full_name_affiliation);
-        if (parsed.titleTh) setTitleTh(parsed.titleTh);
-        if (parsed.firstNameTh) setFirstNameTh(parsed.firstNameTh);
-        if (parsed.lastNameTh) setLastNameTh(parsed.lastNameTh);
-        if (parsed.institutionAbbrTh) setInstitutionAbbrTh(parsed.institutionAbbrTh);
-
-        if (parsed.titleEn) setTitleEn(parsed.titleEn);
-        if (parsed.firstNameEn) setFirstNameEn(parsed.firstNameEn);
-        if (parsed.lastNameEn) setLastNameEn(parsed.lastNameEn);
-        if (parsed.institutionAbbrEn) setInstitutionAbbrEn(parsed.institutionAbbrEn);
-      }
-
-      setFirstName(myRegistration.first_name || '');
-      setLastName(myRegistration.last_name || '');
-      setFullNameAffiliation(myRegistration.full_name_affiliation || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim());
-      setNickname(myRegistration.nickname || '');
-      setCallsign(myRegistration.callsign || '');
-      setShirtSize(myRegistration.shirt_size || 'L');
-      setIdCardPhoto(myRegistration.id_card_photo || myRegistration.id_card_url || '');
-      setBloodGroup(myRegistration.blood_group || 'O');
-      setPhone(myRegistration.phone || '');
-      setInstitution(myRegistration.institution || 'มหาวิทยาลัยมหาสารคาม (มมส)');
-      setEmergencyName(myRegistration.emergency_name ? myRegistration.emergency_name.split(' (')[0] : '');
-      setEmergencyPhone(myRegistration.emergency_phone || '');
-      setMedicalHistory(myRegistration.medical_history || '');
-      setFoodAllergy(myRegistration.food_allergy || '');
-      setPreviousTraining(myRegistration.previous_training || '');
-      setPaymentPlan(myRegistration.payment_plan || 'installment');
-      
-      // Parse relation if present
-      if (myRegistration.emergency_name && myRegistration.emergency_name.includes('(')) {
-        const relMatch = myRegistration.emergency_name.match(/\((.*?)\)/);
-        if (relMatch && relMatch[1]) {
-          setEmergencyRelation(relMatch[1]);
-        }
-      }
-
-      // Parse DOB
-      if (myRegistration.dob) {
-        const parts = myRegistration.dob.split('-');
-        if (parts.length === 3) {
-          setBirthYearBE(parts[0]);
-          setBirthMonth(parseInt(parts[1], 10).toString());
-          setBirthDay(parseInt(parts[2], 10).toString());
-        }
-      }
-      setAgreeCorrectInfo(true);
-      setAgreePDPAAndRules(true);
+      populateFormFromRegistration(myRegistration);
     } else if (user && user.name) {
       // Auto pre-fill name from Google Account for first-time applicants
       const parts = user.name.trim().split(' ');
@@ -3511,6 +3541,43 @@ export default function RegisterView({
         </div>
       )}
 
+      {/* Edit Mode Warning & Action Safeguard Banner */}
+      {isEditing && (
+        <div className="sticky top-20 z-40 bg-amber-500/20 border-2 border-amber-500/80 text-amber-200 p-4 rounded-2xl shadow-2xl backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl animate-pulse">✏️</span>
+            <div>
+              <p className="font-bold text-sm sm:text-base text-amber-300">
+                คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัคร
+              </p>
+              <p className="text-xs text-amber-200/80">
+                หากแก้ไขเสร็จแล้ว กรุณาไปที่ขั้นตอนสรุปและกดบันทึก หรือกดยกเลิกเพื่อคืนค่าเดิม
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={handleCancelEditRegistration}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs sm:text-sm font-bold border border-slate-600 transition-colors cursor-pointer"
+            >
+              ❌ ยกเลิก (คืนค่าเดิม)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const targetStep = paymentPlan === 'installment' && (formSlipRound2 || myRegistration?.installment_2_slip_url) ? 4 : 3;
+                setCurrentFormStep(targetStep);
+                window.scrollTo({ top: 350, behavior: 'smooth' });
+              }}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-amber-500/30 cursor-pointer"
+            >
+              💾 ไปที่ปุ่มบันทึก
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Verified Google Account Banner for New Applicants */}
       {!isEditing && user && (
         <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
@@ -4936,7 +5003,16 @@ export default function RegisterView({
             </div>
 
             {/* Step 1 Bottom Action Button */}
-            <div className="pt-4 flex justify-end">
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              {isEditing ? (
+                <button
+                  type="button"
+                  onClick={handleCancelEditRegistration}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                >
+                  ❌ ยกเลิกการแก้ไข (คืนค่าเดิม)
+                </button>
+              ) : <div />}
               <button
                 type="button"
                 onClick={handleNextToStep2}
@@ -5100,17 +5176,28 @@ export default function RegisterView({
 
             {/* Step 2 Bottom Navigation Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentFormStep(1);
-                  window.scrollTo({ top: 350, behavior: 'smooth' });
-                }}
-                className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>ย้อนกลับไปขั้นตอนที่ 1 (ข้อมูลผู้สมัคร)</span>
-              </button>
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentFormStep(1);
+                    window.scrollTo({ top: 350, behavior: 'smooth' });
+                  }}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>ย้อนกลับไปขั้นตอนที่ 1 (ข้อมูลผู้สมัคร)</span>
+                </button>
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEditRegistration}
+                    className="w-full sm:w-auto px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                  >
+                    ❌ ยกเลิกการแก้ไข
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleNextToStep3}
@@ -5666,13 +5753,10 @@ export default function RegisterView({
                 {isEditing && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsEditing(false);
-                      if (onSubRouteChange) onSubRouteChange('dashboard');
-                    }}
-                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                    onClick={handleCancelEditRegistration}
+                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-rose-300 font-bold rounded-2xl border border-rose-500/30 text-sm cursor-pointer active:scale-95 transition-colors"
                   >
-                    ยกเลิก
+                    ❌ ยกเลิกการแก้ไข (คืนค่าเดิม)
                   </button>
                 )}
               </div>
@@ -6144,13 +6228,10 @@ export default function RegisterView({
                 {isEditing && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsEditing(false);
-                      if (onSubRouteChange) onSubRouteChange('dashboard');
-                    }}
-                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                    onClick={handleCancelEditRegistration}
+                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-rose-300 font-bold rounded-2xl border border-rose-500/30 text-sm cursor-pointer active:scale-95 transition-colors"
                   >
-                    ยกเลิก
+                    ❌ ยกเลิกการแก้ไข (คืนค่าเดิม)
                   </button>
                 )}
               </div>

@@ -14,6 +14,7 @@ import {
   ExternalLink, 
   CheckCircle2, 
   AlertCircle, 
+  AlertTriangle, 
   Download, 
   Building, 
   Sparkles, 
@@ -118,7 +119,39 @@ export default function AdminDashboardView({
     }
   }, [initialTab]);
 
+  // Edit Safeguard States (Locked / View-Only by default to prevent accidental edits)
+  const [isEditingProfileModal, setIsEditingProfileModal] = useState(false);
+  const [isEditingPaymentSettings, setIsEditingPaymentSettings] = useState(false);
+  const [isEditingForms, setIsEditingForms] = useState(false);
+  const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
+
   const handleTabChange = (tab) => {
+    if (tab === activeTab) return;
+
+    if (isEditingPaymentSettings || isEditingForms || isEditingMerchConfig) {
+      const confirmSwitch = window.confirm(
+        'ท่านกำลังอยู่ในโหมดแก้ไขข้อมูลและยังไม่ได้กดบันทึก ต้องการยกเลิกการแก้ไขและสลับแท็บใช่หรือไม่? (การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกยกเลิก)'
+      );
+      if (!confirmSwitch) return;
+
+      if (isEditingPaymentSettings) {
+        setLocalPayment(paymentConfig || DEFAULT_PAYMENT_CONFIG);
+        setIsEditingPaymentSettings(false);
+      }
+      if (isEditingForms) {
+        setLocalForms(formsConfig || {
+          pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
+          posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
+          evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
+        });
+        setIsEditingForms(false);
+      }
+      if (isEditingMerchConfig) {
+        setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
+        setIsEditingMerchConfig(false);
+      }
+    }
+
     setActiveTab(tab);
     if (onTabChange) {
       onTabChange(tab === 'payment_settings' ? 'payment' : tab);
@@ -516,6 +549,15 @@ export default function AdminDashboardView({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
 
+  const handleCloseAnnModal = () => {
+    if (annTitle.trim() || annContent.trim()) {
+      if (!window.confirm('คุณกำลังกรอกหรือแก้ไขประกาศและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
+        return;
+      }
+    }
+    setShowAnnModal(false);
+  };
+
   // Forms Config State
   const [localForms, setLocalForms] = useState(formsConfig || {
     pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
@@ -572,6 +614,7 @@ export default function AdminDashboardView({
         await DataService.saveMerchandiseConfig(updatedMerch);
       }
 
+      setIsEditingPaymentSettings(false);
       triggerToast('บันทึกการตั้งค่าค่าสมัครและซิงค์บัญชีธนาคารกลางเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
@@ -580,6 +623,52 @@ export default function AdminDashboardView({
       setIsSavingPayment(false);
     }
   };
+
+  const handleCancelPaymentSettings = () => {
+    setLocalPayment(paymentConfig || DEFAULT_PAYMENT_CONFIG);
+    setIsEditingPaymentSettings(false);
+    triggerToast('ยกเลิกการแก้ไขและคืนค่าการตั้งค่าชำระเงินเดิม');
+  };
+
+  const handleCancelForms = () => {
+    setLocalForms(formsConfig || {
+      pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
+      posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
+      evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
+    });
+    setIsEditingForms(false);
+    triggerToast('ยกเลิกการแก้ไขและคืนค่าลิงก์แบบฟอร์มเดิม');
+  };
+
+  const handleCancelMerchConfig = () => {
+    setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
+    setIsEditingMerchConfig(false);
+    triggerToast('ยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิม');
+  };
+
+  // Window BeforeUnload Safeguard for Unsaved Admin Changes
+  React.useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (
+        isEditingProfileModal ||
+        isEditingPaymentSettings ||
+        isEditingForms ||
+        isEditingMerchConfig ||
+        editingUserId
+      ) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [
+    isEditingProfileModal,
+    isEditingPaymentSettings,
+    isEditingForms,
+    isEditingMerchConfig,
+    editingUserId
+  ]);
 
   // In-App Document Preview Modal State
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -658,6 +747,15 @@ export default function AdminDashboardView({
     } finally {
       setIsSavingUser(false);
     }
+  };
+
+  const handleCloseEditUserModal = () => {
+    if (editingUserAccount && (editUserName !== (editingUserAccount.name || '') || editUserRole !== (editingUserAccount.role || 'user'))) {
+      if (!window.confirm('คุณกำลังแก้ไขข้อมูลบัญชีผู้ใช้และยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
+        return;
+      }
+    }
+    setEditingUserAccount(null);
   };
 
   const handleAdminResetPassword = async (e) => {
@@ -800,6 +898,24 @@ export default function AdminDashboardView({
       setLocalTeam(teamMembers);
     }
   }, [teamMembers]);
+
+  const handleCloseSpeakerModal = () => {
+    if (speakerFormName.trim()) {
+      if (!window.confirm('คุณกำลังแก้ไขข้อมูลวิทยากรและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
+        return;
+      }
+    }
+    setShowSpeakerModal(false);
+  };
+
+  const handleCloseTeamModal = () => {
+    if (teamFormName.trim()) {
+      if (!window.confirm('คุณกำลังแก้ไขข้อมูลคณะดำเนินงานและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
+        return;
+      }
+    }
+    setShowTeamModal(false);
+  };
 
   // --- Speakers Handlers ---
   const handleMoveSpeakerUp = async (index) => {
@@ -1091,9 +1207,10 @@ export default function AdminDashboardView({
     triggerToast('บันทึกการจัดสรรกลุ่มและห้องพักเรียบร้อย');
   };
 
-  // Open Full Profile & Remarks Modal
+  // Open Full Profile & Remarks Modal (Locked / View-only by default)
   const handleOpenProfileModal = (reg, initialTab = 'info') => {
     setProfileModalReg(reg);
+    setIsEditingProfileModal(false);
     setProfileModalTab(initialTab);
     setModalGroup(reg.group_assigned || '');
     setModalRoom(reg.room_assigned || '');
@@ -1109,6 +1226,35 @@ export default function AdminDashboardView({
     setModalPaymentBank(reg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
     setModalPaymentNotes(reg.payment_notes || '');
     setNewMsgText('');
+  };
+
+  const handleCancelProfileModal = () => {
+    if (!profileModalReg) return;
+    setModalGroup(profileModalReg.group_assigned || '');
+    setModalRoom(profileModalReg.room_assigned || '');
+    setModalSpecialCare(Boolean(profileModalReg.is_special_care));
+    setModalNotes(profileModalReg.special_notes || '');
+    setModalPhone(profileModalReg.phone || '');
+    setModalInstitution(profileModalReg.institution || '');
+    setModalMedical(profileModalReg.medical_history || '');
+    setModalAllergy(profileModalReg.food_allergy || '');
+    setModalTraining(profileModalReg.previous_training || '');
+    setModalPaymentStatus(profileModalReg.payment_status || 'unpaid');
+    setModalPaymentAmount(profileModalReg.payment_amount || (profileModalReg.is_msu ? 650 : 850));
+    setModalPaymentBank(profileModalReg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
+    setModalPaymentNotes(profileModalReg.payment_notes || '');
+    setIsEditingProfileModal(false);
+    triggerToast('ยกเลิกการแก้ไขและคืนค่าเดิมของข้อมูลผู้สมัคร');
+  };
+
+  const handleCloseProfileModal = () => {
+    if (isEditingProfileModal) {
+      if (!window.confirm('คุณกำลังอยู่ในโหมดแก้ไขข้อมูลและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
+        return;
+      }
+    }
+    setIsEditingProfileModal(false);
+    setProfileModalReg(null);
   };
 
   // Save Full Profile & Special Care Remarks
@@ -1138,6 +1284,7 @@ export default function AdminDashboardView({
       
       // Update local modal state copy
       setProfileModalReg(prev => ({ ...prev, ...updates }));
+      setIsEditingProfileModal(false);
       triggerToast(`บันทึกข้อมูลของ ${profileModalReg.first_name} เรียบร้อยแล้ว`);
     } catch (err) {
       triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
@@ -1430,9 +1577,10 @@ export default function AdminDashboardView({
 
   // --- Handlers for Forms Config ---
   const handleSaveForms = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     await onSaveFormsConfig(localForms);
     setFormsSavedMsg(true);
+    setIsEditingForms(false);
     triggerToast('บันทึกการตั้งค่า Google Form และสถานะเปิด/ปิดแล้ว');
     setTimeout(() => setFormsSavedMsg(false), 3000);
   };
@@ -1457,6 +1605,7 @@ export default function AdminDashboardView({
       } else {
         await DataService.saveMerchandiseConfig(localMerchConfig);
       }
+      setIsEditingMerchConfig(false);
 
       // Also sync central bank account to registration paymentConfig
       if (localMerchConfig.payment?.bank_name) {
@@ -2319,10 +2468,10 @@ export default function AdminDashboardView({
 
       {/* MODAL: VIEW FULL PARTICIPANT PROFILE & REMARKS */}
       {profileModalReg && (
-        <ModalPortal isOpen={Boolean(profileModalReg)} onClose={() => setProfileModalReg(null)}>
+        <ModalPortal isOpen={Boolean(profileModalReg)} onClose={handleCloseProfileModal}>
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setProfileModalReg(null)}
+            onClick={handleCloseProfileModal}
           >
             <div 
               className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto"
@@ -2330,7 +2479,7 @@ export default function AdminDashboardView({
             >
             
             <button
-              onClick={() => setProfileModalReg(null)}
+              onClick={handleCloseProfileModal}
               className="absolute top-5 right-5 p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
@@ -2420,60 +2569,129 @@ export default function AdminDashboardView({
               </div>
             </div>
 
-            {/* Modal Internal Navigation Tabs */}
-            <div className="flex border-b border-slate-800 gap-2 mt-4 pb-2">
-              <button
-                onClick={() => setProfileModalTab('info')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  profileModalTab === 'info'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-slate-400 hover:text-white bg-slate-950'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>ประวัติ & ดูแลพิเศษ</span>
-              </button>
+            {/* Modal Internal Navigation Tabs & Edit Safeguard Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 gap-3 mt-4 pb-2">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  onClick={() => setProfileModalTab('info')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    profileModalTab === 'info'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-slate-400 hover:text-white bg-slate-950'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>ประวัติ & ดูแลพิเศษ</span>
+                </button>
 
-              <button
-                onClick={() => setProfileModalTab('payment')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  profileModalTab === 'payment'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-slate-400 hover:text-white bg-slate-950'
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>การเงิน & สลิปโอนเงิน</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileModalTab('payment')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    profileModalTab === 'payment'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-slate-400 hover:text-white bg-slate-950'
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>การเงิน & สลิปโอนเงิน</span>
+                </button>
 
-              <button
-                onClick={() => setProfileModalTab('messages')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  profileModalTab === 'messages'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-slate-400 hover:text-white bg-slate-950'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>ส่งข้อความแจ้งเตือน ({Array.isArray(profileModalReg.admin_messages) ? profileModalReg.admin_messages.length : 0})</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileModalTab('messages')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    profileModalTab === 'messages'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-slate-400 hover:text-white bg-slate-950'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>ส่งข้อความแจ้งเตือน ({Array.isArray(profileModalReg.admin_messages) ? profileModalReg.admin_messages.length : 0})</span>
+                </button>
 
-              <button
-                onClick={() => setProfileModalTab('docs')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  profileModalTab === 'docs'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-slate-400 hover:text-white bg-slate-950'
-                }`}
-              >
-                <FileCheck className="w-3.5 h-3.5" />
-                <span>ขอ & ตรวจเอกสาร ({Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs.length : 0})</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileModalTab('docs')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    profileModalTab === 'docs'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-slate-400 hover:text-white bg-slate-950'
+                  }`}
+                >
+                  <FileCheck className="w-3.5 h-3.5" />
+                  <span>ขอ & ตรวจเอกสาร ({Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs.length : 0})</span>
+                </button>
+              </div>
+
+              {/* Edit Mode Safeguard Toggle */}
+              <div className="shrink-0 flex items-center gap-2 self-end sm:self-auto">
+                {(profileModalTab === 'info' || profileModalTab === 'payment') && (
+                  isEditingProfileModal ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCancelProfileModal}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>ยกเลิก (คืนค่าเดิม)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveProfileModal}
+                        disabled={isSavingProfile}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingProfile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        <span>บันทึกข้อมูล</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfileModal(true)}
+                      className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>ปลดล็อกเพื่อแก้ไข</span>
+                    </button>
+                  )
+                )}
+              </div>
             </div>
 
             {/* TAB 1: INFO & SPECIAL CARE & ALLOCATIONS */}
             {profileModalTab === 'info' && (
               <form onSubmit={handleSaveProfileModal} className="mt-5 space-y-6">
+                {/* Edit Mode Warning Banner */}
+                {isEditingProfileModal && (
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                    <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span>⚠️ กำลังอยู่ในโหมดแก้ไขข้อมูล — อย่าลืมกด "บันทึกข้อมูล" หรือกด "ยกเลิก" เพื่อคืนค่าเดิม</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleCancelProfileModal}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingProfile}
+                        className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        บันทึก
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                   <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">อายุที่คำนวณได้</span>
@@ -2512,10 +2730,15 @@ export default function AdminDashboardView({
                       </label>
                       <input
                         type="text"
+                        disabled={!isEditingProfileModal}
                         value={modalMedical}
                         onChange={e => setModalMedical(e.target.value)}
                         placeholder="เช่น ไม่มี หรือ โรคหอบหืด"
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                        }`}
                       />
                     </div>
 
@@ -2526,10 +2749,15 @@ export default function AdminDashboardView({
                       </label>
                       <input
                         type="text"
+                        disabled={!isEditingProfileModal}
                         value={modalAllergy}
                         onChange={e => setModalAllergy(e.target.value)}
                         placeholder="เช่น ไม่มี หรือ แพ้ยาเพนนิซิลิน"
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                        }`}
                       />
                     </div>
                   </div>
@@ -2541,10 +2769,15 @@ export default function AdminDashboardView({
                     </label>
                     <textarea
                       rows="2"
+                      disabled={!isEditingProfileModal}
                       value={modalTraining}
                       onChange={e => setModalTraining(e.target.value)}
                       placeholder="ประวัติการฝึกอบรมกู้ภัย เช่น BLS, CPR, เชือกกู้ภัย"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                      className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                        !isEditingProfileModal 
+                          ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                          : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                      }`}
                     />
                   </div>
                 </div>
@@ -2558,12 +2791,15 @@ export default function AdminDashboardView({
                       </h4>
                     </div>
                     
-                    <label className="flex items-center gap-2 cursor-pointer bg-rose-950/60 px-3 py-1.5 rounded-xl border border-rose-600/40 hover:bg-rose-900/40 transition-colors">
+                    <label className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border border-rose-600/40 transition-colors ${
+                      !isEditingProfileModal ? 'bg-rose-950/30 cursor-not-allowed opacity-80' : 'bg-rose-950/60 hover:bg-rose-900/40 cursor-pointer'
+                    }`}>
                       <input
                         type="checkbox"
+                        disabled={!isEditingProfileModal}
                         checked={modalSpecialCare}
                         onChange={e => setModalSpecialCare(e.target.checked)}
-                        className="w-4 h-4 rounded text-rose-600 bg-slate-950 border-rose-400"
+                        className="w-4 h-4 rounded text-rose-600 bg-slate-950 border-rose-400 disabled:opacity-50"
                       />
                       <span className="text-xs font-bold text-rose-300">
                         ⭐ กำหนดเป็นบุคคลดูแลพิเศษ (Special Care)
@@ -2577,10 +2813,15 @@ export default function AdminDashboardView({
                     </label>
                     <textarea
                       rows="3"
+                      disabled={!isEditingProfileModal}
                       value={modalNotes}
                       onChange={e => setModalNotes(e.target.value)}
                       placeholder="ระบุข้อควรระวัง เช่น มีโรคประจำตัวหอบหืด ต้องพกยาพ่นติดตัวตลอดเวลา, ทานอาหารฮาลาล/มังสวิรัติ ฯลฯ"
-                      className="w-full px-3 py-2 bg-slate-900 border border-rose-800/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-rose-500 outline-none"
+                      className={`w-full px-3 py-2 rounded-xl text-xs text-white outline-none transition-all ${
+                        !isEditingProfileModal 
+                          ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                          : 'bg-slate-900 border border-rose-800/60 focus:ring-2 focus:ring-rose-500'
+                      }`}
                     />
                   </div>
 
@@ -2591,10 +2832,15 @@ export default function AdminDashboardView({
                       </label>
                       <input
                         type="text"
+                        disabled={!isEditingProfileModal}
                         value={modalGroup}
                         onChange={e => setModalGroup(e.target.value)}
                         placeholder="เช่น Alpha-1"
-                        className="w-full px-3 py-2 bg-slate-900 border border-indigo-700/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white outline-none transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-indigo-700/60 focus:ring-2 focus:ring-indigo-500'
+                        }`}
                       />
                     </div>
 
@@ -2604,24 +2850,50 @@ export default function AdminDashboardView({
                       </label>
                       <input
                         type="text"
+                        disabled={!isEditingProfileModal}
                         value={modalRoom}
                         onChange={e => setModalRoom(e.target.value)}
                         placeholder="เช่น หอพักกุดรัง ห้อง 204"
-                        className="w-full px-3 py-2 bg-slate-900 border border-amber-700/60 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white outline-none transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-amber-700/60 focus:ring-2 focus:ring-amber-500'
+                        }`}
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-3 pt-2">
-                  <button
-                    type="submit"
-                    disabled={isSavingProfile}
-                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg flex items-center gap-2"
-                  >
-                    {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>บันทึกข้อมูลและหมายเหตุ</span>
-                  </button>
+                  {!isEditingProfileModal ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfileModal(true)}
+                      className="px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      <span>ปลดล็อกเพื่อแก้ไขข้อมูลและหมายเหตุ</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleCancelProfileModal}
+                        className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                        <span>ยกเลิก (คืนค่าเดิม)</span>
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingProfile}
+                        className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        <span>บันทึกข้อมูลและหมายเหตุ</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             )}
@@ -2629,6 +2901,34 @@ export default function AdminDashboardView({
             {/* TAB 2: PAYMENT & SLIP VERIFICATION */}
             {profileModalTab === 'payment' && (
               <div className="mt-5 space-y-6 text-xs">
+                {/* Edit Mode Warning Banner */}
+                {isEditingProfileModal && (
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                    <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span>⚠️ กำลังอยู่ในโหมดแก้ไขข้อมูลการเงิน — อย่าลืมกด "บันทึก" หรือกด "ยกเลิก" เพื่อคืนค่าเดิม</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleCancelProfileModal}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveProfileModal}
+                        disabled={isSavingProfile}
+                        className="px-3.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        บันทึก
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
                   <h4 className="font-bold text-white text-sm flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-amber-400" />
@@ -2639,9 +2939,14 @@ export default function AdminDashboardView({
                     <div>
                       <label className="block text-slate-300 mb-1 font-semibold">สถานะการชำระเงิน:</label>
                       <select
+                        disabled={!isEditingProfileModal}
                         value={modalPaymentStatus}
                         onChange={e => setModalPaymentStatus(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold"
+                        className={`w-full px-3 py-2 rounded-xl text-white font-bold transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-slate-700'
+                        }`}
                       >
                         <option value="unpaid">🔴 ค้างชำระ (Unpaid)</option>
                         <option value="pending_review">🟡 รอตรวจสอบสลิป (Pending Review)</option>
@@ -2653,9 +2958,14 @@ export default function AdminDashboardView({
                       <label className="block text-slate-300 mb-1 font-semibold">จำนวนเงินที่ต้องชำระ (บาท):</label>
                       <input
                         type="number"
+                        disabled={!isEditingProfileModal}
                         value={modalPaymentAmount}
                         onChange={e => setModalPaymentAmount(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono"
+                        className={`w-full px-3 py-2 rounded-xl text-white font-mono transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-slate-700'
+                        }`}
                       />
                     </div>
 
@@ -2663,10 +2973,15 @@ export default function AdminDashboardView({
                       <label className="block text-slate-300 mb-1 font-semibold">หมายเหตุเรื่องเงิน:</label>
                       <input
                         type="text"
+                        disabled={!isEditingProfileModal}
                         value={modalPaymentNotes}
                         onChange={e => setModalPaymentNotes(e.target.value)}
                         placeholder="เช่น ชำระครบถ้วน, โอนผ่าน SCB / พร้อมเพย์"
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
+                        className={`w-full px-3 py-2 rounded-xl text-white transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-slate-700'
+                        }`}
                       />
                     </div>
                   </div>
@@ -2675,22 +2990,49 @@ export default function AdminDashboardView({
                     <label className="block text-slate-300 mb-1 font-semibold">ข้อมูลบัญชีรับโอนเงิน:</label>
                     <input
                       type="text"
+                      disabled={!isEditingProfileModal}
                       value={modalPaymentBank}
                       onChange={e => setModalPaymentBank(e.target.value)}
                       placeholder="ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white"
+                      className={`w-full px-3 py-2 rounded-xl text-white transition-all ${
+                        !isEditingProfileModal 
+                          ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                          : 'bg-slate-900 border border-slate-700'
+                      }`}
                     />
                   </div>
 
-                  <div className="flex justify-end pt-2">
-                    <button
-                      type="button"
-                      onClick={handleSaveProfileModal}
-                      className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span>บันทึกสถานะการชำระเงิน</span>
-                    </button>
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    {!isEditingProfileModal ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfileModal(true)}
+                        className="px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        <span>ปลดล็อกเพื่อแก้ไขข้อมูลการเงิน</span>
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleCancelProfileModal}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>ยกเลิก (คืนค่าเดิม)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveProfileModal}
+                          disabled={isSavingProfile}
+                          className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow active:scale-95 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          <span>บันทึกสถานะการชำระเงิน</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -3277,24 +3619,88 @@ export default function AdminDashboardView({
         <form onSubmit={handleSavePaymentSettings} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8 animate-in fade-in duration-200">
           <div className="border-b border-slate-800 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <CreditCard className="w-5 h-5 text-purple-400" />
-                ตั้งค่าค่าธรรมเนียมการลงทะเบียน & ระบบแบ่งชำระ 2 งวด
-              </h3>
+                <h3 className="text-xl font-bold text-white">
+                  ตั้งค่าค่าธรรมเนียมการลงทะเบียน & ระบบแบ่งชำระ 2 งวด
+                </h3>
+                {isEditingPaymentSettings ? (
+                  <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                    ✏️ โหมดแก้ไข
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-full text-xs font-bold flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> ล็อกข้อมูล (View Only)
+                  </span>
+                )}
+              </div>
               <p className="text-slate-400 text-xs sm:text-sm mt-1">
                 กำหนดค่าลงทะเบียนรวม บัญชีธนาคารสำหรับรับโอนเงิน และเปิด/ปิดระบบแบ่งจ่าย 2 งวด พร้อมกำหนดจำนวนเงินและวันครบกำหนด
               </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={isSavingPayment}
-              className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all shrink-0 cursor-pointer disabled:opacity-50"
-            >
-              {isSavingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>บันทึกการตั้งค่าทั้งหมด</span>
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+              {!isEditingPaymentSettings ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPaymentSettings(true)}
+                  className="px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>ปลดล็อกเพื่อแก้ไขการตั้งค่า</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCancelPaymentSettings}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl text-xs sm:text-sm border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>ยกเลิก (คืนค่าเดิม)</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingPayment}
+                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>บันทึกการตั้งค่าทั้งหมด</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Warning Banner when Editing */}
+          {isEditingPaymentSettings && (
+            <div className="p-4 bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400" />
+                <div>
+                  <span className="font-bold text-sm text-amber-300 block">⚠️ ท่านกำลังอยู่ในโหมดแก้ไขการตั้งค่าระบบการเงิน</span>
+                  <span className="text-xs text-amber-200/80">ระบบเปิดให้แก้ไขยอดเงินและข้อมูลบัญชีแล้ว เมื่อแก้ไขเสร็จอย่าลืมกด "บันทึกการตั้งค่าทั้งหมด" หรือกด "ยกเลิก" เพื่อคืนค่าเดิม</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleCancelPaymentSettings}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPayment}
+                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingPayment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  บันทึกทันที
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-6">
             {/* CARD 1: GENERAL FEE & BANK INFO */}
@@ -3312,9 +3718,14 @@ export default function AdminDashboardView({
                   <input
                     type="number"
                     required
+                    disabled={!isEditingPaymentSettings}
                     value={localPayment.fee_total ?? 850}
                     onChange={e => setLocalPayment(prev => ({ ...prev, fee_total: Number(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    className={`w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                     placeholder="850"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">อัตราสำหรับสถาบันภายนอก/ต่างมหาวิทยาลัย (รวมค่าที่พักหอพักกุดรัง มมส และอาหาร)</p>
@@ -3327,9 +3738,14 @@ export default function AdminDashboardView({
                   <input
                     type="number"
                     required
+                    disabled={!isEditingPaymentSettings}
                     value={localPayment.fee_total_msu ?? 650}
                     onChange={e => setLocalPayment(prev => ({ ...prev, fee_total_msu: Number(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    className={`w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                     placeholder="650"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">อัตราสำหรับนิสิตมหาวิทยาลัยมหาสารคาม (ไม่มีค่าที่พัก)</p>
@@ -3342,9 +3758,14 @@ export default function AdminDashboardView({
                   <input
                     type="text"
                     required
+                    disabled={!isEditingPaymentSettings}
                     value={localPayment.bank_name ?? 'ธนาคารไทยพาณิชย์'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_name: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    className={`w-full px-4 py-2.5 rounded-xl text-white text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                     placeholder="เช่น ธนาคารไทยพาณิชย์"
                   />
                 </div>
@@ -3356,9 +3777,14 @@ export default function AdminDashboardView({
                   <input
                     type="text"
                     required
+                    disabled={!isEditingPaymentSettings}
                     value={localPayment.bank_account_number ?? '594-264865-5'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_account_number: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none tracking-wider"
+                    className={`w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm outline-none tracking-wider transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                     placeholder="594-264865-5"
                   />
                 </div>
@@ -3370,9 +3796,14 @@ export default function AdminDashboardView({
                   <input
                     type="text"
                     required
+                    disabled={!isEditingPaymentSettings}
                     value={localPayment.bank_account_name ?? 'นางสาวมัญชุพร ยังเหล็ก'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, bank_account_name: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    className={`w-full px-4 py-2.5 rounded-xl text-white text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                     placeholder="นางสาวมัญชุพร ยังเหล็ก"
                   />
                 </div>
@@ -3385,9 +3816,14 @@ export default function AdminDashboardView({
                   </label>
                   <input
                     type="text"
+                    disabled={!isEditingPaymentSettings}
                     value={localPayment.contact_phone ?? '098-329-6762'}
                     onChange={e => setLocalPayment(prev => ({ ...prev, contact_phone: e.target.value, bank_promptpay: '' }))}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    className={`w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                     placeholder="098-329-6762"
                   />
                   <p className="text-[11px] text-amber-300/80 mt-1 flex items-center gap-1">
@@ -3406,12 +3842,15 @@ export default function AdminDashboardView({
                   <h4>2. ระบบแบ่งจ่าย 2 งวด (2-Round Installments)</h4>
                 </div>
 
-                <label className="inline-flex items-center gap-3 cursor-pointer bg-slate-900 px-4 py-2 rounded-xl border border-slate-700 hover:border-purple-500 transition-colors">
+                <label className={`inline-flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-700 transition-colors ${
+                  !isEditingPaymentSettings ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:border-purple-500'
+                }`}>
                   <input
                     type="checkbox"
+                    disabled={!isEditingPaymentSettings}
                     checked={Boolean(localPayment.allow_installments)}
                     onChange={e => setLocalPayment(prev => ({ ...prev, allow_installments: e.target.checked }))}
-                    className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-slate-600 focus:ring-purple-500"
+                    className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-slate-600 focus:ring-purple-500 disabled:opacity-50"
                   />
                   <span className="text-xs font-bold text-white">
                     {localPayment.allow_installments ? 'เปิดใช้งานระบบแบ่งจ่าย 2 งวด' : 'ปิดระบบแบ่งจ่าย (ให้จ่ายเต็มจำนวนเท่านั้น)'}
@@ -3443,9 +3882,14 @@ export default function AdminDashboardView({
                         <input
                           type="number"
                           required
+                          disabled={!isEditingPaymentSettings}
                           value={localPayment.installment_round1_amount ?? 400}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round1_amount: Number(e.target.value) || 0 }))}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className={`w-full px-3.5 py-2 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                            !isEditingPaymentSettings
+                              ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                              : 'bg-slate-950 border border-slate-700 focus:ring-2 focus:ring-indigo-500'
+                          }`}
                           placeholder="400"
                         />
                       </div>
@@ -3457,9 +3901,14 @@ export default function AdminDashboardView({
                         <input
                           type="text"
                           required
+                          disabled={!isEditingPaymentSettings}
                           value={localPayment.installment_round1_due ?? ''}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round1_due: e.target.value }))}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className={`w-full px-3.5 py-2 rounded-xl text-white text-xs outline-none transition-all ${
+                            !isEditingPaymentSettings
+                              ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                              : 'bg-slate-950 border border-slate-700 focus:ring-2 focus:ring-indigo-500'
+                          }`}
                           placeholder="เช่น 15 ตุลาคม 2569 (วันเปิดรับสมัคร)"
                         />
                       </div>
@@ -3481,9 +3930,14 @@ export default function AdminDashboardView({
                         <input
                           type="number"
                           required
+                          disabled={!isEditingPaymentSettings}
                           value={localPayment.installment_round2_amount ?? 450}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round2_amount: Number(e.target.value) || 0 }))}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                          className={`w-full px-3.5 py-2 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                            !isEditingPaymentSettings
+                              ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                              : 'bg-slate-950 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                          }`}
                           placeholder="450"
                         />
                       </div>
@@ -3495,9 +3949,14 @@ export default function AdminDashboardView({
                         <input
                           type="text"
                           required
+                          disabled={!isEditingPaymentSettings}
                           value={localPayment.installment_round2_due ?? ''}
                           onChange={e => setLocalPayment(prev => ({ ...prev, installment_round2_due: e.target.value }))}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                          className={`w-full px-3.5 py-2 rounded-xl text-white text-xs outline-none transition-all ${
+                            !isEditingPaymentSettings
+                              ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                              : 'bg-slate-950 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                          }`}
                           placeholder="เช่น 5 พฤศจิกายน 2569"
                         />
                       </div>
@@ -3537,24 +3996,50 @@ export default function AdminDashboardView({
                 </label>
                 <textarea
                   rows="3"
+                  disabled={!isEditingPaymentSettings}
                   value={localPayment.notes ?? ''}
                   onChange={e => setLocalPayment(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none"
+                  className={`w-full px-4 py-2.5 rounded-xl text-white text-xs leading-relaxed outline-none transition-all ${
+                    !isEditingPaymentSettings
+                      ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                      : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                  }`}
                   placeholder="เช่น สามารถเลือกชำระเต็มจำนวน หรือแบ่งจ่าย 2 งวดตามกำหนดการข้างต้น..."
                 />
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                disabled={isSavingPayment}
-                className="px-8 py-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-rescue-600 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center gap-2 shadow-xl shadow-purple-600/30 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {isSavingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>บันทึกการตั้งค่าระบบการเงิน</span>
-              </button>
+            {/* Save / Cancel Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              {!isEditingPaymentSettings ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPaymentSettings(true)}
+                  className="px-6 py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-2xl text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>ปลดล็อกเพื่อแก้ไขการตั้งค่าระบบการเงิน</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCancelPaymentSettings}
+                    className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl text-sm border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>ยกเลิก (คืนค่าเดิม)</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingPayment}
+                    className="px-8 py-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-rescue-600 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center gap-2 shadow-xl shadow-purple-600/30 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>บันทึกการตั้งค่าระบบการเงิน</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </form>
@@ -3564,15 +4049,88 @@ export default function AdminDashboardView({
       {activeTab === 'forms' && (
         <form onSubmit={handleSaveForms} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8">
           
-          <div className="border-b border-slate-800 pb-4">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-400" />
-              จัดการ URL แบบทดสอบก่อน-หลัง และแบบประเมิน (Google Forms)
-            </h3>
-            <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              Admin สามารถใส่ URL ของ Google Form แต่ละรายการ และเปิด/ปิดการแสดงผลให้ผู้เข้าอบรมเห็นได้ตลอดเวลา
-            </p>
+          <div className="border-b border-slate-800 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <h3 className="text-xl font-bold text-white">
+                  จัดการ URL แบบทดสอบก่อน-หลัง และแบบประเมิน (Google Forms)
+                </h3>
+                {isEditingForms ? (
+                  <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                    ✏️ โหมดแก้ไข
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-full text-xs font-bold flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> ล็อกข้อมูล (View Only)
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                Admin สามารถใส่ URL ของ Google Form แต่ละรายการ และเปิด/ปิดการแสดงผลให้ผู้เข้าอบรมเห็นได้ตลอดเวลา
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+              {!isEditingForms ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingForms(true)}
+                  className="px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>ปลดล็อกเพื่อแก้ไขลิงก์แบบฟอร์ม</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCancelForms}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl text-xs sm:text-sm border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>ยกเลิก (คืนค่าเดิม)</span>
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all shrink-0 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>บันทึกการตั้งค่าลิงก์</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Warning Banner when Editing */}
+          {isEditingForms && (
+            <div className="p-4 bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400" />
+                <div>
+                  <span className="font-bold text-sm text-amber-300 block">⚠️ ท่านกำลังอยู่ในโหมดแก้ไขลิงก์และสถานะ Google Forms</span>
+                  <span className="text-xs text-amber-200/80">ระบบเปิดให้แก้ไข URL และสถานะแล้ว เมื่อเสร็จอย่าลืมกด "บันทึกการตั้งค่าลิงก์" หรือกด "ยกเลิก" เพื่อคืนค่าเดิม</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleCancelForms}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  บันทึกทันที
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-6">
             
@@ -3587,11 +4145,14 @@ export default function AdminDashboardView({
                 </div>
                 <button
                   type="button"
+                  disabled={!isEditingForms}
                   onClick={() => handleToggleForm('pretest')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    localForms.pretest?.enabled
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-slate-800 text-slate-400'
+                    !isEditingForms 
+                      ? 'opacity-80 cursor-not-allowed bg-slate-900 text-slate-400' 
+                      : localForms.pretest?.enabled
+                        ? 'bg-emerald-600 text-white shadow-md cursor-pointer'
+                        : 'bg-slate-800 text-slate-400 cursor-pointer'
                   }`}
                 >
                   {localForms.pretest?.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
@@ -3617,26 +4178,36 @@ export default function AdminDashboardView({
                   <label className="block text-xs text-slate-400 mb-1">ชื่อหัวข้อแบบทดสอบ:</label>
                   <input
                     type="text"
+                    disabled={!isEditingForms}
                     value={localForms.pretest?.title || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       pretest: { ...localForms.pretest, title: e.target.value }
                     })}
                     placeholder="แบบทดสอบก่อนเรียน (Pre-Test) 2027"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs text-white outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">คำอธิบายย่อ:</label>
                   <input
                     type="text"
+                    disabled={!isEditingForms}
                     value={localForms.pretest?.description || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       pretest: { ...localForms.pretest, description: e.target.value }
                     })}
                     placeholder="คำอธิบายแบบทดสอบ..."
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs text-white outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                 </div>
               </div>
@@ -3646,13 +4217,18 @@ export default function AdminDashboardView({
                 <div className="flex gap-2">
                   <input
                     type="url"
+                    disabled={!isEditingForms}
                     placeholder="https://docs.google.com/forms/d/e/.../viewform"
                     value={localForms.pretest?.url || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       pretest: { ...localForms.pretest, url: e.target.value }
                     })}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono"
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-xs text-white font-mono outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                   {localForms.pretest?.url && (
                     <a
@@ -3680,11 +4256,14 @@ export default function AdminDashboardView({
                 </div>
                 <button
                   type="button"
+                  disabled={!isEditingForms}
                   onClick={() => handleToggleForm('posttest')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    localForms.posttest?.enabled
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-slate-800 text-slate-400'
+                    !isEditingForms 
+                      ? 'opacity-80 cursor-not-allowed bg-slate-900 text-slate-400' 
+                      : localForms.posttest?.enabled
+                        ? 'bg-emerald-600 text-white shadow-md cursor-pointer'
+                        : 'bg-slate-800 text-slate-400 cursor-pointer'
                   }`}
                 >
                   {localForms.posttest?.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
@@ -3710,26 +4289,36 @@ export default function AdminDashboardView({
                   <label className="block text-xs text-slate-400 mb-1">ชื่อหัวข้อแบบทดสอบ:</label>
                   <input
                     type="text"
+                    disabled={!isEditingForms}
                     value={localForms.posttest?.title || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       posttest: { ...localForms.posttest, title: e.target.value }
                     })}
                     placeholder="แบบทดสอบหลังเรียน (Post-Test)"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs text-white outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">คำอธิบายย่อ:</label>
                   <input
                     type="text"
+                    disabled={!isEditingForms}
                     value={localForms.posttest?.description || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       posttest: { ...localForms.posttest, description: e.target.value }
                     })}
                     placeholder="คำอธิบายแบบทดสอบหลังเรียน..."
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs text-white outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                 </div>
               </div>
@@ -3739,13 +4328,18 @@ export default function AdminDashboardView({
                 <div className="flex gap-2">
                   <input
                     type="url"
+                    disabled={!isEditingForms}
                     placeholder="https://docs.google.com/forms/d/e/.../viewform"
                     value={localForms.posttest?.url || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       posttest: { ...localForms.posttest, url: e.target.value }
                     })}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono"
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-xs text-white font-mono outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                   {localForms.posttest?.url && (
                     <a
@@ -3773,11 +4367,14 @@ export default function AdminDashboardView({
                 </div>
                 <button
                   type="button"
+                  disabled={!isEditingForms}
                   onClick={() => handleToggleForm('evaluation')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    localForms.evaluation?.enabled
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-slate-800 text-slate-400'
+                    !isEditingForms 
+                      ? 'opacity-80 cursor-not-allowed bg-slate-900 text-slate-400' 
+                      : localForms.evaluation?.enabled
+                        ? 'bg-emerald-600 text-white shadow-md cursor-pointer'
+                        : 'bg-slate-800 text-slate-400 cursor-pointer'
                   }`}
                 >
                   {localForms.evaluation?.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
@@ -3803,26 +4400,36 @@ export default function AdminDashboardView({
                   <label className="block text-xs text-slate-400 mb-1">ชื่อหัวข้อแบบประเมิน:</label>
                   <input
                     type="text"
+                    disabled={!isEditingForms}
                     value={localForms.evaluation?.title || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       evaluation: { ...localForms.evaluation, title: e.target.value }
                     })}
                     placeholder="แบบประเมินความพึงพอใจ (JRE 2027)"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs text-white outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">คำอธิบายย่อ:</label>
                   <input
                     type="text"
+                    disabled={!isEditingForms}
                     value={localForms.evaluation?.description || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       evaluation: { ...localForms.evaluation, description: e.target.value }
                     })}
                     placeholder="คำอธิบายแบบประเมิน..."
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs text-white outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                 </div>
               </div>
@@ -3832,13 +4439,18 @@ export default function AdminDashboardView({
                 <div className="flex gap-2">
                   <input
                     type="url"
+                    disabled={!isEditingForms}
                     placeholder="https://docs.google.com/forms/d/e/.../viewform"
                     value={localForms.evaluation?.url || ''}
                     onChange={e => setLocalForms({
                       ...localForms,
                       evaluation: { ...localForms.evaluation, url: e.target.value }
                     })}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono"
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-xs text-white font-mono outline-none transition-all ${
+                      !isEditingForms
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                    }`}
                   />
                   {localForms.evaluation?.url && (
                     <a
@@ -3857,14 +4469,35 @@ export default function AdminDashboardView({
 
           </div>
 
-          <div className="pt-4 flex items-center gap-4">
-            <button
-              type="submit"
-              className="px-8 py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-xl shadow-purple-600/30 text-xs sm:text-sm flex items-center gap-2 transition-all active:scale-95"
-            >
-              <Save className="w-4 h-4" />
-              <span>บันทึกการตั้งค่าลิงก์และสถานะเปิด/ปิด</span>
-            </button>
+          <div className="pt-4 flex items-center gap-3">
+            {!isEditingForms ? (
+              <button
+                type="button"
+                onClick={() => setIsEditingForms(true)}
+                className="px-6 py-3.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-2xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>ปลดล็อกเพื่อแก้ไขลิงก์แบบฟอร์ม</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelForms}
+                  className="px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl text-xs sm:text-sm border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                  <span>ยกเลิก (คืนค่าเดิม)</span>
+                </button>
+                <button
+                  type="submit"
+                  className="px-8 py-3.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-xl shadow-purple-600/30 text-xs sm:text-sm flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกการตั้งค่าลิงก์และสถานะเปิด/ปิด</span>
+                </button>
+              </>
+            )}
             {formsSavedMsg && (
               <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" />
@@ -3966,10 +4599,10 @@ export default function AdminDashboardView({
 
       {/* ANNOUNCEMENT CREATE / EDIT MODAL */}
       {showAnnModal && (
-        <ModalPortal isOpen={Boolean(showAnnModal)} onClose={() => setShowAnnModal(false)}>
+        <ModalPortal isOpen={Boolean(showAnnModal)} onClose={handleCloseAnnModal}>
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setShowAnnModal(false)}
+            onClick={handleCloseAnnModal}
           >
             <div 
               className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto"
@@ -3977,7 +4610,7 @@ export default function AdminDashboardView({
             >
             
             <button
-              onClick={() => setShowAnnModal(false)}
+              onClick={handleCloseAnnModal}
               className="absolute top-5 right-5 text-slate-400 hover:text-white"
             >
               <X className="w-5 h-5" />
@@ -4176,7 +4809,7 @@ export default function AdminDashboardView({
               <div className="pt-3 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAnnModal(false)}
+                  onClick={handleCloseAnnModal}
                   className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium"
                 >
                   ยกเลิก
@@ -4914,27 +5547,94 @@ export default function AdminDashboardView({
           {/* SETTINGS SECTION: PRODUCTS, SIZES, PRICES & BACKUP GOOGLE FORM */}
           <div id="merchandise-settings" className="pt-8 border-t border-slate-800 space-y-6">
             
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-rescue-500" />
-                  <span>ตั้งค่าสินค้า, ไซต์, ราคาบวกเพิ่ม & Google Form สำรอง</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-rescue-500" />
+                    <span>ตั้งค่าสินค้า, ไซต์, ราคาบวกเพิ่ม & Google Form สำรอง</span>
+                  </h3>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
+                    isEditingMerchConfig 
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 animate-pulse' 
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  }`}>
+                    {isEditingMerchConfig ? '✏️ โหมดแก้ไข' : '🔒 ล็อกข้อมูล (View Only)'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
                   ปรับราคาฐาน, เพิ่ม/ลดขนาดไซต์, กำหนดราคาไซต์พิเศษบวกเพิ่มกี่บาท และจัดการระบบสั่งซื้อสำรอง
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleSaveMerchandiseConfig}
-                disabled={isSavingMerch}
-                className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                <span>{isSavingMerch ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่าทั้งหมด'}</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {!isEditingMerchConfig ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMerchConfig(true)}
+                    className="px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>ปลดล็อกเพื่อแก้ไขสินค้า & ไซต์</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง')) {
+                          handleCancelMerchConfig();
+                        }
+                      }}
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <X className="w-4 h-4 text-rose-400" />
+                      <span>ยกเลิก (คืนค่าเดิม)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveMerchandiseConfig}
+                      disabled={isSavingMerch}
+                      className="px-5 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-rescue-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{isSavingMerch ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่าทั้งหมด'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* Warning Banner when Editing */}
+            {isEditingMerchConfig && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-300 animate-in fade-in">
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>คุณกำลังอยู่ใน <strong>โหมดแก้ไขการตั้งค่าสินค้าและขนาดไซต์</strong> ข้อมูลที่ปรับแก้จะไม่ถูกบันทึกจริงจนกว่าจะกดปุ่ม "บันทึกการตั้งค่าทั้งหมด"</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่?')) {
+                        handleCancelMerchConfig();
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMerchandiseConfig}
+                    disabled={isSavingMerch}
+                    className="px-3 py-1 bg-rescue-600 hover:bg-rescue-500 text-white rounded-lg font-bold shadow cursor-pointer"
+                  >
+                    {isSavingMerch ? 'กำลังบันทึก...' : 'บันทึกตอนนี้'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* 1. CENTRAL BANK ACCOUNT REFERENCE (Uses Settings from Payment Tab) */}
             <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -4988,6 +5688,7 @@ export default function AdminDashboardView({
 
                 <button
                   type="button"
+                  disabled={!isEditingMerchConfig}
                   onClick={() => {
                     const currentEnabled = localMerchConfig.google_form?.enabled;
                     setLocalMerchConfig({
@@ -4999,6 +5700,8 @@ export default function AdminDashboardView({
                     });
                   }}
                   className={`px-4 py-1.5 rounded-full text-xs font-black transition-all ${
+                    !isEditingMerchConfig ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
+                  }${
                     localMerchConfig.google_form?.enabled
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                       : 'bg-slate-800 text-slate-500 border border-slate-700'
@@ -5013,6 +5716,7 @@ export default function AdminDashboardView({
                   <label className="text-xs font-bold text-slate-400">ลิงก์ Google Form URL:</label>
                   <input
                     type="url"
+                    disabled={!isEditingMerchConfig}
                     value={localMerchConfig.google_form?.url || ''}
                     onChange={(e) => {
                       setLocalMerchConfig({
@@ -5024,7 +5728,7 @@ export default function AdminDashboardView({
                       });
                     }}
                     placeholder="https://docs.google.com/forms/d/e/..."
-                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950"
                   />
                 </div>
 
@@ -5032,6 +5736,7 @@ export default function AdminDashboardView({
                   <label className="text-xs font-bold text-slate-400">ข้อความบนปุ่ม:</label>
                   <input
                     type="text"
+                    disabled={!isEditingMerchConfig}
                     value={localMerchConfig.google_form?.title || ''}
                     onChange={(e) => {
                       setLocalMerchConfig({
@@ -5043,7 +5748,7 @@ export default function AdminDashboardView({
                       });
                     }}
                     placeholder="สั่งซื้อเสื้อ/กางเกงโครงการผ่าน Google Form (ช่องทางสำรอง)"
-                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950"
                   />
                 </div>
               </div>
@@ -5083,29 +5788,33 @@ export default function AdminDashboardView({
                   <div className="flex flex-wrap gap-1.5 shrink-0">
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('shirt', 'enabled', true)}
-                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       👁️ เปิดแสดง
                     </button>
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('shirt', 'enabled', false)}
-                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       ซ่อน
                     </button>
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('shirt', 'allow_order', true)}
-                      className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       🛒 เปิดสั่ง
                     </button>
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('shirt', 'allow_order', false)}
-                      className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       🔒 ปิดสั่ง
                     </button>
@@ -5126,29 +5835,33 @@ export default function AdminDashboardView({
                   <div className="flex flex-wrap gap-1.5 shrink-0">
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('pants', 'enabled', true)}
-                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       👁️ เปิดแสดง
                     </button>
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('pants', 'enabled', false)}
-                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       ซ่อน
                     </button>
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('pants', 'allow_order', true)}
-                      className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       🛒 เปิดสั่ง
                     </button>
                     <button
                       type="button"
+                      disabled={!isEditingMerchConfig}
                       onClick={() => handleBatchToggleCategory('pants', 'allow_order', false)}
-                      className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       🔒 ปิดสั่ง
                     </button>
@@ -5230,8 +5943,11 @@ export default function AdminDashboardView({
 
                         <button
                           type="button"
+                          disabled={!isEditingMerchConfig}
                           onClick={() => handleToggleProductEnabled(selectedProductIndex)}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-95 ${
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm ${
+                            !isEditingMerchConfig ? 'opacity-40 cursor-not-allowed ' : 'cursor-pointer active:scale-95 '
+                          }${
                             isEnabled
                               ? 'bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40'
                               : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-emerald-600/30'
@@ -5277,8 +5993,11 @@ export default function AdminDashboardView({
 
                         <button
                           type="button"
+                          disabled={!isEditingMerchConfig}
                           onClick={() => handleToggleProductAllowOrder(selectedProductIndex)}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-95 ${
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm ${
+                            !isEditingMerchConfig ? 'opacity-40 cursor-not-allowed ' : 'cursor-pointer active:scale-95 '
+                          }${
                             isAllowOrder
                               ? 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40'
                               : 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 shadow-blue-600/30'
@@ -5306,19 +6025,21 @@ export default function AdminDashboardView({
                         <label className="text-xs font-bold text-slate-300">ชื่อสินค้า (Product Name):</label>
                         <input
                           type="text"
+                          disabled={!isEditingMerchConfig}
                           value={curProd.name || ''}
                           onChange={(e) => handleUpdateProductField(selectedProductIndex, 'name', e.target.value)}
                           placeholder="ระบุชื่อสินค้า..."
-                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-rescue-500"
+                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                         />
                       </div>
 
                       <div className="md:col-span-3">
                         <label className="text-xs font-bold text-slate-300">หมวดหมู่สินค้า:</label>
                         <select
+                          disabled={!isEditingMerchConfig}
                           value={curProd.category || 'shirt'}
                           onChange={(e) => handleUpdateProductField(selectedProductIndex, 'category', e.target.value)}
-                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                         >
                           <option value="shirt">เสื้อ (Shirt / Polo)</option>
                           <option value="pants">กางเกง (Pants / Shorts)</option>
@@ -5331,9 +6052,10 @@ export default function AdminDashboardView({
                           <input
                             type="number"
                             min={0}
+                            disabled={!isEditingMerchConfig}
                             value={curProd.base_price || 0}
                             onChange={(e) => handleUpdateProductBasePrice(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-black text-rescue-400 focus:outline-none focus:border-rescue-500"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-black text-rescue-400 focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                           />
                           <span className="absolute right-3 top-2 text-xs text-slate-400">บาท</span>
                         </div>
@@ -5343,10 +6065,11 @@ export default function AdminDashboardView({
                         <label className="text-xs font-bold text-slate-300">คำอธิบายรายละเอียดสินค้า (Description):</label>
                         <textarea
                           rows={2}
+                          disabled={!isEditingMerchConfig}
                           value={curProd.description || ''}
                           onChange={(e) => handleUpdateProductField(selectedProductIndex, 'description', e.target.value)}
                           placeholder="รายละเอียดเนื้อผ้า คุณสมบัติ และประโยชน์การใช้งาน..."
-                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-rescue-500"
+                          className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                         />
                       </div>
                     </div>
@@ -5393,12 +6116,13 @@ export default function AdminDashboardView({
                                 </div>
                               )}
 
-                              <div className="p-2 bg-slate-900 border-t border-slate-800 space-y-1.5">
+                                <div className="p-2 bg-slate-900 border-t border-slate-800 space-y-1.5">
                                 {!isCover && (
                                   <button
                                     type="button"
+                                    disabled={!isEditingMerchConfig}
                                     onClick={() => handleSetCoverProductImage(selectedProductIndex, imgUrl)}
-                                    className="w-full py-1 text-[11px] font-bold bg-slate-800 hover:bg-rescue-600/20 hover:text-rescue-400 text-slate-300 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                    className="w-full py-1 text-[11px] font-bold bg-slate-800 hover:bg-rescue-600/20 hover:text-rescue-400 text-slate-300 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     <Star className="w-3 h-3" />
                                     <span>ตั้งเป็นหน้าปก</span>
@@ -5418,8 +6142,9 @@ export default function AdminDashboardView({
 
                                   <button
                                     type="button"
+                                    disabled={!isEditingMerchConfig}
                                     onClick={() => handleRemoveProductImage(selectedProductIndex, imgIdx)}
-                                    className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                                    className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                     title="ลบรูปนี้"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -5437,15 +6162,17 @@ export default function AdminDashboardView({
                         <div className="sm:col-span-7 flex gap-2">
                           <input
                             type="url"
+                            disabled={!isEditingMerchConfig}
                             value={newProductImageUrl}
                             onChange={(e) => setNewProductImageUrl(e.target.value)}
                             placeholder="วางลิงก์ URL รูปภาพ เช่น https://..."
-                            className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500"
+                            className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                           />
                           <button
                             type="button"
+                            disabled={!isEditingMerchConfig}
                             onClick={() => handleAddProductImageUrl(selectedProductIndex)}
-                            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer"
+                            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             + เพิ่มจาก URL
                           </button>
@@ -5457,14 +6184,14 @@ export default function AdminDashboardView({
                             type="file"
                             id="upload-product-img-input"
                             accept="image/*,.heic,.heif"
-                            disabled={isUploadingProductImg}
+                            disabled={!isEditingMerchConfig || isUploadingProductImg}
                             onChange={(e) => handleUploadProductImageFile(e, selectedProductIndex)}
                             className="hidden"
                           />
                           <label
-                            htmlFor="upload-product-img-input"
-                            className={`w-full py-1.5 px-3 bg-gradient-to-r from-purple-600/30 to-indigo-600/30 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                              isUploadingProductImg ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
+                            htmlFor={isEditingMerchConfig ? "upload-product-img-input" : undefined}
+                            className={`w-full py-1.5 px-3 bg-gradient-to-r from-purple-600/30 to-indigo-600/30 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                              !isEditingMerchConfig || isUploadingProductImg ? 'opacity-40 cursor-not-allowed' : 'active:scale-95 cursor-pointer'
                             }`}
                           >
                             {isUploadingProductImg ? (
@@ -5523,9 +6250,10 @@ export default function AdminDashboardView({
                                       <input
                                         type="number"
                                         min={0}
+                                        disabled={!isEditingMerchConfig}
                                         value={sz.extra_price || 0}
                                         onChange={(e) => handleUpdateSizeExtraPrice(szIdx, e.target.value)}
-                                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500"
+                                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500 disabled:opacity-50 disabled:bg-slate-950"
                                       />
                                       <span className="text-slate-400 text-[10px]">บ.</span>
                                     </div>
@@ -5536,8 +6264,9 @@ export default function AdminDashboardView({
                                   <td className="p-2.5 text-center">
                                     <button
                                       type="button"
+                                      disabled={!isEditingMerchConfig}
                                       onClick={() => handleRemoveSizeFromProduct(szIdx)}
-                                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                       title="ลบไซส์นี้"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -5558,18 +6287,20 @@ export default function AdminDashboardView({
                         
                         <input
                           type="text"
+                          disabled={!isEditingMerchConfig}
                           value={newSizeName}
                           onChange={(e) => setNewSizeName(e.target.value)}
                           placeholder="ชื่อไซส์ (เช่น 6XL)"
-                          className="w-28 px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rescue-500"
+                          className="w-28 px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                         />
 
                         <input
                           type="text"
+                          disabled={!isEditingMerchConfig}
                           value={newSizeMeasurement}
                           onChange={(e) => setNewSizeMeasurement(e.target.value)}
                           placeholder={curProd.category === 'shirt' ? 'รอบอก เช่น 56 นิ้ว' : 'รอบเอว เช่น 50-52 นิ้ว'}
-                          className="flex-1 min-w-[150px] px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rescue-500"
+                          className="flex-1 min-w-[150px] px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-900"
                         />
 
                         <div className="flex items-center gap-1 w-28">
@@ -5577,17 +6308,19 @@ export default function AdminDashboardView({
                           <input
                             type="number"
                             min={0}
+                            disabled={!isEditingMerchConfig}
                             value={newSizeExtra}
                             onChange={(e) => setNewSizeExtra(e.target.value)}
                             placeholder="บวกเพิ่ม บ."
-                            className="w-full px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-500"
+                            className="w-full px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-500 disabled:opacity-50 disabled:bg-slate-900"
                           />
                         </div>
 
                         <button
                           type="button"
+                          disabled={!isEditingMerchConfig}
                           onClick={handleAddSizeToProduct}
-                          className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition-all border border-slate-700 active:scale-95 cursor-pointer"
+                          className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition-all border border-slate-700 active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           + เพิ่มไซส์
                         </button>
@@ -5601,17 +6334,53 @@ export default function AdminDashboardView({
 
             </div>
 
-            {/* Bottom Save Button */}
-            <div className="text-right">
-              <button
-                type="button"
-                onClick={handleSaveMerchandiseConfig}
-                disabled={isSavingMerch}
-                className="px-6 py-3 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 ml-auto disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                <span>{isSavingMerch ? 'กำลังบันทึกข้อมูล...' : 'บันทึกการตั้งค่าทั้งหมด (Save Changes)'}</span>
-              </button>
+            {/* Bottom Safeguard Controls */}
+            <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-400 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-rescue-500"></span>
+                <span>
+                  {isEditingMerchConfig 
+                    ? '⚠️ ข้อมูลสินค้ากำลังอยู่ในโหมดแก้ไข โปรดตรวจสอบความถูกต้องก่อนกดบันทึก' 
+                    : '🔒 ข้อมูลสินค้าถูกล็อกอยู่ในโหมดอ่านอย่างเดียว คลิก "ปลดล็อกเพื่อแก้ไข" เมื่อต้องการปรับเปลี่ยน'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                {!isEditingMerchConfig ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMerchConfig(true)}
+                    className="px-6 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>ปลดล็อกเพื่อแก้ไขสินค้าและขนาดไซต์</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง')) {
+                          handleCancelMerchConfig();
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <X className="w-4 h-4 text-rose-400" />
+                      <span>ยกเลิก (คืนค่าเดิม)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveMerchandiseConfig}
+                      disabled={isSavingMerch}
+                      className="px-6 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{isSavingMerch ? 'กำลังบันทึกข้อมูล...' : 'บันทึกการตั้งค่าทั้งหมด (Save Changes)'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
           </div>
@@ -6371,10 +7140,10 @@ export default function AdminDashboardView({
 
       {/* EDIT USER ACCOUNT MODAL */}
       {editingUserAccount && (
-        <ModalPortal isOpen={Boolean(editingUserAccount)} onClose={() => setEditingUserAccount(null)}>
+        <ModalPortal isOpen={Boolean(editingUserAccount)} onClose={handleCloseEditUserModal}>
           <div 
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={() => setEditingUserAccount(null)}
+            onClick={handleCloseEditUserModal}
           >
             <div 
               className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4"
@@ -6382,7 +7151,7 @@ export default function AdminDashboardView({
             >
             <button
               type="button"
-              onClick={() => setEditingUserAccount(null)}
+              onClick={handleCloseEditUserModal}
               className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
             >
               <X className="w-4 h-4" />
@@ -6458,7 +7227,7 @@ export default function AdminDashboardView({
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setEditingUserAccount(null)}
+                  onClick={handleCloseEditUserModal}
                   disabled={isSavingUser}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition-colors cursor-pointer"
                 >
@@ -6615,10 +7384,10 @@ export default function AdminDashboardView({
 
       {/* SPEAKER MODAL */}
       {showSpeakerModal && (
-        <ModalPortal isOpen={Boolean(showSpeakerModal)} onClose={() => setShowSpeakerModal(false)}>
+        <ModalPortal isOpen={Boolean(showSpeakerModal)} onClose={handleCloseSpeakerModal}>
           <div 
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
-            onClick={() => setShowSpeakerModal(false)}
+            onClick={handleCloseSpeakerModal}
           >
             <div 
               className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8"
@@ -6626,7 +7395,7 @@ export default function AdminDashboardView({
             >
             <button
               type="button"
-              onClick={() => setShowSpeakerModal(false)}
+              onClick={handleCloseSpeakerModal}
               className="absolute top-5 right-5 p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-full cursor-pointer transition-colors"
             >
               <X className="w-5 h-5" />
@@ -6774,7 +7543,7 @@ export default function AdminDashboardView({
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setShowSpeakerModal(false)}
+                  onClick={handleCloseSpeakerModal}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   ยกเลิก
@@ -6795,10 +7564,10 @@ export default function AdminDashboardView({
 
       {/* TEAM MEMBER MODAL */}
       {showTeamModal && (
-        <ModalPortal isOpen={Boolean(showTeamModal)} onClose={() => setShowTeamModal(false)}>
+        <ModalPortal isOpen={Boolean(showTeamModal)} onClose={handleCloseTeamModal}>
           <div 
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
-            onClick={() => setShowTeamModal(false)}
+            onClick={handleCloseTeamModal}
           >
             <div 
               className="bg-slate-900 border border-slate-700 max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8"
@@ -6806,7 +7575,7 @@ export default function AdminDashboardView({
             >
             <button
               type="button"
-              onClick={() => setShowTeamModal(false)}
+              onClick={handleCloseTeamModal}
               className="absolute top-5 right-5 p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-full cursor-pointer transition-colors"
             >
               <X className="w-5 h-5" />
@@ -6982,7 +7751,7 @@ export default function AdminDashboardView({
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setShowTeamModal(false)}
+                  onClick={handleCloseTeamModal}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   ยกเลิก
