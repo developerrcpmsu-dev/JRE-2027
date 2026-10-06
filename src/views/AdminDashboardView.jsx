@@ -3543,82 +3543,127 @@ export default function AdminDashboardView({
                               </p>
                             )}
 
-                            <div className="flex gap-2 pt-1">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const isMsu = isMsuInstitution(profileModalReg.institution);
-                                  const round2Fee = isMsu 
-                                    ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                    : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                  const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
-                                  
-                                  const updates = {
-                                    installment_1_status: 'paid',
-                                    installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
-                                  };
-
-                                  if (isR2Paid) {
-                                    updates.payment_status = 'paid';
-                                    updates.payment_amount = 0;
-                                    updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
-                                    setModalPaymentStatus('paid');
-                                    setModalPaymentAmount(0);
-                                    setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
-                                  } else {
-                                    const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
-                                    const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
-                                    updates.payment_status = nextStatus;
-                                    updates.payment_amount = round2Fee;
-                                    updates.payment_notes = nextNotes;
-                                    setModalPaymentStatus(nextStatus);
-                                    setModalPaymentAmount(round2Fee);
-                                    setModalPaymentNotes(nextNotes);
-                                  }
-
-                                  await onUpdateAllocation(profileModalReg.user_id, updates);
-                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                  triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
-                                }}
-                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                              >
-                                ✓ อนุมัติงวด 1
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const reason = await askPrompt({
-                                    title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
-                                    message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
-                                    defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                    placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                    variant: 'danger',
-                                    confirmText: 'ตกลง',
-                                    cancelText: 'ยกเลิก'
-                                  });
-                                  if (reason) {
+                            {profileModalReg.installment_1_status === 'paid' ? (
+                              <div className="flex items-center gap-2 pt-1">
+                                <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>✓ อนุมัติงวด 1 แล้ว</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const reason = await askPrompt({
+                                      title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
+                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                      variant: 'danger',
+                                      confirmText: 'ตกลง',
+                                      cancelText: 'ยกเลิก'
+                                    });
+                                    if (reason) {
+                                      const isMsu = isMsuInstitution(profileModalReg.institution);
+                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                      const updates = {
+                                        installment_1_status: 'unpaid',
+                                        installment_1_notes: reason,
+                                        payment_status: 'unpaid',
+                                        payment_amount: totalFee,
+                                        payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                      };
+                                      setModalPaymentStatus('unpaid');
+                                      setModalPaymentAmount(totalFee);
+                                      setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+                                      await onUpdateAllocation(profileModalReg.user_id, updates);
+                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                      triggerToast('ยกเลิกการอนุมัติสลิปงวด 1 และปรับให้ส่งใหม่แล้ว');
+                                    }
+                                  }}
+                                  className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
+                                  title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  <span>✕ ให้ส่งใหม่</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
                                     const isMsu = isMsuInstitution(profileModalReg.institution);
-                                    const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                    const round2Fee = isMsu 
+                                      ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                      : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                    const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+                                    
                                     const updates = {
-                                      installment_1_status: 'unpaid',
-                                      installment_1_notes: reason,
-                                      payment_status: 'unpaid',
-                                      payment_amount: totalFee,
-                                      payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                      installment_1_status: 'paid',
+                                      installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
                                     };
-                                    setModalPaymentStatus('unpaid');
-                                    setModalPaymentAmount(totalFee);
-                                    setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+
+                                    if (isR2Paid) {
+                                      updates.payment_status = 'paid';
+                                      updates.payment_amount = 0;
+                                      updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                      setModalPaymentStatus('paid');
+                                      setModalPaymentAmount(0);
+                                      setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
+                                    } else {
+                                      const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                      const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
+                                      updates.payment_status = nextStatus;
+                                      updates.payment_amount = round2Fee;
+                                      updates.payment_notes = nextNotes;
+                                      setModalPaymentStatus(nextStatus);
+                                      setModalPaymentAmount(round2Fee);
+                                      setModalPaymentNotes(nextNotes);
+                                    }
+
                                     await onUpdateAllocation(profileModalReg.user_id, updates);
                                     setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                    triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
-                                  }
-                                }}
-                                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                              >
-                                ✕ ให้ส่งใหม่
-                              </button>
-                            </div>
+                                    triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
+                                  }}
+                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  ✓ อนุมัติงวด 1
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const reason = await askPrompt({
+                                      title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
+                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                      variant: 'danger',
+                                      confirmText: 'ตกลง',
+                                      cancelText: 'ยกเลิก'
+                                    });
+                                    if (reason) {
+                                      const isMsu = isMsuInstitution(profileModalReg.institution);
+                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                      const updates = {
+                                        installment_1_status: 'unpaid',
+                                        installment_1_notes: reason,
+                                        payment_status: 'unpaid',
+                                        payment_amount: totalFee,
+                                        payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                      };
+                                      setModalPaymentStatus('unpaid');
+                                      setModalPaymentAmount(totalFee);
+                                      setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+                                      await onUpdateAllocation(profileModalReg.user_id, updates);
+                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                      triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
+                                    }
+                                  }}
+                                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  ✕ ให้ส่งใหม่
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
@@ -3700,85 +3745,135 @@ export default function AdminDashboardView({
                               </p>
                             )}
 
-                            <div className="flex gap-2 pt-1">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const isMsu = isMsuInstitution(profileModalReg.institution);
-                                  const round1Fee = paymentConfig?.installment_round1_amount || 400;
-                                  const isR1Paid = profileModalReg.installment_1_status === 'paid';
-                                  
-                                  const updates = {
-                                    installment_2_status: 'paid',
-                                    installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
-                                  };
+                            {profileModalReg.installment_2_status === 'paid' && profileModalReg.installment_2_slip_url ? (
+                              <div className="flex items-center gap-2 pt-1">
+                                <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>✓ อนุมัติงวด 2 แล้ว</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const reason = await askPrompt({
+                                      title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
+                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                      variant: 'danger',
+                                      confirmText: 'ตกลง',
+                                      cancelText: 'ยกเลิก'
+                                    });
+                                    if (reason) {
+                                      const isMsu = isMsuInstitution(profileModalReg.institution);
+                                      const round2Fee = isMsu 
+                                        ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                      const isR1Paid = profileModalReg.installment_1_status === 'paid';
 
-                                  if (isR1Paid) {
-                                    updates.payment_status = 'paid';
-                                    updates.payment_amount = 0;
-                                    updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
-                                    setModalPaymentStatus('paid');
-                                    setModalPaymentAmount(0);
-                                    setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
-                                  } else {
-                                    const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
-                                    const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
-                                    updates.payment_status = nextStatus;
-                                    updates.payment_amount = round1Fee;
-                                    updates.payment_notes = nextNotes;
-                                    setModalPaymentStatus(nextStatus);
-                                    setModalPaymentAmount(round1Fee);
-                                    setModalPaymentNotes(nextNotes);
-                                  }
-
-                                  await onUpdateAllocation(profileModalReg.user_id, updates);
-                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                  triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
-                                }}
-                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                              >
-                                ✓ อนุมัติงวด 2
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const reason = await askPrompt({
-                                    title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
-                                    message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
-                                    defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                    placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                    variant: 'danger',
-                                    confirmText: 'ตกลง',
-                                    cancelText: 'ยกเลิก'
-                                  });
-                                  if (reason) {
+                                      const updates = {
+                                        installment_2_status: 'unpaid',
+                                        installment_2_notes: reason,
+                                        payment_status: 'unpaid',
+                                        payment_amount: isR1Paid ? round2Fee : totalFee,
+                                        payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                      };
+                                      setModalPaymentStatus('unpaid');
+                                      setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                      setModalPaymentNotes(updates.payment_notes);
+                                      await onUpdateAllocation(profileModalReg.user_id, updates);
+                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                      triggerToast('ยกเลิกการอนุมัติสลิปงวด 2 และปรับให้ส่งใหม่แล้ว');
+                                    }
+                                  }}
+                                  className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
+                                  title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  <span>✕ ให้ส่งใหม่</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
                                     const isMsu = isMsuInstitution(profileModalReg.institution);
-                                    const round2Fee = isMsu 
-                                      ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                      : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                    const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                    const round1Fee = paymentConfig?.installment_round1_amount || 400;
                                     const isR1Paid = profileModalReg.installment_1_status === 'paid';
-
+                                    
                                     const updates = {
-                                      installment_2_status: 'unpaid',
-                                      installment_2_notes: reason,
-                                      payment_status: 'unpaid',
-                                      payment_amount: isR1Paid ? round2Fee : totalFee,
-                                      payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                      installment_2_status: 'paid',
+                                      installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
                                     };
-                                    setModalPaymentStatus('unpaid');
-                                    setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
-                                    setModalPaymentNotes(updates.payment_notes);
+
+                                    if (isR1Paid) {
+                                      updates.payment_status = 'paid';
+                                      updates.payment_amount = 0;
+                                      updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                      setModalPaymentStatus('paid');
+                                      setModalPaymentAmount(0);
+                                      setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
+                                    } else {
+                                      const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                      const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
+                                      updates.payment_status = nextStatus;
+                                      updates.payment_amount = round1Fee;
+                                      updates.payment_notes = nextNotes;
+                                      setModalPaymentStatus(nextStatus);
+                                      setModalPaymentAmount(round1Fee);
+                                      setModalPaymentNotes(nextNotes);
+                                    }
+
                                     await onUpdateAllocation(profileModalReg.user_id, updates);
                                     setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                    triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
-                                  }
-                                }}
-                                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                              >
-                                ✕ ให้ส่งใหม่
-                              </button>
-                            </div>
+                                    triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
+                                  }}
+                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  ✓ อนุมัติงวด 2
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const reason = await askPrompt({
+                                      title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
+                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                      variant: 'danger',
+                                      confirmText: 'ตกลง',
+                                      cancelText: 'ยกเลิก'
+                                    });
+                                    if (reason) {
+                                      const isMsu = isMsuInstitution(profileModalReg.institution);
+                                      const round2Fee = isMsu 
+                                        ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                      const isR1Paid = profileModalReg.installment_1_status === 'paid';
+
+                                      const updates = {
+                                        installment_2_status: 'unpaid',
+                                        installment_2_notes: reason,
+                                        payment_status: 'unpaid',
+                                        payment_amount: isR1Paid ? round2Fee : totalFee,
+                                        payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                      };
+                                      setModalPaymentStatus('unpaid');
+                                      setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                      setModalPaymentNotes(updates.payment_notes);
+                                      await onUpdateAllocation(profileModalReg.user_id, updates);
+                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                      triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
+                                    }
+                                  }}
+                                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  ✕ ให้ส่งใหม่
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
@@ -3846,74 +3941,124 @@ export default function AdminDashboardView({
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const isInstallment = profileModalReg.payment_plan === 'installment';
-                              const fullApprovalUpdates = {
-                                payment_status: 'paid',
-                                payment_amount: 0,
-                                payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
-                              };
-                              if (isInstallment) {
-                                fullApprovalUpdates.installment_1_status = 'paid';
-                                fullApprovalUpdates.installment_2_status = 'paid';
-                              }
-                              setModalPaymentStatus('paid');
-                              setModalPaymentAmount(0);
-                              setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
-                              await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
-                              setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
-                              triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
-                            }}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            <span>อนุมัติสลิป (ชำระแล้ว)</span>
-                          </button>
+                        {profileModalReg.payment_status === 'paid' ? (
+                          <div className="flex flex-wrap items-center gap-2 pt-2">
+                            <div className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold rounded-xl flex items-center gap-1.5 shadow-sm">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>✓ อนุมัติสลิปแล้ว (ชำระแล้ว)</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const reason = await askPrompt({
+                                  title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิป',
+                                  message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
+                                  defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                  placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                  variant: 'danger',
+                                  confirmText: 'ตกลง',
+                                  cancelText: 'ยกเลิก'
+                                });
+                                if (reason) {
+                                  const isMsu = isMsuInstitution(profileModalReg.institution);
+                                  const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                  const isInstallment = profileModalReg.payment_plan === 'installment';
+                                  const round2Fee = isMsu 
+                                    ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                    : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                  const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                  const remaining = (isInstallment && isR1Paid) ? round2Fee : totalFee;
 
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const reason = await askPrompt({
-                                title: 'ระบุเหตุผลที่ปฏิเสธสลิป',
-                                message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
-                                defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                variant: 'danger',
-                                confirmText: 'ตกลง',
-                                cancelText: 'ยกเลิก'
-                              });
-                              if (reason) {
-                                const isMsu = isMsuInstitution(profileModalReg.institution);
-                                const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                  setModalPaymentStatus('unpaid');
+                                  setModalPaymentAmount(remaining);
+                                  setModalPaymentNotes(reason);
+                                  const rejectUpdates = {
+                                    payment_status: 'unpaid',
+                                    payment_amount: remaining,
+                                    payment_notes: reason
+                                  };
+                                  await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                  setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
+                                  triggerToast('ยกเลิกการอนุมัติสลิปและปรับเป็นค้างชำระแล้ว');
+                                }
+                              }}
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95"
+                              title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
                                 const isInstallment = profileModalReg.payment_plan === 'installment';
-                                const round2Fee = isMsu 
-                                  ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                  : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                const isR1Paid = profileModalReg.installment_1_status === 'paid';
-                                const remaining = (isInstallment && isR1Paid) ? round2Fee : totalFee;
-
-                                setModalPaymentStatus('unpaid');
-                                setModalPaymentAmount(remaining);
-                                setModalPaymentNotes(reason);
-                                const rejectUpdates = {
-                                  payment_status: 'unpaid',
-                                  payment_amount: remaining,
-                                  payment_notes: reason
+                                const fullApprovalUpdates = {
+                                  payment_status: 'paid',
+                                  payment_amount: 0,
+                                  payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
                                 };
-                                await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
-                                setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
-                                triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
-                              }
-                            }}
-                            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
-                          >
-                            <XCircle className="w-4 h-4" />
-                            <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
-                          </button>
-                        </div>
+                                if (isInstallment) {
+                                  fullApprovalUpdates.installment_1_status = 'paid';
+                                  fullApprovalUpdates.installment_2_status = 'paid';
+                                }
+                                setModalPaymentStatus('paid');
+                                setModalPaymentAmount(0);
+                                setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
+                                await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
+                                setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
+                                triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
+                              }}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              <span>อนุมัติสลิป (ชำระแล้ว)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const reason = await askPrompt({
+                                  title: 'ระบุเหตุผลที่ปฏิเสธสลิป',
+                                  message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
+                                  defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                  placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                  variant: 'danger',
+                                  confirmText: 'ตกลง',
+                                  cancelText: 'ยกเลิก'
+                                });
+                                if (reason) {
+                                  const isMsu = isMsuInstitution(profileModalReg.institution);
+                                  const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                  const isInstallment = profileModalReg.payment_plan === 'installment';
+                                  const round2Fee = isMsu 
+                                    ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                    : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                  const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                  const remaining = (isInstallment && isR1Paid) ? round2Fee : totalFee;
+
+                                  setModalPaymentStatus('unpaid');
+                                  setModalPaymentAmount(remaining);
+                                  setModalPaymentNotes(reason);
+                                  const rejectUpdates = {
+                                    payment_status: 'unpaid',
+                                    payment_amount: remaining,
+                                    payment_notes: reason
+                                  };
+                                  await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                  setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
+                                  triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
+                                }
+                              }}
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
