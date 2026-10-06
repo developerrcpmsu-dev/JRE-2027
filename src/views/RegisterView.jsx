@@ -59,6 +59,7 @@ import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import ModalPortal from '../components/ModalPortal';
+import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import { scanSlipImage } from '../utils/slipOcr';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
@@ -234,6 +235,9 @@ export default function RegisterView({
   subRoute,
   onSubRouteChange
 }) {
+  // In-app Popup Modal for Confirmations & Alerts
+  const { confirmModalProps, askConfirm } = useConfirmModal();
+
   const effectivePaymentConfig = paymentConfig || DEFAULT_PAYMENT_CONFIG;
   const [isEditing, setIsEditing] = useState(false);
 
@@ -888,14 +892,21 @@ export default function RegisterView({
   };
 
   const handleCancelEditRegistration = () => {
-    if (window.confirm('คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัคร ต้องการยกเลิกและละทิ้งการเปลี่ยนแปลงทั้งหมดใช่หรือไม่? (ข้อมูลเดิมจะถูกนำกลับมา)')) {
-      if (myRegistration) {
-        populateFormFromRegistration(myRegistration);
+    askConfirm({
+      title: 'ยกเลิกการแก้ไขข้อมูลใบสมัคร',
+      message: 'คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัคร ต้องการยกเลิกและละทิ้งการเปลี่ยนแปลงทั้งหมดใช่หรือไม่? (ข้อมูลเดิมจะถูกนำกลับมา)',
+      confirmText: 'ยืนยันยกเลิก (คืนค่าเดิม)',
+      cancelText: 'แก้ไขต่อ',
+      variant: 'warning',
+      onConfirm: () => {
+        if (myRegistration) {
+          populateFormFromRegistration(myRegistration);
+        }
+        setIsEditing(false);
+        if (onSubRouteChange) onSubRouteChange('dashboard');
+        triggerToast('ยกเลิกการแก้ไขและคืนค่าข้อมูลเดิมเรียบร้อยแล้ว', 'info');
       }
-      setIsEditing(false);
-      if (onSubRouteChange) onSubRouteChange('dashboard');
-      triggerToast('ยกเลิกการแก้ไขและคืนค่าข้อมูลเดิมเรียบร้อยแล้ว', 'info');
-    }
+    });
   };
 
   // Window beforeunload safeguard when user is editing form
@@ -6317,6 +6328,9 @@ export default function RegisterView({
 
       {/* TOAST NOTIFICATION */}
       <Toast toast={toast} onClose={() => setToast(null)} />
+
+      {/* IN-APP SYSTEM POPUP DIALOG FOR CONFIRMATIONS & ALERTS */}
+      <ConfirmModal {...confirmModalProps} />
     </div>
   );
 }

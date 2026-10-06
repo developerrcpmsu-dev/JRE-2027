@@ -251,7 +251,7 @@ export default function AdminQRScannerModal({
       }));
     } catch (err) {
       console.error('Error confirming handover:', err);
-      alert('เกิดข้อผิดพลาดในการบันทึกสถานะ');
+      setScanError('เกิดข้อผิดพลาดในการบันทึกสถานะ');
     } finally {
       setIsActionLoading(false);
     }
@@ -280,7 +280,7 @@ export default function AdminQRScannerModal({
       }));
     } catch (err) {
       console.error('Error undoing handover:', err);
-      alert('เกิดข้อผิดพลาดในการยกเลิกสถานะ');
+      setScanError('เกิดข้อผิดพลาดในการยกเลิกสถานะ');
     } finally {
       setIsActionLoading(false);
     }
@@ -290,7 +290,7 @@ export default function AdminQRScannerModal({
     if (!scannedOrder) return;
     try {
       if (scannedOrder.itemType === 'registration') {
-        alert('กรุณาตรวจสอบยอดค่าสมัครของผู้สมัครที่เมนู "จัดการผู้สมัคร"');
+        setScanError('กรุณาตรวจสอบยอดค่าสมัครของผู้สมัครที่เมนู "จัดการผู้สมัคร"');
         return;
       }
       await onVerifyPayment(scannedOrder.id, true, 'อนุมัติสลิปหน้างานโดย Admin');
@@ -301,7 +301,7 @@ export default function AdminQRScannerModal({
       });
       setActionSuccessMsg('อนุมัติยอดเงินเรียบร้อยแล้ว!');
     } catch (err) {
-      alert('เกิดข้อผิดพลาดในการอนุมัติสลิป');
+      setScanError('เกิดข้อผิดพลาดในการอนุมัติสลิป');
     }
   };
 

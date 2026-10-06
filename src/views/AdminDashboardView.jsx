@@ -76,6 +76,7 @@ import {
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
 import ModalPortal from '../components/ModalPortal';
+import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import * as XLSX from 'xlsx';
 
 export default function AdminDashboardView({
@@ -119,6 +120,9 @@ export default function AdminDashboardView({
     }
   }, [initialTab]);
 
+  // In-app Popup Modal for Confirmations & Alerts
+  const { confirmModalProps, askConfirm, askAlert } = useConfirmModal();
+
   // Edit Safeguard States (Locked / View-Only by default to prevent accidental edits)
   const [isEditingProfileModal, setIsEditingProfileModal] = useState(false);
   const [isEditingPaymentSettings, setIsEditingPaymentSettings] = useState(false);
@@ -129,27 +133,39 @@ export default function AdminDashboardView({
     if (tab === activeTab) return;
 
     if (isEditingPaymentSettings || isEditingForms || isEditingMerchConfig) {
-      const confirmSwitch = window.confirm(
-        'ท่านกำลังอยู่ในโหมดแก้ไขข้อมูลและยังไม่ได้กดบันทึก ต้องการยกเลิกการแก้ไขและสลับแท็บใช่หรือไม่? (การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกยกเลิก)'
-      );
-      if (!confirmSwitch) return;
-
-      if (isEditingPaymentSettings) {
-        setLocalPayment(paymentConfig || DEFAULT_PAYMENT_CONFIG);
-        setIsEditingPaymentSettings(false);
-      }
-      if (isEditingForms) {
-        setLocalForms(formsConfig || {
-          pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
-          posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
-          evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
-        });
-        setIsEditingForms(false);
-      }
-      if (isEditingMerchConfig) {
-        setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
-        setIsEditingMerchConfig(false);
-      }
+      askConfirm({
+        title: '⚠️ มีการแก้ไขที่ยังไม่ได้บันทึก',
+        message: 'ท่านกำลังอยู่ในโหมดแก้ไขข้อมูลและยังไม่ได้กดบันทึก ต้องการยกเลิกการแก้ไขและสลับแท็บใช่หรือไม่? (การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกยกเลิก)',
+        confirmText: 'ละทิ้งการแก้ไขและสลับแท็บ',
+        cancelText: 'อยู่หน้านี้ต่อ',
+        variant: 'warning',
+        onConfirm: () => {
+          if (isEditingPaymentSettings) {
+            setLocalPayment(paymentConfig || DEFAULT_PAYMENT_CONFIG);
+            setIsEditingPaymentSettings(false);
+          }
+          if (isEditingForms) {
+            setLocalForms(formsConfig || {
+              pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
+              posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
+              evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
+            });
+            setIsEditingForms(false);
+          }
+          if (isEditingMerchConfig) {
+            setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
+            setIsEditingMerchConfig(false);
+          }
+          setActiveTab(tab);
+          if (onTabChange) {
+            onTabChange(tab === 'payment_settings' ? 'payment' : tab);
+          }
+          if (tab === 'users') {
+            loadUserAccounts();
+          }
+        }
+      });
+      return;
     }
 
     setActiveTab(tab);
@@ -551,9 +567,17 @@ export default function AdminDashboardView({
 
   const handleCloseAnnModal = () => {
     if (annTitle.trim() || annContent.trim()) {
-      if (!window.confirm('คุณกำลังกรอกหรือแก้ไขประกาศและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
-        return;
-      }
+      askConfirm({
+        title: 'ยกเลิกการแก้ไขประกาศ',
+        message: 'คุณกำลังกรอกหรือแก้ไขประกาศและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง',
+        confirmText: 'ปิดหน้าต่าง (ละทิ้งข้อมูล)',
+        cancelText: 'แก้ไขต่อ',
+        variant: 'warning',
+        onConfirm: () => {
+          setShowAnnModal(false);
+        }
+      });
+      return;
     }
     setShowAnnModal(false);
   };
@@ -625,25 +649,52 @@ export default function AdminDashboardView({
   };
 
   const handleCancelPaymentSettings = () => {
-    setLocalPayment(paymentConfig || DEFAULT_PAYMENT_CONFIG);
-    setIsEditingPaymentSettings(false);
-    triggerToast('ยกเลิกการแก้ไขและคืนค่าการตั้งค่าชำระเงินเดิม');
+    askConfirm({
+      title: 'ยกเลิกการแก้ไขข้อมูลการชำระเงิน',
+      message: 'ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลบัญชีธนาคารเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง',
+      confirmText: 'ยืนยันยกเลิก (คืนค่าเดิม)',
+      cancelText: 'แก้ไขต่อ',
+      variant: 'warning',
+      onConfirm: () => {
+        setLocalPayment(paymentConfig || DEFAULT_PAYMENT_CONFIG);
+        setIsEditingPaymentSettings(false);
+        triggerToast('ยกเลิกการแก้ไขและคืนค่าการตั้งค่าชำระเงินเดิม');
+      }
+    });
   };
 
   const handleCancelForms = () => {
-    setLocalForms(formsConfig || {
-      pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
-      posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
-      evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
+    askConfirm({
+      title: 'ยกเลิกการแก้ไขลิงก์แบบฟอร์ม',
+      message: 'ต้องการยกเลิกการแก้ไขและคืนค่าลิงก์แบบฟอร์มเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง',
+      confirmText: 'ยืนยันยกเลิก (คืนค่าเดิม)',
+      cancelText: 'แก้ไขต่อ',
+      variant: 'warning',
+      onConfirm: () => {
+        setLocalForms(formsConfig || {
+          pretest: { title: 'แบบทดสอบก่อนเรียน (Pre-Test) 2027', url: '', enabled: false },
+          posttest: { title: 'แบบทดสอบหลังเรียน (Post-Test)', url: '', enabled: false },
+          evaluation: { title: 'แบบประเมินความพึงพอใจ (JRE 2027)', url: '', enabled: false }
+        });
+        setIsEditingForms(false);
+        triggerToast('ยกเลิกการแก้ไขและคืนค่าลิงก์แบบฟอร์มเดิม');
+      }
     });
-    setIsEditingForms(false);
-    triggerToast('ยกเลิกการแก้ไขและคืนค่าลิงก์แบบฟอร์มเดิม');
   };
 
   const handleCancelMerchConfig = () => {
-    setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
-    setIsEditingMerchConfig(false);
-    triggerToast('ยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิม');
+    askConfirm({
+      title: 'ยกเลิกการแก้ไขข้อมูลสินค้า',
+      message: 'ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง',
+      confirmText: 'ยืนยันยกเลิก (คืนค่าเดิม)',
+      cancelText: 'แก้ไขต่อ',
+      variant: 'warning',
+      onConfirm: () => {
+        setLocalMerchConfig(sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig));
+        setIsEditingMerchConfig(false);
+        triggerToast('ยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิม');
+      }
+    });
   };
 
   // Window BeforeUnload Safeguard for Unsaved Admin Changes
@@ -751,9 +802,17 @@ export default function AdminDashboardView({
 
   const handleCloseEditUserModal = () => {
     if (editingUserAccount && (editUserName !== (editingUserAccount.name || '') || editUserRole !== (editingUserAccount.role || 'user'))) {
-      if (!window.confirm('คุณกำลังแก้ไขข้อมูลบัญชีผู้ใช้และยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
-        return;
-      }
+      askConfirm({
+        title: 'ยกเลิกการแก้ไขบัญชีผู้ใช้',
+        message: 'คุณกำลังแก้ไขข้อมูลบัญชีผู้ใช้และยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง',
+        confirmText: 'ปิดหน้าต่าง (ละทิ้งข้อมูล)',
+        cancelText: 'แก้ไขต่อ',
+        variant: 'warning',
+        onConfirm: () => {
+          setEditingUserAccount(null);
+        }
+      });
+      return;
     }
     setEditingUserAccount(null);
   };
@@ -901,18 +960,34 @@ export default function AdminDashboardView({
 
   const handleCloseSpeakerModal = () => {
     if (speakerFormName.trim()) {
-      if (!window.confirm('คุณกำลังแก้ไขข้อมูลวิทยากรและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
-        return;
-      }
+      askConfirm({
+        title: 'ยกเลิกการแก้ไขวิทยากร',
+        message: 'คุณกำลังแก้ไขข้อมูลวิทยากรและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง',
+        confirmText: 'ปิดหน้าต่าง (ละทิ้งข้อมูล)',
+        cancelText: 'แก้ไขต่อ',
+        variant: 'warning',
+        onConfirm: () => {
+          setShowSpeakerModal(false);
+        }
+      });
+      return;
     }
     setShowSpeakerModal(false);
   };
 
   const handleCloseTeamModal = () => {
     if (teamFormName.trim()) {
-      if (!window.confirm('คุณกำลังแก้ไขข้อมูลคณะดำเนินงานและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
-        return;
-      }
+      askConfirm({
+        title: 'ยกเลิกการแก้ไขคณะดำเนินงาน',
+        message: 'คุณกำลังแก้ไขข้อมูลคณะดำเนินงานและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง',
+        confirmText: 'ปิดหน้าต่าง (ละทิ้งข้อมูล)',
+        cancelText: 'แก้ไขต่อ',
+        variant: 'warning',
+        onConfirm: () => {
+          setShowTeamModal(false);
+        }
+      });
+      return;
     }
     setShowTeamModal(false);
   };
@@ -1030,7 +1105,14 @@ export default function AdminDashboardView({
 
   const handleDeleteSpeaker = async (id) => {
     const spkToDelete = localSpeakers.find(s => s.id === id);
-    if (!window.confirm(`ยืนยันการลบวิทยากร "${spkToDelete?.name || ''}" หรือไม่?`)) return;
+    const ok = await askConfirm({
+      title: 'ยืนยันการลบวิทยากร',
+      message: `คุณต้องการลบข้อมูลวิทยากร "${spkToDelete?.name || ''}" ออกจากระบบใช่หรือไม่?`,
+      confirmText: 'ยืนยันลบ',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!ok) return;
     const filtered = localSpeakers.filter(s => s.id !== id).map((s, idx) => ({ ...s, num: idx + 1 }));
     setLocalSpeakers(filtered);
     try {
@@ -1166,7 +1248,14 @@ export default function AdminDashboardView({
 
   const handleDeleteTeamMember = async (id) => {
     const memberToDelete = localTeam.find(m => m.id === id);
-    if (!window.confirm(`ยืนยันการลบ "${memberToDelete?.name || ''}" หรือไม่?`)) return;
+    const ok = await askConfirm({
+      title: 'ยืนยันการลบคณะดำเนินงาน',
+      message: `คุณต้องการลบข้อมูล "${memberToDelete?.name || ''}" ออกจากระบบใช่หรือไม่?`,
+      confirmText: 'ยืนยันลบ',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!ok) return;
     const filtered = localTeam.filter(m => m.id !== id);
     setLocalTeam(filtered);
     try {
@@ -1230,28 +1319,46 @@ export default function AdminDashboardView({
 
   const handleCancelProfileModal = () => {
     if (!profileModalReg) return;
-    setModalGroup(profileModalReg.group_assigned || '');
-    setModalRoom(profileModalReg.room_assigned || '');
-    setModalSpecialCare(Boolean(profileModalReg.is_special_care));
-    setModalNotes(profileModalReg.special_notes || '');
-    setModalPhone(profileModalReg.phone || '');
-    setModalInstitution(profileModalReg.institution || '');
-    setModalMedical(profileModalReg.medical_history || '');
-    setModalAllergy(profileModalReg.food_allergy || '');
-    setModalTraining(profileModalReg.previous_training || '');
-    setModalPaymentStatus(profileModalReg.payment_status || 'unpaid');
-    setModalPaymentAmount(profileModalReg.payment_amount || (profileModalReg.is_msu ? 650 : 850));
-    setModalPaymentBank(profileModalReg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
-    setModalPaymentNotes(profileModalReg.payment_notes || '');
-    setIsEditingProfileModal(false);
-    triggerToast('ยกเลิกการแก้ไขและคืนค่าเดิมของข้อมูลผู้สมัคร');
+    askConfirm({
+      title: 'ยกเลิกการแก้ไขข้อมูลผู้สมัคร',
+      message: 'ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลผู้สมัครเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง',
+      confirmText: 'ยืนยันยกเลิก (คืนค่าเดิม)',
+      cancelText: 'แก้ไขต่อ',
+      variant: 'warning',
+      onConfirm: () => {
+        setModalGroup(profileModalReg.group_assigned || '');
+        setModalRoom(profileModalReg.room_assigned || '');
+        setModalSpecialCare(Boolean(profileModalReg.is_special_care));
+        setModalNotes(profileModalReg.special_notes || '');
+        setModalPhone(profileModalReg.phone || '');
+        setModalInstitution(profileModalReg.institution || '');
+        setModalMedical(profileModalReg.medical_history || '');
+        setModalAllergy(profileModalReg.food_allergy || '');
+        setModalTraining(profileModalReg.previous_training || '');
+        setModalPaymentStatus(profileModalReg.payment_status || 'unpaid');
+        setModalPaymentAmount(profileModalReg.payment_amount || (profileModalReg.is_msu ? 650 : 850));
+        setModalPaymentBank(profileModalReg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
+        setModalPaymentNotes(profileModalReg.payment_notes || '');
+        setIsEditingProfileModal(false);
+        triggerToast('ยกเลิกการแก้ไขและคืนค่าเดิมของข้อมูลผู้สมัคร');
+      }
+    });
   };
 
   const handleCloseProfileModal = () => {
     if (isEditingProfileModal) {
-      if (!window.confirm('คุณกำลังอยู่ในโหมดแก้ไขข้อมูลและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง')) {
-        return;
-      }
+      askConfirm({
+        title: 'กำลังอยู่ในโหมดแก้ไขข้อมูล',
+        message: 'คุณกำลังอยู่ในโหมดแก้ไขข้อมูลและยังไม่ได้บันทึก ต้องการยกเลิกและปิดหน้าต่างใช่หรือไม่? การเปลี่ยนแปลงจะถูกละทิ้ง',
+        confirmText: 'ปิดหน้าต่าง (คืนค่าเดิม)',
+        cancelText: 'แก้ไขต่อ',
+        variant: 'warning',
+        onConfirm: () => {
+          setIsEditingProfileModal(false);
+          setProfileModalReg(null);
+        }
+      });
+      return;
     }
     setIsEditingProfileModal(false);
     setProfileModalReg(null);
@@ -1365,7 +1472,14 @@ export default function AdminDashboardView({
   };
 
   const handleDeleteReg = async (userId, name) => {
-    if (window.confirm(`ยืนยันการลบข้อมูลผู้สมัคร: ${name} หรือไม่?`)) {
+    const ok = await askConfirm({
+      title: 'ยืนยันการลบข้อมูลผู้สมัคร',
+      message: `คุณต้องการลบข้อมูลผู้สมัคร "${name}" ออกจากระบบใช่หรือไม่? ข้อมูลและประวัติการชำระเงินทั้งหมดจะถูกลบถาวร`,
+      confirmText: 'ยืนยันลบข้อมูลผู้สมัคร',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (ok) {
       await onDeleteRegistration(userId);
       triggerToast('ลบข้อมูลผู้สมัครเรียบร้อยแล้ว');
     }
@@ -1635,7 +1749,7 @@ export default function AdminDashboardView({
 
   const handleAddSizeToProduct = () => {
     if (!newSizeName.trim()) {
-      alert('กรุณาระบุชื่อไซส์ เช่น 2XL, 3XL');
+      triggerToast('กรุณาระบุชื่อไซส์ เช่น 2XL, 3XL', 'warning');
       return;
     }
     const updatedProducts = [...(localMerchConfig.products || [])];
@@ -1736,7 +1850,7 @@ export default function AdminDashboardView({
 
   const handleAddProductImageUrl = (prodIdx) => {
     if (!newProductImageUrl.trim()) {
-      alert('กรุณากรอกลิงก์ URL รูปภาพสินค้า');
+      triggerToast('กรุณากรอกลิงก์ URL รูปภาพสินค้า', 'warning');
       return;
     }
     const updatedProducts = [...(localMerchConfig.products || [])];
@@ -1931,7 +2045,14 @@ export default function AdminDashboardView({
   };
 
   const handleDeleteAnn = async (id) => {
-    if (window.confirm('ยืนยันการลบประกาศนี้?')) {
+    const ok = await askConfirm({
+      title: 'ยืนยันการลบประกาศ',
+      message: 'คุณต้องการลบประกาศนี้ออกจากระบบใช่หรือไม่? ข้อมูลประกาศและเอกสารแนบจะถูกลบถาวร',
+      confirmText: 'ยืนยันลบประกาศ',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (ok) {
       await onDeleteAnnouncement(id);
       triggerToast('ลบประกาศเรียบร้อยแล้ว');
     }
@@ -5581,11 +5702,7 @@ export default function AdminDashboardView({
                   <>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.confirm('ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง')) {
-                          handleCancelMerchConfig();
-                        }
-                      }}
+                      onClick={handleCancelMerchConfig}
                       className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
                       <X className="w-4 h-4 text-rose-400" />
@@ -5615,11 +5732,7 @@ export default function AdminDashboardView({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (window.confirm('ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่?')) {
-                        handleCancelMerchConfig();
-                      }
-                    }}
+                    onClick={handleCancelMerchConfig}
                     className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold cursor-pointer"
                   >
                     ยกเลิก
@@ -6359,11 +6472,7 @@ export default function AdminDashboardView({
                   <>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.confirm('ต้องการยกเลิกการแก้ไขและคืนค่าข้อมูลสินค้าเดิมใช่หรือไม่? การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะถูกละทิ้ง')) {
-                          handleCancelMerchConfig();
-                        }
-                      }}
+                      onClick={handleCancelMerchConfig}
                       className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
                     >
                       <X className="w-4 h-4 text-rose-400" />
@@ -6895,7 +7004,7 @@ export default function AdminDashboardView({
                                         e.stopPropagation();
                                         const profileUrl = `${window.location.origin}/users/${acc.id}`;
                                         navigator.clipboard.writeText(profileUrl);
-                                        alert(`คัดลอก URL หน้าโปรไฟล์สำเร็จ!\n${profileUrl}`);
+                                        triggerToast(`คัดลอก URL หน้าโปรไฟล์สำเร็จ!\n${profileUrl}`, 'success');
                                       }}
                                       className="p-1 hover:bg-slate-700/60 text-slate-400 hover:text-cyan-300 rounded transition-colors cursor-pointer"
                                       title="คัดลอก URL โปรไฟล์ (https://jre-2027.vercel.app/users/...)"
@@ -7869,6 +7978,9 @@ export default function AdminDashboardView({
         onClose={() => setPreviewDoc(null)}
         doc={previewDoc}
       />
+
+      {/* IN-APP SYSTEM POPUP DIALOG FOR CONFIRMATIONS & ALERTS */}
+      <ConfirmModal {...confirmModalProps} />
 
     </div>
   );
