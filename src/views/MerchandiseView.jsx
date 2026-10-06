@@ -178,39 +178,61 @@ export default function MerchandiseView({
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-12">
       
-      {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-slate-900 via-rescue-950/40 to-slate-900 border border-rescue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+      {/* UNIFIED SINGLE HEADER SECTION */}
+      <div className="bg-gradient-to-r from-slate-900 via-rescue-950/40 to-slate-900 border border-rescue-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-rescue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-rescue-500/20 text-rescue-400 border border-rescue-500/40">
-              <Shirt className="w-3.5 h-3.5" />
-              <span>OFFICIAL APPAREL & MERCHANDISE • JRE 2027</span>
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-rescue-500/20 text-rescue-400 border border-rescue-500/40">
+                <Shirt className="w-3.5 h-3.5" />
+                <span>OFFICIAL APPAREL • JRE 2027</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span>ระบบสั่งซื้อเสื้อรวมในใบสมัครโครงการ (Pre-Order)</span>
+              </span>
             </div>
+
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight">
               เสื้อปฏิบัติการกู้ภัย JRE 2027
             </h1>
+
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               เครื่องแบบเสื้อฝึกทางการโครงการ Joint Response Exercise 2027 มหาวิทยาลัยมหาสารคาม 
-              (สั่งซื้อรวมในขั้นตอนการสมัคร • จัดทำแบบพรีออเดอร์ • พร้อมระบบออกบัตรรับเสื้อดิจิทัล QR Code)
+              จัดทำแบบ <strong className="text-amber-300 font-bold">พรีออเดอร์ (Pre-Order) ตามขนาดไซส์จริงที่ระบุในใบสมัคร</strong> 
+              (ค่าเสื้อ 400 บาท รวมอยู่ในการชำระค่าสมัครรอบที่ 1 เรียบร้อยแล้ว พร้อมระบบออกบัตรรับเสื้อดิจิทัล QR Code สำหรับรับของหน้างาน)
             </p>
           </div>
 
-          {/* Quick Action Button */}
+          {/* Single Action Button */}
           <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
             {isRegistered ? (
-              <button
-                onClick={() => handleTabChange('my_orders')}
-                className="px-4 py-3 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer border border-rescue-400/40"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>คำสั่งซื้อของฉัน & QR รับของ</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5"></span>
-              </button>
+              activeTab === 'my_orders' && applicantShirtOrder ? (
+                <button
+                  type="button"
+                  onClick={() => setActivePickupOrder(applicantShirtOrder)}
+                  className="px-5 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer border border-emerald-400/40"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>เปิดบัตร QR Code รับเสื้อ</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('my_orders')}
+                  className="px-5 py-3.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer border border-rescue-400/40"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>คำสั่งซื้อของฉัน & QR รับของ</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5"></span>
+                </button>
+              )
             ) : (
               <button
+                type="button"
                 onClick={() => onNavigateRegister && onNavigateRegister()}
-                className="px-5 py-3 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer border border-amber-400/40"
+                className="px-5 py-3.5 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-rescue-600/30 transition-all active:scale-95 cursor-pointer border border-amber-400/40"
               >
                 <Shirt className="w-4 h-4" />
                 <span>สมัครเข้าร่วมโครงการ & สั่งเสื้อ (ขั้นตอนที่ 2)</span>
@@ -254,48 +276,6 @@ export default function MerchandiseView({
           </a>
         </div>
       )}
-
-      {/* UNIFIED INTEGRATION NOTICE: Shirt Order is part of Project Registration */}
-      <div className="bg-gradient-to-r from-orange-950/80 via-slate-900 to-amber-950/80 border-2 border-orange-500/60 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-orange-500/20 text-orange-300 border border-orange-500/40">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-amber-400" />
-              <span>ระบบสั่งซื้อเสื้อและระบบสมัครเป็นระบบเดียวกัน</span>
-            </div>
-            <h2 className="text-lg sm:text-xl md:text-2xl font-black text-white">
-              👕 สั่งซื้อเสื้อฝึก JRE 2027 พร้อมการสมัครเข้าร่วมโครงการ
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              การจัดทำเสื้อโครงการทางการนี้จัดทำแบบ <strong className="text-amber-300 font-bold">พรีออเดอร์ (Pre-Order) ตามขนาดไซส์จริงที่ผู้สมัครเลือกในขั้นตอนที่ 2</strong> 
-              โดยค่าจัดทำเสื้อจำนวน <strong className="text-white font-bold">400 บาท ถูกรวมอยู่ในการชำระค่าสมัครรอบที่ 1</strong> (15–20 ต.ค. 2569) 
-              ไม่มีการเปิดสั่งซื้อแยกหรือชำระเงินแยกต่างหาก
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            {isRegistered ? (
-              <button
-                onClick={() => handleTabChange('my_orders')}
-                className="px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-2xl shadow-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border border-emerald-400/40"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>ดูบัตรรับเสื้อ & QR Code ของท่าน</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => onNavigateRegister && onNavigateRegister()}
-                className="px-6 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all active:scale-95 cursor-pointer border border-amber-400/40"
-              >
-                <Shirt className="w-5 h-5" />
-                <span>ไปกรอกใบสมัคร & เลือกไซส์เสื้อ (ขั้นตอนที่ 2)</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* NAVIGATION TABS: STRICTLY 2 TABS */}
       <div className="flex border-b border-slate-800 space-x-2 sm:space-x-4">
