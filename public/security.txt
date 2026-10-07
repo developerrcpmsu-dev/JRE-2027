@@ -1,0 +1,28 @@
+# ==============================================================================
+# Security Policy & Vulnerability Disclosure
+# Project: JRE 2027 (Junior Rescue Exercise 2027)
+# Organization: ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (Mahasarakham University)
+# Standard: RFC 9116 (A File Format to Aid in Security Vulnerability Disclosure)
+# ==============================================================================
+
+# Contact Channels for Security Researchers & Vulnerability Reports
+Contact: mailto:developer.rcpmsu@gmail.com
+Contact: mailto:rescue.rajapruek@msu.ac.th
+Contact: tel:+66-88-946-3459
+Contact: https://github.com/developerrcpmsu-dev/JRE-2027/issues
+
+# Expiration Date for this security policy (RFC 3339)
+Expires: 2027-12-31T23:59:59.000Z
+
+# Canonical URLs for this document
+Canonical: https://jre-2027.vercel.app/.well-known/security.txt
+Canonical: https://jre-2027.vercel.app/security.txt
+
+# Security Policy & Live Vulnerability Assessment
+Policy: https://jre-2027.vercel.app/security-audit
+Acknowledgments: https://jre-2027.vercel.app/security-audit
+
+# Preferred Languages
+Preferred-Languages: th, en
+
+# Lead Systems Architect & Developer: นายพงศ์ภรณ์ ทองศิริ (Dev RCP16-37)

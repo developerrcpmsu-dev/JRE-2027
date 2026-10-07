@@ -1,0 +1,44 @@
+# ==============================================================================
+# Robots.txt for JRE 2027 (Junior Rescue Exercise 2027)
+# Organization: ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (Mahasarakham University)
+# Official Portal: https://jre-2027.vercel.app
+# ==============================================================================
+
+User-agent: *
+
+# Publicly Accessible & Search Indexable Pages
+Allow: /
+Allow: /schedule
+Allow: /register
+Allow: /announcements
+Allow: /announcements/
+Allow: /announcements/pr
+Allow: /announcements/orders
+Allow: /merchandise
+Allow: /merchandise/
+Allow: /security-audit
+Allow: /security.txt
+Allow: /.well-known/security.txt
+Allow: /sitemap.xml
+Allow: /favicon.ico
+Allow: /favicon.png
+Allow: /apple-touch-icon.png
+Allow: /images/
+Allow: /icons/
+Allow: /documents/
+
+# Disallow Private Portals, Member Dashboards & Admin Operations
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /merchandise/orders
+Disallow: /users/
+Disallow: /user/
+Disallow: /api/
+
+# Crawler Rate Optimization
+Crawl-delay: 1
+
+# Sitemap & Host Declarations
+Sitemap: https://jre-2027.vercel.app/sitemap.xml
+Host: https://jre-2027.vercel.app

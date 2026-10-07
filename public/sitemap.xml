@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- Homepage: หน้าแรก โครงการฝึกอบรมเครือข่ายกู้ภัยนักศึกษาทั่วประเทศ JRE 2027 มมส -->
+  <url>
+    <loc>https://jre-2027.vercel.app/</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Schedule & Event Timeline: กำหนดการและไทม์ไลน์การฝึกอบรม -->
+  <url>
+    <loc>https://jre-2027.vercel.app/schedule</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Registration Portal: ระบบลงทะเบียนรับสมัครผู้เข้าร่วมการฝึกอบรม -->
+  <url>
+    <loc>https://jre-2027.vercel.app/register</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Announcements: รวมประกาศและข่าวสารทั้งหมด -->
+  <url>
+    <loc>https://jre-2027.vercel.app/announcements</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Public Announcements: ข่าวประชาสัมพันธ์ทั่วไป -->
+  <url>
+    <loc>https://jre-2027.vercel.app/announcements/pr</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Member Announcements: คำสั่งและประกาศสำหรับสมาชิกผู้เข้ารับการฝึก -->
+  <url>
+    <loc>https://jre-2027.vercel.app/announcements/orders</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Merchandise Catalog: รายการสั่งซื้อเสื้อและของที่ระลึกโครงการ -->
+  <url>
+    <loc>https://jre-2027.vercel.app/merchandise</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Security Audit & Vulnerability Assessment: รายงานการตรวจสอบความมั่นคงปลอดภัย -->
+  <url>
+    <loc>https://jre-2027.vercel.app/security-audit</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Official Schedule Document (PDF) -->
+  <url>
+    <loc>https://jre-2027.vercel.app/documents/schedule_jre2027.pdf</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+</urlset>

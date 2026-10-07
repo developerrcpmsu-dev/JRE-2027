@@ -220,6 +220,13 @@ export default function Footer({ onOpenAdminLogin }) {
                   <span>รายงานความปลอดภัย (Security Audit)</span>
                 </a>
               </li>
+              <li className="pt-2 border-t border-slate-900 mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 font-mono">
+                <a href="/robots.txt" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 hover:underline">robots.txt</a>
+                <span>•</span>
+                <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 hover:underline">sitemap.xml</a>
+                <span>•</span>
+                <a href="/.well-known/security.txt" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 hover:underline">security.txt</a>
+              </li>
             </ul>
           </div>
 

@@ -1,6 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const sbUrl = 'https://clgavdzozfsmohdcetue.supabase.co';
 const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsZ2F2ZHpvemZzbW9oZGNldHVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5NjEwNTYsImV4cCI6MjEwNjUzNzA1Nn0.YgmNzkGjrrHTIfcdxkUvuRk6Ksa9CMGLYkkSMRn1lM8';
@@ -50,8 +56,27 @@ const serveApiFile = () => ({
   }
 });
 
+const ensureStaticSecurityFiles = () => ({
+  name: 'ensure-static-security-files',
+  closeBundle() {
+    try {
+      const distDir = path.resolve(__dirname, 'dist');
+      const wellKnownDist = path.join(distDir, '.well-known');
+      if (!fs.existsSync(wellKnownDist)) {
+        fs.mkdirSync(wellKnownDist, { recursive: true });
+      }
+      const wellKnownSrc = path.resolve(__dirname, 'public/.well-known/security.txt');
+      if (fs.existsSync(wellKnownSrc)) {
+        fs.copyFileSync(wellKnownSrc, path.join(wellKnownDist, 'security.txt'));
+      }
+    } catch (e) {
+      console.warn('Could not copy .well-known files:', e);
+    }
+  }
+});
+
 export default defineConfig({
-  plugins: [react(), serveApiFile()],
+  plugins: [react(), serveApiFile(), ensureStaticSecurityFiles()],
   server: {
     port: 3000,
     open: true
