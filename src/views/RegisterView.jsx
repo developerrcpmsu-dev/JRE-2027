@@ -1030,6 +1030,7 @@ export default function RegisterView({
   // Compute calculated age dynamically in real-time
   const ageResult = calculateAgeDetailed(birthYearBE, birthMonth, birthDay);
   const feeInfo = getRegistrationFeeDetails(institution);
+  const isConsentAgreed = Boolean(agreeCorrectInfo && agreePDPAAndRules);
 
   const validateStep1 = () => {
     const errs = {};
@@ -5534,6 +5535,12 @@ export default function RegisterView({
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                   {SHIRT_SIZE_OPTIONS.map((opt) => {
                     const isSelected = shirtSize === opt.value;
+                    const isCustom = opt.value.startsWith('อื่นๆ');
+                    const displayTitle = isCustom ? 'อื่นๆ / พิเศษ' : opt.value;
+                    const displaySubtitle = isCustom 
+                      ? 'ติดต่อ 098-329-6762' 
+                      : opt.label.replace(opt.value, '').replace(/[()]/g, '').trim();
+
                     return (
                       <button
                         type="button"
@@ -5549,15 +5556,15 @@ export default function RegisterView({
                         }`}
                       >
                         <div className="flex items-center justify-between w-full mb-1">
-                          <span className="font-black text-sm text-white">
-                            {opt.value}
+                          <span className={`font-black text-sm ${isCustom ? 'text-amber-300' : 'text-white'}`}>
+                            {displayTitle}
                           </span>
                           {isSelected && (
                             <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                           )}
                         </div>
                         <span className="text-[10px] text-slate-400 leading-snug">
-                          {opt.label.replace(opt.value, '').replace(/[()]/g, '').trim()}
+                          {displaySubtitle}
                         </span>
                       </button>
                     );
@@ -5566,24 +5573,40 @@ export default function RegisterView({
               </div>
 
               {/* Selected Size Banner */}
-              {shirtSize && (
-                <div className="p-4 bg-orange-950/40 border border-orange-500/40 rounded-2xl flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center font-black text-base shrink-0">
-                      {shirtSize}
+              {shirtSize && (() => {
+                const isCustom = shirtSize.startsWith('อื่นๆ');
+                const matchedOpt = SHIRT_SIZE_OPTIONS.find(o => o.value === shirtSize);
+                const sizeDetail = matchedOpt ? matchedOpt.label.replace(matchedOpt.value, '').replace(/[()]/g, '').trim() : '';
+
+                return (
+                  <div className="p-4 bg-orange-950/40 border border-orange-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center font-black text-base shrink-0">
+                        {isCustom ? (
+                          <Shirt className="w-5 h-5 text-orange-400" />
+                        ) : (
+                          shirtSize
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-300 block">ไซส์เสื้อที่ท่านเลือกสำหรับสั่งผลิตพรีออเดอร์:</span>
+                        <strong className="text-white text-sm font-black">
+                          {isCustom ? (
+                            'ไซส์พิเศษ (อื่นๆ) • ☎️ ติดต่อแจ้งรอบอก: 098-329-6762'
+                          ) : (
+                            `ไซส์ ${shirtSize} ${sizeDetail ? `(${sizeDetail})` : ''}`
+                          )}
+                        </strong>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[11px] text-slate-300 block">ไซส์เสื้อที่ท่านเลือกสำหรับสั่งผลิตพรีออเดอร์:</span>
-                      <strong className="text-white text-sm font-black">
-                        ไซส์ {shirtSize} ({SHIRT_SIZE_OPTIONS.find(o => o.value === shirtSize)?.label || ''})
-                      </strong>
-                    </div>
+                    <span className="text-[11px] text-orange-300 font-bold bg-orange-500/20 px-3 py-1.5 rounded-full border border-orange-500/30 whitespace-nowrap shrink-0 self-start sm:self-auto">
+                      {paymentPlan === 'full' 
+                        ? '💵 ค่าเสื้อ 400 บ. (รวมในยอดเต็มจำนวนแล้ว)' 
+                        : '💵 ค่าเสื้อ 400 บ. (รวมในงวดที่ 1)'}
+                    </span>
                   </div>
-                  <span className="text-[11px] text-orange-300 font-bold bg-orange-500/20 px-3 py-1 rounded-full border border-orange-500/30 shrink-0">
-                    💵 ค่าเสื้อ 400 บ. รวมในรอบที่ 1
-                  </span>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Step 2 Bottom Navigation Buttons */}
@@ -5595,16 +5618,16 @@ export default function RegisterView({
                     setCurrentFormStep(1);
                     window.scrollTo({ top: 350, behavior: 'smooth' });
                   }}
-                  className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 whitespace-nowrap"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>ย้อนกลับไปขั้นตอนที่ 1 (ข้อมูลผู้สมัคร)</span>
+                  <ArrowLeft className="w-4 h-4 shrink-0" />
+                  <span>ย้อนกลับไปขั้นตอนที่ 1</span>
                 </button>
                 {isEditing && (
                   <button
                     type="button"
                     onClick={handleCancelEditRegistration}
-                    className="w-full sm:w-auto px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors"
+                    className="w-full sm:w-auto px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl border border-slate-700 text-sm cursor-pointer active:scale-95 transition-colors whitespace-nowrap"
                   >
                     ❌ ยกเลิกการแก้ไข
                   </button>
@@ -5613,14 +5636,14 @@ export default function RegisterView({
               <button
                 type="button"
                 onClick={handleNextToStep3}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-orange-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-orange-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
               >
                 <span>
                   {paymentPlan === 'full' 
                     ? 'ถัดไป: สรุปค่าสมัคร & ชำระเงินเต็มจำนวน (ขั้นตอนที่ 3) →' 
-                    : 'ถัดไป: สรุปค่าสมัคร & ชำระเงินรอบที่ 1 (ขั้นตอนที่ 3) →'}
+                    : 'ถัดไป: สรุปค่าสมัคร & ชำระเงิน (ขั้นตอนที่ 3) →'}
                 </span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5 shrink-0" />
               </button>
             </div>
           </div>
@@ -5694,18 +5717,6 @@ export default function RegisterView({
               </div>
             </div>
 
-            {/* EARLY SUBMISSION FEATURE CALLOUT */}
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-950/60 via-slate-950 to-indigo-950/60 border border-blue-500/40 rounded-2xl flex items-start gap-3 shadow-lg">
-              <Sparkles className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <h4 className="text-xs sm:text-sm font-bold text-blue-300">
-                  💡 ส่งข้อมูลให้ Admin ตรวจสอบก่อนได้ (แนบสลิปตอนนี้ หรือมาแนบภายหลังได้)
-                </h4>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  หากท่านยังไม่สะดวกโอนเงินในตอนนี้ สามารถกดปุ่ม <strong className="text-white">“ส่งใบสมัครและรายการสั่งเสื้อไปยัง Admin ก่อน”</strong> ด้านล่างได้เลย ระบบจะบันทึกข้อมูลและรายการเสื้อของท่านไว้ และแสดงสถานะรอแนบสลิปในหน้าแดชบอร์ด เพื่อให้กลับมาแนบสลิปภายหลังได้ตลอดเวลา
-                </p>
-              </div>
-            </div>
 
             {/* Section 5: บัญชีธนาคาร & หลักฐานการโอนเงิน (เต็มจำนวน หรือ รอบที่ 1) */}
             <div className="space-y-4">
@@ -6033,27 +6044,38 @@ export default function RegisterView({
               className={`p-5 sm:p-6 bg-slate-950/80 border rounded-3xl space-y-4 shadow-inner transition-all duration-300 ${
                 fieldErrors.agreeCorrectInfo
                   ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20'
-                  : 'border-slate-800'
+                  : isConsentAgreed
+                  ? 'border-emerald-500/50 bg-emerald-950/10'
+                  : 'border-amber-500/40 bg-amber-950/10'
               }`}
             >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-5 h-5 text-rescue-500" />
+                  <ShieldCheck className={`w-5 h-5 shrink-0 ${isConsentAgreed ? 'text-emerald-400' : 'text-amber-400'}`} />
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                     การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
                   </h3>
                 </div>
-                {fieldErrors.agreeCorrectInfo && (
-                  <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1 animate-pulse">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    กรุณาติ๊กยินยอมทั้ง 2 ข้อ
+                {isConsentAgreed ? (
+                  <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30 shrink-0 self-start sm:self-auto">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    ✓ ยินยอมครบถ้วนแล้ว (ปลดล็อกปุ่มส่ง)
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-500/30 shrink-0 self-start sm:self-auto">
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    🔒 จำเป็นต้องติ๊กครบทั้ง 2 ข้อ เพื่อเปิดปุ่มส่ง
                   </span>
                 )}
               </div>
 
-              <div className="space-y-3.5">
+              <div className="space-y-3">
                 {/* Checkbox 1: Correct Info Confirmation */}
-                <label className="flex items-start gap-3 cursor-pointer group select-none">
+                <label className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer group select-none ${
+                  agreeCorrectInfo 
+                    ? 'bg-emerald-950/20 border-emerald-500/40' 
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                }`}>
                   <input
                     type="checkbox"
                     required
@@ -6064,15 +6086,19 @@ export default function RegisterView({
                         clearFieldError('agreeCorrectInfo');
                       }
                     }}
-                    className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
-                    <strong className="text-white font-semibold">การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ ขนาดไซส์เสื้อ และหลักฐานการโอนเงินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
+                    <strong className="text-white font-semibold">1. การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ ขนาดไซส์เสื้อ และหลักฐานการโอนเงินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
                   </span>
                 </label>
 
                 {/* Checkbox 2: PDPA and Project Rules */}
-                <label className="flex items-start gap-3 cursor-pointer group select-none">
+                <label className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer group select-none ${
+                  agreePDPAAndRules 
+                    ? 'bg-emerald-950/20 border-emerald-500/40' 
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                }`}>
                   <input
                     type="checkbox"
                     required
@@ -6083,10 +6109,10 @@ export default function RegisterView({
                         clearFieldError('agreeCorrectInfo');
                       }
                     }}
-                    className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <div className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
-                    <strong className="text-white font-semibold">นโยบาย PDPA และข้อตกลงโครงการ:</strong> ข้าพเจ้ายินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) มหาวิทยาลัยมหาสารคาม และตกลงที่จะปฏิบัติตามกฎระเบียบ ข้อตกลง และคำสั่งความปลอดภัยของโครงการ JRE 2027 ตลอดระยะเวลาการฝึกอบรมทุกประการ <span className="text-rose-400 font-bold">*</span>
+                    <strong className="text-white font-semibold">2. นโยบาย PDPA และข้อตกลงโครงการ:</strong> ข้าพเจ้ายินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) มหาวิทยาลัยมหาสารคาม และตกลงที่จะปฏิบัติตามกฎระเบียบ ข้อตกลง และคำสั่งความปลอดภัยของโครงการ JRE 2027 ตลอดระยะเวลาการฝึกอบรมทุกประการ <span className="text-rose-400 font-bold">*</span>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -6108,16 +6134,25 @@ export default function RegisterView({
               {/* Primary Action Button: Submit Application */}
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer ${
-                  ((paymentPlan === 'full' && !formSlipFull && !myRegistration?.payment_slip_url) ||
-                   (paymentPlan === 'installment' && !formSlipRound1 && !myRegistration?.installment_1_slip_url))
-                    ? 'bg-gradient-to-r from-amber-700 via-orange-700 to-amber-800 hover:from-amber-600 hover:to-orange-600 text-amber-100 shadow-amber-900/30 border border-amber-500/50'
-                    : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white shadow-rescue-600/30'
+                disabled={isSubmitting || !isConsentAgreed}
+                className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all active:scale-[0.99] text-sm sm:text-base flex items-center justify-center gap-2 ${
+                  !isConsentAgreed
+                    ? 'bg-slate-800/80 text-slate-400 border border-slate-700/80 cursor-not-allowed shadow-none opacity-80'
+                    : ((paymentPlan === 'full' && !formSlipFull && !myRegistration?.payment_slip_url) ||
+                       (paymentPlan === 'installment' && !formSlipRound1 && !myRegistration?.installment_1_slip_url))
+                    ? 'bg-gradient-to-r from-amber-700 via-orange-700 to-amber-800 hover:from-amber-600 hover:to-orange-600 text-amber-100 shadow-amber-900/30 border border-amber-500/50 cursor-pointer'
+                    : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white shadow-rescue-600/30 cursor-pointer'
                 }`}
               >
                 {isSubmitting ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : !isConsentAgreed ? (
+                  <>
+                    <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span className="text-center font-bold">
+                      🔒 กรุณาติ๊กยอมรับเงื่อนไขและยืนยันข้อมูลถูกต้องด้านบนก่อน จึงจะเปิดให้ส่งใบสมัคร
+                    </span>
+                  </>
                 ) : (
                   <>
                     <Save className="w-5 h-5 shrink-0" />
@@ -6527,27 +6562,38 @@ export default function RegisterView({
               className={`p-5 sm:p-6 bg-slate-950/80 border rounded-3xl space-y-4 shadow-inner transition-all duration-300 ${
                 fieldErrors.agreeCorrectInfo
                   ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20'
-                  : 'border-slate-800'
+                  : isConsentAgreed
+                  ? 'border-emerald-500/50 bg-emerald-950/10'
+                  : 'border-amber-500/40 bg-amber-950/10'
               }`}
             >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-5 h-5 text-rescue-500" />
+                  <ShieldCheck className={`w-5 h-5 shrink-0 ${isConsentAgreed ? 'text-emerald-400' : 'text-amber-400'}`} />
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                     การยืนยันข้อมูลและข้อตกลงความยินยอม (Consent & Agreements)
                   </h3>
                 </div>
-                {fieldErrors.agreeCorrectInfo && (
-                  <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1 animate-pulse">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    กรุณาติ๊กยินยอมทั้ง 2 ข้อ
+                {isConsentAgreed ? (
+                  <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30 shrink-0 self-start sm:self-auto">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    ✓ ยินยอมครบถ้วนแล้ว (ปลดล็อกปุ่มส่ง)
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-500/30 shrink-0 self-start sm:self-auto">
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    🔒 จำเป็นต้องติ๊กครบทั้ง 2 ข้อ เพื่อเปิดปุ่มส่ง
                   </span>
                 )}
               </div>
 
-              <div className="space-y-3.5">
+              <div className="space-y-3">
                 {/* Checkbox 1: Correct Info Confirmation */}
-                <label className="flex items-start gap-3 cursor-pointer group select-none">
+                <label className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer group select-none ${
+                  agreeCorrectInfo 
+                    ? 'bg-emerald-950/20 border-emerald-500/40' 
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                }`}>
                   <input
                     type="checkbox"
                     required
@@ -6558,15 +6604,19 @@ export default function RegisterView({
                         clearFieldError('agreeCorrectInfo');
                       }
                     }}
-                    className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <span className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
-                    <strong className="text-white font-semibold">การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ ขนาดไซส์เสื้อ และหลักฐานการโอนเงินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
+                    <strong className="text-white font-semibold">1. การรับรองความถูกต้องของข้อมูล:</strong> ข้าพเจ้าขอยืนยันว่า ข้อมูลประวัติ สังกัด เบอร์โทรศัพท์ ประวัติสุขภาพ ขนาดไซส์เสื้อ และหลักฐานการโอนเงินทั้งหมดที่ระบุข้างต้นเป็นความจริง ถูกต้อง และเป็นปัจจุบันทุกประการ <span className="text-rose-400 font-bold">*</span>
                   </span>
                 </label>
 
                 {/* Checkbox 2: PDPA and Project Rules */}
-                <label className="flex items-start gap-3 cursor-pointer group select-none">
+                <label className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer group select-none ${
+                  agreePDPAAndRules 
+                    ? 'bg-emerald-950/20 border-emerald-500/40' 
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                }`}>
                   <input
                     type="checkbox"
                     required
@@ -6577,10 +6627,10 @@ export default function RegisterView({
                         clearFieldError('agreeCorrectInfo');
                       }
                     }}
-                    className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-rescue-600 focus:ring-rescue-500 focus:ring-offset-slate-900 shrink-0 cursor-pointer"
                   />
                   <div className="text-xs text-slate-300 group-hover:text-white leading-relaxed">
-                    <strong className="text-white font-semibold">นโยบาย PDPA และข้อตกลงโครงการ:</strong> ข้าพเจ้ายินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) มหาวิทยาลัยมหาสารคาม และตกลงที่จะปฏิบัติตามกฎระเบียบ ข้อตกลง และคำสั่งความปลอดภัยของโครงการ JRE 2027 ตลอดระยะเวลาการฝึกอบรมทุกประการ <span className="text-rose-400 font-bold">*</span>
+                    <strong className="text-white font-semibold">2. นโยบาย PDPA และข้อตกลงโครงการ:</strong> ข้าพเจ้ายินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) มหาวิทยาลัยมหาสารคาม และตกลงที่จะปฏิบัติตามกฎระเบียบ ข้อตกลง และคำสั่งความปลอดภัยของโครงการ JRE 2027 ตลอดระยะเวลาการฝึกอบรมทุกประการ <span className="text-rose-400 font-bold">*</span>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -6602,15 +6652,24 @@ export default function RegisterView({
               {/* Primary Action Button: Submit with Round 2 */}
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer ${
-                  (!formSlipRound2 && !myRegistration?.installment_2_slip_url)
-                    ? 'bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-800 hover:from-sky-800 hover:to-indigo-800 text-sky-100 shadow-sky-950/40 border border-sky-500/50'
-                    : 'bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white shadow-sky-600/30'
+                disabled={isSubmitting || !isConsentAgreed}
+                className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all active:scale-[0.99] text-sm sm:text-base flex items-center justify-center gap-2 ${
+                  !isConsentAgreed
+                    ? 'bg-slate-800/80 text-slate-400 border border-slate-700/80 cursor-not-allowed shadow-none opacity-80'
+                    : (!formSlipRound2 && !myRegistration?.installment_2_slip_url)
+                    ? 'bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-800 hover:from-sky-800 hover:to-indigo-800 text-sky-100 shadow-sky-950/40 border border-sky-500/50 cursor-pointer'
+                    : 'bg-gradient-to-r from-sky-600 via-indigo-600 to-rescue-600 hover:from-sky-500 hover:to-rescue-500 text-white shadow-sky-600/30 cursor-pointer'
                 }`}
               >
                 {isSubmitting ? (
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : !isConsentAgreed ? (
+                  <>
+                    <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span className="text-center font-bold">
+                      🔒 กรุณาติ๊กยอมรับเงื่อนไขและยืนยันข้อมูลถูกต้องด้านบนก่อน จึงจะเปิดให้ส่งใบสมัคร
+                    </span>
+                  </>
                 ) : (
                   <>
                     <Save className="w-5 h-5 shrink-0" />
