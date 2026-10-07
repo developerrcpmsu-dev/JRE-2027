@@ -39,6 +39,8 @@
 
 ข้อความใน diagram อธิบาย workflow ที่ต้องการนำเสนอ แต่ไม่ได้ใช้เป็นหลักฐานว่าทุกเครื่องมือถูกติดตั้งหรือทำงานครบในรอบ audit นี้
 
+หลังติดตั้ง lab เพิ่มเติมแล้ว สถานะที่ยืนยันได้คือ WSL2/Kali ทำงาน, Docker Engine ทำงาน และ DVWA เปิดได้ที่ `http://127.0.0.1:8081/login.php` เท่านั้น โดยไม่ผูกกับ production
+
 ภาพ Burp ที่ผู้ใช้แนบมาเป็น snapshot ก่อนส่ง traffic ซึ่งแสดง passive crawl ว่า `0 items`; จึงเก็บเป็น `public/images/security/burp-passive-crawl-before.png` พร้อมคำอธิบายว่าเป็น “ก่อนตรวจ” ไม่ใช่ผลสแกนที่ยืนยันช่องโหว่
 
 ภาพ Burp เพิ่มเติมจากรอบเดียวกัน:
@@ -167,17 +169,19 @@
 | Burp Suite Community | ติดตั้งแล้วและใช้ผ่าน proxy | PortSwigger package 2026.3.3; listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests และ passive crawl UI แสดง 50 site-map items / 13 responses processed; ยังไม่ได้ทำ active scan หรือ credential test |
 | Claude Desktop | มีอยู่แล้ว | เพิ่ม `jre2027-filesystem` MCP server แบบจำกัด path โปรเจกต์ใน `%APPDATA%\\Claude\\claude_desktop_config.json`; restart Claude เพื่อโหลด config |
 | MCP | พร้อมใช้งาน | รอบ audit นี้ใช้ MCP tools/local file inspection; ไม่ส่ง `.env` ให้โมเดลโดยอัตโนมัติ |
-| Kali Linux | ยังไม่พร้อม | WSL ยังไม่ติดตั้ง; Windows แจ้งว่าต้องใช้ Administrator (`0x80073d28`) |
-| DVWA | ยังไม่ติดตั้ง | ควรติดตั้งใน lab/container แยก และใช้เป็น baseline เท่านั้น ห้ามผูกเข้ากับ production |
+| Kali Linux | ติดตั้งและใช้งานได้ | WSL2 distribution `kali-linux` อยู่สถานะ Running; Linux user สร้างแล้ว; systemd มี warning เรื่อง user session แต่ shell ใช้งานได้ |
+| Docker Engine | ติดตั้งและใช้งานได้ | Docker Engine/CLI/Compose `28.5.2` ทำงานภายใน Kali และเพิ่ม user เข้า `docker` group |
+| DVWA | ติดตั้งและรันแล้ว | image `vulnerables/web-dvwa:latest`, container `dvwa`, HTTP `127.0.0.1:8081 -> 80`; ตรวจได้ `302` ไป `login.php`; ไม่เปิดรับจาก network ภายนอก |
 
-## ขั้นตอนติดตั้ง lab ที่เหลืออย่างปลอดภัย
+## ขั้นตอนติดตั้งและใช้งาน lab อย่างปลอดภัย
 
-1. เปิด PowerShell แบบ Administrator โดยผู้ดูแลเครื่องเป็นผู้ดำเนินการ
-2. ติดตั้ง WSL แล้วรีสตาร์ตตามที่ Windows ขอ จากนั้นติดตั้ง Kali Linux และสร้าง Linux user แยกสำหรับ lab
-3. ติดตั้ง Docker Desktop หรือ runtime ที่ผู้สอนอนุมัติ แล้วรัน DVWA ใน network แยก เช่น localhost เท่านั้น
-4. ตั้ง Burp proxy ให้ชี้เฉพาะ `127.0.0.1`/lab และติดตั้ง CA certificate เฉพาะ profile ทดสอบ
-5. ทดสอบ payload กับ DVWA ก่อน แล้วค่อยทำ non-destructive verification กับ staging JRE 2027
-6. เก็บ screenshot ของ request/response โดย redaction token, cookie, email, phone และ PII ก่อนแนบรายงาน
+1. เปิด PowerShell แบบ Administrator และติดตั้ง WSL2/Kali; สร้าง Linux user แยกสำหรับ lab โดยไม่ส่ง password ออกนอกเครื่อง
+2. ติดตั้ง Docker Engine/Compose ใน Kali และตรวจ `docker version` ให้ client/server ทำงาน
+3. รัน DVWA ด้วย `-p 127.0.0.1:8081:80` เพื่อจำกัดการเข้าถึงไว้ที่เครื่องนี้
+4. เปิด [DVWA local login](http://127.0.0.1:8081/login.php) แล้วใช้เฉพาะบัญชีทดสอบของ DVWA; ห้ามใช้ password จริงของระบบ JRE
+5. ตั้ง Burp proxy ให้ชี้เฉพาะ `127.0.0.1`/lab และติดตั้ง CA certificate เฉพาะ profile ทดสอบ
+6. ทดสอบ payload กับ DVWA ก่อน แล้วค่อยทำ non-destructive verification กับ staging JRE 2027
+7. เก็บ screenshot ของ request/response โดย redaction token, cookie, email, phone และ PII ก่อนแนบรายงาน
 
 ## ขั้นตอนแก้ไขฐานข้อมูลที่เพิ่มในรอบนี้
 
