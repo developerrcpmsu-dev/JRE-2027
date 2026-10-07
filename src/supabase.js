@@ -544,22 +544,138 @@ export const DataService = {
     return true;
   },
 
+  // Check if a slip's TransRef or Slip Reference already exists in the system
+  async checkSlipDuplicate(transRef, currentUserId = null) {
+    if (!transRef || typeof transRef !== 'string') return { isDuplicate: false };
+    const cleanRef = transRef.trim();
+    if (cleanRef.length < 5) return { isDuplicate: false };
+
+    try {
+      // 1. Check local registry first
+      let registry = [];
+      const localRegistryStr = localStorage.getItem('jre2027_slip_registry');
+      if (localRegistryStr) {
+        try { registry = JSON.parse(localRegistryStr); } catch (e) {}
+      }
+
+      // 2. Fetch centralized slip registry from project_settings if Supabase configured
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('project_settings')
+            .select('value')
+            .eq('key', 'submitted_slips_registry')
+            .maybeSingle();
+          if (!error && data?.value && Array.isArray(data.value)) {
+            registry = data.value;
+            localStorage.setItem('jre2027_slip_registry', JSON.stringify(registry));
+          }
+        } catch (e) {}
+      }
+
+      // 3. Search for existing match with different user
+      const match = registry.find(r => 
+        r.transRef && 
+        r.transRef.toLowerCase() === cleanRef.toLowerCase() && 
+        (!currentUserId || (r.userId && String(r.userId) !== String(currentUserId)))
+      );
+
+      if (match) {
+        const dateStr = match.submittedAt ? new Date(match.submittedAt).toLocaleDateString('th-TH') : 'ไม่ระบุวัน';
+        return {
+          isDuplicate: true,
+          transRef: cleanRef,
+          existingRecord: match,
+          message: `รหัสอ้างอิงธุรกรรม ${cleanRef} เคยถูกส่งในระบบแล้ว (${match.userName || 'ผู้ใช้อื่น'} เมื่อ ${dateStr})`
+        };
+      }
+    } catch (err) {
+      console.warn('checkSlipDuplicate notice:', err);
+    }
+
+    return { isDuplicate: false, transRef: cleanRef };
+  },
+
+  // Record a submitted slip into the centralized registry
+  async recordSubmittedSlip(slipRecord) {
+    if (!slipRecord || !slipRecord.transRef) return false;
+    const cleanRef = String(slipRecord.transRef).trim();
+    if (cleanRef.length < 5) return false;
+
+    try {
+      let registry = [];
+      const localRegistryStr = localStorage.getItem('jre2027_slip_registry');
+      if (localRegistryStr) {
+        try { registry = JSON.parse(localRegistryStr); } catch (e) {}
+      }
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('project_settings')
+            .select('value')
+            .eq('key', 'submitted_slips_registry')
+            .maybeSingle();
+          if (!error && data?.value && Array.isArray(data.value)) {
+            registry = data.value;
+          }
+        } catch (e) {}
+      }
+
+      const newEntry = {
+        transRef: cleanRef,
+        userId: slipRecord.userId || '',
+        userName: slipRecord.userName || '',
+        amount: slipRecord.amount || null,
+        bank: slipRecord.bank || '',
+        date: slipRecord.date || '',
+        time: slipRecord.time || '',
+        submittedAt: new Date().toISOString()
+      };
+
+      const existingIdx = registry.findIndex(r => r.transRef && r.transRef.toLowerCase() === cleanRef.toLowerCase());
+      if (existingIdx >= 0) {
+        registry[existingIdx] = newEntry;
+      } else {
+        registry.unshift(newEntry);
+      }
+
+      if (registry.length > 1000) registry = registry.slice(0, 1000);
+      localStorage.setItem('jre2027_slip_registry', JSON.stringify(registry));
+
+      if (isSupabaseConfigured && supabase) {
+        await supabase
+          .from('project_settings')
+          .upsert({
+            key: 'submitted_slips_registry',
+            value: registry,
+            updated_at: new Date().toISOString()
+          });
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('recordSubmittedSlip error:', err);
+      return false;
+    }
+  },
+
   // Submit Payment Slip
-  async submitPaymentSlip(userId, slipUrl) {
+  async submitPaymentSlip(userId, slipUrl, status = 'pending_review') {
     return this.updateRegistrationDetails(userId, {
       payment_slip_url: slipUrl,
       payment_slip_date: new Date().toISOString(),
-      payment_status: 'pending_review'
+      payment_status: status
     });
   },
 
   // User submits an installment payment slip (Round 1 or Round 2)
-  async submitInstallmentSlip(userId, round, slipUrl) {
+  async submitInstallmentSlip(userId, round, slipUrl, status = 'pending_review') {
     const update = {
       payment_plan: 'installment',
       [`installment_${round}_slip_url`]: slipUrl,
       [`installment_${round}_slip_date`]: new Date().toISOString(),
-      [`installment_${round}_status`]: 'pending_review'
+      [`installment_${round}_status`]: status
     };
     return this.updateRegistrationDetails(userId, update);
   },

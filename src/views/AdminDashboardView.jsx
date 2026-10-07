@@ -3811,6 +3811,38 @@ export default function AdminDashboardView({
                               </p>
                             )}
 
+                            {profileModalReg.slip_ocr_round1 && (
+                              <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                                profileModalReg.slip_ocr_round1.isFullyVerified 
+                                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                                  : profileModalReg.slip_ocr_round1.isDuplicate
+                                  ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                                  : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                              }`}>
+                                <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                                  <span className="font-bold flex items-center gap-1">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                    ผลตรวจ OCR (งวด 1):
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                    profileModalReg.slip_ocr_round1.isFullyVerified 
+                                      ? 'bg-emerald-500/20 text-emerald-300' 
+                                      : profileModalReg.slip_ocr_round1.isDuplicate
+                                      ? 'bg-rose-500/20 text-rose-300'
+                                      : 'bg-amber-500/20 text-amber-300'
+                                  }`}>
+                                    {profileModalReg.slip_ocr_round1.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_round1.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+                                  <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_round1.amountFormatted || '-'}</span></div>
+                                  <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_round1.transferDateTimeStr || '-'}</span></div>
+                                  <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_round1.bankDetected || '-'}</span></div>
+                                  <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_round1.transRef || '-'}</span></div>
+                                </div>
+                              </div>
+                            )}
+
                             {profileModalReg.installment_1_status === 'paid' ? (
                               <div className="flex items-center gap-2 pt-1">
                                 <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
@@ -4013,6 +4045,38 @@ export default function AdminDashboardView({
                               </p>
                             )}
 
+                            {profileModalReg.slip_ocr_round2 && (
+                              <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                                profileModalReg.slip_ocr_round2.isFullyVerified 
+                                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                                  : profileModalReg.slip_ocr_round2.isDuplicate
+                                  ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                                  : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                              }`}>
+                                <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                                  <span className="font-bold flex items-center gap-1">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                    ผลตรวจ OCR (งวด 2):
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                    profileModalReg.slip_ocr_round2.isFullyVerified 
+                                      ? 'bg-emerald-500/20 text-emerald-300' 
+                                      : profileModalReg.slip_ocr_round2.isDuplicate
+                                      ? 'bg-rose-500/20 text-rose-300'
+                                      : 'bg-amber-500/20 text-amber-300'
+                                  }`}>
+                                    {profileModalReg.slip_ocr_round2.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_round2.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+                                  <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_round2.amountFormatted || '-'}</span></div>
+                                  <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_round2.transferDateTimeStr || '-'}</span></div>
+                                  <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_round2.bankDetected || '-'}</span></div>
+                                  <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_round2.transRef || '-'}</span></div>
+                                </div>
+                              </div>
+                            )}
+
                             {profileModalReg.installment_2_status === 'paid' && profileModalReg.installment_2_slip_url ? (
                               <div className="flex items-center gap-2 pt-1">
                                 <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
@@ -4212,6 +4276,38 @@ export default function AdminDashboardView({
                             </button>
                           </div>
                         </div>
+
+                        {profileModalReg.slip_ocr_full && (
+                          <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                            profileModalReg.slip_ocr_full.isFullyVerified 
+                              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                              : profileModalReg.slip_ocr_full.isDuplicate
+                              ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                          }`}>
+                            <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                              <span className="font-bold flex items-center gap-1">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                ผลตรวจ OCR (เต็มจำนวน):
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                profileModalReg.slip_ocr_full.isFullyVerified 
+                                  ? 'bg-emerald-500/20 text-emerald-300' 
+                                  : profileModalReg.slip_ocr_full.isDuplicate
+                                  ? 'bg-rose-500/20 text-rose-300'
+                                  : 'bg-amber-500/20 text-amber-300'
+                              }`}>
+                                {profileModalReg.slip_ocr_full.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_full.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+                              <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_full.amountFormatted || '-'}</span></div>
+                              <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_full.transferDateTimeStr || '-'}</span></div>
+                              <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_full.bankDetected || '-'}</span></div>
+                              <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_full.transRef || '-'}</span></div>
+                            </div>
+                          </div>
+                        )}
 
                         {profileModalReg.payment_status === 'paid' ? (
                           <div className="flex flex-wrap items-center gap-2 pt-2">
