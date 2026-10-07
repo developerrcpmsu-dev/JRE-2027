@@ -171,7 +171,7 @@
 | MCP | พร้อมใช้งาน | รอบ audit นี้ใช้ MCP tools/local file inspection; ไม่ส่ง `.env` ให้โมเดลโดยอัตโนมัติ |
 | Kali Linux | ติดตั้งและใช้งานได้ | WSL2 distribution `kali-linux` อยู่สถานะ Running; Linux user สร้างแล้ว; systemd มี warning เรื่อง user session แต่ shell ใช้งานได้ |
 | Docker Engine | ติดตั้งและใช้งานได้ | Docker Engine/CLI/Compose `28.5.2` ทำงานภายใน Kali และเพิ่ม user เข้า `docker` group |
-| DVWA | ติดตั้งและรันแล้ว | image `vulnerables/web-dvwa:latest`, container `dvwa`, HTTP `127.0.0.1:8081 -> 80`; ตรวจได้ `302` ไป `login.php`; ไม่เปิดรับจาก network ภายนอก |
+| DVWA | ติดตั้งและรันแล้ว | image `vulnerables/web-dvwa:latest`, container `dvwa`, HTTP `127.0.0.1:8081 -> 80`; ตรวจได้ `302` ไป `login.php` และทดสอบฟอร์มบัญชี lab ไปถึง `index.php`; ไม่เปิดรับจาก network ภายนอก |
 
 ## ขั้นตอนติดตั้งและใช้งาน lab อย่างปลอดภัย
 
