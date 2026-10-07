@@ -36,6 +36,9 @@ export function parseCurrentRoute() {
       return { mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' };
     }
     if (queryOrHash === 'admin') return { mainTab: 'admin', subRoute: 'applicants', canonicalPath: '/admin' };
+    if (queryOrHash === 'security' || queryOrHash === 'security-audit' || queryOrHash === 'audit') {
+      return { mainTab: 'security', subRoute: null, canonicalPath: '/security-audit' };
+    }
   }
 
   // 2. Parse modern path segments (/main/sub)
@@ -119,6 +122,15 @@ export function parseCurrentRoute() {
     };
   }
 
+  // Security Audit Report (/security-audit or /security or /audit)
+  if (first === 'security-audit' || first === 'security' || first === 'audit' || first === 'vulnerabilities') {
+    return {
+      mainTab: 'security',
+      subRoute: null,
+      canonicalPath: '/security-audit'
+    };
+  }
+
   return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
 }
 
@@ -152,6 +164,10 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'users':
     case 'user':
       return subRoute ? `/users/${subRoute}` : '/users';
+    case 'security':
+    case 'security-audit':
+    case 'audit':
+      return '/security-audit';
     default:
       return '/';
   }

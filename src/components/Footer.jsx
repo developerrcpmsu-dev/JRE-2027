@@ -9,7 +9,8 @@ import {
   AlertCircle, 
   ExternalLink,
   Code2,
-  Database
+  Database,
+  ShieldAlert
 } from 'lucide-react';
 import PDPAModal from './PDPAModal';
 
@@ -208,6 +209,16 @@ export default function Footer({ onOpenAdminLogin }) {
                   <Shield className="w-3.5 h-3.5 text-purple-400" />
                   <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
                 </button>
+              </li>
+              <li className="pt-1">
+                <a
+                  href="/security-audit"
+                  className="text-slate-400 hover:text-amber-300 text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-slate-900/60 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/40 rounded-xl cursor-pointer inline-flex"
+                  title="ดูรายงานผลการตรวจสอบความมั่นคงปลอดภัย (Security Audit)"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                  <span>รายงานความปลอดภัย (Security Audit)</span>
+                </a>
               </li>
             </ul>
           </div>

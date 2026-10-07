@@ -14,6 +14,7 @@ import AdminDashboardView from './views/AdminDashboardView';
 import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import UserProfileView from './views/UserProfileView';
+import SecurityAuditView from './views/SecurityAuditView';
 import { DataService, supabase, isSupabaseConfigured } from './supabase';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -47,6 +48,9 @@ export default function App() {
     } else if (newTab === 'users' || newTab === 'user') {
       main = 'users';
       sub = newSubRoute;
+    } else if (newTab === 'security' || newTab === 'security-audit' || newTab === 'audit') {
+      main = 'security';
+      sub = null;
     }
 
     syncUrlToRoute(main, sub, false, options);
@@ -575,6 +579,13 @@ export default function App() {
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin', 'users')}
             onNavigateRegister={() => setCurrentTab('register')}
+          />
+        )}
+
+        {currentTab === 'security' && (
+          <SecurityAuditView
+            onNavigateHome={() => setCurrentTab('home')}
+            onNavigateAdmin={() => setCurrentTab('admin')}
           />
         )}
       </main>
