@@ -1648,6 +1648,8 @@ export default function AdminDashboardView({
       (reg.last_name || '') + ' ' + 
       (reg.full_name_affiliation || '') + ' ' +
       (reg.nickname || '') + ' ' +
+      (reg.nickname_th || '') + ' ' +
+      (reg.nickname_en || '') + ' ' +
       (reg.callsign || '') + ' ' +
       (reg.shirt_size || '') + ' ' +
       (reg.phone || '') + ' ' + 

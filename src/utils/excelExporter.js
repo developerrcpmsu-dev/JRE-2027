@@ -304,7 +304,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       shirt_size: r.shirt_size || 'L',
       group_assigned: r.group_assigned || 'ยังไม่จัดสรร',
       room_assigned: r.room_assigned || 'ยังไม่จัดสรร',
-      nickname: r.nickname || '-',
+      nickname: r.nickname || (r.nickname_th && r.nickname_en ? `${r.nickname_th} / ${r.nickname_en}` : (r.nickname_th || r.nickname_en || '-')),
       email: r.user_email || '-',
       dob: r.dob || '-',
       age_full: `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,

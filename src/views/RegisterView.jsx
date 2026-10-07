@@ -231,6 +231,45 @@ export const parseFullNameAffiliationString = (str) => {
   return result;
 };
 
+export const parseNicknameString = (str) => {
+  if (!str || typeof str !== 'string') return { nicknameTh: '', nicknameEn: '' };
+  const trimmed = str.trim();
+  if (!trimmed) return { nicknameTh: '', nicknameEn: '' };
+
+  // Case: "เจมส์ / James" or "เจมส์/James"
+  if (trimmed.includes('/')) {
+    const parts = trimmed.split('/');
+    return {
+      nicknameTh: (parts[0] || '').trim(),
+      nicknameEn: (parts.slice(1).join('/') || '').trim()
+    };
+  }
+
+  // Case: "เจมส์ (James)"
+  const bracketMatch = trimmed.match(/^(.*?)\((.*?)\)/);
+  if (bracketMatch) {
+    return {
+      nicknameTh: (bracketMatch[1] || '').trim(),
+      nicknameEn: (bracketMatch[2] || '').trim()
+    };
+  }
+
+  // If mostly Thai:
+  if (/[\u0E00-\u0E7F]/.test(trimmed)) {
+    return { nicknameTh: trimmed, nicknameEn: '' };
+  }
+
+  // If mostly English:
+  return { nicknameTh: '', nicknameEn: trimmed };
+};
+
+export const buildNicknameString = (th, en) => {
+  const t = (th || '').trim();
+  const e = (en || '').trim();
+  if (t && e) return `${t} / ${e}`;
+  return t || e || '';
+};
+
 export default function RegisterView({ 
   user, 
   myRegistration, 
@@ -387,7 +426,15 @@ export default function RegisterView({
     institutionAbbrEn,
     isManualFullName
   ]);
+
+  const [nicknameTh, setNicknameTh] = useState('');
+  const [nicknameEn, setNicknameEn] = useState('');
   const [nickname, setNickname] = useState('');
+
+  // Keep combined nickname in sync whenever nicknameTh or nicknameEn changes
+  useEffect(() => {
+    setNickname(buildNicknameString(nicknameTh, nicknameEn));
+  }, [nicknameTh, nicknameEn]);
   const [callsign, setCallsign] = useState('');
   const [unit, setUnit] = useState('');
   const [shirtSize, setShirtSize] = useState('L');
@@ -661,6 +708,13 @@ export default function RegisterView({
           if (d.institutionAbbrEn) setInstitutionAbbrEn(d.institutionAbbrEn);
           if (d.firstName) setFirstName(d.firstName);
           if (d.lastName) setLastName(d.lastName);
+          if (d.nicknameTh) setNicknameTh(d.nicknameTh);
+          if (d.nicknameEn) setNicknameEn(d.nicknameEn);
+          if (!d.nicknameTh && !d.nicknameEn && d.nickname) {
+            const parsedNick = parseNicknameString(d.nickname);
+            if (parsedNick.nicknameTh) setNicknameTh(parsedNick.nicknameTh);
+            if (parsedNick.nicknameEn) setNicknameEn(parsedNick.nicknameEn);
+          }
           if (d.nickname) setNickname(d.nickname);
           if (d.callsign) setCallsign(d.callsign);
           if (d.unit) setUnit(d.unit);
@@ -721,6 +775,8 @@ export default function RegisterView({
         institutionAbbrEn,
         firstName,
         lastName,
+        nicknameTh,
+        nicknameEn,
         nickname,
         callsign,
         unit,
@@ -764,6 +820,8 @@ export default function RegisterView({
     institutionAbbrEn,
     firstName,
     lastName,
+    nicknameTh,
+    nicknameEn,
     nickname,
     callsign,
     unit,
@@ -790,6 +848,8 @@ export default function RegisterView({
   const handleClearDraft = () => {
     localStorage.removeItem(DRAFT_KEY);
     setFullNameAffiliation('');
+    setNicknameTh('');
+    setNicknameEn('');
     setNickname('');
     setCallsign('');
     setUnit('');
@@ -1073,6 +1133,13 @@ export default function RegisterView({
     setFirstName(reg.first_name || '');
     setLastName(reg.last_name || '');
     setFullNameAffiliation(reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim());
+    if (reg.nickname_th) setNicknameTh(reg.nickname_th);
+    if (reg.nickname_en) setNicknameEn(reg.nickname_en);
+    if (!reg.nickname_th && !reg.nickname_en && reg.nickname) {
+      const parsedNick = parseNicknameString(reg.nickname);
+      setNicknameTh(parsedNick.nicknameTh || '');
+      setNicknameEn(parsedNick.nicknameEn || '');
+    }
     setNickname(reg.nickname || '');
     setCallsign(reg.callsign || '');
     const selectedInstitution = OFFICIAL_NETWORK_INSTITUTIONS.find(
@@ -1189,7 +1256,8 @@ export default function RegisterView({
     if (titleEn === 'อื่นๆ' && !titleOtherEn.trim()) errs.titleOtherEn = 'กรุณาระบุ Title ภาษาอังกฤษ';
 
     if (!fullNameAffiliation.trim()) errs.fullNameAffiliation = 'กรุณาระบุคำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน';
-    if (!nickname.trim()) errs.nickname = 'กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ';
+    if (!nicknameTh.trim()) errs.nicknameTh = 'กรุณากรอกชื่อเล่นภาษาไทย';
+    if (!nicknameEn.trim()) errs.nicknameEn = 'กรุณากรอกชื่อเล่นภาษาอังกฤษ (Nickname in English)';
     if (!callsign.trim()) errs.callsign = 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01';
     if (!institution.trim()) errs.institution = 'กรุณาระบุสังกัด / Affiliation (มหาวิทยาลัยหรือสถาบัน)';
 
@@ -1217,7 +1285,8 @@ export default function RegisterView({
       'firstNameEn',
       'lastNameEn',
       'fullNameAffiliation',
-      'nickname',
+      'nicknameTh',
+      'nicknameEn',
       'callsign',
       'institution',
       'birthYearBE',
@@ -1508,7 +1577,9 @@ export default function RegisterView({
         last_name_en: lastNameEn.trim(),
         institution_abbr_en: institutionAbbrEn.trim(),
         full_name_affiliation: fullNameAffiliation.trim() || `${finalFirstName} ${finalLastName}`.trim(),
-        nickname: nickname.trim(),
+        nickname: buildNicknameString(nicknameTh, nicknameEn) || nickname.trim(),
+        nickname_th: nicknameTh.trim(),
+        nickname_en: nicknameEn.trim(),
         callsign: callsign.trim(),
         unit: unit.trim(),
         affiliation: institution.trim(),
@@ -5108,36 +5179,69 @@ export default function RegisterView({
                 </div>
               </div>
 
-              {/* ฟิลด์ 2 & ฟิลด์ 3: ชื่อเล่น & รหัสนามเรียกขาน */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* ฟิลด์ชื่อเล่น: แยกคนละช่อง ภาษาไทย เเละ อังกฤษ ตามข้อกำหนด */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    <span>ชื่อเล่น ภาษาไทย เเละ อังกฤษ <span className="text-rose-400 font-bold">*</span></span>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>🇹🇭 ชื่อเล่น ภาษาไทย <span className="text-rose-400 font-bold">*</span></span>
+                    <span className="text-[10px] text-slate-400 font-normal">เช่น เจมส์, ต้น, นัท</span>
                   </label>
                   <input
-                    id="field-nickname"
+                    id="field-nicknameTh"
                     type="text"
                     required
-                    value={nickname}
+                    value={nicknameTh}
                     onChange={e => {
-                      setNickname(e.target.value);
-                      if (e.target.value.trim()) clearFieldError('nickname');
+                      setNicknameTh(e.target.value);
+                      if (e.target.value.trim()) clearFieldError('nicknameTh');
                     }}
-                    placeholder="เช่น เจมส์ / James"
+                    placeholder="กรอกชื่อเล่นภาษาไทย เช่น เจมส์"
                     className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-medium transition-all ${
-                      fieldErrors.nickname 
+                      fieldErrors.nicknameTh 
                         ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
                         : 'border-slate-700 focus:ring-rescue-500'
                     }`}
                   />
-                  {fieldErrors.nickname && (
+                  {fieldErrors.nicknameTh && (
                     <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{fieldErrors.nickname}</span>
+                      <span>{fieldErrors.nicknameTh}</span>
                     </p>
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>🇬🇧 ชื่อเล่น ภาษาอังกฤษ (Nickname) <span className="text-rose-400 font-bold">*</span></span>
+                    <span className="text-[10px] text-slate-400 font-normal">เช่น James, Ton, Nat</span>
+                  </label>
+                  <input
+                    id="field-nicknameEn"
+                    type="text"
+                    required
+                    value={nicknameEn}
+                    onChange={e => {
+                      setNicknameEn(e.target.value);
+                      if (e.target.value.trim()) clearFieldError('nicknameEn');
+                    }}
+                    placeholder="กรอกชื่อเล่นภาษาอังกฤษ เช่น James"
+                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-medium transition-all ${
+                      fieldErrors.nicknameEn 
+                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                        : 'border-slate-700 focus:ring-rescue-500'
+                    }`}
+                  />
+                  {fieldErrors.nicknameEn && (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{fieldErrors.nicknameEn}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ฟิลด์รหัสนามเรียกขาน & หน่วย/ชมรม */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                     <span>รหัสนามเรียกขานหน่วยตัวเอง <span className="text-rose-400 font-bold">*</span></span>
@@ -6072,7 +6176,7 @@ export default function RegisterView({
                     {fullNameAffiliation || `${firstName} ${lastName}`}
                   </p>
                   <p className="text-[11px] text-amber-300 font-semibold mt-0.5">
-                    ชื่อเล่น: {nickname || '-'}
+                    ชื่อเล่น: {nicknameTh && nicknameEn ? `${nicknameTh} (${nicknameEn})` : (nicknameTh || nicknameEn || nickname || '-')}
                   </p>
                 </div>
 
