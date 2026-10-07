@@ -54,7 +54,7 @@ export default function UserProfileView({
     async function fetchAccount() {
       setLoading(true);
       try {
-        const accounts = await DataService.getUserAccounts();
+        const accounts = await DataService.getUserAccounts({ userId: userUid || currentUser?.id, email: currentUser?.email });
         const targetId = (userUid || '').trim().toLowerCase();
 
         let found = null;
@@ -295,7 +295,7 @@ export default function UserProfileView({
                 </span>
               ) : userAccount.provider === 'email' ? (
                 <span className="px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-bold">
-                  🔑 Email & Password (เข้ารหัส SHA-256 + Salt)
+                  🔑 Email & Password (credential metadata redacted)
                 </span>
               ) : (
                 <span className="px-2.5 py-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg text-[11px] font-bold">
@@ -398,8 +398,8 @@ export default function UserProfileView({
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-black text-white">การตรวจสอบความปลอดภัยทางไซเบอร์ (Cryptographic Audit)</h3>
-            <p className="text-xs text-emerald-400 font-semibold">เกณฑ์การจัดเก็บรหัสผ่านตามมาตรฐานสากล OWASP</p>
+            <h3 className="text-base font-black text-white">สถานะการปกป้องข้อมูลบัญชี</h3>
+            <p className="text-xs text-emerald-400 font-semibold">ไม่แสดง credential material ในหน้าโปรไฟล์</p>
           </div>
         </div>
 
@@ -418,32 +418,10 @@ export default function UserProfileView({
             </div>
           </div>
 
-          <div>
-            <span className="text-slate-400 block mb-1">อัลกอริทึม (Cryptographic Algorithm):</span>
-            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-lg font-mono font-bold inline-block">
-              {userAccount.password_hash 
-                ? 'SHA-256 + 16-byte Dynamic Hex Salt (Web Crypto API)' 
-                : 'Google Identity Services OAuth 2.0 (Dual-Bypass Authentication)'}
-            </span>
+          <div className="p-3 bg-emerald-950/25 border border-emerald-500/30 rounded-xl">
+            <p className="text-emerald-200 font-bold">Credential metadata ถูกจำกัดการแสดงผล</p>
+            <p className="text-slate-400 mt-1 leading-relaxed">หน้าโปรไฟล์ไม่ render และไม่เปิดให้คัดลอก password hash, salt หรือ OTP ของบัญชี งานย้ายการตรวจรหัสผ่านไป Supabase Auth/server-side KDF ยังต้องทำใน migration ถัดไป</p>
           </div>
-
-          {userAccount.salt && (
-            <div>
-              <span className="text-slate-400 block mb-1">Dynamic Salt (16 Bytes Hex):</span>
-              <div className="font-mono text-[11px] text-amber-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800 break-all select-all">
-                {userAccount.salt}
-              </div>
-            </div>
-          )}
-
-          {userAccount.password_hash && (
-            <div>
-              <span className="text-slate-400 block mb-1">Stored Password Hash (SHA-256 Digest ในฐานข้อมูล):</span>
-              <div className="font-mono text-[11px] text-emerald-400 bg-slate-950 p-2.5 rounded-xl border border-emerald-500/30 break-all select-all">
-                {userAccount.password_hash}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

@@ -774,7 +774,6 @@ export default function AdminDashboardView({
   const [userProviderFilter, setUserProviderFilter] = useState('all'); // all, email, google, both
 
   // Modal states for user account management
-  const [selectedHashUser, setSelectedHashUser] = useState(null); // inspect password hash & salt
   const [editingUserAccount, setEditingUserAccount] = useState(null); // edit user
   const [editUserName, setEditUserName] = useState('');
   const [editUserEmail, setEditUserEmail] = useState('');
@@ -793,7 +792,7 @@ export default function AdminDashboardView({
   const loadUserAccounts = async () => {
     setIsLoadingUsers(true);
     try {
-      const accs = await DataService.getUserAccounts();
+      const accs = await DataService.getUserAccounts({ admin: true });
       const deduped = mergeAndDeduplicateAccounts ? mergeAndDeduplicateAccounts(accs || []) : (accs || []);
       setUserAccounts(deduped);
     } catch (err) {
@@ -857,7 +856,7 @@ export default function AdminDashboardView({
     setIsResettingUserPass(true);
     try {
       await DataService.adminResetUserPassword(resetPassUser.id, adminNewPassword);
-      triggerToast(`รีเซ็ตรหัสผ่านสำหรับ ${resetPassUser.email} สำเร็จ (เข้ารหัส SHA-256 + Salt เรียบร้อย)`);
+      triggerToast(`รีเซ็ตรหัสผ่านสำหรับ ${resetPassUser.email} สำเร็จ — ค่า credential ไม่แสดงใน UI; การย้ายไป server-side KDF ยังเป็นงานค้าง`);
       setResetPassUser(null);
       setAdminNewPassword('');
       await loadUserAccounts();
@@ -897,8 +896,8 @@ export default function AdminDashboardView({
       'อีเมล (Email)',
       'ยืนยันอีเมลแล้ว (Email Verified)',
       'ผู้ให้บริการเข้าสู่ระบบ (Auth Provider)',
-      'เกลือสุ่ม 16-byte (Dynamic Salt Hex)',
-      'รหัสผ่านแฮช (Password Hash SHA-256)',
+      'ข้อมูล credential (ไม่ส่งออก secret)',
+      'สถานะการจัดเก็บ credential (ไม่ส่งออก hash/salt)',
       'บทบาทในระบบ (Role)',
       'วันที่สร้างบัญชี (Created At)',
       'อัปเดตล่าสุด (Updated At)'
@@ -921,8 +920,8 @@ export default function AdminDashboardView({
       u.email || '-',
       getVerificationStatusText(u),
       u.provider === 'both' ? 'Google OAuth + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
-      u.salt || 'N/A (Google OAuth)',
-      u.password_hash || 'N/A (Google OAuth)',
+      'ไม่แสดง/ไม่ส่งออกเพื่อป้องกันข้อมูลลับ',
+      u.provider === 'email' || u.provider === 'both' ? 'มี credential — รายละเอียดไม่แสดง' : 'จัดการโดย Google OAuth',
       u.role || 'user',
       u.created_at ? new Date(u.created_at).toLocaleString('th-TH') : '-',
       u.updated_at ? new Date(u.updated_at).toLocaleString('th-TH') : '-'
@@ -1503,7 +1502,7 @@ export default function AdminDashboardView({
         payment_status: modalPaymentStatus
       });
 
-      const updatedRegs = await DataService.getRegistrations();
+      const updatedRegs = await DataService.getRegistrations({ admin: true });
       const updatedTarget = updatedRegs.find(r => r.user_id === profileModalReg.user_id);
       if (updatedTarget) {
         setProfileModalReg(updatedTarget);
@@ -1533,7 +1532,7 @@ export default function AdminDashboardView({
 
     try {
       await DataService.deleteAdminMessage(profileModalReg.user_id, msgId);
-      const updatedRegs = await DataService.getRegistrations();
+      const updatedRegs = await DataService.getRegistrations({ admin: true });
       const updatedTarget = updatedRegs.find(r => r.user_id === profileModalReg.user_id);
       if (updatedTarget) {
         setProfileModalReg(updatedTarget);
@@ -7712,7 +7711,7 @@ export default function AdminDashboardView({
                 จัดการบัญชีผู้ใช้งานระบบ ({userAccounts.length} บัญชี)
               </h2>
               <p className="text-slate-400 text-xs mt-1">
-                ตรวจสอบรายชื่อผู้ใช้งานทั้งหมด, บทบาทผู้ใช้ (Role-Based Access), วิธีการยืนยันตัวตน, และการตรวจสอบค่าเข้ารหัสรหัสผ่าน One-Way Cryptographic Hash (SHA-256 + Dynamic Salt 16-byte) ในฐานข้อมูล
+                ตรวจสอบรายชื่อผู้ใช้งาน, บทบาท และช่องทางยืนยันตัวตน โดยไม่แสดงหรือส่งออก password hash, salt หรือ OTP
               </p>
             </div>
 
@@ -7732,10 +7731,10 @@ export default function AdminDashboardView({
                 type="button"
                 onClick={handleExportUsersExcel}
                 className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer"
-                title="ส่งออกรายชื่อผู้ใช้และค่าแฮชเป็นไฟล์ Excel (.xlsx)"
+                title="ส่งออกรายชื่อผู้ใช้โดยไม่ส่งออก hash หรือ salt"
               >
                 <FileDown className="w-4 h-4 text-emerald-100" />
-                <span>ส่งออกรายชื่อผู้ใช้เป็น Excel (.xlsx)</span>
+                <span>ส่งออกรายชื่อผู้ใช้แบบไม่ติด secret (.xlsx)</span>
               </button>
             </div>
           </div>
@@ -7753,13 +7752,13 @@ export default function AdminDashboardView({
 
             <div className="p-4 bg-slate-950 border border-emerald-900/40 rounded-2xl">
               <div className="flex items-center justify-between text-emerald-400 mb-2">
-                <span className="text-xs font-bold">เกณฑ์ 1: Password Hashed</span>
+                <span className="text-xs font-bold">Credential status (redacted)</span>
                 <Lock className="w-4 h-4 text-emerald-400" />
               </div>
               <div className="text-2xl font-black text-emerald-300">
-                {userAccounts.filter(u => u.password_hash).length}
+                {userAccounts.filter(u => u.provider === 'email' || u.provider === 'both').length}
               </div>
-              <p className="text-[11px] text-emerald-400/80 mt-1">🔒 SHA-256 + 16-byte Dynamic Salt</p>
+              <p className="text-[11px] text-emerald-400/80 mt-1">🔒 มี credential แต่ไม่แสดงค่า secret</p>
             </div>
 
             <div className="p-4 bg-slate-950 border border-indigo-900/40 rounded-2xl">
@@ -7806,7 +7805,7 @@ export default function AdminDashboardView({
                 className="px-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-purple-500"
               >
                 <option value="all">ทั้งหมด (All Providers)</option>
-                <option value="email">Email & Password (มี Password Hash)</option>
+                <option value="email">Email & Password (redacted)</option>
                 <option value="google">Google OAuth</option>
                 <option value="both">Both (Google + Password)</option>
               </select>
@@ -7822,7 +7821,7 @@ export default function AdminDashboardView({
                   <th className="py-3 px-4">ผู้ใช้งาน (User Info)</th>
                   <th className="py-3 px-4">อีเมล & สถานะ (Email)</th>
                   <th className="py-3 px-4">ช่องทางยืนยันตัวตน</th>
-                  <th className="py-3 px-4">Cryptographic Hash (SHA-256 + Salt)</th>
+                  <th className="py-3 px-4">Credential status (ไม่แสดง hash/salt)</th>
                   <th className="py-3 px-4">บทบาท (Role)</th>
                   <th className="py-3 px-4">วันที่สมัคร</th>
                   <th className="py-3 px-4 text-center">จัดการ</th>
@@ -7846,7 +7845,7 @@ export default function AdminDashboardView({
                     return true;
                   })
                   .map((acc, index) => {
-                    const hasPassword = Boolean(acc.password_hash);
+                    const hasPassword = acc.provider === 'email' || acc.provider === 'both';
                     return (
                       <tr key={acc.id || acc.email || index} className="hover:bg-slate-800/40 transition-colors">
                         <td className="py-3.5 px-4 font-mono text-slate-500 font-bold">
@@ -7946,23 +7945,13 @@ export default function AdminDashboardView({
 
                         <td className="py-3.5 px-4">
                           {hasPassword ? (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedHashUser(acc)}
-                              className="group text-left p-2 bg-slate-950 border border-emerald-500/30 hover:border-emerald-500/70 rounded-xl transition-all cursor-pointer block max-w-[220px]"
-                              title="คลิกเพื่อตรวจสอบค่า Salt และ Password Hash ตัวเต็ม (เกณฑ์ 1: Password Hashing)"
-                            >
-                              <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-[10px] mb-1">
+                            <div className="p-2 bg-slate-950 border border-emerald-500/30 rounded-xl text-[10px] text-emerald-300 max-w-[220px]">
+                              <div className="flex items-center gap-1.5 font-bold mb-1">
                                 <Lock className="w-3 h-3" />
-                                <span>SHA-256 + Salt (16-byte)</span>
+                                <span>มี credential · ค่าไม่แสดง</span>
                               </div>
-                              <div className="font-mono text-[10px] text-slate-400 truncate group-hover:text-emerald-300">
-                                Hash: {acc.password_hash.slice(0, 16)}...
-                              </div>
-                              <div className="font-mono text-[9px] text-slate-500 truncate mt-0.5">
-                                Salt: {acc.salt ? `${acc.salt.slice(0, 10)}...` : '-'}
-                              </div>
-                            </button>
+                              <div className="text-[9px] text-slate-500">Hash/salt ไม่ถูก render หรือ export</div>
+                            </div>
                           ) : (
                             <div className="p-2 bg-slate-950/50 border border-slate-800 rounded-xl text-[10px] text-slate-500 max-w-[200px]">
                               <span>Google OAuth Token (Managed by Google)</span>
@@ -8020,7 +8009,7 @@ export default function AdminDashboardView({
                                 setAdminNewPassword('');
                               }}
                               className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors cursor-pointer"
-                              title="รีเซ็ตรหัสผ่าน (Reset Password with SHA-256 Hashing)"
+                              title="รีเซ็ตรหัสผ่าน (ค่า credential จะไม่แสดง)"
                             >
                               <Key className="w-3.5 h-3.5" />
                             </button>
@@ -8043,81 +8032,6 @@ export default function AdminDashboardView({
           </div>
         </div>
       )}
-
-      {/* PASSWORD HASH INSPECTOR MODAL (FOR PROFESSOR INSPECTION) */}
-      {selectedHashUser && (
-        <ModalPortal isOpen={Boolean(selectedHashUser)} onClose={() => setSelectedHashUser(null)}>
-          <div 
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={() => setSelectedHashUser(null)}
-          >
-            <div 
-              className="bg-slate-900 border-2 border-emerald-500/50 max-w-lg w-full rounded-3xl p-6 sm:p-7 shadow-2xl relative space-y-4"
-              onClick={e => e.stopPropagation()}
-            >
-            <button
-              type="button"
-              onClick={() => setSelectedHashUser(null)}
-              className="absolute top-4 right-4 p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
-                <Lock className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-white">
-                  ตรวจสอบค่า Password Hashing ในฐานข้อมูล
-                </h3>
-                <p className="text-xs text-emerald-400 font-semibold">
-                  (เกณฑ์ที่ 1: การเก็บรหัสผ่านด้วย Password Hashing ตามมาตรฐานสากล)
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <span className="text-slate-400 block mb-1">บัญชีผู้ใช้:</span>
-                <span className="font-mono text-white font-bold bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 block">
-                  {selectedHashUser.email} (UID: {selectedHashUser.id})
-                </span>
-              </div>
-
-              <div>
-                <span className="text-slate-400 block mb-1">อัลกอริทึม (Cryptographic Algorithm):</span>
-                <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-lg font-mono font-bold inline-block">
-                  SHA-256 + 16-byte Dynamic Hex Salt (Web Crypto API)
-                </span>
-              </div>
-
-              <div>
-                <span className="text-slate-400 block mb-1">Dynamic Salt (สุ่มค่าเฉพาะแต่ละบัญชี 16 Bytes Hex):</span>
-                <div className="font-mono text-[11px] text-amber-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800 break-all select-all">
-                  {selectedHashUser.salt || 'N/A'}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-slate-400 block mb-1">Stored Password Hash (ผลลัพธ์ Digest ที่จัดเก็บใน Database):</span>
-                <div className="font-mono text-[11px] text-emerald-400 bg-slate-950 p-2.5 rounded-xl border border-emerald-500/30 break-all select-all">
-                  {selectedHashUser.password_hash || 'N/A'}
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setSelectedHashUser(null)}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-            >
-              ปิดหน้าต่าง
-            </button>
-          </div>
-        </div>
-      </ModalPortal>
-    )}
 
       {/* EDIT USER ACCOUNT MODAL */}
       {editingUserAccount && (
@@ -8286,7 +8200,7 @@ export default function AdminDashboardView({
               </div>
 
               <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 leading-relaxed">
-                <span>🔒 รหัสผ่านใหม่จะถูกนำไปสุ่ม 16-byte Salt และคำนวณ SHA-256 Digest ใหม่ทันทีเมื่อบันทึก</span>
+                <span>🔒 ระบบไม่แสดงหรือ export hash/salt; ควรย้าย password verification ไป Supabase Auth/server-side KDF ก่อนใช้งานจริง</span>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

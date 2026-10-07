@@ -345,34 +345,85 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
   return result;
 }
 
+// Presentation/profile/admin list views must never render credential material.
+// Authentication code opts into includeSecrets explicitly until this app is
+// migrated fully to Supabase Auth/server-side password verification.
+function projectAccountForClient(account) {
+  if (!account || typeof account !== 'object') return account;
+  const {
+    password_hash: _passwordHash,
+    salt: _salt,
+    verification_code: _verificationCode,
+    ...safeAccount
+  } = account;
+  return safeAccount;
+}
+
+function readCachedRegistrations() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /**
  * Data Service API - bridges Supabase and LocalStorage smoothly
  */
 export const DataService = {
   // REGISTRATIONS
-  async getRegistrations() {
-    if (isSupabaseConfigured) {
+  async getRegistrations({ admin = false, userId = null, email = null } = {}) {
+    const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+    const hasIdentity = Boolean(userId || cleanEmail);
+
+    // Do not issue an unscoped public query. The old code loaded every
+    // registration before the caller knew whether the visitor was an admin.
+    if (isSupabaseConfigured && (admin || hasIdentity)) {
       try {
-        const { data, error } = await supabase
+        const buildScopedQuery = (field, value) => supabase
           .from('registrations')
           .select('*')
+          .eq(field, value)
           .order('created_at', { ascending: false });
+        const response = admin
+          ? await supabase.from('registrations').select('*').order('created_at', { ascending: false })
+          : await buildScopedQuery(userId ? 'user_id' : 'user_email', userId || cleanEmail);
+        let { data, error } = response;
+
+        // Some legacy rows are keyed by email only. Retry with the scoped
+        // email query, never with an unfiltered SELECT *.
+        if (!admin && !error && (!data || data.length === 0) && userId && cleanEmail) {
+          const fallback = await buildScopedQuery('user_email', cleanEmail);
+          data = fallback.data;
+          error = fallback.error;
+        }
         if (!error && data) {
           const unpacked = data.map(unpackRegistration);
-          localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(unpacked));
+          if (admin) {
+            localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(unpacked));
+          }
           return unpacked;
         }
       } catch (e) {
-        console.warn('Supabase fetch failed, falling back to local storage', e);
+        console.warn('Supabase scoped registration fetch failed, falling back to local storage', e);
       }
     }
-    const raw = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
-    return raw ? JSON.parse(raw) : [];
+
+    const cached = readCachedRegistrations();
+    if (admin) return cached;
+    if (!hasIdentity) return [];
+    return cached.filter((registration) => {
+      const sameId = userId && (registration.user_id === userId || registration.id === userId);
+      const sameEmail = cleanEmail && registration.user_email && registration.user_email.trim().toLowerCase() === cleanEmail;
+      return Boolean(sameId || sameEmail);
+    });
   },
 
   async getRegistrationByUserId(userId, email = null) {
     if (!userId && !email) return null;
-    const regs = await this.getRegistrations();
+    const regs = await this.getRegistrations({ userId, email });
     const cleanEmail = email ? email.trim().toLowerCase() : null;
     return regs.find(r => 
       (userId && (r.user_id === userId || r.id === userId)) ||
@@ -396,7 +447,7 @@ export const DataService = {
         console.warn('Supabase upsert failed, using localStorage fallback', e);
       }
     }
-    const regs = await this.getRegistrations();
+    const regs = readCachedRegistrations();
     const existingIndex = regs.findIndex(r => r.user_id === regData.user_id);
     let updated;
     const finalData = { ...(savedRow || regData), ...regData };
@@ -501,7 +552,7 @@ export const DataService = {
 
   // Send Admin Message to User
   async sendAdminMessage(userId, messageText, extraData = {}) {
-    const regs = await this.getRegistrations();
+    const regs = await this.getRegistrations({ admin: true });
     const target = regs.find(r => r.user_id === userId || r.id === userId);
     const existingMessages = Array.isArray(target?.admin_messages) ? target.admin_messages : [];
     
@@ -531,7 +582,7 @@ export const DataService = {
 
   // Mark admin message(s) as read
   async markAdminMessageRead(userId, messageId = 'all') {
-    const regs = await this.getRegistrations();
+    const regs = await this.getRegistrations({ userId });
     const target = regs.find(r => r.user_id === userId || r.id === userId);
     if (!target) return false;
     const existingMessages = Array.isArray(target.admin_messages) ? target.admin_messages : [];
@@ -546,7 +597,7 @@ export const DataService = {
 
   // Toggle admin message read status
   async toggleAdminMessageRead(userId, messageId) {
-    const regs = await this.getRegistrations();
+    const regs = await this.getRegistrations({ userId });
     const target = regs.find(r => r.user_id === userId || r.id === userId);
     if (!target) return false;
     const existingMessages = Array.isArray(target.admin_messages) ? target.admin_messages : [];
@@ -561,7 +612,7 @@ export const DataService = {
 
   // Delete an admin message
   async deleteAdminMessage(userId, messageId) {
-    const regs = await this.getRegistrations();
+    const regs = await this.getRegistrations({ admin: true });
     const target = regs.find(r => r.user_id === userId || r.id === userId);
     if (!target) return false;
     const existingMessages = Array.isArray(target.admin_messages) ? target.admin_messages : [];
@@ -576,7 +627,7 @@ export const DataService = {
 
   // User submits a document
   async submitUserDoc(userId, docId, fileUrl, fileName) {
-    const regs = await this.getRegistrations();
+    const regs = await this.getRegistrations({ userId });
     const target = regs.find(r => r.user_id === userId);
     const docs = Array.isArray(target?.requested_docs) ? [...target.requested_docs] : [];
     
@@ -611,7 +662,7 @@ export const DataService = {
         console.warn('Supabase delete error', e);
       }
     }
-    const regs = await this.getRegistrations();
+    const regs = readCachedRegistrations();
     const filtered = regs.filter(r => r.user_id !== userId);
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(filtered));
     return true;
@@ -1141,9 +1192,11 @@ export const DataService = {
   },
 
   // USER ACCOUNTS & SECURE AUTHENTICATION (Password Hashing, Verification & Admin Management)
-  async getUserAccounts() {
+  async getUserAccounts({ includeSecrets = false, admin = false, userId = null, email = null } = {}) {
     let accounts = [];
-    if (isSupabaseConfigured && supabase) {
+    const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+    const shouldReadRemote = isSupabaseConfigured && supabase && (includeSecrets || admin || userId || cleanEmail);
+    if (shouldReadRemote) {
       try {
         const { data, error } = await supabase
           .from('project_settings')
@@ -1187,11 +1240,19 @@ export const DataService = {
       localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
     }
 
-    return deduped;
+    const scoped = (userId || cleanEmail)
+      ? deduped.filter((account) => {
+          const sameId = userId && account.id === userId;
+          const sameEmail = cleanEmail && account.email && account.email.trim().toLowerCase() === cleanEmail;
+          return Boolean(sameId || sameEmail);
+        })
+      : deduped;
+
+    return includeSecrets ? scoped : scoped.map(projectAccountForClient);
   },
 
   async syncUserAccount(userObj) {
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const cleanEmail = (userObj.email || '').trim().toLowerCase();
 
     const idx = accounts.findIndex(a => (a.email || '').trim().toLowerCase() === cleanEmail);
@@ -1262,7 +1323,7 @@ export const DataService = {
       throw new Error(pwdCheck.message);
     }
 
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const existing = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     const salt = generateSalt(16);
@@ -1341,7 +1402,7 @@ export const DataService = {
       throw new Error('รูปแบบอีเมลไม่ถูกต้อง');
     }
 
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     if (!account) {
@@ -1391,7 +1452,7 @@ export const DataService = {
     const cleanName = name.trim();
     const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const existing = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     let userObj;
@@ -1440,7 +1501,7 @@ export const DataService = {
   // 4. Verify Email OTP Code
   async verifyEmailCode(email, code) {
     const cleanEmail = email.trim().toLowerCase();
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
 
@@ -1467,7 +1528,7 @@ export const DataService = {
   // 5. Resend Verification Code
   async resendVerificationCode(email) {
     const cleanEmail = email.trim().toLowerCase();
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
 
@@ -1480,7 +1541,7 @@ export const DataService = {
   // 6. Reset Password via Verification Code
   async resetPassword({ email, code, newPassword }) {
     const cleanEmail = email.trim().toLowerCase();
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้ที่ระบุ กรุณาสมัครสมาชิกใหม่');
 
@@ -1518,7 +1579,7 @@ export const DataService = {
 
   // 7. Change Password (For authenticated user)
   async changePassword(userId, oldPassword, newPassword) {
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => a.id === userId);
     if (!account) throw new Error('ไม่พบข้อมูลบัญชี');
 
@@ -1540,7 +1601,7 @@ export const DataService = {
 
   // 8. Update User Profile
   async updateUserProfile(userId, { name, avatar }) {
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => a.id === userId);
     if (!account) throw new Error('ไม่พบข้อมูลบัญชี');
 
@@ -1569,7 +1630,7 @@ export const DataService = {
 
   // 10. Admin: Update User Account
   async adminUpdateUser(userId, fields) {
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const idx = accounts.findIndex(a => a.id === userId);
     if (idx === -1) throw new Error('ไม่พบบัญชีผู้ใช้');
 
@@ -1580,7 +1641,7 @@ export const DataService = {
 
   // 11. Admin: Reset User Password
   async adminResetUserPassword(userId, newPassword) {
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const account = accounts.find(a => a.id === userId);
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
 
@@ -1594,7 +1655,7 @@ export const DataService = {
 
   // 12. Admin: Delete User Account
   async adminDeleteUser(userId) {
-    const accounts = await this.getUserAccounts();
+    const accounts = await this.getUserAccounts({ includeSecrets: true });
     const accountToDelete = accounts.find(a => a.id === userId);
     const deleteEmail = (accountToDelete?.email || '').trim().toLowerCase();
     const filtered = accounts.filter(a => a.id !== userId && (!deleteEmail || (a.email || '').trim().toLowerCase() !== deleteEmail));

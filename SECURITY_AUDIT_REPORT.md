@@ -1,6 +1,6 @@
 # JRE 2027 — Security Audit Report
 
-วันที่ตรวจ: 7 ตุลาคม 2569 (2026)  
+วันที่ตรวจ: 7–8 ตุลาคม 2569 (2026)
 เป้าหมาย: [https://jre-2027.vercel.app/](https://jre-2027.vercel.app/)  
 ขอบเขตซอร์ส: `C:\Users\Lenovo\Desktop\JRE2027`
 
@@ -19,9 +19,9 @@
 
 ข้อค้นพบที่เร่งด่วนที่สุดคือ public `user_accounts` payload ที่มี `password_hash`/`salt`, RLS policies แบบ `USING (true)`, magic OTP ใน production baseline (`123456`/`999999`) และการโหลด `registrations` ทั้งตารางจาก client ก่อนแยกสิทธิ์ Admin
 
-หลังเก็บหลักฐาน มีการทำแพตช์ใน working tree สำหรับ magic OTP, admin-auth fallback และ CORS แล้ว แต่ยังไม่ได้ deploy ไป Vercel จึงคงสถานะ findings เป็น “เปิดอยู่” จนกว่าจะ deploy และทดสอบ production ซ้ำ
+หลังเก็บหลักฐาน มีการทำแพตช์ใน working tree สำหรับ magic OTP, admin-auth fallback, CORS, scoped registration query และการ redacted credential ใน UI/export แล้ว รวมทั้งเพิ่ม `supabase_security_hardening_v2.sql` สำหรับ review/staging แต่ยังไม่ได้รัน migration บนฐานข้อมูลและต้อง deploy/test production ซ้ำ จึงคงสถานะ findings เป็น “เปิดอยู่”
 
-ดังนั้นไม่ควรอ้างว่าแก้ครบทุกประเด็นหรือไม่มีความเสี่ยงเหลือ จนกว่าจะรัน migration จริงบน Supabase, แก้ auth/data-flow และทำ regression test ใน staging ครบ
+ดังนั้นไม่ควรอ้างว่าแก้ครบทุกประเด็นหรือไม่มีความเสี่ยงเหลือ: SQL migration ยังไม่ถูกรัน, password verification เดิมยังต้องย้ายไป Supabase Auth/server-side KDF และ dependency audit ยังมีรายการเปิดอยู่
 
 ## URL สำหรับนำเสนอ
 
@@ -39,6 +39,8 @@
 
 ข้อความใน diagram อธิบาย workflow ที่ต้องการนำเสนอ แต่ไม่ได้ใช้เป็นหลักฐานว่าทุกเครื่องมือถูกติดตั้งหรือทำงานครบในรอบ audit นี้
 
+ภาพ Burp ที่ผู้ใช้แนบมาเป็น snapshot ก่อนส่ง traffic ซึ่งแสดง passive crawl ว่า `0 items`; จึงเก็บเป็น `public/images/security/burp-passive-crawl-before.png` พร้อมคำอธิบายว่าเป็น “ก่อนตรวจ” ไม่ใช่ผลสแกนที่ยืนยันช่องโหว่
+
 ## วิธีตรวจที่ทำจริง
 
 1. อ่านโครงสร้างโปรเจกต์และ source ด้วย `rg` โดยไม่เปิดเผยค่าจาก `.env`
@@ -48,12 +50,13 @@
 5. ตรวจ response headers: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy และ Permissions-Policy พบว่าตอบจริงบนหน้าเว็บ
 6. อ่าน Supabase REST metadata แบบ read-only ด้วย anon key จาก environment ในเครื่อง โดยไม่พิมพ์ key, email, ชื่อ หรือค่า hash ลงรายงาน
 7. สแกน production bundle แบบ pattern-only พบ string credential ใน code example ของหน้า presentation
+8. ใช้ Burp Suite Community listener ที่ `127.0.0.1:8080` รับ safe GET/OPTIONS ผ่าน proxy รวม 11 requests ครอบคลุมหน้าเว็บ, static assets และ API method/CORS checks โดยไม่ส่ง credential หรือ active-scan payload
 
 ## หลักฐาน live ที่บันทึกแบบไม่เปิดเผยข้อมูล
 
 - `registrations`: ณ เวลาตรวจพบ 0 แถว จึงยังไม่พบ PII ของผู้สมัครจาก endpoint ในช่วงเวลานั้น แต่ source/query และ policy ยังมีความเสี่ยงเมื่อมีข้อมูลจริง
 - `project_settings`: พบ 9 records ที่อ่านได้ด้วย anon key
-- `project_settings` key `user_accounts`: พบ 1 record ภายในมี 4 account objects และ field names ได้แก่ `password_hash` และ `salt` (ค่าจริงถูก redacted)
+- `project_settings` key `user_accounts`: พบ 1 record ภายในมี 4 account objects และ field names ได้แก่ `password_hash` และ `salt` (ค่าจริงถูก redacted); working-tree patch ไม่ส่ง field เหล่านี้ไปยัง profile/admin list/export แต่ public REST exposure จะปิดได้เมื่อรัน RLS migration และย้าย auth แล้วเท่านั้น
 - `announcements`: พบ 7 records ที่อ่านได้ด้วย anon key
 - baseline ก่อนแพตช์ `GET /api/admin-auth`: 405 และ `POST {}`: 400; หลัง deploy แพตช์ใหม่ `GET`/`POST {}` ตอบ 503 เพราะยังไม่ยืนยันว่า `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET` ถูกตั้งครบใน Vercel — เป็น fail-closed แต่ Admin login ยังใช้ไม่ได้จนกว่าจะตั้งค่า
 - preflight จาก origin ภายนอกไม่ถูกสะท้อนกลับเป็น origin ของผู้โจมตี
@@ -68,7 +71,7 @@
 
 ผลกระทบ: offline password guessing และการเปิดเผยข้อมูลบัญชี
 
-วิธีแก้: ย้ายไป Supabase Auth, แยก public/private settings, ลบ public policy ของ account data, rotate credentials และตรวจว่า anon อ่าน key นี้ไม่ได้อีก
+วิธีแก้: working tree redacts hash/salt/OTP จาก client views และ export แล้ว; ขั้นตอนปิดจริงคือย้ายไป Supabase Auth/server KDF, แยก public/private settings, รัน `supabase_security_hardening_v2.sql`, rotate credentials และตรวจว่า anon อ่าน key นี้ไม่ได้อีก
 
 ### F-02 — Critical — RLS policy แบบ public
 
@@ -78,9 +81,9 @@
 
 ### F-03 — High — โหลด registrations ทั้งตารางจาก client
 
-หลักฐาน: `src/App.jsx` เรียก `DataService.getRegistrations()` ตอนเริ่มระบบ และ `src/supabase.js` ใช้ `.select('*')`
+หลักฐาน baseline: `src/App.jsx` เรียก `DataService.getRegistrations()` ตอนเริ่มระบบ และ `src/supabase.js` ใช้ unscoped `.select('*')`; working tree เปลี่ยนเป็น `admin` หรือ `user_id/email` scoped query แล้ว แต่ยังต้องยืนยัน RLS จริง
 
-วิธีแก้: query owner แยกจาก admin query, โหลดทั้งหมดหลัง server-side admin authorization เท่านั้น และล้าง state ตอน logout
+วิธีแก้: query owner แยกจาก admin query, โหลดทั้งหมดหลัง server-side admin authorization เท่านั้น, ล้าง state ตอน logout และรัน regression test หลัง migration
 
 ### F-04 — Critical — magic OTP
 
@@ -132,12 +135,13 @@
 - CORS preflight ไม่สะท้อน origin ภายนอกกลับไปเป็น allow-origin
 - File endpoint ที่ไม่มี id ตอบ 400
 - `security.txt` และ `robots.txt` ให้บริการจริง
+- Burp listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests; ไม่มี active scan/credential test
 
 ## สถานะเครื่องมือและการติดตั้ง
 
 | เครื่องมือ | สถานะ | หมายเหตุ |
 |---|---|---|
-| Burp Suite Community | ติดตั้งแล้ว | PortSwigger package 2026.3.3; ยังไม่ได้ตั้ง proxy capture กับ browser ในรอบนี้ |
+| Burp Suite Community | ติดตั้งแล้วและใช้ผ่าน proxy | PortSwigger package 2026.3.3; listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests; ยังไม่ได้ทำ active scan หรือ credential test |
 | Claude Desktop | มีอยู่แล้ว | เพิ่ม `jre2027-filesystem` MCP server แบบจำกัด path โปรเจกต์ใน `%APPDATA%\\Claude\\claude_desktop_config.json`; restart Claude เพื่อโหลด config |
 | MCP | พร้อมใช้งาน | รอบ audit นี้ใช้ MCP tools/local file inspection; ไม่ส่ง `.env` ให้โมเดลโดยอัตโนมัติ |
 | Kali Linux | ยังไม่พร้อม | WSL ยังไม่ติดตั้ง; Windows แจ้งว่าต้องใช้ Administrator (`0x80073d28`) |
@@ -151,6 +155,18 @@
 4. ตั้ง Burp proxy ให้ชี้เฉพาะ `127.0.0.1`/lab และติดตั้ง CA certificate เฉพาะ profile ทดสอบ
 5. ทดสอบ payload กับ DVWA ก่อน แล้วค่อยทำ non-destructive verification กับ staging JRE 2027
 6. เก็บ screenshot ของ request/response โดย redaction token, cookie, email, phone และ PII ก่อนแนบรายงาน
+
+## ขั้นตอนแก้ไขฐานข้อมูลที่เพิ่มในรอบนี้
+
+ไฟล์ `supabase_security_hardening_v2.sql` เป็น migration แบบ review-first: ลบ policy public จากชื่อที่พบใน schema/migrations, จำกัด `registrations`/`user_accounts` เป็น owner/admin และให้ `project_settings` อ่านได้เฉพาะ public-key allow-list โดยไม่ลบข้อมูลแถวใด ๆ
+
+1. สำรองฐานข้อมูลและใช้ staging project ก่อน
+2. ย้าย password login ไป Supabase Auth หรือ server-side KDF และเตรียม admin JWT claim ให้เสร็จ
+3. รันไฟล์ migration ใน Supabase SQL Editor ด้วย database owner
+4. ตรวจ `pg_policies` และทดสอบ anon/authenticated/admin แยกกัน
+5. ตรวจว่า anon อ่าน `user_accounts`, `merchandise_orders`, `file_*` และ `registrations` ไม่ได้ จากนั้นจึงพิจารณา production
+
+ยังไม่ได้รันไฟล์นี้กับ production อัตโนมัติ เพราะเป็นการเปลี่ยนสิทธิ์ฐานข้อมูลและอาจทำให้ auth flow แบบเดิมหยุดทำงานถ้ายังไม่ย้ายระบบ
 
 ## คำสั่งตรวจซ้ำที่ปลอดภัย
 

@@ -183,7 +183,12 @@ export default function App() {
               localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
               setUser(userObj);
               const found = matchRegistration(userObj, regs);
-              if (found) setMyRegistration(found);
+              if (found) {
+                setMyRegistration(found);
+              } else {
+                const ownRegistration = await DataService.getRegistrationByUserId(userObj.id, userObj.email);
+                if (ownRegistration) setMyRegistration(ownRegistration);
+              }
             }
           } catch (oauthErr) {
             console.warn('OAuth redirect hash parse error:', oauthErr);
@@ -200,7 +205,12 @@ export default function App() {
             const parsed = JSON.parse(storedUser);
             setUser(parsed);
             const found = matchRegistration(parsed, regs);
-            if (found) setMyRegistration(found);
+            if (found) {
+              setMyRegistration(found);
+            } else {
+              const ownRegistration = await DataService.getRegistrationByUserId(parsed.id, parsed.email);
+              if (ownRegistration) setMyRegistration(ownRegistration);
+            }
           } catch (e) {
             localStorage.removeItem('jre2027_auth_user');
           }
@@ -247,7 +257,12 @@ export default function App() {
             };
             setUser(u);
             const found = matchRegistration(u, regs);
-            if (found) setMyRegistration(found);
+            if (found) {
+              setMyRegistration(found);
+            } else {
+              const ownRegistration = await DataService.getRegistrationByUserId(u.id, u.email);
+              if (ownRegistration) setMyRegistration(ownRegistration);
+            }
           }
 
           supabase.auth.onAuthStateChange((_event, session) => {
@@ -261,6 +276,9 @@ export default function App() {
               };
               setUser(u);
               localStorage.setItem('jre2027_auth_user', JSON.stringify(u));
+              DataService.getRegistrationByUserId(u.id, u.email).then((ownRegistration) => {
+                if (ownRegistration) setMyRegistration(ownRegistration);
+              });
             } else if (!storedUser) {
               setUser(null);
             }
@@ -281,22 +299,29 @@ export default function App() {
     if (user && registrations.length > 0) {
       const found = matchRegistration(user, registrations);
       setMyRegistration(found || null);
-    } else {
+    } else if (!user) {
       setMyRegistration(null);
     }
   }, [user, registrations]);
 
   // Auth Handlers
-  const handleGoogleLoginSuccess = (userObj) => {
+  const handleGoogleLoginSuccess = async (userObj) => {
     setUser(userObj);
     // Security notice: Google login authenticates participant identity only.
     // It strictly does NOT grant access to the Admin Dashboard without dedicated admin credentials.
     const found = matchRegistration(userObj, registrations);
-    if (found) setMyRegistration(found);
+    if (found) {
+      setMyRegistration(found);
+    } else {
+      const ownRegistration = await DataService.getRegistrationByUserId(userObj.id, userObj.email);
+      if (ownRegistration) setMyRegistration(ownRegistration);
+    }
   };
 
-  const handleAdminLoginSuccess = () => {
+  const handleAdminLoginSuccess = async () => {
     setIsAdmin(true);
+    const adminRegistrations = await DataService.getRegistrations({ admin: true });
+    setRegistrations(adminRegistrations);
     setCurrentTab('admin', currentSubRoute || 'applicants');
   };
 
@@ -331,7 +356,9 @@ export default function App() {
       payload.user_email = user.email;
     }
     const saved = await DataService.saveRegistration(payload);
-    const updated = await DataService.getRegistrations();
+    const updated = isAdmin
+      ? await DataService.getRegistrations({ admin: true })
+      : await DataService.getRegistrations({ userId: payload.user_id, email: payload.user_email });
     setRegistrations(updated);
     setMyRegistration(saved);
     return saved;
@@ -400,7 +427,9 @@ export default function App() {
       }
     }
     await DataService.deleteRegistration(userId);
-    const updated = await DataService.getRegistrations();
+    const updated = isAdmin
+      ? await DataService.getRegistrations({ admin: true })
+      : await DataService.getRegistrations({ userId: user?.id, email: user?.email });
     setRegistrations(updated);
     if (user && (user.id === userId || myRegistration?.user_id === userId)) {
       setMyRegistration(null);
