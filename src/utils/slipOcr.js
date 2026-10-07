@@ -75,8 +75,8 @@ export function parseSlipQrData(qrRaw) {
   };
 
   // Case 1: Thai Bank SlipVerify (ITMX Mini QR)
-  // Format standard: starts with 0038, 0046, 0049, 0051, 0054, 0055
-  if (/^(?:0038|0046|0049|0051|0054|0055)/.test(raw)) {
+  // Format standard: starts with 0038, 0041, 0045, 0046, 0049, 0051, 0054, 0055
+  if (/^(?:0038|0041|0045|0046|0049|0051|0054|0055)/.test(raw)) {
     info.type = 'slip_verify';
     info.typeName = 'สลิปมาตรฐาน Thai QR Payment (SlipVerify Mini QR)';
 
@@ -311,15 +311,19 @@ function extractTime(str) {
  */
 function extractDate(str) {
   if (!str) return null;
-  // 1. Thai date: e.g. 23 มี.ค. 2569 or 07 ต.ค. 2569
-  const mThai = str.match(/([0-3]?\d\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(?:25)?\d{2})/);
-  if (mThai) return mThai[1].trim();
+  // 1. Thai date: e.g. 23 มี.ค. 2569 or 23 มี.ค. 69 or common OCR patterns
+  const mThai = str.match(/([0-3]?\d\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|ii\.[a-z]\.|ila\.|[0-9]\.A\.)\s*(?:25)?\d{2})/i);
+  if (mThai) {
+    let d = mThai[1].trim();
+    d = d.replace(/ii\.p\./i, 'มี.ค.').replace(/ila\./i, 'มี.ค.').replace(/[0-9]\.A\./i, 'มี.ค.').replace(/ii\.n\./i, 'มี.ค.');
+    return d;
+  }
 
   // 2. English date: e.g. 07 Oct 2026 or 7 October 2026
   const mEng = str.match(/([0-3]?\d\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*(?:20)?\d{2})/i);
   if (mEng) return mEng[1].trim();
 
-  // 3. Numeric date: e.g. 07/10/2026 or 07-10-2569
+  // 3. Numeric date: e.g. 23/03/2569 or 07/10/2026
   const mNum = str.match(/\b([0-3]?\d[\/\-][01]?\d[\/\-](?:25\d{2}|20\d{2}|\d{2}))\b/);
   if (mNum) return mNum[1].trim();
 
@@ -349,16 +353,17 @@ export function parseSlipText(text, expectedAmount = null) {
   // 1. Detect Bank
   let bankDetected = null;
   if (/krungthai|กรุงไทย|ktb|next/i.test(cleaned)) bankDetected = 'ธนาคารกรุงไทย (Krungthai NEXT)';
-  else if (/kbank|กสิกร|k plus|kasikorn/i.test(cleaned)) bankDetected = 'ธนาคารกสิกรไทย (K PLUS)';
+  else if (/kbank|กสิกร|k plus|kasikorn|i<\+|a\.nans/i.test(cleaned)) bankDetected = 'ธนาคารกสิกรไทย (K PLUS)';
   else if (/scb|ไทยพาณิชย์|easy/i.test(cleaned)) bankDetected = 'ธนาคารไทยพาณิชย์ (SCB EASY)';
   else if (/bangkok\s*bank|กรุงเทพ|bbl|bualuang/i.test(cleaned)) bankDetected = 'ธนาคารกรุงเทพ (BBL)';
   else if (/ttb|ทหารไทยธนชาต|thanachart/i.test(cleaned)) bankDetected = 'ธนาคารทหารไทยธนชาต (ttb)';
-  else if (/gsb|ออมสิน|mymo/i.test(cleaned)) bankDetected = 'ธนาคารออมสิน (MyMo)';
+  else if (/gsb|ออมสิน|mymo/i.test(cleaned)) bankDetected = 'ธนาคารออมสิน (MyMo by GSB)';
   else if (/bay|krungsri|กรุงศรี/i.test(cleaned)) bankDetected = 'ธนาคารกรุงศรีอยุธยา (KMA)';
-  else if (/promptpay|พร้อมเพย์/i.test(cleaned)) bankDetected = 'พร้อมเพย์ (PromptPay)';
+  else if (/truemoney|true\s*money|wallet|ทรูมันนี่|วอลเล็ท|ooal/i.test(cleaned)) bankDetected = 'ทรูมันนี่ วอลเล็ท (TrueMoney Wallet)';
+  else if (/promptpay|พร้อมเพย์|wdouwe/i.test(cleaned)) bankDetected = 'พร้อมเพย์ (PromptPay)';
 
   // General transfer indicators in Thai bank slips (including English OCR transcriptions like JuduLdU, a1sssu)
-  const hasTransferKeyword = /โอนเงิน|โอนสำเร็จ|สำเร็จ|รายการสำเร็จ|ผู้รับเงิน|ผู้โอน|ยอดโอน|จำนวนเงิน|ยอดเงิน|รหัสอ้างอิง|เลขที่รายการ|transfer|transferred|successful|success|payment|paid|bscan|slip|juduldu|judul|juduan|tuau|a1sssu|ska3103/i.test(cleaned);
+  const hasTransferKeyword = /โอนเงิน|โอนสำเร็จ|สำเร็จ|รายการสำเร็จ|ผู้รับเงิน|ผู้โอน|ยอดโอน|จำนวนเงิน|ยอดเงิน|ยอดเงินรวม|รหัสอ้างอิง|เลขที่รายการ|เลขที่อ้างอิง|transfer|transferred|successful|success|payment|paid|bscan|slip|juduldu|judul|juduan|tuau|fuudu|goqaldusou|j7uduru|a1sssu|ska3103|truemoney|wallet|mymo|toutsu/i.test(cleaned);
 
   const isBankSlip = Boolean(bankDetected || hasTransferKeyword);
 
@@ -380,11 +385,11 @@ export function parseSlipText(text, expectedAmount = null) {
     }
 
     // B. Explicit amount keywords:
-    // "จำนวนเงิน 10.00 บาท", "JuduLdU 10.00 un", "Amount 650.00 THB", "650.00 บาท"
+    // "จำนวนเงิน 50.00 บาท", "JuduLdU 10.00 un", "ยอดเงินรวม 50.00 บาท", "J7UdURU 50.00"
     if (!detectedAmount) {
       const explicitAmountPatterns = [
-        /(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|ยอดชำระ|amount|transferred|paid|juduldu|judul|juduan|tuau)\s*[:\s-]*\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/i,
-        /([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)\s*(?:บาท|thb|baht|un|uin|uln|th)\b/i
+        /(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|ยอดชำระ|ยอดเงินรวม|amount|transferred|paid|juduldu|judul|juduan|tuau|fuudu|goqaldusou|j7uduru)\s*[:\s-]*\s*([1-9][0-9]{0,4}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i,
+        /([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:บาท|thb|baht|un|uin|uln|vn|uin|8|฿)?\b/i
       ];
 
       for (const regex of explicitAmountPatterns) {
@@ -400,9 +405,9 @@ export function parseSlipText(text, expectedAmount = null) {
       }
     }
 
-    // C. Decimal currency amount: e.g. 10.00, 400.00, 650.00 (Excluding 0.00 fee)
+    // C. Decimal currency amount fallback (skip 0.00 fee)
     if (!detectedAmount) {
-      const allDecimals = [...cleaned.matchAll(/\b([0-9]{1,4}(?:,[0-9]{3})*\.[0-9]{2})\b/g)];
+      const allDecimals = [...cleaned.matchAll(/\b([1-9][0-9]{0,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g)];
       for (const m of allDecimals) {
         const num = parseFloat(m[1].replace(/,/g, ''));
         // Filter out 0.00 which is typically fee (ค่าธรรมเนียม 0.00 บาท)
@@ -420,7 +425,7 @@ export function parseSlipText(text, expectedAmount = null) {
 
     // D. Integer amount if followed by Thai or currency indicators
     if (!detectedAmount) {
-      const intMatch = cleaned.match(/\b([1-9][0-9]{0,4})\s*(?:บาท|thb|baht|un|uin)\b/i);
+      const intMatch = cleaned.match(/\b([1-9][0-9]{0,4})\s*(?:บาท|thb|baht|un|uin|฿)\b/i);
       if (intMatch) {
         const num = parseFloat(intMatch[1]);
         if (!isNaN(num) && num > 0 && num <= 100000) {
@@ -429,6 +434,7 @@ export function parseSlipText(text, expectedAmount = null) {
       }
     }
   }
+
 
   // 3. Detect Transfer Date & Time
   let transferDate = null;
