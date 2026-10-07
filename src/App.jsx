@@ -399,6 +399,18 @@ export default function App() {
     } catch (e) {}
   };
 
+  const refreshCoreData = async () => {
+    const tasks = [
+      refreshRegistrations(),
+      refreshAnnouncements(),
+      refreshMerchandiseOrders()
+    ];
+    if (isAdmin) {
+      tasks.push(refreshUserAccounts());
+    }
+    await Promise.allSettled(tasks);
+  };
+
   const refreshAllData = async () => {
     await Promise.allSettled([
       refreshRegistrations(),
@@ -450,17 +462,23 @@ export default function App() {
     });
 
     let isPolling = false;
-    const pollSafe = async () => {
+    let lastPollTime = Date.now();
+
+    const pollSafe = async (force = false) => {
+      const now = Date.now();
+      // Debounce polling by at least 15 seconds to avoid network hammering
+      if (!force && now - lastPollTime < 15000) return;
       if (isPolling) return;
       isPolling = true;
+      lastPollTime = now;
       try {
-        await refreshAllData();
+        await refreshCoreData();
       } finally {
         isPolling = false;
       }
     };
 
-    // 2. Immediate check on visibilitychange & window focus
+    // 2. Check on visibilitychange & window focus (debounced)
     const handleVis = () => {
       if (document.visibilityState === 'visible') {
         pollSafe();
@@ -473,18 +491,18 @@ export default function App() {
     window.addEventListener('visibilitychange', handleVis);
     window.addEventListener('focus', handleFocus);
 
-    // 3. Heartbeat convergence timer (every 4s active, 15s in background)
+    // 3. Heartbeat convergence timer (every 45s active, 120s in background)
     const activeTimer = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        pollSafe();
+        pollSafe(true);
       }
-    }, 4000);
+    }, 45000);
 
     const bgTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') {
-        pollSafe();
+        pollSafe(true);
       }
-    }, 15000);
+    }, 120000);
 
     return () => {
       unsubscribe();

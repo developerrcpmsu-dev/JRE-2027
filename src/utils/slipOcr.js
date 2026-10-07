@@ -472,6 +472,39 @@ export function parseSlipText(text, expectedAmount = null) {
   };
 }
 
+// Filter out harmless legacy OCR parameters warning from Tesseract LSTM engine
+if (typeof window !== 'undefined') {
+  const origWarn = console.warn;
+  console.warn = function (...args) {
+    const msg = args[0];
+    if (
+      typeof msg === 'string' &&
+      (msg.includes('Parameter not found:') ||
+       msg.includes('segsearch_max_futile_classifications') ||
+       msg.includes('language_model_ngram') ||
+       msg.includes('chop_enable'))
+    ) {
+      return; // suppress harmless legacy Tesseract parameter warnings
+    }
+    return origWarn.apply(this, args);
+  };
+
+  const origError = console.error;
+  console.error = function (...args) {
+    const msg = args[0];
+    if (
+      typeof msg === 'string' &&
+      (msg.includes('Parameter not found:') ||
+       msg.includes('segsearch_max_futile_classifications') ||
+       msg.includes('language_model_ngram') ||
+       msg.includes('chop_enable'))
+    ) {
+      return; // suppress harmless legacy Tesseract parameter warnings
+    }
+    return origError.apply(this, args);
+  };
+}
+
 /**
  * Reusable singleton Tesseract worker with Thai + English support
  */
@@ -480,14 +513,18 @@ let sharedTesseractWorker = null;
 async function getSharedWorker() {
   if (!sharedTesseractWorker) {
     try {
-      // Load both Thai and English models for high precision on Thai bank slips
-      const worker = await createWorker(['tha', 'eng']);
+      // Load both Thai and English models for high precision on Thai bank slips with LSTM engine (OEM 1)
+      const worker = await createWorker(['tha', 'eng'], 1, {
+        errorHandler: () => {}
+      });
       sharedTesseractWorker = worker;
     } catch (err) {
       console.warn('Worker initialization error:', err);
       // Fallback to English if Thai traineddata fails network load
       try {
-        const fallbackWorker = await createWorker('eng');
+        const fallbackWorker = await createWorker('eng', 1, {
+          errorHandler: () => {}
+        });
         sharedTesseractWorker = fallbackWorker;
       } catch (fallbackErr) {
         sharedTesseractWorker = null;
