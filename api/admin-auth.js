@@ -9,11 +9,6 @@ global.__ADMIN_FAILED_ATTEMPTS = FAILED_ATTEMPTS;
 const MAX_FAILURES = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes lockout
 
-// Cryptographic Salt & One-Way Fallback Hashes (Zero Plaintext Passwords in Source Code)
-const SECRET_SALT = 'jre2027_sec_salt_msu_9842';
-const DEFAULT_USER_HASH = '822b3f76821b8e8315c3ec40198729a1f198edcc84120d8cc93bb83377585395';
-const DEFAULT_PASS_HASH = '19594e129b6d028dc0433fd8d9859df66716120614895a5de9b5bf7a1fb3ad3b';
-
 export default async function handler(req, res) {
   // Hardened Security Response Headers
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -28,7 +23,7 @@ export default async function handler(req, res) {
     'http://localhost:5173',
     'http://localhost:3000'
   ];
-  if (allowedOrigins.some(o => origin.startsWith(o))) {
+  if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', 'https://jre-2027.vercel.app');
@@ -36,6 +31,14 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  const adminUsername = process.env.ADMIN_USERNAME;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!adminUsername || !adminPassword || !sessionSecret || sessionSecret.length < 32) {
+    console.error('Admin authentication is not configured with server-only secrets');
+    return res.status(503).json({ success: false, message: 'ระบบยืนยันตัวตนยังไม่พร้อมใช้งาน' });
   }
 
   if (req.method !== 'POST') {
@@ -62,7 +65,6 @@ export default async function handler(req, res) {
   }
 
   const { action, token, username, password } = req.body || {};
-  const sessionSecret = process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || DEFAULT_PASS_HASH;
 
   // 1. Verify Token Action (for ongoing session integrity verification)
   if (action === 'verify') {
@@ -73,7 +75,9 @@ export default async function handler(req, res) {
     try {
       const payload = Buffer.from(b64Payload, 'base64').toString('utf8');
       const expectedSig = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
-      if (signature !== expectedSig) {
+      const signatureBuf = Buffer.from(signature, 'utf8');
+      const expectedSigBuf = Buffer.from(expectedSig, 'utf8');
+      if (signatureBuf.length !== expectedSigBuf.length || !crypto.timingSafeEqual(signatureBuf, expectedSigBuf)) {
         return res.status(401).json({ success: false, valid: false, message: 'Token signature invalid' });
       }
       const [, tokenExpires] = payload.split(':');
@@ -98,31 +102,15 @@ export default async function handler(req, res) {
   let userMatch = false;
   let passMatch = false;
 
-  // If environment variables exist, compare securely with constant-time equality
-  if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
-    const expUser = process.env.ADMIN_USERNAME;
-    const expPass = process.env.ADMIN_PASSWORD;
-
-    const userBuf = Buffer.from(String(username).padEnd(64, ' '));
-    const expUserBuf = Buffer.from(String(expUser).padEnd(64, ' '));
-    const passBuf = Buffer.from(String(password).padEnd(64, ' '));
-    const expPassBuf = Buffer.from(String(expPass).padEnd(64, ' '));
-
-    userMatch = crypto.timingSafeEqual(userBuf, expUserBuf) && username.trim() === expUser.trim();
-    passMatch = crypto.timingSafeEqual(passBuf, expPassBuf) && password === expPass;
-  } else {
-    // Fallback: Verify using one-way cryptographic SHA-256 salted hash (No plaintext credentials in code)
-    const inUserHash = crypto.createHash('sha256').update(`${SECRET_SALT}:${username.trim()}`).digest('hex');
-    const inPassHash = crypto.createHash('sha256').update(`${SECRET_SALT}:${password}`).digest('hex');
-
-    const inUserBuf = Buffer.from(inUserHash);
-    const defUserBuf = Buffer.from(DEFAULT_USER_HASH);
-    const inPassBuf = Buffer.from(inPassHash);
-    const defPassBuf = Buffer.from(DEFAULT_PASS_HASH);
-
-    userMatch = crypto.timingSafeEqual(inUserBuf, defUserBuf);
-    passMatch = crypto.timingSafeEqual(inPassBuf, defPassBuf);
-  }
+  // Compare fixed-length SHA-256 digests so timingSafeEqual never receives
+  // attacker-controlled buffers of different lengths. Missing server secrets
+  // fail closed above; there is no credential fallback in source code.
+  const inputUserDigest = crypto.createHash('sha256').update(String(username).trim()).digest();
+  const expectedUserDigest = crypto.createHash('sha256').update(String(adminUsername).trim()).digest();
+  const inputPassDigest = crypto.createHash('sha256').update(String(password)).digest();
+  const expectedPassDigest = crypto.createHash('sha256').update(String(adminPassword)).digest();
+  userMatch = crypto.timingSafeEqual(inputUserDigest, expectedUserDigest) && String(username).trim() === String(adminUsername).trim();
+  passMatch = crypto.timingSafeEqual(inputPassDigest, expectedPassDigest) && String(password) === String(adminPassword);
 
   if (userMatch && passMatch) {
     // Reset failure record upon successful authentication
@@ -130,7 +118,7 @@ export default async function handler(req, res) {
 
     // Generate secure HMAC-SHA256 session token valid for 4 hours
     const expiresAt = Date.now() + 4 * 3600 * 1000;
-    const tokenIdentifier = process.env.ADMIN_USERNAME || 'admin_user';
+    const tokenIdentifier = adminUsername;
     const payload = `${tokenIdentifier}:${expiresAt}`;
     const signature = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
     const adminToken = `${Buffer.from(payload).toString('base64')}.${signature}`;

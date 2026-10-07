@@ -1445,7 +1445,7 @@ export const DataService = {
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้');
 
     const cleanCode = (code || '').trim();
-    if (account.verification_code === cleanCode || cleanCode === '123456' || cleanCode === '999999') {
+    if (account.verification_code && cleanCode && account.verification_code === cleanCode) {
       account.verified = true;
       account.email_verified = true;
       account.verification_code = '';
@@ -1485,7 +1485,7 @@ export const DataService = {
     if (!account) throw new Error('ไม่พบบัญชีผู้ใช้ที่ระบุ กรุณาสมัครสมาชิกใหม่');
 
     const cleanCode = (code || '').trim();
-    if (account.verification_code && cleanCode && account.verification_code !== cleanCode && cleanCode !== '123456' && cleanCode !== '999999') {
+    if (!account.verification_code || !cleanCode || account.verification_code !== cleanCode) {
       throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
     }
 

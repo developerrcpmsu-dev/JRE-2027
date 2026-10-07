@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://clgavdzozfsmohdcetue.supabase.co';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsZ2F2ZHpvemZzbW9oZGNldHVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5NjEwNTYsImV4cCI6MjEwNjUzNzA1Nn0.YgmNzkGjrrHTIfcdxkUvuRk6Ksa9CMGLYkkSMRn1lM8';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
 // Strict Whitelist of Safe Delivery MIME Types (Prevents Stored XSS - CWE-79)
 const ALLOWED_MIME_TYPES = new Set([
@@ -16,9 +15,9 @@ const ALLOWED_MIME_TYPES = new Set([
 export default async function handler(req, res) {
   // CORS Security: Restrict origins to official project domain and local dev
   const reqOrigin = req.headers.origin || '';
-  const isAllowedOrigin = 
-    reqOrigin.startsWith('https://jre-2027.vercel.app') || 
-    reqOrigin.startsWith('http://localhost:');
+  const isAllowedOrigin =
+    reqOrigin === 'https://jre-2027.vercel.app' ||
+    /^http:\/\/localhost:\d+$/.test(reqOrigin);
 
   if (isAllowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', reqOrigin);
@@ -37,6 +36,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res.status(503).send('File service is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   const { id } = req.query || {};
   if (!id) {

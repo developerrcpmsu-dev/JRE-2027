@@ -1,970 +1,219 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AcademicPresentationSection from '../components/AcademicPresentationSection';
 import {
-  ShieldAlert,
-  ShieldCheck,
-  AlertTriangle,
-  Lock,
-  Unlock,
-  Key,
-  FileText,
-  CheckCircle2,
-  XCircle,
-  ExternalLink,
-  Copy,
-  Check,
-  Printer,
-  ArrowLeft,
-  Server,
-  Database,
-  UserCheck,
-  Eye,
-  Code2,
-  Terminal,
-  Layers,
-  Search,
-  Filter,
-  Clock,
-  ChevronRight,
-  Shield,
-  HelpCircle,
-  FileCode,
-  AlertCircle,
-  Sparkles,
-  Zap,
-  CheckCheck
+  AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Code2, Copy,
+  Database, Filter, Globe2, LockKeyhole, Printer, Search, ShieldCheck,
+  Terminal, Wrench
 } from 'lucide-react';
 
-export default function SecurityAuditView({ 
-  onNavigateHome, 
-  onNavigateAdmin, 
-  subRoute, 
-  onSwitchSubRoute 
-}) {
+const findings = [
+  {
+    id: 'F-01', severity: 'critical', severityLabel: 'วิกฤต', cwe: 'CWE-200 / CWE-284', status: 'open',
+    title: 'Anon อ่าน JSON user_accounts ที่เก็บ password_hash และ salt ได้',
+    evidence: 'ตรวจแบบ read-only: Supabase REST project_settings?key=user_accounts',
+    observed: 'HTTP 200; พบ 4 account records และฟิลด์ password_hash, salt อยู่ใน payload (รายงานนี้ไม่แสดงค่าบัญชีหรือค่า hash จริง)',
+    impact: 'ผู้โจมตีที่มี public anon key สามารถเก็บ hash ไปทำ offline password guessing และเห็นข้อมูลบัญชีผู้ใช้ได้',
+    fix: [
+      'ย้ายการสมัคร/เข้าสู่ระบบไปใช้ Supabase Auth (bcrypt/หรือ Argon2 ฝั่งบริการ) และหยุดเก็บ password_hash/salt ใน JSON public',
+      'ลบและหมุนเวียนบัญชี/รหัสผ่านที่อาจถูกเปิดเผย พร้อมตรวจสอบ audit log',
+      'ลบ policy สาธารณะของ project_settings หรือแยก public settings กับ private account data เป็นคนละตาราง',
+      'ทดสอบด้วย anon key อีกครั้ง: endpoint ต้องไม่คืน user_accounts หรือ password metadata'
+    ],
+    files: 'supabase_schema.sql, migration_v4.sql, src/supabase.js, Supabase policy state',
+    test: 'GET project_settings?select=key,value&key=eq.user_accounts ด้วย anon key แล้วตรวจว่าไม่สามารถอ่านข้อมูลได้'
+  },
+  {
+    id: 'F-02', severity: 'critical', severityLabel: 'วิกฤต', cwe: 'CWE-284: Improper Access Control', status: 'open',
+    title: 'Schema/migrations สร้าง RLS policy แบบ public USING (true)',
+    evidence: 'supabase_schema.sql:76-83, migration_v4.sql:37-47, migration_v5_merchandise.sql:31-38',
+    observed: 'สคริปต์ hardening ลบชื่อ policy บางชื่อไม่ตรงกับ policy ที่ migration สร้าง จึงยังมีโอกาสเหลือ policy แบบ public หลังรันสคริปต์',
+    impact: 'หาก policy เหล่านี้ถูกใช้งานจริง anon อาจอ่าน/เขียนข้อมูลผู้สมัคร การตั้งค่า และออเดอร์ได้เกินสิทธิ์',
+    fix: [
+      'ทำ inventory policy จริงจาก Supabase Dashboard/pg_policies ก่อนแก้ ไม่ใช้ชื่อ policy ที่คาดเดา',
+      'DROP policy สาธารณะทุกชื่อที่มาจาก schema/migration และสร้าง policy owner/admin ใหม่แบบ allow-list',
+      'ห้ามใช้ WITH CHECK (true) กับข้อมูลส่วนบุคคลหรือธุรกรรม',
+      'ทำ regression test ด้วย anon, applicant และ admin role แยกกัน แล้วเก็บผล 401/403/allowed เป็นหลักฐาน'
+    ],
+    files: 'supabase_schema.sql, migration_v4.sql, migration_v5_merchandise.sql, supabase_security_hardening.sql',
+    test: 'ตรวจ pg_policies และยิง REST read/write แบบไม่แก้ข้อมูล เพื่อยืนยัน policy ที่ใช้จริง'
+  },
+  {
+    id: 'F-03', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-359: Exposure of Private Personal Information', status: 'open',
+    title: 'Client เรียก registrations ทั้งตารางก่อนรู้ว่าเป็น Admin หรือไม่',
+    evidence: "src/App.jsx:124-134 และ src/supabase.js:353-370 ใช้ .from('registrations').select('*')",
+    observed: 'ตอนตรวจ live database พบ registrations 0 แถว จึงยังไม่เห็น PII จาก endpoint ในช่วงเวลาตรวจ แต่ code path จะดึงทั้งหมดเมื่อมีข้อมูล',
+    impact: 'เมื่อมีผู้สมัครจริง ข้อมูลชื่อ โทรศัพท์ สุขภาพ และการชำระเงินอาจเข้า React state ของผู้ใช้ทั่วไป หาก RLS พลาด',
+    fix: [
+      'ผู้ใช้ทั่วไปต้องเรียก query ที่ filter user_id/email ฝั่งฐานข้อมูลเท่านั้น',
+      'โหลดรายการทั้งหมดเฉพาะหลัง server-side admin session ผ่าน และแยกฟังก์ชัน getAdminRegistrations()',
+      'ล้าง registrations state เมื่อ logout และห้ามใช้ localStorage เป็นแหล่งข้อมูลสิทธิ์',
+      'ทดสอบด้วยข้อมูลจำลอง 2 บัญชีและยืนยันว่าแต่ละบัญชีเห็นได้เฉพาะแถวของตัวเอง'
+    ],
+    files: 'src/App.jsx, src/supabase.js',
+    test: 'สร้าง test accounts แบบข้อมูลจำลอง แล้วตรวจ Network response ของผู้ใช้ทั่วไปว่าไม่มีแถวของคนอื่น'
+  },
+  {
+    id: 'F-04', severity: 'critical', severityLabel: 'วิกฤต', cwe: 'CWE-798 / CWE-640', status: 'open',
+    title: 'มี magic OTP 123456 และ 999999 ในโค้ดตรวจยืนยัน/รีเซ็ตรหัสผ่าน',
+    evidence: 'baseline ก่อนแก้พบใน src/supabase.js และ GoogleLoginModal.jsx; local working tree ลบ fallback แล้ว แต่ production ต้อง deploy/retest',
+    observed: 'หลักฐานเดิมเป็น static analysis เท่านั้น ยังไม่ได้ส่งคำขอ reset หรือใช้กับบัญชีจริง; สถานะ open หมายถึง production ยังไม่ได้ยืนยันแพตช์',
+    impact: 'ผู้ที่รู้ email อาจข้ามการยืนยันหรือรีเซ็ตรหัสผ่านโดยไม่ต้องครอบครอง OTP จริง',
+    fix: [
+      'ลบค่าคงที่ bypass ออกจาก production code ทันที',
+      'กำหนด OTP expiry, one-time use, attempt limit และส่ง OTP ผ่าน provider ฝั่ง server',
+      'ผูก reset flow กับ Supabase Auth recovery token แทนการตรวจใน browser',
+      'เพิ่ม automated test ว่า OTP ปลอม/หมดอายุ/ใช้ซ้ำต้องถูกปฏิเสธ'
+    ],
+    files: 'src/supabase.js, src/components/GoogleLoginModal.jsx',
+    test: 'ทดสอบเฉพาะใน staging ด้วย OTP ผิดและ OTP หมดอายุ ห้ามทดสอบบนบัญชี production'
+  },
+  {
+    id: 'F-05', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-916: Insufficient Password Hashing Cost', status: 'open',
+    title: 'รหัสผ่านผู้ใช้ถูก hash ด้วย SHA-256 รอบเดียวในฝั่ง Client',
+    evidence: "src/utils/cryptoUtils.js:24-47 ใช้ crypto.subtle.digest('SHA-256') แล้วเก็บค่าไว้ใน client data",
+    observed: 'เป็น fast hash ไม่ใช่ password KDF; salt ช่วยลด rainbow table แต่ไม่เพิ่ม cost ต่อการเดามากพอ',
+    impact: 'หากฐานข้อมูล/JSON ถูกอ่าน ผู้โจมตีสามารถเดารหัสผ่านแบบ offline ได้เร็ว และ hash/salt ถูกส่งผ่านระบบ client-side',
+    fix: [
+      'ย้าย password verification ไป Supabase Auth หรือ backend KDF ที่มี cost control',
+      'บังคับ password reset สำหรับบัญชีเดิมหลัง migration',
+      'ไม่ส่ง password_hash/salt ใน public query หรือ profile payload',
+      'อัปเดตเอกสารไม่เรียก SHA-256 แบบเดิมว่า OWASP-compliant password storage'
+    ],
+    files: 'src/utils/cryptoUtils.js, src/supabase.js, migration_v4.sql',
+    test: 'ตรวจ production bundle/REST payload ต้องไม่มี password hash ของผู้ใช้และไม่มี client-side password verifier'
+  },
+  {
+    id: 'F-06', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-798 / CWE-321', status: 'open',
+    title: 'Serverless admin auth มี deterministic fallback salt/hash ใน source',
+    evidence: 'baseline ก่อนแก้พบ deterministic fallback ใน api/admin-auth.js; local working tree เปลี่ยนเป็น fail-closed + server env แต่ production ต้อง deploy/retest',
+    observed: 'ฝั่ง client เรียก API จริงและ API ปฏิเสธคำขอว่างเปล่า 400; ยังไม่ได้ลอง credential guessing หรือ login สำเร็จ',
+    impact: 'ถ้า production env ผิดหรือหาย ระบบอาจกลับไปใช้ credential fallback ที่เดา/แตกได้ และ session secret ผูกกับค่าเดิม',
+    fix: [
+      'ลบ fallback credential/hash/salt ออกจาก source และ fail closed ด้วย 503 เมื่อ ADMIN_USERNAME, ADMIN_PASSWORD, SESSION_SECRET ไม่ครบ',
+      'เปรียบเทียบ credential ที่มาจาก env ด้วย hash digest + timingSafeEqual โดยไม่ pad string แบบคาดเดา',
+      'หมุนเวียน admin credential และ SESSION_SECRET หลัง deploy',
+      'ใช้ durable rate limit store แทน in-memory Map ที่ไม่คงอยู่ข้าม serverless instance'
+    ],
+    files: 'api/admin-auth.js, .env.example, Vercel Environment Variables',
+    test: 'ตรวจ bundle ไม่ควรมีค่า server secret; staging ที่ถอด env ต้องตอบ 503 ไม่ใช่ใช้ fallback'
+  },
+  {
+    id: 'F-07', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-200 / CWE-798', status: 'open',
+    title: 'Public bundle มีรหัสผ่านตัวอย่างจาก code diff ในหน้า presentation',
+    evidence: 'production JS scan รอบ baseline พบ credential-like string จาก code example; local presentation ถูกเขียนใหม่และต้อง deploy/re-scan เพื่อยืนยันการหายไป',
+    observed: 'นี่เป็นข้อความตัวอย่างในหน้า presentation ไม่ใช่เส้นทาง login ปัจจุบัน แต่ production bundle เดิมเผยแพร่ข้อความดังกล่าวสู่ CDN/cache ได้',
+    impact: 'สร้างความสับสนว่าเป็น credential จริง และทำให้ secret-like value ถูกเก็บถาวรใน CDN/cache หรือ search index',
+    fix: [
+      'แทนค่า credential ในตัวอย่างด้วย <REDACTED> และระบุว่าเป็น pseudocode',
+      'เพิ่ม CI secret scan ที่ตรวจทั้ง source และ dist ก่อน deploy',
+      'ลบ/rotate ค่าเดิมจากประวัติ Git และ Vercel deployment หากเป็น credential ที่เคยใช้งานจริง'
+    ],
+    files: 'src/components/AcademicPresentationSection.jsx, dist/assets/index-*.js',
+    test: 'หลัง build ให้ค้นหา credential-like literals, VITE_*_PASSWORD และ secret patterns แล้วต้องไม่พบค่าจริง'
+  },
+  {
+    id: 'F-08', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-1321 / CWE-1333 / CWE-674', status: 'open',
+    title: 'npm audit พบ dependency vulnerabilities 10 รายการ',
+    evidence: 'npm audit --json ณ 7 ตุลาคม 2569: high 6, moderate 4, critical 0',
+    observed: 'พบ xlsx direct dependency (Prototype Pollution/ReDoS), tailwindcss dependency chain (braces/micromatch/fast-glob) และ exceljs/uuid',
+    impact: 'ความเสี่ยงขึ้นกับ data flow; xlsx ใช้ export-only ในโค้ดปัจจุบัน จึงลดโอกาส exploit แต่ยังไม่ใช่การแก้ dependency',
+    fix: [
+      'อัปเดต/เปลี่ยน SheetJS xlsx เป็นเวอร์ชันที่มี fix หรือใช้ exporter ที่ไม่ parse workbook จากผู้ใช้',
+      'อัปเดต Tailwind/PostCSS ตาม compatibility plan และทดสอบ build',
+      'ตั้ง npm audit ใน CI เป็น gate พร้อมบันทึก exception ที่มี owner/วันหมดอายุ',
+      'จำกัดการ parse ไฟล์ที่ผู้ใช้อัปโหลดด้วย sandbox, size/type limits และ fixture tests'
+    ],
+    files: 'package.json, package-lock.json, src/utils/excelExporter.js',
+    test: 'npm audit --audit-level=high และ npm run build หลังอัปเดต dependency'
+  },
+  {
+    id: 'F-09', severity: 'medium', severityLabel: 'ปานกลาง', cwe: 'CWE-602 / CWE-307', status: 'open',
+    title: 'การควบคุมสิทธิ์และ rate limit หลายส่วนยังพึ่ง Client-side guard',
+    evidence: 'src/App.jsx มี guard isAdmin; data mutations อยู่ใน Supabase client; debounce ไม่ใช่ server-side rate limit',
+    observed: 'ยังไม่พบหลักฐานว่าทุก mutation มี server-side authorization/rate limit ที่ผูกกับ identity จริง',
+    impact: 'ผู้โจมตีสามารถข้าม UI แล้วสร้างคำขอโดยตรงได้ หาก RLS/endpoint ไม่ได้บังคับซ้ำ',
+    fix: [
+      'บังคับ authorization ที่ database policy หรือ server endpoint ทุก mutation',
+      'เพิ่ม per-user/IP rate limit ฝั่ง server และ audit log สำหรับ login, upload, register, reset',
+      'ใช้ idempotency key กับการสมัคร/ชำระเงิน และไม่พึ่งปุ่ม disabled อย่างเดียว',
+      'ทำ abuse test ใน staging เท่านั้น'
+    ],
+    files: 'src/App.jsx, src/supabase.js, Supabase RLS, api/*',
+    test: 'ส่ง request ตรงจาก test client โดยไม่ผ่าน UI แล้วต้องถูกปฏิเสธเมื่อไม่มี owner/admin claim'
+  },
+  {
+    id: 'F-10', severity: 'low', severityLabel: 'ต่ำ', cwe: 'CWE-942: Overly Permissive CORS', status: 'open',
+    title: 'CORS ตรวจ origin ด้วย startsWith ใน serverless handlers',
+    evidence: 'baseline ก่อนแก้พบ startsWith ใน api/file.js และ api/admin-auth.js; local working tree ใช้ exact allow-list/regex แล้ว แต่ production ต้อง deploy/retest',
+    observed: 'source baseline มีความเสี่ยง prefix-confusion; ยังไม่สรุปว่า production exploit ได้จาก preflight ที่ทดสอบเพียง origin ภายนอกทั่วไป',
+    impact: 'ลดความแม่นยำของ origin policy และทำให้การ review/incident response ยากขึ้น',
+    fix: [
+      'ใช้ allowedOrigins.includes(origin) และ normalize origin ด้วย URL parser',
+      'ไม่ตั้ง Access-Control-Allow-Origin เป็น * สำหรับ endpoint ที่เกี่ยวกับข้อมูลผู้ใช้',
+      'เพิ่ม preflight tests สำหรับ evil.example และโดเมนที่มี prefix คล้ายกัน'
+    ],
+    files: 'api/file.js, api/admin-auth.js, vercel.json',
+    test: 'OPTIONS จาก origin ที่ไม่อยู่ใน allow-list ต้องไม่คืน origin ของผู้โจมตี'
+  }
+];
+
+const verifiedControls = [
+  ['Build', 'npm run build ผ่าน (Vite exit 0)'],
+  ['Headers', 'หน้าเว็บจริงส่ง X-Frame-Options: DENY, nosniff, HSTS, Referrer-Policy และ Permissions-Policy'],
+  ['Admin API', 'GET /api/admin-auth ได้ 405 และ POST ว่างได้ 400 โดยไม่ได้ลอง credential จริง'],
+  ['CORS preflight', 'Origin ภายนอกไม่ถูกสะท้อนกลับเป็น allow-origin ของผู้โจมตี'],
+  ['File API', 'GET /api/file ที่ไม่มี id ได้ 400'],
+  ['Discovery', '/.well-known/security.txt และ /robots.txt เปิดอ่านได้จริง']
+];
+
+const severityMeta = {
+  critical: { label: 'วิกฤต', badge: '🔴' },
+  high: { label: 'สูง', badge: '🟠' },
+  medium: { label: 'ปานกลาง', badge: '🟡' },
+  low: { label: 'ต่ำ', badge: '🔵' }
+};
+
+export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin, subRoute, onSwitchSubRoute }) {
   const [activeTab, setActiveTab] = useState(subRoute === 'audit' ? 'audit' : 'presentation');
   const [filterSeverity, setFilterSeverity] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [copiedUrl, setCopiedUrl] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
-  useEffect(() => {
-    if (subRoute === 'presentation') {
-      setActiveTab('presentation');
-    } else if (subRoute === 'audit') {
-      setActiveTab('audit');
-    }
-  }, [subRoute]);
+  useEffect(() => setActiveTab(subRoute === 'audit' ? 'audit' : 'presentation'), [subRoute]);
+  const setTab = (tab) => { setActiveTab(tab); onSwitchSubRoute?.(tab); };
+  const reportUrl = typeof window === 'undefined' ? 'https://jre-2027.vercel.app/security' : `${window.location.origin}/${activeTab === 'audit' ? 'security' : 'presentation'}`;
+  const filteredFindings = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return findings.filter((item) => {
+      const severityOk = filterSeverity === 'all' || item.severity === filterSeverity;
+      const searchOk = !q || [item.id, item.title, item.cwe, item.evidence, item.files, item.impact].join(' ').toLowerCase().includes(q);
+      return severityOk && searchOk;
+    });
+  }, [filterSeverity, searchQuery]);
+  const copyUrl = async () => { try { await navigator.clipboard?.writeText(reportUrl); setCopiedUrl(true); setTimeout(() => setCopiedUrl(false), 1800); } catch { setCopiedUrl(false); } };
 
-  const handleSwitchTab = (tab) => {
-    setActiveTab(tab);
-    if (onSwitchSubRoute) {
-      onSwitchSubRoute(tab);
-    }
-  };
-
-  const reportUrl = typeof window !== 'undefined' 
-    ? (activeTab === 'presentation' ? window.location.origin + '/presentation' : window.location.origin + '/security')
-    : 'https://jre-2027.vercel.app/presentation';
-
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(reportUrl);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const vulnerabilities = [
-    {
-      id: 1,
-      severity: 'critical',
-      severityLabel: 'วิกฤต (Critical)',
-      title: 'รหัสผ่าน Admin ฝังอยู่ในไฟล์ JavaScript ของ Production Bundle',
-      category: 'CWE-798: Use of Hard-coded Credentials / Secret Exposure',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Serverless Auth',
-      howItWasFixed: '1. ลบตัวแปร `VITE_ADMIN_USERNAME` และ `VITE_ADMIN_PASSWORD` รวมถึงข้อความรหัสผ่านดิบออกจากฝั่ง Client-Side 100% ป้องกันการ Inspect หรือค้นหาในไฟล์ bundle (.js)\n2. ย้ายการยืนยันตัวตนไปทำงานผ่าน Serverless API `/api/admin-auth` หลังบ้าน โดยใช้การแฮชแบบ Cryptographic Salted Hash และ `crypto.timingSafeEqual`\n3. ติดตั้งเกราะป้องกัน Brute-Force & Spam: หากพยายามสุ่มรหัสผ่านผิดเกิน 5 ครั้ง ระบบจะระงับการเข้าถึงจาก IP นั้น 15 นาทีทันที (HTTP 429)\n4. ติดตั้งกับดัก Anti-Bot Honeypot และ Rate Limiting ในฟอร์มสมัคร ป้องกันการส่งสแปมใบสมัครซ้ำซ้อน\n5. เพิ่มระบบตรวจจับสิทธิ์ (IDOR Protection) ในการแก้ไขและลบข้อมูล ป้องกันไม่ให้ผู้ใช้แอบแก้ไขหรือลบใบสมัครของผู้สมัครท่านอื่น',
-      evidence: 'api/admin-auth.js, src/App.jsx, src/views/RegisterView.jsx และ src/components/AdminLoginModal.jsx',
-      description: 'เดิมรหัสผ่านถูกอ่านผ่าน import.meta.env ซึ่ง Vite จะคอมไพล์ลงไฟล์ bundle (.js) ทำให้บุคคลภายนอก inspect ดูได้ ปัจจุบันลบข้อมูลลับออกจากโค้ดหน้าบ้าน 100% พร้อมเสริมระบบป้องกัน Brute-Force และป้องกันการแก้ไขข้อมูลผู้อื่น',
-      attackVector: 'การเปิด Browser DevTools เพื่อค้นหาคำว่า admin หรือรหัสผ่านในไฟล์ JavaScript จะไม่พบข้อมูลลับอีกต่อไป และหากพยายามยิง Brute Force หรือยิงสแปมจะถูกระบบ Rate Limiting และ Honeypot สกัดกั้นทันที',
-      remediation: 'ใช้ Serverless API ตรวจสอบสิทธิ์ฝั่งเซิร์ฟเวอร์ และออก Token ควบคุม Session แทนการเก็บค่าดิบ'
-    },
-    {
-      id: 2,
-      severity: 'critical',
-      severityLabel: 'วิกฤต (Critical)',
-      title: 'การ Bypass สิทธิ์ Admin และปลอมแปลงบัญชีผู้ใช้ผ่าน localStorage โดยไม่มี Server Verification',
-      category: 'CWE-285: Improper Authorization / Client-Side Authorization Bypass',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Token Verified',
-      howItWasFixed: '1. ยกเลิกการให้สิทธิ์ Admin โดยอาศัยเพียงค่า boolean ใน localStorage (`jre2027_is_admin: true`) และสั่งล้างทิ้งอัตโนมัติทุกครั้งที่โหลดเว็บ\n2. แก้ไขข้อผิดพลาดบนเบราว์เซอร์มือถือ: แยกการเข้าถึง Admin ออกจากการเข้าสู่ระบบด้วย Google โดยสิ้นเชิง แม้ผู้ใช้จะมี role admin ในโปรไฟล์ ก็ยังจำเป็นต้องกรอกรหัสผ่าน Admin เพื่อเข้าสู่ Admin Dashboard\n3. กำหนดให้ระบบต้องตรวจสอบ `jre2027_admin_token` ที่มีลายเซ็นดิจิทัลจากเซิร์ฟเวอร์ (`/api/admin-auth?action=verify`) และตรวจอายุการใช้งานใน sessionStorage\n4. ปิดหน้าต่างหรือแถบเบราว์เซอร์บนมือถือจะทำให้สถานะ Admin สิ้นสุดลงทันทีเพื่อความปลอดภัยสูงสุด',
-      evidence: 'src/App.jsx, api/admin-auth.js และ src/components/AdminLoginModal.jsx',
-      description: 'เดิมใครก็ตามสามารถพิมพ์คำสั่งใน Console หรือเบราว์เซอร์มือถือที่เคยจำสิทธิ์ไว้จะคงสถานะ Admin ถาวร ปัจจุบันระบบล้างค่าทิ้งและตรวจสอบ Token ฝั่งเซิร์ฟเวอร์อย่างเข้มงวด',
-      attackVector: 'การแก้ไข localStorage.setItem("jre2027_is_admin", "true") ด้วยตนเองจะไม่สามารถเปิดโหมด Admin ได้หากไม่มี Signed Token ที่ถูกต้องจากระบบ',
-      remediation: 'ผูกสิทธิ์ Admin เข้ากับ Signed Token จาก Serverless Auth'
-    },
-    {
-      id: 3,
-      severity: 'critical',
-      severityLabel: 'วิกฤต (Critical)',
-      title: 'ฐานข้อมูล Supabase เปิดสิทธิ์สาธารณะให้อ่าน/เขียน/ลบได้ทุกตาราง (RLS USING true)',
-      category: 'CWE-284: Improper Access Control / Overly Permissive Row-Level Security',
-      status: 'configured',
-      statusLabel: 'สคริปต์พร้อมใช้งาน (Configured)',
-      statusColor: 'yellow',
-      statusBadge: '🟡 สคริปต์ SQL พร้อมรันบน Supabase',
-      howItWasFixed: '1. จัดทำไฟล์สคริปต์ความปลอดภัยฐานข้อมูล `supabase_security_hardening.sql` ครอบคลุม 100%\n2. สั่ง `ENABLE ROW LEVEL SECURITY` บนทุกตาราง (registrations, user_accounts, project_settings, announcements)\n3. กำหนดนโยบาย RLS: ผู้สมัครทั่วไปอ่านและแก้ไขได้เฉพาะแถวของตนเอง (`USING (auth.uid() = user_id OR user_email = auth.jwt()->>\'email\')`)\n4. สงวนสิทธิ์การแก้ไขเลขบัญชีโครงการ (project_settings) และการลบข้อมูล ให้เฉพาะผู้มี Role Admin เท่านั้น',
-      evidence: 'สร้างไฟล์ supabase_security_hardening.sql ใน Workspace สำหรับนำไปรันบน Supabase SQL Editor',
-      description: 'เดิมนโยบาย RLS ตั้งค่า USING (true) ซึ่งเปิดให้ anon key ทำอะไรก็ได้ ปัจจุบันมีสคริปต์ RLS จำกัดสิทธิ์ตามรายบุคคลและ Role อย่างเคร่งครัด',
-      attackVector: 'การใช้ anon key ยิง REST API ตรงจากภายนอกจะไม่สามารถอ่านหรือแก้ไขข้อมูลของผู้สมัครคนอื่นได้อีกต่อไป',
-      remediation: 'นำสคริปต์ supabase_security_hardening.sql ไปรันบน Supabase SQL Editor เพื่อปิดกั้นการเข้าถึงสาธารณะ'
-    },
-    {
-      id: 4,
-      severity: 'high',
-      severityLabel: 'สูง (High)',
-      title: 'การจัดเก็บและ Hash รหัสผ่านผู้ใช้ในระดับ Client-Side ด้วย SHA-256 ความทนทานต่ำ',
-      category: 'CWE-916: Use of Password Hash With Insufficient Computational Effort',
-      status: 'hardened',
-      statusLabel: 'เสริมเกราะป้องกันแล้ว (Hardened)',
-      statusColor: 'green',
-      statusBadge: '🟢 แยกระบบจัดเก็บและเพิ่ม Salt',
-      howItWasFixed: '1. เสริมการสุ่ม Salt แบบ Cryptographically Secure 16 ไบต์ และใช้กระบวนการรวมบัญชี (Account Deduplication Engine)\n2. จัดเตรียมโครงสร้างรองรับการเชื่อมต่อกับ Supabase Auth (bcrypt/argon2 บนเซิร์ฟเวอร์)\n3. ทำการปกปิดฟิลด์ password_hash และ salt ไม่ให้ส่งออกใน Public Data API',
-      evidence: 'src/supabase.js (ฟังก์ชัน mergeAndDeduplicateAccounts และ hashPassword)',
-      description: 'ระบบป้องกันการเข้าถึง Hash รหัสผ่าน และวางสถาปัตยกรรมเชื่อมโยงระบบยืนยันตัวตนแบบรวมศูนย์',
-      attackVector: 'แฮกเกอร์ไม่สามารถอ่านฟิลด์ Hash รหัสผ่านผ่านหน้าเว็บได้ และฐานข้อมูลมี RLS ควบคุมไม่ให้บุคคลภายนอก SELECT ตาราง user_accounts',
-      remediation: 'เสริม Salt เข้มงวด และจำกัดสิทธิ์อ่านตาราง user_accounts เฉพาะเจ้าของบัญชี'
-    },
-    {
-      id: 5,
-      severity: 'high',
-      severityLabel: 'สูง (High)',
-      title: 'Google OAuth ไม่มีการตรวจสอบ Cryptographic Signature บน Server ฝั่งหลังบ้าน',
-      category: 'CWE-347: Improper Verification of Cryptographic Signature',
-      status: 'hardened',
-      statusLabel: 'เสริมเกราะป้องกันแล้ว (Hardened)',
-      statusColor: 'green',
-      statusBadge: '🟢 ตรวจสอบความถูกต้องของ Token',
-      howItWasFixed: '1. เพิ่มการตรวจสอบฟิลด์ Audience (aud), Issuer (iss) และ Expiration (exp) ของ Google ID Token อย่างเข้มงวดใน `src/utils/googleAuth.js`\n2. รองรับกระบวนการ Supabase OAuth Session (`supabase.auth.signInWithOAuth`) ซึ่งทำ Token Signature Exchange บน Supabase Backend โดยตรง',
-      evidence: 'src/utils/googleAuth.js และ src/App.jsx',
-      description: 'ระบบตรวจสอบโครงสร้างโทเคนและอายุโทเคน พร้อมเชื่อมต่อผ่าน Supabase OAuth Backend',
-      attackVector: 'การปลอมแปลง Token จากภายนอกที่ไม่มี Issuer และ Audience ตรงกับ Google Client ID ของโครงการจะถูกปฏิเสธทันที',
-      remediation: 'ตรวจสอบฟิลด์ aud/iss/exp อย่างเคร่งครัด และเชื่อมต่อผ่าน Supabase OAuth'
-    },
-    {
-      id: 6,
-      severity: 'high',
-      severityLabel: 'สูง (High)',
-      title: 'แอปพลิเคชันดาวน์โหลดข้อมูลผู้สมัคร "ทั้งหมด" มาเก็บในหน่วยความจำของเบราว์เซอร์ทุกคน',
-      category: 'CWE-359: Exposure of Private Personal Information to an Unauthorized Actor',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Isolated Queries',
-      howItWasFixed: '1. ปรับปรุงฟังก์ชัน `getRegistrationByUserId` ใน `src/supabase.js` ให้ค้นหาเฉพาะแถวของผู้ใช้ที่ล็อกอินอยู่เท่านั้น\n2. ปรับการทำงานของหน้าแรกและแดชบอร์ดผู้สมัคร: หากไม่ใช่ Admin ระบบจะไม่เรียกข้อมูลผู้สมัครทั้งตาราง แต่จะดึงเฉพาะข้อมูลของตนเอง\n3. การดาวน์โหลดข้อมูลผู้สมัครทั้งหมดถูกจำกัดไว้เฉพาะใน `AdminDashboardView.jsx` ซึ่งต้องผ่านการล็อกอิน Admin ก่อนเท่านั้น',
-      evidence: 'src/supabase.js (getRegistrationByUserId) และ src/App.jsx',
-      description: 'เดิมผู้ใช้ทั่วไปจะได้รับข้อมูลผู้สมัครทุกคนลงใน React State ปัจจุบันผู้ใช้ทั่วไปจะได้รับเฉพาะใบสมัครของตนเองเท่านั้น',
-      attackVector: 'ผู้ใช้ทั่วไปที่เปิด DevTools > Network จะเห็นเฉพาะแถวข้อมูลของตนเอง ไม่สามารถดูข้อมูลชื่อ เบอร์โทร หรือข้อมูลสุขภาพของผู้อื่นได้',
-      remediation: 'แยกคำสั่ง Query ระหว่างผู้ใช้ทั่วไปกับผู้ดูแลระบบอย่างชัดเจน'
-    },
-    {
-      id: 7,
-      severity: 'high',
-      severityLabel: 'สูง (High)',
-      title: 'ช่องโหว่ Stored Cross-Site Scripting (XSS) ผ่านทาง API ให้บริการไฟล์ (/api/file)',
-      category: 'CWE-79: Improper Neutralization of Input During Web Page Generation (Stored XSS)',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Strict MIME Whitelist',
-      howItWasFixed: '1. ปรับปรุง `api/file.js` กำหนด Whitelist ของ MIME Type อย่างเคร่งครัด อนุญาตเฉพาะ: `image/jpeg`, `image/png`, `image/webp`, `image/gif`, `application/pdf`\n2. หากพบไฟล์ประเภทอื่น (เช่น text/html, image/svg+xml, application/javascript) ระบบจะบังคับแปลงเป็น `application/octet-stream` และส่งคำสั่ง `Content-Disposition: attachment` เพื่อดาวน์โหลด ห้ามรันในเบราว์เซอร์\n3. เพิ่ม Header สำคัญ: `Content-Security-Policy: default-src \'none\'; sandbox` และ `X-Content-Type-Options: nosniff`',
-      evidence: 'api/file.js บรรทัด 10-65',
-      description: 'เดิม API ให้บริการไฟล์ส่ง Content-Type ตามที่ระบุในสตริง Base64 โดยไม่มีการคัดกรอง ปัจจุบันมี Whitelist และ CSP Sandbox ป้องกันการรันสคริปต์ 100%',
-      attackVector: 'แม้จะมีผู้อัปโหลดโค้ด HTML หรือ JavaScript เข้ามาในระบบ เบราว์เซอร์จะไม่สามารถรันสคริปต์ได้เนื่องจากติดกฎ CSP Sandbox และบังคับดาวน์โหลดเป็นไฟล์ดิบ',
-      remediation: 'กำหนด Whitelist MIME Type และบังคับใช้ CSP Sandbox Header'
-    },
-    {
-      id: 8,
-      severity: 'high',
-      severityLabel: 'สูง (High)',
-      title: 'เอกสารสำคัญและรูปบัตรประชาชนเข้าถึงได้แบบสาธารณะ พร้อมการแคช Public แบบถาวร',
-      category: 'CWE-200: Exposure of Sensitive Information to an Unauthorized Actor',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Private No-Store Cache',
-      howItWasFixed: '1. ปรับปรุง `api/file.js` ให้ตรวจจับเอกสารสำคัญ (รูปบัตรประชาชน, สลิปโอนเงิน) จาก Key และข้อมูลอ้างอิง\n2. ส่ง Header ป้องกันการแคชบน CDN สาธารณะ: `Cache-Control: private, no-cache, no-store, must-revalidate`\n3. ส่ง Header `Pragma: no-cache` และ `Expires: 0` เพื่อป้องกันไม่ให้ Proxy ใดๆ บันทึกภาพเอกสารประจำตัวไว้',
-      evidence: 'api/file.js บรรทัด 70-85',
-      description: 'เดิมรูปบัตรประชาชนถูกแคชบน Public CDN นาน 1 ปี ปัจจุบันถูกปิดการแคชสาธารณะอย่างสิ้นเชิง',
-      attackVector: 'ไม่มีรูปบัตรประชาชนหรือสลิปการเงินค้างอยู่ในแคชสาธารณะ และไม่สามารถเข้าถึงผ่าน Proxy แคชภายนอกได้',
-      remediation: 'บังคับใช้ Cache-Control: private, no-store สำหรับไฟล์ที่มีความอ่อนไหว'
-    },
-    {
-      id: 9,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'ตรรกะการตรวจสอบสถานะการเงินทำในเบราว์เซอร์ ไม่มี Server-Side Enforcement',
-      category: 'CWE-602: Client-Side Enforcement of Server-Side Security',
-      status: 'configured',
-      statusLabel: 'สคริปต์พร้อมใช้งาน (Configured)',
-      statusColor: 'yellow',
-      statusBadge: '🟡 Database Trigger ป้องกันใน SQL',
-      howItWasFixed: '1. สร้างฟังก์ชัน PostgreSQL Trigger `protect_payment_status_modification()` ในไฟล์ `supabase_security_hardening.sql`\n2. หากคำสั่ง UPDATE มาจากผู้ใช้ทั่วไป (ไม่ใช่ Admin) และพยายามแก้ไขฟิลด์ `payment_status` หรือ `payment_amount` ฐานข้อมูลจะโยน EXCEPTION และปฏิเสธคำขอทันที\n3. ในฝั่ง Client ทำการ Sanitize ให้ฟอร์มผู้สมัครส่งได้เฉพาะหลักฐานรูปสลิปและข้อมูลโปรไฟล์',
-      evidence: 'supabase_security_hardening.sql (ส่วนที่ 7: Trigger)',
-      description: 'เดิมผู้ใช้สามารถส่ง PATCH แก้ payment_status: "paid" ได้ ปัจจุบันมี Database Trigger คอยดักจับและปฏิเสธคำขอที่ไม่ใช่ Admin',
-      attackVector: 'การพยายามส่ง API อัปเดต payment_status โดยตรงจะถูก Database Block ทันทีด้วยข้อผิดพลาด 403 / 400',
-      remediation: 'เปิดใช้งาน Trigger ป้องกันการแก้สถานะการเงินบนฐานข้อมูล Supabase'
-    },
-    {
-      id: 10,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'ขาดแคลน Security Response Headers บน Web Deployment',
-      category: 'CWE-693: Protection Mechanism Failure / Missing Security Headers',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · 6 Security Headers',
-      howItWasFixed: '1. อัปเดตไฟล์ `vercel.json` เพิ่มการตั้งค่า Headers ความปลอดภัยระดับสูงสำหรับทุกหน้าเว็บไซต์ (`/(.*)`):\n   - `X-Frame-Options: DENY` (ป้องกัน Clickjacking 100%)\n   - `X-Content-Type-Options: nosniff` (ป้องกัน MIME Sniffing)\n   - `Referrer-Policy: strict-origin-when-cross-origin` (ป้องกันข้อมูล URL รั่วไหล)\n   - `Permissions-Policy: camera=(), microphone=(), geolocation=()` (ปิดการเข้าถึงฮาร์ดแวร์ที่ไม่จำเป็น)\n   - `X-XSS-Protection: 1; mode=block` (เปิดตัวกรอง XSS ในเบราว์เซอร์รุ่นเก่า)\n   - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` (บังคับ HTTPS)',
-      evidence: 'vercel.json บรรทัด 30-45',
-      description: 'เดิมเว็บไม่มี Security Headers ปัจจุบันได้รับการติดตั้ง Headers มาตรฐานระดับ Enterprise ครบถ้วนทุกเส้นทาง',
-      attackVector: 'ไม่สามารถนำเว็บไซต์ jre-2027.vercel.app ไปแสดงใน <iframe> เพื่อทำ Clickjacking ได้ และเบราว์เซอร์ถูกบังคับใช้ HTTPS อย่างเข้มงวด',
-      remediation: 'ติดตั้ง Security Headers ใน vercel.json เรียบร้อยแล้ว'
-    },
-    {
-      id: 11,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'ไม่มีกลไก Rate Limiting และ CAPTCHA ป้องกันการส่งข้อมูลอัตโนมัติ',
-      category: 'CWE-307: Improper Restriction of Excessive Authentication / Request Attempts',
-      status: 'hardened',
-      statusLabel: 'เสริมเกราะป้องกันแล้ว (Hardened)',
-      statusColor: 'green',
-      statusBadge: '🟢 Client-Debounce & Double-Submit Gate',
-      howItWasFixed: '1. เพิ่มกลไก Debounce และ Double-Submission Lock บนปุ่มส่งใบสมัครและปุ่มล็อกอิน ป้องกันการกดซ้ำหรือสแปมคำขอ\n2. เพิ่มการจำกัดขนาดไฟล์อัปโหลดใน Client ไม่ให้เกิน 5MB และกรองประเภทไฟล์ตั้งแต่ก่อนอัปโหลด\n3. ใน `/api/admin-auth.js` มีการดักจับข้อผิดพลาดและส่งสถานะที่ปลอดภัย',
-      evidence: 'src/views/RegisterView.jsx และ src/components/AdminLoginModal.jsx',
-      description: 'ระบบป้องกันการส่งคำขอซ้ำซ้อน รัวคำขอ และจำกัดขนาดของไฟล์อัปโหลดอย่างเป็นระบบ',
-      attackVector: 'การส่งข้อมูลรัวๆ จะถูกปุ่มและ State ฝั่ง Client ปิดกั้นไว้ และไฟล์ขนาดใหญ่เกินกำหนดจะถูกปฏิเสธตั้งแต่ในเบราว์เซอร์',
-      remediation: 'ติดตั้ง Double-Submit Lock และจำกัดขนาดไฟล์อัปโหลด'
-    },
-    {
-      id: 12,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'ความเสี่ยงด้านการคุ้มครองข้อมูลส่วนบุคคลอ่อนไหวตาม พ.ร.บ. PDPA (ข้อมูลสุขภาพและโรคประจำตัว)',
-      category: 'Legal & Regulatory Compliance: Thailand PDPA Section 26 (Sensitive Personal Data)',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ถูกต้องตามกฎหมาย · Consent Gating',
-      howItWasFixed: '1. สร้าง Consent Gating ใน `RegisterView.jsx` บังคับให้ผู้สมัครต้องติ๊กยอมรับทั้ง 2 ข้อ (รับรองความถูกต้องของข้อมูล + นโยบาย PDPA มมส) ก่อนที่ปุ่มส่งจะเปิดให้ใช้งาน\n2. แยกส่วนจัดเก็บข้อมูลสุขภาพ (medical_history, food_allergy, blood_group) ไว้อย่างชัดเจน และจัดเตรียมสิทธิ์ RLS ให้เข้าถึงได้เฉพาะเจ้าหน้าที่ที่เกี่ยวข้อง\n3. จัดทำเอกสาร PDPA Policy Modal ในตัวแอปพลิเคชันให้อ่านรายละเอียดได้ครบถ้วน',
-      evidence: 'src/views/RegisterView.jsx (isConsentAgreed gate) และ supabase_security_hardening.sql',
-      description: 'ระบบปฏิบัติตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 มาตรา 26 โดยมีกลไกความยินยอมแบบชัดแจ้ง (Explicit Consent)',
-      attackVector: 'ผู้สมัครต้องให้ความยินยอมโดยสมัครใจอย่างชัดแจ้งก่อนส่งข้อมูล และข้อมูลสุขภาพถูกจำกัดการเข้าถึงตามหลักการ Need-to-Know',
-      remediation: 'ติดตั้ง Consent Gating และผูกนโยบาย RLS คุ้มครองข้อมูลสุขภาพ'
-    },
-    {
-      id: 13,
-      severity: 'low',
-      severityLabel: 'ต่ำ / ข้อสังเกต (Low)',
-      title: 'Hardcoded Fallback Credentials ใน Serverless Endpoint api/file.js และ CORS Wildcard (*)',
-      category: 'CWE-798 & CWE-942: Hard-coded Credentials / Overly Permissive CORS',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Origin Restricted',
-      howItWasFixed: '1. แก้ไข `api/file.js` ยกเลิกการใช้ `Access-Control-Allow-Origin: *` และเปลี่ยนมาตรวจสอบ Origin เทียบกับโดเมนจริง `https://jre-2027.vercel.app`\n2. ปรับการอ่านค่า Supabase URL และ Key ให้รับจาก Environment Variables อย่างปลอดภัย',
-      evidence: 'api/file.js บรรทัด 15-28',
-      description: 'เดิมเปิด CORS Wildcard อนุญาตให้ทุกเว็บดึงไฟล์ได้ ปัจจุบันจำกัดสิทธิ์เฉพาะโดเมนของโครงการ',
-      attackVector: 'เว็บไซต์บุคคลที่สามไม่สามารถส่งคำขอแบบ Cross-Origin มาดึงไฟล์หรือทำ Hotlinking ได้อีกต่อไป',
-      remediation: 'จำกัด CORS Whitelist เฉพาะโดเมนโครงการ'
-    },
-    {
-      id: 14,
-      severity: 'low',
-      severityLabel: 'ต่ำ / ข้อสังเกต (Low)',
-      title: 'ความไม่สอดคล้องระหว่าง Schema ฐานข้อมูลจริง กับโค้ดของแอปพลิเคชัน (ตาราง merchandise_orders)',
-      category: 'Database Inconsistency & Unhandled Error Fallback',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Graceful Local Fallback',
-      howItWasFixed: '1. ปรับปรุง `src/supabase.js` ให้มีกลไก Try-Catch ดักจับกรณีที่ตารางยังไม่ได้ถูกสร้าง และสลับไปใช้ Secure LocalStorage Fallback อัตโนมัติโดยไม่ทำให้เว็บแครช\n2. รวมคำสั่ง `CREATE TABLE IF NOT EXISTS merchandise_orders` ไว้ในสคริปต์ความปลอดภัยฐานข้อมูล',
-      evidence: 'src/supabase.js (getMerchandiseOrders fallback)',
-      description: 'ระบบทำงานได้อย่างต่อเนื่องแม้ในกรณีที่ตารางบนคลาวด์ยังไม่ได้รัน Migration โดยไม่มีข้อผิดพลาดที่กระทบต่อผู้ใช้งาน',
-      attackVector: 'ไม่มี Unhandled Exception หรือหน้าจอขาว (White Screen of Death) เกิดขึ้นเมื่อเกิดข้อผิดพลาดในการเรียกตาราง',
-      remediation: 'ติดตั้ง Graceful Fallback และเตรียมสคริปต์สร้างตารางในฐานข้อมูล'
-    },
-    {
-      id: 15,
-      severity: 'low',
-      severityLabel: 'ต่ำ / ข้อสังเกต (Low)',
-      title: 'ช่องโหว่ในไลบรารีภายนอก (npm audit: xlsx Prototype Pollution & ReDoS)',
-      category: 'CWE-1321 & CWE-1333: Third-party Dependency Vulnerabilities (SheetJS / xlsx)',
-      status: 'hardened',
-      statusLabel: 'เสริมเกราะป้องกันแล้ว (Hardened)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Export Only Scope',
-      howItWasFixed: '1. ตรวจสอบขอบเขตการใช้งาน: แอปพลิเคชันใช้ไลบรารี xlsx เฉพาะสำหรับการ "สร้างและส่งออกไฟล์ Excel" (Export Only) ในส่วนของ Admin เท่านั้น\n2. ไม่มีการรับไฟล์ Excel จากผู้ใช้ภายนอกเข้ามา Parse หรืออ่านไฟล์ จึงไม่สามารถเกิดช่องโหว่ Prototype Pollution จากไฟล์อันตรายได้\n3. ติดตั้งไลบรารี `exceljs` ไว้เป็นทางเลือกหลักสำหรับการประมวลผลข้อมูล',
-      evidence: 'package.json และ src/views/AdminDashboardView.jsx',
-      description: 'ช่องโหว่ของ SheetJS เกิดจากการอ่านไฟล์ Excel แปลกปลอม แต่ระบบของเราใช้เฉพาะการเขียนไฟล์ออก ทำให้ไม่ได้รับผลกระทบในทางปฏิบัติ',
-      attackVector: 'ไม่สามารถส่งไฟล์ Excel อันตรายเข้ามาโจมตีระบบได้เนื่องจากไม่มี Endpoint ใดเปิดรับการ Parse ไฟล์ Excel',
-      remediation: 'จำกัดขอบเขตการใช้งานเฉพาะ Export Only'
-    },
-    // NEW VULNERABILITIES ADDED & REMEDIATED (Items 16 - 20)
-    {
-      id: 16,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'ความเสี่ยง Reverse Tabnabbing บนลิงก์ภายนอกทั้งหมด (Target Blank Exploit)',
-      category: 'CWE-1022: Use of Web Link to Untrusted Target with window.opener Access',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · rel="noopener noreferrer"',
-      howItWasFixed: '1. ตรวจสอบทุกลิงก์ `<a href="..." target="_blank">` ในระบบทั้งหมด (ลิงก์แผนที่, เอกสารภายนอก, โทรศัพท์, ไลน์)\n2. บังคับใส่ attribute `rel="noopener noreferrer"` ครบทุกจุด 100%\n3. ป้องกันไม่ให้หน้าต่างใหม่สามารถเข้าถึงออบเจ็กต์ `window.opener` ของหน้าต่างเดิมได้',
-      evidence: 'ทั่วทั้งโปรเจกต์ (Navbar.jsx, Footer.jsx, RegisterView.jsx, HomeView.jsx)',
-      description: 'การเปิดลิงก์ภายนอกแบบ target="_blank" โดยไม่มี noopener อาจทำให้เว็บภายนอกสามารถ Redirect หน้าเดิมของผู้ใช้ไปยังหน้าฟิชชิ่งได้',
-      attackVector: 'เว็บปลายทางไม่สามารถเข้าถึง window.opener เพื่อเปลี่ยน URL ของแท็บเดิมได้อีกต่อไป',
-      remediation: 'เพิ่ม rel="noopener noreferrer" บนทุกลิงก์ที่เปิดแท็บใหม่'
-    },
-    {
-      id: 17,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'การรั่วไหลของข้อมูลระบบผ่าน Technical Error Stack Traces',
-      category: 'CWE-209: Generation of Error Message Containing Sensitive Information',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Sanitized Error Handling',
-      howItWasFixed: '1. ห่อหุ้ม API Handlers และฟังก์ชันเชื่อมต่อฐานข้อมูลทั้งหมดด้วย Generic User-Friendly Error Messages\n2. ซ่อน SQL Query, Internal Table Names, และ Server Path ไม่ให้แสดงบนหน้า UI หรือ Toast Notification\n3. แสดงข้อความภาษาไทยที่สุภาพและเข้าใจง่ายแทนข้อความทางเทคนิคดิบๆ',
-      evidence: 'src/supabase.js, api/file.js, src/views/RegisterView.jsx',
-      description: 'เดิมข้อผิดพลาดทางเทคนิคอาจหลุดไปแสดงให้ผู้ใช้เห็น ปัจจุบันถูกแปลงเป็นข้อความมาตรฐานที่ปลอดภัย',
-      attackVector: 'แฮกเกอร์ไม่สามารถดูโครงสร้างฐานข้อมูล คอลัมน์ หรือเส้นทางเซิร์ฟเวอร์จากข้อความ Error ได้',
-      remediation: 'แปลง Error Message ทางเทคนิคให้เป็นข้อความทั่วไปที่ไม่เปิดเผยข้อมูลภายใน'
-    },
-    {
-      id: 18,
-      severity: 'low',
-      severityLabel: 'ต่ำ / ข้อสังเกต (Low)',
-      title: 'การขาดแคลน Security Advisory & Responsible Disclosure Files (security.txt, robots.txt)',
-      category: 'RFC 9116 & Web Discovery Standards: Missing Security Contact & Crawler Policy',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · RFC 9116 Compliant',
-      howItWasFixed: '1. จัดทำไฟล์ `/.well-known/security.txt` และ `/security.txt` ตามมาตรฐาน RFC 9116 ระบุช่องทางแจ้งช่องโหว่ความปลอดภัยอย่างเป็นทางการ\n2. จัดทำไฟล์ `/robots.txt` และ `/sitemap.xml` ควบคุมการเข้าถึงของ Search Engine Bots และปิดกั้นหน้า Admin จากการทำดัชนี\n3. ตั้งค่า Rewrite และ Response Headers ที่ถูกต้องใน `vercel.json`',
-      evidence: 'public/.well-known/security.txt, public/robots.txt, vercel.json',
-      description: 'เพิ่มช่องทางประสานงานด้านความปลอดภัยสำหรับนักวิจัยความปลอดภัย (White Hat) และควบคุมการทำงานของบอทค้นหา',
-      attackVector: 'ช่วยให้นักวิจัยความปลอดภัยแจ้งเตือนข้อบกพร่องได้อย่างถูกต้อง และป้องกันไม่ให้บอทไต่เข้าถึงหน้าที่เป็นความลับ',
-      remediation: 'สร้าง security.txt และ robots.txt ตามมาตรฐานสากลเรียบร้อยแล้ว'
-    },
-    {
-      id: 19,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'ความเสี่ยง Cross-Site Request Forgery (CSRF) & State Tampering ในการลบข้อมูล',
-      category: 'CWE-352: Cross-Site Request Forgery (CSRF) on Destructive Actions',
-      status: 'hardened',
-      statusLabel: 'เสริมเกราะป้องกันแล้ว (Hardened)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · In-App Modal Confirmation',
-      howItWasFixed: '1. ติดตั้งระบบ In-App Confirmation Modal (`useConfirmModal`) สำหรับคำสั่งสำคัญ เช่น การลบใบสมัคร การยกเลิกการแก้ไข หรือการลบข้อความ\n2. ผู้ใช้ต้องกดยืนยันผ่าน Modal แบบ Interactive เท่านั้น ไม่สามารถถูก Trigger ด้วยการเรียก URL ตรงๆ ได้\n3. ปิดกั้นการส่งคำสั่งอัตโนมัติจากภายนอก',
-      evidence: 'src/hooks/useConfirmModal.jsx และ src/views/RegisterView.jsx',
-      description: 'คำสั่งลบหรือยกเลิกข้อมูลสำคัญทั้งหมดต้องผ่านการยืนยันตัวตนซ้ำผ่าน Modal ป้องกันการถูกหลอกให้คลิกลิงก์อันตราย',
-      attackVector: 'การโจมตีแบบ CSRF หรือการหลอกให้ผู้ใช้คลิกลิงก์ภายนอกจะไม่สามารถสั่งลบข้อมูลได้เนื่องจากติดการยืนยันสองชั้น',
-      remediation: 'ติดตั้ง In-App Confirmation Modal บังคับยืนยันก่อนการกระทำสำคัญ'
-    },
-    {
-      id: 20,
-      severity: 'medium',
-      severityLabel: 'ปานกลาง (Medium)',
-      title: 'การฉีดโค้ด HTML หรือ Script ผ่านทางช่องกรอกข้อมูลผู้สมัคร (Input Sanitization)',
-      category: 'CWE-116: Improper Encoding or Escaping of Output in Form Inputs',
-      status: 'resolved',
-      statusLabel: 'แก้ไขแล้ว (Resolved)',
-      statusColor: 'green',
-      statusBadge: '🟢 ปลอดภัยแล้ว · Auto-Escaping & Regex',
-      howItWasFixed: '1. ใช้ระบบ Data Binding แบบ React State ซึ่งมีกลไก JSX Automatic String Escaping โดยอัตโนมัติ (ไม่ใช้ dangerouslySetInnerHTML ในฟิลด์ข้อมูลผู้ใช้)\n2. เพิ่มการตรวจสอบ Regular Expression บนฟิลด์สำคัญ เช่น เบอร์โทรศัพท์ (บังคับเฉพาะตัวเลข 10 หลัก), วันเกิด, และชื่อ-นามสกุล\n3. ลบอักขระพิเศษที่อาจเป็นอันตรายออกจากชื่อไฟล์ก่อนทำการอัปโหลด',
-      evidence: 'src/views/RegisterView.jsx (validateStep1, regex checks)',
-      description: 'ระบบป้องกันการส่งโค้ด HTML, Javascript หรือ SQL Injection ผ่านฟอร์มลงทะเบียนในทุกฟิลด์',
-      attackVector: 'การพิมพ์แท็ก <script> หรือโค้ด HTML ลงในช่องชื่อเล่น เบอร์โทร หรือสังกัด จะถูกแสดงผลเป็นตัวอักษรธรรมดา ไม่ถูกประมวลผลเป็นโค้ด',
-      remediation: 'ใช้ React Auto-Escaping และตรวจสอบ Regex บนทุกช่องอินพุต'
-    }
-  ];
-
-  const attackScenarios = [
-    {
-      rank: 1,
-      title: 'พยายามเข้ายึดระบบ Admin Console ผ่าน localStorage',
-      difficulty: 'ถูกปิดกั้นแล้ว (Blocked)',
-      mechanism: 'แก้ไขค่า jre2027_is_admin ในเบราว์เซอร์ Console',
-      status: '🟢 ป้องกันสำเร็จ: ระบบบังคับตรวจ Signed HMAC Token ที่มีอายุจำกัด',
-      findingRef: 'ข้อ 1, 2'
-    },
-    {
-      rank: 2,
-      title: 'ค้นหารหัสผ่าน Admin จาก Production JavaScript Bundle',
-      difficulty: 'ถูกปิดกั้นแล้ว (Blocked)',
-      mechanism: 'เปิด DevTools > ค้นหาคำว่า ADMIN ในไฟล์ JavaScript',
-      status: '🟢 ป้องกันสำเร็จ: ย้ายการตรวจรหัสผ่านไปทำบน Serverless /api/admin-auth',
-      findingRef: 'ข้อ 1'
-    },
-    {
-      rank: 3,
-      title: 'ดึงข้อมูลส่วนบุคคลและข้อมูลสุขภาพของผู้สมัครทุกคน',
-      difficulty: 'ต้องใช้ Service Role Key เท่านั้น',
-      mechanism: 'เปิดดู Network Tab หรือยิง REST API ตรงด้วย anon key',
-      status: '🟢 ป้องกันสำเร็จ: Client ดึงเฉพาะใบสมัครของตนเอง + มีสคริปต์ RLS บังคับ',
-      findingRef: 'ข้อ 3, 6, 12'
-    },
-    {
-      rank: 4,
-      title: 'แก้ไขเลขที่บัญชีรับเงินของโครงการเพื่อขโมยยอดโอน',
-      difficulty: 'ต้องใช้ Admin Role',
-      mechanism: 'ส่ง PATCH คำขอไปยังตาราง project_settings',
-      status: '🟢 ป้องกันสำเร็จ: นโยบาย RLS ล็อคสิทธิ์ UPDATE เฉพาะผู้ดูแลระบบ',
-      findingRef: 'ข้อ 3, 9'
-    },
-    {
-      rank: 5,
-      title: 'การรันสคริปต์อันตรายผ่าน /api/file (Stored XSS)',
-      difficulty: 'ถูกปิดกั้นแล้ว (Blocked)',
-      mechanism: 'บันทึก HTML Script ลงฐานข้อมูลแล้วเปิดผ่านลิงก์ไฟล์',
-      status: '🟢 ป้องกันสำเร็จ: บังคับ Whitelist MIME Type + Content-Security-Policy Sandbox',
-      findingRef: 'ข้อ 7, 8, 13'
-    },
-    {
-      rank: 6,
-      title: 'การดักขโมยข้อมูลหน้าต่างเดิมผ่านลิงก์ภายนอก (Reverse Tabnabbing)',
-      difficulty: 'ถูกปิดกั้นแล้ว (Blocked)',
-      mechanism: 'เปิดลิงก์แท็บใหม่แล้วใช้ window.opener เปลี่ยนหน้าเดิม',
-      status: '🟢 ป้องกันสำเร็จ: ติดตั้ง rel="noopener noreferrer" ครบถ้วนทุกจุด',
-      findingRef: 'ข้อ 16'
-    }
-  ];
-
-  const goodPractices = [
-    {
-      title: 'การติดตั้ง Security Response Headers ครบถ้วน',
-      desc: 'ติดตั้ง X-Frame-Options: DENY, X-Content-Type-Options: nosniff, CSP sandbox, และ HSTS ใน vercel.json'
-    },
-    {
-      title: 'การคุ้มครองข้อมูลด้วย Consent Gate (PDPA)',
-      desc: 'ผู้สมัครต้องติ๊กยอมรับเงื่อนไขและยืนยันข้อมูลครบ 2 ข้อ ปุ่มส่งจึงจะปลดล็อกเปิดใช้งาน'
-    },
-    {
-      title: 'ระบบตรวจสอบสิทธิ์ Admin ฝั่งเซิร์ฟเวอร์ (Serverless Auth)',
-      desc: 'ตรวจสอบรหัสผ่านด้วย Constant-time comparison และออก Signed HMAC Token ป้องกันการรั่วไหลใน Bundle'
-    },
-    {
-      title: 'การตรวจสอบและจำกัดประเภทไฟล์ (MIME Whitelist)',
-      desc: 'อนุญาตเฉพาะรูปภาพและ PDF พร้อมคำสั่งบังคับดาวน์โหลดหากพบไฟล์น่าสงสัย'
-    },
-    {
-      title: 'มาตรฐานความปลอดภัยสาธารณะ (RFC 9116 security.txt & robots.txt)',
-      desc: 'เผยแพร่ช่องทางรายงานช่องโหว่อย่างเป็นทางการ และตั้งค่า Crawling Policy ป้องกันข้อมูลรั่วไหล'
-    },
-    {
-      title: 'ปลอดภัยจากการดัดแปลงข้อมูลสำคัญ (Two-Step Confirmation)',
-      desc: 'การยกเลิกหรือลบข้อมูลต้องผ่าน Interactive Confirmation Modal ป้องกันการโจมตีแบบ CSRF'
-    }
-  ];
-
-  const filteredList = vulnerabilities.filter(v => {
-    const matchesSeverity = filterSeverity === 'all' || v.severity === filterSeverity;
-    const matchesStatus = filterStatus === 'all' || v.status === filterStatus;
-    const matchesSearch = searchQuery === '' || 
-      v.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.howItWasFixed.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.evidence.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSeverity && matchesStatus && matchesSearch;
-  });
-
-  const resolvedCount = vulnerabilities.filter(v => v.status === 'resolved' || v.status === 'hardened').length;
-  const configuredCount = vulnerabilities.filter(v => v.status === 'configured').length;
-
-  return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300 pb-16">
-      
-      {/* TOP NAVIGATION / ACTION BAR */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-3xl shadow-xl backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          {onNavigateHome && (
-            <button
-              onClick={onNavigateHome}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>หน้าแรก</span>
-            </button>
-          )}
-          {onNavigateAdmin && (
-            <button
-              onClick={onNavigateAdmin}
-              className="px-3.5 py-2 bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-800/60 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Shield className="w-3.5 h-3.5 text-purple-400" />
-              <span>ระบบ Admin</span>
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-          <button
-            onClick={handleCopyUrl}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-            title="คัดลอก URL หน้ารายงานนี้"
-          >
-            {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-            <span>{copiedUrl ? 'คัดลอกลิงก์แล้ว!' : 'คัดลอก URL หน้านี้'}</span>
-          </button>
-
-          <button
-            onClick={handlePrint}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-            title="พิมพ์รายงานหรือส่งออกเป็น PDF"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-400" />
-            <span>พิมพ์ / บันทึก PDF</span>
-          </button>
-        </div>
-      </div>
-
-      {/* MODE TOGGLE TABS (Academic Presentation vs 20 Vulnerabilities Audit) */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-2 sm:p-2.5 rounded-2xl shadow-xl">
-        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-          <button
-            onClick={() => handleSwitchTab('presentation')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              activeTab === 'presentation'
-                ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>🎓 นำเสนอวิจัย AI & MCP</span>
-          </button>
-
-          <button
-            onClick={() => handleSwitchTab('audit')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              activeTab === 'audit'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 text-emerald-300" />
-            <span>🛡️ รายการช่องโหว่ (20 จุด)</span>
-          </button>
-        </div>
-
-        <div className="text-xs text-slate-400 hidden sm:flex items-center gap-2 pr-2">
-          <span className="font-mono text-indigo-400 font-bold">
-            {activeTab === 'presentation' ? 'URL: /presentation' : 'URL: /security'}
-          </span>
-        </div>
-      </div>
-
-      {activeTab === 'presentation' ? (
-        <AcademicPresentationSection 
-          onSwitchToAudit={() => handleSwitchTab('audit')}
-          onNavigateHome={onNavigateHome}
-        />
-      ) : (
-        <>
-          {/* HERO BANNER & EXECUTIVE SUMMARY */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 border-2 border-emerald-500/40 p-6 sm:p-10 shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-        
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black uppercase tracking-wider">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Cybersecurity Remediation & Hardening Audit</span>
-            </div>
-
-            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-              รายงานผลการแก้ไขช่องโหว่และยกระดับความมั่นคงปลอดภัย
-            </h1>
-
-            <p className="text-slate-300 text-xs sm:text-sm max-w-3xl leading-relaxed">
-              เป้าหมาย: <strong className="text-amber-400 font-mono">jre-2027.vercel.app</strong> (ระบบลงทะเบียนและบริหารโครงการฝึกอบรม JRE 2027) · ดำเนินการแก้ไขช่องโหว่เชิงเทคนิคครบทุกจุด, ปรับปรุงสิทธิ์การเข้าถึง, เสริมสร้าง Security Headers, ป้องกัน Stored XSS, และคุ้มครองข้อมูลตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA)
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 pt-1">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                อัปเดตล่าสุด: ตุลาคม 2569 (2026)
-              </span>
-              <span>•</span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <CheckCheck className="w-4 h-4 text-emerald-400" />
-                ระดับความปลอดภัยรวม: สีเขียว 🟢 ปลอดภัยระดับสูงมาก (A+ Fully Hardened)
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4 bg-slate-950/90 border border-emerald-500/40 rounded-2xl text-center shrink-0 w-full md:w-auto shadow-xl">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
-              สถานะการแก้ไขช่องโหว่
-            </span>
-            <div className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300">
-              {resolvedCount}/{vulnerabilities.length} ข้อ
-            </div>
-            <span className="text-[11px] text-emerald-300 font-semibold block mt-1">
-              แก้ไขและเสริมเกราะป้องกันแล้ว 100%
-            </span>
-          </div>
-        </div>
-
-        {/* METRICS SCORECARDS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-8 border-t border-slate-800/80 mt-8">
-          <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-600/50">
-            <span className="text-[10px] font-black uppercase text-emerald-400 block">🟢 แก้ไขแล้ว (Resolved)</span>
-            <span className="text-2xl font-black text-white mt-1 block">{resolvedCount} รายการ</span>
-            <span className="text-[10px] text-slate-400">อุดช่องโหว่ในระบบเรียบร้อย</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-600/40">
-            <span className="text-[10px] font-black uppercase text-amber-400 block">🟡 มีสคริปต์พร้อมใช้งาน</span>
-            <span className="text-2xl font-black text-white mt-1 block">{configuredCount} รายการ</span>
-            <span className="text-[10px] text-slate-400">สคริปต์ SQL พร้อมรันบน DB</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-700">
-            <span className="text-[10px] font-black uppercase text-rose-400 block">🔴 วิกฤตคงค้าง (Critical Left)</span>
-            <span className="text-2xl font-black text-white mt-1 block">0 รายการ</span>
-            <span className="text-[10px] text-slate-400">ไม่มีช่องโหว่วิกฤตค้าง</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-blue-950/20 border border-blue-600/30">
-            <span className="text-[10px] font-black uppercase text-blue-400 block">🔵 ช่องโหว่ที่ตรวจสอบทั้งหมด</span>
-            <span className="text-2xl font-black text-white mt-1 block">{vulnerabilities.length} รายการ</span>
-            <span className="text-[10px] text-slate-400">ครอบคลุมทุกมิติความปลอดภัย</span>
-          </div>
-        </div>
-      </div>
-
-      {/* QUICK STATUS SUMMARY BAR */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-indigo-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-lg border border-emerald-500/30 shrink-0">
-            🛡️
-          </div>
-          <div>
-            <h3 className="font-bold text-white text-sm">
-              สรุปคำตอบ: ช่องโหว่ทั้งหมดแก้ยังไง ความปลอดภัยอยู่สีอะไรสถานะไหน?
-            </h3>
-            <p className="text-slate-300 text-xs">
-              • <strong>สีความปลอดภัยปัจจุบัน:</strong> <span className="text-emerald-400 font-bold">สีเขียว 🟢 (สถานะ: ปลอดภัยระดับสูงมาก / Fully Hardened)</span> ไม่มีช่องโหว่วิกฤตคงค้าง<br />
-              • <strong>แก้ยังไง:</strong> ดูในแต่ละการ์ดด้านล่างที่ช่อง <span className="text-emerald-300 font-bold">“💡 แก้ยังไง (How It Was Fixed)”</span> ระบุแนวทางแก้ไขและไฟล์ที่ปรับปรุงชัดเจนทุกข้อ
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* REALISTIC ATTACK PATHWAYS TABLE */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold">
-            <AlertTriangle className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-white">
-              เส้นทางการโจมตีที่เคยเสี่ยง และผลการป้องกันในปัจจุบัน
-            </h2>
-            <p className="text-xs text-slate-400">
-              สถานะการรับมือการโจมตีจริงเมื่อมีผู้ไม่ประสงค์ดีพยายามเจาะระบบ
-            </p>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 text-[11px] font-semibold bg-slate-950/60">
-                <th className="p-3 w-12 text-center">ลำดับ</th>
-                <th className="p-3">รูปแบบการโจมตี</th>
-                <th className="p-3">กลไกเดิมที่เสี่ยง</th>
-                <th className="p-3">สถานะการป้องกันปัจจุบัน</th>
-                <th className="p-3 w-20 text-center">ช่องโหว่</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {attackScenarios.map(sc => (
-                <tr key={sc.rank} className="hover:bg-slate-850/50 transition-colors">
-                  <td className="p-3 text-center font-black text-amber-400">#{sc.rank}</td>
-                  <td className="p-3 font-bold text-white whitespace-nowrap">{sc.title}</td>
-                  <td className="p-3 text-slate-400">{sc.mechanism}</td>
-                  <td className="p-3 font-medium text-emerald-300">{sc.status}</td>
-                  <td className="p-3 text-center">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-800 text-slate-300">
-                      {sc.findingRef}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* FILTER & SEARCH CONTROLS */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-800">
-        {/* Severity Filter Pills */}
-        <div className="flex items-center gap-1.5 flex-wrap text-xs">
-          <button
-            onClick={() => setFilterSeverity('all')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-              filterSeverity === 'all'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            ทั้งหมด ({vulnerabilities.length})
-          </button>
-          <button
-            onClick={() => setFilterSeverity('critical')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-              filterSeverity === 'critical'
-                ? 'bg-red-600 text-white shadow-md'
-                : 'bg-slate-800 text-red-400 hover:bg-slate-750'
-            }`}
-          >
-            🔴 วิกฤต (3)
-          </button>
-          <button
-            onClick={() => setFilterSeverity('high')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-              filterSeverity === 'high'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-slate-800 text-amber-400 hover:bg-slate-750'
-            }`}
-          >
-            🟠 สูง (5)
-          </button>
-          <button
-            onClick={() => setFilterSeverity('medium')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-              filterSeverity === 'medium'
-                ? 'bg-yellow-600 text-white shadow-md'
-                : 'bg-slate-800 text-yellow-400 hover:bg-slate-750'
-            }`}
-          >
-            🟡 ปานกลาง (8)
-          </button>
-          <button
-            onClick={() => setFilterSeverity('low')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-              filterSeverity === 'low'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-slate-800 text-blue-400 hover:bg-slate-750'
-            }`}
-          >
-            🔵 ต่ำ (4)
-          </button>
-        </div>
-
-        {/* Search Box */}
-        <div className="relative min-w-[220px]">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ค้นหาช่องโหว่, วิธีแก้, ไฟล์..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs outline-none focus:border-purple-500"
-          />
-        </div>
-      </div>
-
-      {/* 20 VULNERABILITIES DETAILED CARDS */}
-      <div className="space-y-5">
-        {filteredList.map(item => {
-          const isResolved = item.status === 'resolved' || item.status === 'hardened';
-
-          return (
-            <div
-              key={item.id}
-              className={`p-6 rounded-3xl border transition-all space-y-4 shadow-xl ${
-                isResolved
-                  ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/20 border-emerald-500/40 shadow-emerald-950/20'
-                  : 'bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/20 border-amber-500/40 shadow-amber-950/20'
-              }`}
-            >
-              {/* Finding Header */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                <div className="flex items-start sm:items-center gap-3">
-                  <span className={`w-8 h-8 rounded-xl font-black text-sm flex items-center justify-center shrink-0 ${
-                    isResolved 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  }`}>
-                    {item.id}
-                  </span>
-
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
-                        {item.severityLabel}
-                      </span>
-                      <span className="text-[11px] font-mono text-slate-400">
-                        {item.category}
-                      </span>
-                    </div>
-
-                    <h3 className="text-base sm:text-lg font-black text-white mt-1">
-                      {item.title}
-                    </h3>
-                  </div>
-                </div>
-
-                {/* Status Badge */}
-                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                  <span className={`px-3 py-1 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
-                    item.statusColor === 'green'
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                  }`}>
-                    {item.statusColor === 'green' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-400" />}
-                    <span>{item.statusBadge}</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Code Evidence */}
-              <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-start gap-2.5 text-xs font-mono text-slate-300">
-                <FileCode className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">ตำแหน่งโค้ด / ไฟล์ที่เกี่ยวข้อง:</span>
-                  <span className="text-purple-300">{item.evidence}</span>
-                </div>
-              </div>
-
-              {/* Description */}
-              <div className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                <span className="font-bold text-white block mb-0.5">รายละเอียดข้อบกพร่อง:</span>
-                {item.description}
-              </div>
-
-              {/* HOW IT WAS FIXED (MAIN USER REQUIREMENT) */}
-              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/50 space-y-2 text-xs">
-                <div className="flex items-center gap-1.5 text-emerald-300 font-black text-sm">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                  <span>👉 แก้ยังไง (How It Was Fixed) • สถานะ: {item.statusColor === 'green' ? '🟢 สีเขียว (ปลอดภัยแล้ว)' : '🟡 สีเหลือง (มีสคริปต์พร้อมใช้งาน)'}:</span>
-                </div>
-                <p className="text-slate-200 whitespace-pre-line leading-relaxed font-sans">
-                  {item.howItWasFixed}
-                </p>
-              </div>
-
-              {/* Attack Vector & Remediation Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1.5 text-amber-400 font-bold">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    <span>ผลลัพธ์การป้องกันเมื่อถูกโจมตี:</span>
-                  </div>
-                  <p className="text-slate-300 whitespace-pre-line leading-relaxed font-sans">
-                    {item.attackVector}
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1.5 text-sky-400 font-bold">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>สรุปมาตรการเชิงเทคนิค (Summary):</span>
-                  </div>
-                  <p className="text-slate-300 whitespace-pre-line leading-relaxed font-sans">
-                    {item.remediation}
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* SECTION: SQL SCRIPT DOWNLOAD / COPY MODAL */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-amber-500/40 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
-              <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-white">
-                สคริปต์ความปลอดภัยฐานข้อมูล Supabase (supabase_security_hardening.sql)
-              </h2>
-              <p className="text-xs text-slate-400">
-                สคริปต์ Row Level Security (RLS) และ Trigger อัตโนมัติ พร้อมนำไปรันบน Supabase Dashboard
-              </p>
-            </div>
-          </div>
-
-          <a
-            href="/supabase_security_hardening.sql"
-            download
-            className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shrink-0 cursor-pointer self-start sm:self-auto"
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>ดาวน์โหลด SQL Script</span>
-          </a>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 space-y-2 max-h-48 overflow-y-auto">
-          <p className="text-slate-500">-- ตัวอย่างส่วนหนึ่งของสคริปต์ความปลอดภัย supabase_security_hardening.sql --</p>
-          <p className="text-amber-300">ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;</p>
-          <p className="text-amber-300">ALTER TABLE user_accounts ENABLE ROW LEVEL SECURITY;</p>
-          <p className="text-amber-300">ALTER TABLE project_settings ENABLE ROW LEVEL SECURITY;</p>
-          <p className="text-emerald-400">{'CREATE POLICY "Registrations Owner Read" ON registrations FOR SELECT USING (auth.uid() = user_id OR auth.jwt() ->> \'email\' = user_email OR (auth.jwt() -> \'app_metadata\' ->> \'role\') = \'admin\');'}</p>
-          <p className="text-emerald-400">CREATE TRIGGER trg_protect_payment_status BEFORE UPDATE ON registrations FOR EACH ROW EXECUTE FUNCTION protect_payment_status_modification();</p>
-        </div>
-      </div>
-
-      {/* SECTION: EXISTING POSITIVE PRACTICES */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-white">
-              จุดแข็งและส่วนที่ระบบทำได้อย่างถูกต้องแล้ว (Positive Controls)
-            </h2>
-            <p className="text-xs text-slate-400">
-              ผลการตรวจส่วนที่ไม่พบช่องโหว่และเป็นไปตามหลักปฏิบัติที่ดี (Best Practices)
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 pt-2">
-          {goodPractices.map((gp, idx) => (
-            <div key={idx} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-start gap-3 text-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-bold text-white text-xs sm:text-sm">{gp.title}</h4>
-                <p className="text-slate-400 mt-1 leading-relaxed">{gp.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* FOOTER NOTE */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-center text-xs text-slate-500">
-        รายงานนี้ถูกจัดทำขึ้นเพื่อการประเมินและยกระดับความมั่นคงปลอดภัยของโครงการ Joint Response Exercise (JRE 2027) · พัฒนาระบบโดยทีมงาน RCPDEV
-      </div>
-        </>
-      )}
-
+  return <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-3 sm:p-4 rounded-2xl shadow-xl">
+      <div className="flex items-center gap-2 flex-wrap">{onNavigateHome && <button onClick={onNavigateHome} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5"><ArrowLeft className="w-3.5 h-3.5" /> หน้าแรก</button>}{onNavigateAdmin && <button onClick={onNavigateAdmin} className="px-3 py-2 bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-800/60 text-xs font-bold rounded-xl flex items-center gap-1.5"><LockKeyhole className="w-3.5 h-3.5" /> ระบบ Admin</button>}</div>
+      <div className="flex items-center gap-2 flex-wrap"><button onClick={copyUrl} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> {copiedUrl ? 'คัดลอกแล้ว' : 'คัดลอก URL'}</button><button onClick={() => window.print()} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> พิมพ์ / PDF</button></div>
     </div>
-  );
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl shadow-xl"><div className="grid grid-cols-2 gap-2"><button onClick={() => setTab('presentation')} className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 ${activeTab === 'presentation' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Code2 className="w-4 h-4" /> นำเสนอ AI & MCP</button><button onClick={() => setTab('audit')} className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 ${activeTab === 'audit' ? 'bg-rose-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><ShieldCheck className="w-4 h-4" /> รายงานหลักฐาน</button></div><span className="text-xs font-mono text-slate-500 px-3">{reportUrl}</span></div>
+    {activeTab === 'presentation' ? <AcademicPresentationSection onSwitchToAudit={() => setTab('audit')} onNavigateHome={onNavigateHome} /> : <>
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950/40 border-2 border-rose-500/40 p-6 sm:p-10 shadow-2xl"><div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"><div className="space-y-3"><div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/40 text-xs font-black uppercase tracking-wider"><AlertTriangle className="w-4 h-4" /> Evidence-based security audit</div><h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">รายงานตรวจสอบความปลอดภัยเว็บ JRE 2027</h1><p className="text-slate-300 text-xs sm:text-sm max-w-3xl leading-relaxed">เป้าหมาย: <a className="text-amber-300 underline" href="https://jre-2027.vercel.app" target="_blank" rel="noopener noreferrer">https://jre-2027.vercel.app</a> · ตรวจซอร์สในเครื่อง, production HTTP surface และ Supabase policy แบบ read-only</p><div className="flex flex-wrap gap-3 text-[11px] text-slate-400"><span className="flex items-center gap-1"><Clock3 className="w-3.5 h-3.5 text-amber-400" /> ตรวจเมื่อ 7 ตุลาคม 2569 (2026)</span><span>•</span><span className="text-rose-300 font-bold">สถานะ: ยังไม่ผ่านการรับรอง / มีประเด็นเปิดอยู่</span></div></div><div className="p-5 bg-slate-950/90 border border-rose-500/40 rounded-2xl text-center shrink-0 w-full lg:w-56 shadow-xl"><span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">ประเด็นที่ต้องแก้</span><div className="text-5xl font-black text-rose-300 mt-1">{findings.length}</div><span className="text-[11px] text-rose-200 font-semibold block mt-1">ยังเปิดอยู่จาก static/live evidence</span></div></div></section>
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Metric label="Critical" value={findings.filter((f) => f.severity === 'critical').length} color="rose" note="ต้องหยุดก่อน deploy" /><Metric label="High" value={findings.filter((f) => f.severity === 'high').length} color="orange" note="แก้ในรอบ hardening" /><Metric label="Medium/Low" value={findings.filter((f) => f.severity === 'medium' || f.severity === 'low').length} color="amber" note="ปรับปรุงตามลำดับ" /><Metric label="Verified controls" value={verifiedControls.length} color="emerald" note="ไม่ใช่การปิดช่องโหว่ทั้งหมด" /></section>
+      <section className="p-5 sm:p-7 rounded-3xl bg-amber-950/20 border border-amber-500/30 space-y-3"><div className="flex items-center gap-2 text-amber-300 font-black"><AlertCircle className="w-5 h-5" /> อ่านสรุปนี้ก่อนนำเสนอ</div><p className="text-sm text-slate-200 leading-relaxed">ผลตรวจนี้ไม่ใช่ penetration-test certification และไม่ได้ลองรหัสผ่านจริง ไม่ได้แก้/ลบข้อมูล production และยังไม่ได้ยืนยันว่า RLS hardening ถูกนำไปรันบน Supabase แล้ว จึงใช้คำว่า “พบจากหลักฐาน” และ “ต้องแก้” แทนการอ้างว่าแก้ครบทุกประเด็นหรือไม่มีความเสี่ยงเหลือ</p></section>
+      <section className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-5"><SectionTitle title="ขอบเขตและวิธีตรวจที่ทำจริง" subtitle="คำสั่ง read-only และการตรวจซอร์สที่ทำซ้ำได้" /><div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs"><EvidenceRow title="SAST / source review" text="rg ตรวจ auth, RLS, OTP, secrets, client data flow และ code snippets" /><EvidenceRow title="Build / dependency" text="npm run build ผ่าน; npm audit พบ high 6 และ moderate 4" /><EvidenceRow title="Production HTTP" text="GET หน้าเว็บ, API method checks, headers, security.txt และ robots.txt" /><EvidenceRow title="Supabase metadata" text="อ่าน count/field names แบบไม่แสดง PII และไม่แก้ไขข้อมูล" /></div><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-700 text-slate-400"><th className="p-3">หลักฐาน</th><th className="p-3">ผลที่ยืนยันได้</th></tr></thead><tbody className="divide-y divide-slate-800">{verifiedControls.map(([name, text]) => <tr key={name}><td className="p-3 font-bold text-emerald-300 whitespace-nowrap">{name}</td><td className="p-3 text-slate-300">{text}</td></tr>)}</tbody></table></div></section>
+      <section className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4"><SectionTitle title="ภาพประกอบและแผนภาพระบบ" subtitle="ใช้ภาพแนบเป็น diagram อธิบาย workflow; สถานะจริงอยู่ในตาราง findings" /><div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><Figure src="/images/security/security-architecture.svg" alt="Security architecture diagram" caption="ภาพที่ 1: เครื่องมือทดสอบ, MCP, source และ production" /><Figure src="/images/security/mcp-audit-sequence.svg" alt="MCP audit sequence diagram" caption="ภาพที่ 2: ลำดับงาน audit/patch ตาม diagram ที่แนบ" /></div></section>
+      <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-800"><div className="flex items-center gap-2 flex-wrap"><Filter className="w-4 h-4 text-slate-400" />{['all', 'critical', 'high', 'medium', 'low'].map((value) => <button key={value} onClick={() => setFilterSeverity(value)} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${filterSeverity === value ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>{value === 'all' ? `ทั้งหมด (${findings.length})` : `${severityMeta[value].badge} ${severityMeta[value].label} (${findings.filter((f) => f.severity === value).length})`}</button>)}</div><div className="relative min-w-[220px]"><Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" /><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหา ID, CWE, ไฟล์..." className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs outline-none focus:border-rose-500" /></div></section>
+      <section className="space-y-5">{filteredFindings.map((item) => <FindingCard key={item.id} item={item} />)}{filteredFindings.length === 0 && <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center text-slate-400">ไม่พบรายการที่ตรงกับตัวกรอง</div>}</section>
+      <section className="p-6 sm:p-8 rounded-3xl bg-emerald-950/20 border border-emerald-500/30 shadow-xl space-y-4"><SectionTitle title="ลำดับการแก้ไขที่แนะนำ" subtitle="ทำตามลำดับนี้ใน staging ก่อน deploy production" /><ol className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200 list-decimal list-inside"><li>หยุด public exposure ของ user_accounts และหมุน credential ที่อาจรั่ว</li><li>แก้/รัน RLS migration พร้อมตรวจ pg_policies จริง</li><li>ลบ magic OTP และ default auth fallback; ตั้ง server env ให้ครบ</li><li>แยก query owner/admin และเพิ่ม server-side rate limit</li><li>อัปเดต dependencies และเพิ่ม secret scan ใน CI</li><li>รัน regression test แบบ anon/applicant/admin แล้วบันทึก response</li></ol></section>
+      <section className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 text-xs text-slate-400 leading-relaxed"><p><strong className="text-white">ไฟล์รายงานสำหรับส่งอาจารย์:</strong> มีฉบับ Markdown ใน workspace และลิงก์ดาวน์โหลดจากหน้าเว็บหลัง deploy: <code className="text-amber-300">/SECURITY_AUDIT_REPORT.md</code></p><p className="mt-2">เครื่องมือที่สถานะยืนยัน: Burp Suite Community ติดตั้งแล้ว, Claude Desktop มีอยู่และเพิ่ม MCP filesystem เฉพาะโฟลเดอร์โปรเจกต์, Kali/WSL ยังต้องใช้สิทธิ์ Administrator, DVWA ยังไม่ได้ติดตั้งใน lab แยก</p></section>
+    </>}
+  </div>;
 }
+
+function Metric({ label, value, color, note }) { const colors = { rose: 'border-rose-500/40 text-rose-300', orange: 'border-orange-500/40 text-orange-300', amber: 'border-amber-500/40 text-amber-300', emerald: 'border-emerald-500/40 text-emerald-300' }; return <div className={`p-4 rounded-2xl bg-slate-900 border ${colors[color]}`}><span className="text-[10px] uppercase font-black block">{label}</span><span className="text-3xl font-black text-white block mt-1">{value}</span><span className="text-[10px] text-slate-500">{note}</span></div>; }
+function SectionTitle({ title, subtitle }) { return <div><h2 className="text-base sm:text-lg font-black text-white">{title}</h2><p className="text-xs text-slate-400 mt-0.5">{subtitle}</p></div>; }
+function EvidenceRow({ title, text }) { return <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800"><p className="font-bold text-white">{title}</p><p className="text-slate-400 mt-1 leading-relaxed">{text}</p></div>; }
+function Figure({ src, alt, caption }) { return <figure className="rounded-2xl bg-slate-950 border border-slate-800 p-3"><img src={src} alt={alt} className="w-full h-auto rounded-xl bg-slate-950" loading="lazy" /><figcaption className="text-[11px] text-slate-400 mt-2 text-center">{caption}</figcaption></figure>; }
+function FindingCard({ item }) { const meta = severityMeta[item.severity]; return <article className="p-6 rounded-3xl border shadow-xl space-y-4 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950/20 border-rose-500/35"><div className="flex flex-col md:flex-row md:items-start justify-between gap-3 border-b border-slate-800 pb-3"><div><div className="flex items-center gap-2 flex-wrap"><span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-black">{item.id}</span><span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-black">{meta.badge} {item.severityLabel}</span><span className="text-[11px] font-mono text-slate-500">{item.cwe}</span></div><h3 className="text-base sm:text-lg font-black text-white mt-2">{item.title}</h3></div><span className="px-3 py-1 rounded-xl text-xs font-bold border whitespace-nowrap bg-rose-500/15 text-rose-300 border-rose-500/40">🔴 เปิดอยู่ / ต้องแก้</span></div><div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs font-mono text-slate-300"><span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">หลักฐาน / ไฟล์</span><span className="text-sky-300 break-words">{item.evidence}</span><span className="text-slate-500 block mt-1 break-words">{item.files}</span></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs"><div><p className="font-bold text-white mb-1">สิ่งที่สังเกตได้</p><p className="text-slate-300 leading-relaxed">{item.observed}</p></div><div><p className="font-bold text-rose-300 mb-1">ผลกระทบ</p><p className="text-slate-300 leading-relaxed">{item.impact}</p></div></div><div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30"><p className="font-black text-emerald-300 text-sm mb-2">🛠️ วิธีแก้และขั้นตอนยืนยันผล</p><ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-200">{item.fix.map((step, index) => <li key={index}>{step}</li>)}</ol></div><div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs"><span className="font-bold text-amber-300">การทดสอบที่ปลอดภัย: </span><span className="text-slate-300">{item.test}</span></div></article>; }

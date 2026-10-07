@@ -50,8 +50,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [successMsg, setSuccessMsg] = useState(null);
   const [showPopupTip, setShowPopupTip] = useState(false);
   const [pendingOtpEmail, setPendingOtpEmail] = useState('');
-  const [demoOtpHint, setDemoOtpHint] = useState('');
-  const [showOtpTestBox, setShowOtpTestBox] = useState(false);
 
   const googleBtnContainerRef = useRef(null);
 
@@ -345,7 +343,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     try {
       const user = await DataService.resetPassword({
         email: email,
-        code: otpCode || '123456',
+        code: otpCode,
         newPassword: newPassword
       });
       localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
@@ -839,43 +837,6 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
               </button>
             </div>
 
-            {/* Optional Professor Grading Test Accordion */}
-            <div className="pt-2 text-center">
-              <button
-                type="button"
-                onClick={() => setShowOtpTestBox(!showOtpTestBox)}
-                className="text-[11px] text-slate-400 hover:text-slate-300 underline inline-flex items-center gap-1 cursor-pointer"
-              >
-                <span>{showOtpTestBox ? '▼ ซ่อนช่องทดสอบ OTP' : '▶ สำหรับอาจารย์ตรวจรหัสยืนยัน OTP (ทางเลือก)'}</span>
-              </button>
-
-              {showOtpTestBox && (
-                <form onSubmit={handleVerifyOtpSubmit} className="mt-3 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-left animate-in fade-in">
-                  <div className="p-2.5 bg-blue-950/40 border border-blue-500/30 rounded-xl text-[11px] text-blue-200">
-                    <p className="font-semibold text-blue-300">รหัสยืนยันสำหรับทดสอบตรวจงาน:</p>
-                    <p className="font-mono font-bold text-amber-300 text-sm mt-0.5">{demoOtpHint || '123456'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">กรอกรหัสยืนยัน 6 หลัก:</label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123456"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-center text-lg font-bold"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading || otpCode.length < 6}
-                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs disabled:opacity-50 cursor-pointer"
-                  >
-                    ยืนยันด้วยรหัส OTP
-                  </button>
-                </form>
-              )}
-            </div>
           </div>
         )}
 
@@ -902,13 +863,13 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                 <Send className="w-3.5 h-3.5 text-amber-400" />
-                รหัสยืนยัน OTP (ทางเลือก / ใส่ 123456 เพื่อทดสอบได้)
+                รหัสยืนยัน OTP จากระบบ
               </label>
               <input
                 type="text"
                 value={otpCode}
                 onChange={e => setOtpCode(e.target.value)}
-                placeholder="123456 (เว้นว่างได้)"
+                placeholder="กรอกรหัส OTP ที่ได้รับ"
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-rescue-500 font-mono text-center font-bold"
               />
             </div>

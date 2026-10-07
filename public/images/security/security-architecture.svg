@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1035.8992916666666 1123.5" width="1035.8992916666666" height="1123.5" style="--bg:#1F1F1F;--fg:#CCCCCC;--line:#CCCCCC;--accent:#0078D4;--muted:#CCCCCCCC;--surface:#181818;--border:#CCCCCC;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="Traditional" data-label="1. เครื่องมือทดสอบความปลอดภัยดั้งเดิม (Baseline Security Lab)">
+  <rect x="114.27129166666663" y="52" width="601.838" height="215.60000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="114.27129166666663" y="52" width="601.838" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="126.27129166666663" y="66" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">1. เครื่องมือทดสอบความปลอดภัยดั้งเดิม (Baseline Security Lab)</text>
+</g>
+<g class="subgraph" data-id="MCP_Protocol" data-label="2. โปรโตคอลเชื่อมต่อ AI เข้ากับระบบจริง (Context &amp; Tool Layer)">
+  <rect x="744.1092916666666" y="120" width="251.78999999999996" height="147.60000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="744.1092916666666" y="120" width="251.78999999999996" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="756.1092916666666" y="134" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">2. โปรโตคอลเชื่อมต่อ AI เข้ากับระบบจริง (Context &amp; Tool Layer)</text>
+</g>
+<g class="subgraph" data-id="AI_Engine" data-label="3. สมองกลวิเคราะห์และปิดช่องโหว่ (Cognitive Security Engine)">
+  <rect x="531.9667916666666" y="395.90000000000003" width="364.42199999999997" height="147.60000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="531.9667916666666" y="395.90000000000003" width="364.42199999999997" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="543.9667916666666" y="409.90000000000003" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">3. สมองกลวิเคราะห์และปิดช่องโหว่ (Cognitive Security Engine)</text>
+</g>
+<g class="subgraph" data-id="Target_App" data-label="4. ระบบเป้าหมายจริง (JRE 2027 Application)">
+  <rect x="292.20108333333326" y="671.8" width="450.55899999999997" height="385.70000000000005" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="292.20108333333326" y="671.8" width="450.55899999999997" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="304.20108333333326" y="685.8" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">4. ระบบเป้าหมายจริง (JRE 2027 Application)</text>
+</g>
+<polyline class="edge" data-from="BURP" data-to="PROD" data-style="dotted" data-arrow-start="false" data-arrow-end="true" data-label="ทดสอบ Traffic" points="259.43229166666663,251.60000000000002 259.43229166666663,585.5 278.7035833333333,585.5 278.7035833333333,653.8 475.90466666666657,653.8 475.90466666666657,885.9" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="DVWA" data-to="CLAUDE" data-style="dotted" data-arrow-start="false" data-arrow-end="true" data-label="เกณฑ์เปรียบเทียบ OWASP" points="558.3512916666666,251.60000000000002 558.3512916666666,309.6 539.0799999999999,309.6 539.0799999999999,377.90000000000003 658.774125,377.90000000000003 658.774125,439.90000000000003" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="LOCAL" data-to="MCP" data-style="thick" data-arrow-start="true" data-arrow-end="true" data-label="อ่าน/แก้ไขไฟล์" points="627.3499166666666,769.5999999999999 627.3499166666666,781.5999999999999 725.7600833333332,781.5999999999999 725.7600833333332,1075.5 85,1075.5 85,40 870.0042916666666,40 870.0042916666666,164" fill="none" stroke="var(--_line)" stroke-width="2" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<polyline class="edge" data-from="MCP" data-to="CLAUDE" data-style="thick" data-arrow-start="true" data-arrow-end="true" data-label="สื่อสารคำสั่ง" points="870.0042916666666,251.60000000000002 870.0042916666666,377.90000000000003 769.5814583333333,377.90000000000003 769.5814583333333,439.90000000000003" fill="none" stroke="var(--_line)" stroke-width="2" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<polyline class="edge" data-from="CLAUDE" data-to="LOCAL" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="สร้างโค้ดแก้ไขอัตโนมัติ" points="714.1777916666667,527.5 714.1777916666667,653.8 598.1282500000001,653.8 598.12825,715.8" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="KALI" data-to="BURP" data-style="dotted" data-arrow-start="false" data-arrow-end="true" points="259.43229166666663,149.8 259.43229166666663,197.8" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="LOCAL" data-to="PROD" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="Deploy ผ่าน Git" points="568.9065833333332,769.5999999999999 568.9065833333332,781.5999999999999 544.6644999999999,781.5999999999999 544.6644999999999,849.9 543.9809999999999,849.9 543.9809999999999,885.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="PROD" data-to="API" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="509.9428333333332,939.6999999999999 509.9428333333332,963.7 401.05308333333323,963.7 401.05308333333323,987.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="PROD" data-to="DB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="509.9428333333332,939.6999999999999 509.9428333333332,963.7 618.8325833333332,963.7 618.8325833333332,987.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<g class="edge-label" data-from="BURP" data-to="PROD" data-label="ทดสอบ Traffic">
+  <rect x="238.2035833333333" y="592.5" width="80.02000000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="278.2135833333333" y="607.65" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">ทดสอบ Traffic</text>
+</g>
+<g class="edge-label" data-from="DVWA" data-to="CLAUDE" data-label="เกณฑ์เปรียบเทียบ OWASP">
+  <rect x="463.0799999999999" y="316.6" width="151.894" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="539.0269999999999" y="331.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">เกณฑ์เปรียบเทียบ OWASP</text>
+</g>
+<g class="edge-label" data-from="LOCAL" data-to="MCP" data-label="อ่าน/แก้ไขไฟล์">
+  <rect x="36.00000000000001" y="1038.2" width="97.84000000000002" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="84.92000000000002" y="1053.3500000000001" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">อ่าน/แก้ไขไฟล์</text>
+</g>
+<g class="edge-label" data-from="MCP" data-to="CLAUDE" data-label="สื่อสารคำสั่ง">
+  <rect x="822.5042916666666" y="316.6" width="94.87" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="869.9392916666666" y="331.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">สื่อสารคำสั่ง</text>
+</g>
+<g class="edge-label" data-from="CLAUDE" data-to="LOCAL" data-label="สร้างโค้ดแก้ไขอัตโนมัติ">
+  <rect x="636.6777916666667" y="592.5" width="154.27" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="713.8127916666667" y="607.65" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">สร้างโค้ดแก้ไขอัตโนมัติ</text>
+</g>
+<g class="edge-label" data-from="LOCAL" data-to="PROD" data-label="Deploy ผ่าน Git">
+  <rect x="499.1644999999998" y="812.6" width="90.11800000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="544.2234999999998" y="827.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">Deploy ผ่าน Git</text>
+</g>
+<g class="node" data-id="KALI" data-label="Kali Linux OS
+(สภาพแวดล้อมทดสอบการเจาะระบบ)" data-shape="rectangle">
+  <rect x="134.7172916666666" y="96" width="249.42999999999998" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="259.4322916666666" y="122.9" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="259.4322916666666" dy="-3.9000000000000012">Kali Linux OS</tspan><tspan x="259.4322916666666" dy="16.900000000000002">(สภาพแวดล้อมทดสอบการเจาะระบบ)</tspan></text>
+</g>
+<g class="node" data-id="BURP" data-label="Burp Suite
+(Intercepting Proxy &amp; Dynamic DAST)" data-shape="rectangle">
+  <rect x="130.27129166666663" y="197.8" width="258.32199999999995" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="259.43229166666663" y="224.70000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="259.43229166666663" dy="-3.9000000000000012">Burp Suite</tspan><tspan x="259.43229166666663" dy="16.900000000000002">(Intercepting Proxy &amp; Dynamic DAST)</tspan></text>
+</g>
+<g class="node" data-id="DVWA" data-label="DVWA Lab
+(เกณฑ์อ้างอิงระดับช่องโหว่ OWASP)" data-shape="rectangle">
+  <rect x="416.59329166666663" y="197.8" width="283.51599999999996" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="558.3512916666666" y="224.70000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="558.3512916666666" dy="-3.9000000000000012">DVWA Lab</tspan><tspan x="558.3512916666666" dy="16.900000000000002">(เกณฑ์อ้างอิงระดับช่องโหว่ OWASP)</tspan></text>
+</g>
+<g class="node" data-id="MCP" data-label="Model Context Protocol (MCP)
+- Filesystem Inspection Server
+- Git &amp; Code Modification Tool
+- Security Tool Orchestrator" data-shape="rectangle">
+  <rect x="760.1092916666666" y="164" width="219.78999999999996" height="87.60000000000001" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="870.0042916666666" y="207.8" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="870.0042916666666" dy="-20.8">Model Context Protocol (MCP)</tspan><tspan x="870.0042916666666" dy="16.900000000000002">- Filesystem Inspection Server</tspan><tspan x="870.0042916666666" dy="16.900000000000002">- Git &amp; Code Modification Tool</tspan><tspan x="870.0042916666666" dy="16.900000000000002">- Security Tool Orchestrator</tspan></text>
+</g>
+<g class="node" data-id="CLAUDE" data-label="Claude / LLM Agent
+- ตรวจสอบซอร์สโค้ดทั้งโปรเจกต์ (SAST)
+- วิเคราะห์ตรรกะและ Flow ข้อมูลข้ามไฟล์
+- สังเคราะห์โค้ดแก้ไข (Automated Remediation)" data-shape="rectangle">
+  <rect x="547.9667916666666" y="439.90000000000003" width="332.42199999999997" height="87.60000000000001" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="714.1777916666666" y="483.70000000000005" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="714.1777916666666" dy="-20.8">Claude / LLM Agent</tspan><tspan x="714.1777916666666" dy="16.900000000000002">- ตรวจสอบซอร์สโค้ดทั้งโปรเจกต์ (SAST)</tspan><tspan x="714.1777916666666" dy="16.900000000000002">- วิเคราะห์ตรรกะและ Flow ข้อมูลข้ามไฟล์</tspan><tspan x="714.1777916666666" dy="16.900000000000002">- สังเคราะห์โค้ดแก้ไข (Automated Remediation)</tspan></text>
+</g>
+<g class="node" data-id="LOCAL" data-label="ซอร์สโค้ดในเครื่อง
+(c:\\...\\JRE2027)" data-shape="rectangle">
+  <rect x="510.4632499999999" y="715.8" width="175.32999999999998" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="598.1282499999999" y="742.6999999999999" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="598.1282499999999" dy="-3.9000000000000012">ซอร์สโค้ดในเครื่อง</tspan><tspan x="598.1282499999999" dy="16.900000000000002">(c:\\...\\JRE2027)</tspan></text>
+</g>
+<g class="node" data-id="API" data-label="Serverless Security API
+(/api/admin-auth.js)" data-shape="rectangle">
+  <rect x="308.20108333333326" y="987.7" width="185.70399999999998" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="401.05308333333323" y="1014.6" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="401.05308333333323" dy="-3.9000000000000012">Serverless Security API</tspan><tspan x="401.05308333333323" dy="16.900000000000002">(/api/admin-auth.js)</tspan></text>
+</g>
+<g class="node" data-id="DB" data-label="ฐานข้อมูล Supabase
+(Row-Level Security RLS)" data-shape="rectangle">
+  <rect x="521.9050833333332" y="987.7" width="193.855" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="618.8325833333332" y="1014.6" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="618.8325833333332" dy="-3.9000000000000012">ฐานข้อมูล Supabase</tspan><tspan x="618.8325833333332" dy="16.900000000000002">(Row-Level Security RLS)</tspan></text>
+</g>
+<g class="node" data-id="PROD" data-label="Vercel Cloud Production
+(https://jre-2027.vercel.app)" data-shape="rectangle">
+  <rect x="407.82833333333326" y="885.9" width="204.22899999999996" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="509.9428333333332" y="912.8" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="509.9428333333332" dy="-3.9000000000000012">Vercel Cloud Production</tspan><tspan x="509.9428333333332" dy="16.900000000000002">(https://jre-2027.vercel.app)</tspan></text>
+</g>
+</svg>
