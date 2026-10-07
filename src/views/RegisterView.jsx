@@ -4053,68 +4053,80 @@ export default function RegisterView({
 
             {/* Interactive Payment Plan Chooser */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* Option 1: จ่ายครั้งเดียวเลย (Full Payment: 3 Steps) */}
+              {/* Option 1: จ่ายครบเต็มจำนวน (Full Payment: 3 Steps) */}
               <div 
                 onClick={() => {
                   setPaymentPlan('full');
                   if (currentFormStep === 4) setCurrentFormStep(3);
-                  triggerToast('เลือกรูปแบบ: จ่ายครั้งเดียวเลยทั้งหมด (3 ขั้นตอน: 1, 2, 3)', 'info');
+                  triggerToast('เลือกรูปแบบ: จ่ายครบเต็มจำนวน (3 ขั้นตอน)', 'info');
                 }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 select-none ${
+                className={`p-4 sm:p-4.5 rounded-2xl border transition-all cursor-pointer space-y-2.5 select-none ${
                   paymentPlan === 'full'
                     ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/30 shadow-lg shadow-amber-500/10'
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🌟</span>
-                    <span className="font-black text-white text-sm">จ่ายครบครั้งเดียวทั้งหมด</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-lg shrink-0">🌟</span>
+                    <span className="font-black text-white text-sm whitespace-nowrap">จ่ายครบเต็มจำนวน</span>
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                      1 รอบ
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                    paymentPlan === 'full' ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
+                    paymentPlan === 'full' 
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}>
-                    3 ขั้นตอน (1, 2, 3)
+                    3 ขั้นตอน
                   </span>
                 </div>
-                <p className="text-slate-300 text-xs leading-snug">
-                  ชำระค่าลงทะเบียนและค่าเสื้อเต็มจำนวนในคราวเดียว ({feeInfo.isMsu ? 'นิสิต มมส 650 บ.' : 'ต่างมหาวิทยาลัย 850 บ.'}) รวดเร็ว สบายใจ และส่งตรวจสอบได้ทันที
+                <p className="text-slate-300 text-xs leading-relaxed">
+                  ชำระค่าลงทะเบียนและค่าเสื้อเต็มจำนวนในคราวเดียว ({feeInfo.isMsu ? 'นิสิต มมส 650 บ.' : 'ต่างมหาวิทยาลัย 850 บ.'}) รวดเร็ว สบายใจ ยืนยันสิทธิ์ทันที
                 </p>
-                <div className="text-[11px] text-amber-300 font-semibold pt-1 border-t border-slate-800/80 flex items-center justify-between">
+                <div className="text-[11px] text-amber-300 font-semibold pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
                   <span>💵 ยอดชำระเต็มจำนวน:</span>
                   <span className="font-black text-sm text-white">{feeInfo.totalFee} บาท</span>
                 </div>
               </div>
 
-              {/* Option 2: แบ่งจ่าย 2 รอบ (Installments: 4 Steps) */}
+              {/* Option 2: แบ่งจ่าย 2 งวด (Installments: 4 Steps) */}
               <div 
                 onClick={() => {
                   setPaymentPlan('installment');
-                  triggerToast('เลือกรูปแบบ: แบ่งจ่าย 2 รอบ (4 ขั้นตอน: 1, 2, 3, 4)', 'info');
+                  triggerToast('เลือกรูปแบบ: แบ่งจ่าย 2 งวด (4 ขั้นตอน)', 'info');
                 }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 select-none ${
+                className={`p-4 sm:p-4.5 rounded-2xl border transition-all cursor-pointer space-y-2.5 select-none ${
                   paymentPlan === 'installment'
                     ? 'bg-sky-500/15 border-sky-500 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">💳</span>
-                    <span className="font-black text-white text-sm">แบ่งจ่าย 2 รอบ</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-lg shrink-0">💳</span>
+                    <span className="font-black text-white text-sm whitespace-nowrap">แบ่งจ่าย 2 งวด</span>
+                    <span className="text-[10px] font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                      มัดจำ + คงค้าง
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                    paymentPlan === 'installment' ? 'bg-sky-500 text-slate-950 border-sky-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
+                    paymentPlan === 'installment' 
+                      ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sm' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}>
-                    4 ขั้นตอน (1, 2, 3, 4)
+                    4 ขั้นตอน
                   </span>
                 </div>
-                <p className="text-slate-300 text-xs leading-snug">
-                  รอบที่ 1 มัดจำค่าจัดทำเสื้อ 400 บ. (15–20 ต.ค. 69) และรอบที่ 2 ชำระส่วนที่เหลือ ({feeInfo.round2Amount} บ. วันที่ 1–5 พ.ย. 69)
+                <p className="text-slate-300 text-xs leading-relaxed">
+                  งวดที่ 1 มัดจำค่าเสื้อ 400 บ. (15–20 ต.ค. 69) และงวดที่ 2 ชำระส่วนที่เหลือ ({feeInfo.round2Amount} บ. วันที่ 1–5 พ.ย. 69)
                 </p>
-                <div className="text-[11px] text-sky-300 font-semibold pt-1 border-t border-slate-800/80 flex items-center justify-between">
-                  <span>รอบ 1: 400 บ.</span>
-                  <span>รอบ 2: {feeInfo.round2Amount} บ.</span>
+                <div className="text-[11px] text-sky-300 font-semibold pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
+                  <span>งวด 1: 400 บ.</span>
+                  <span className="text-slate-500">•</span>
+                  <span>งวด 2: {feeInfo.round2Amount} บ.</span>
+                  <span className="text-slate-400 font-bold">(รวม {feeInfo.totalFee} บ.)</span>
                 </div>
               </div>
             </div>

@@ -37,16 +37,16 @@ export default function Toast({ toast, onClose }) {
   const isInfo = toast.type === 'info';
 
   return (
-    <div className="fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto">
-      <div className={`p-4 rounded-2xl shadow-2xl border flex flex-col gap-2.5 backdrop-blur-md overflow-hidden relative ${
+    <div className="fixed top-6 right-6 z-50 max-w-sm sm:max-w-md w-[calc(100vw-3rem)] sm:w-auto animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto">
+      <div className={`p-3.5 sm:p-4 rounded-2xl shadow-2xl border flex flex-col gap-2.5 backdrop-blur-md overflow-hidden relative ${
         isError 
           ? 'bg-rose-950/95 border-rose-500/60 text-rose-100 shadow-rose-950/50' 
           : isInfo 
           ? 'bg-blue-950/95 border-blue-500/60 text-blue-100 shadow-blue-950/50' 
           : 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100 shadow-emerald-950/50'
       }`}>
-        <div className="flex items-start gap-3">
-          <div className="shrink-0 mt-0.5">
+        <div className="flex items-center gap-3">
+          <div className="shrink-0">
             {isError ? (
               <AlertCircle className="w-5 h-5 text-rose-400" />
             ) : isInfo ? (
@@ -55,13 +55,13 @@ export default function Toast({ toast, onClose }) {
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             )}
           </div>
-          <div className="flex-1 text-xs leading-relaxed font-medium">
+          <div className="flex-1 text-xs leading-relaxed font-semibold break-words">
             {contentText}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 -mr-1 -mt-1 rounded-lg transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-white p-1 -mr-1 -mt-1 rounded-lg transition-colors cursor-pointer shrink-0"
             title="ปิดการแจ้งเตือน"
           >
             <X className="w-4 h-4" />
