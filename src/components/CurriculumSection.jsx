@@ -245,13 +245,14 @@ export default function CurriculumSection() {
       {/* Part 3: Highlights Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 via-rescue-600 to-amber-600 p-6 sm:p-8 text-center shadow-2xl">
         <div className="absolute inset-0 bg-black/20" />
-        <div className="relative z-10 space-y-2 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-black text-white tracking-wider">
-            <Zap className="w-3.5 h-3.5" />
-            <span>⚡ ไฮไลต์ของการฝึก JRE 2027</span>
+        <div className="relative z-10 space-y-3 max-w-4xl mx-auto">
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-black text-white tracking-wider">
+            <Zap className="w-3.5 h-3.5 text-amber-300" />
+            <span>ไฮไลต์ของการฝึก JRE 2027</span>
           </div>
-          <blockquote className="text-lg sm:text-xl md:text-2xl font-black text-white tracking-tight drop-shadow-md">
-            “ไม่ใช่เพียงเรียนรู้ว่าต้องทำอะไร แต่ได้ฝึกว่าต้องทำอย่างไรเมื่อเกิดเหตุจริง”
+          <blockquote className="text-base sm:text-xl md:text-2xl font-black text-white tracking-tight drop-shadow-md leading-relaxed">
+            <span className="inline-block">“ไม่ใช่เพียงเรียนรู้ว่าต้องทำอะไร</span>{' '}
+            <span className="inline-block">แต่ได้ฝึกว่าต้องทำอย่างไรเมื่อเกิดเหตุจริง”</span>
           </blockquote>
         </div>
       </div>
