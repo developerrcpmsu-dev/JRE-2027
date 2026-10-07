@@ -122,12 +122,12 @@ export function parseCurrentRoute() {
     };
   }
 
-  // Security Audit Report (/security-audit or /security or /audit)
-  if (first === 'security-audit' || first === 'security' || first === 'audit' || first === 'vulnerabilities') {
+  // Security Audit Report (/security or /security-audit or /audit)
+  if (first === 'security' || first === 'security-audit' || first === 'audit' || first === 'vulnerabilities') {
     return {
       mainTab: 'security',
       subRoute: null,
-      canonicalPath: '/security-audit'
+      canonicalPath: '/security'
     };
   }
 
@@ -167,7 +167,7 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'security':
     case 'security-audit':
     case 'audit':
-      return '/security-audit';
+      return '/security';
     default:
       return '/';
   }

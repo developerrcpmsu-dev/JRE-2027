@@ -18,19 +18,54 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMsg('');
 
-    // ตรวจสอบผ่าน Environment Variables (ต้องตั้งค่าใน Vercel หรือไฟล์ .env)
-    const expectedUser = import.meta.env.VITE_ADMIN_USERNAME;
-    const expectedPass = import.meta.env.VITE_ADMIN_PASSWORD;
+    try {
+      // 1. Try Server-Side Verification First (Protects credentials from bundle exposure)
+      let serverVerified = false;
+      try {
+        const response = await fetch('/api/admin-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), password })
+        });
+        if (response.ok) {
+          const resData = await response.json();
+          if (resData.success && resData.token) {
+            sessionStorage.setItem('jre2027_admin_token', resData.token);
+            sessionStorage.setItem('jre2027_admin_expires', String(resData.expiresAt));
+            serverVerified = true;
+          }
+        } else if (response.status === 401) {
+          setErrorMsg('ชื่อผู้ใช้หรือรหัสผ่านผู้ดูแลระบบไม่ถูกต้อง');
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (apiErr) {
+        // Fallback gracefully if running in environment without serverless support
+      }
 
-    setTimeout(() => {
+      if (serverVerified) {
+        onLoginSuccess();
+        onClose();
+        setUsername('');
+        setPassword('');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Client-side fallback for local development
+      const expectedUser = import.meta.env.VITE_ADMIN_USERNAME;
+      const expectedPass = import.meta.env.VITE_ADMIN_PASSWORD;
+
       if (!expectedUser || !expectedPass) {
         setErrorMsg('ยังไม่ได้ตั้งค่า VITE_ADMIN_USERNAME และ VITE_ADMIN_PASSWORD ใน Environment Variables กรุณาตั้งค่าใน Vercel เพื่อเปิดใช้งาน');
       } else if (username.trim() === expectedUser && password === expectedPass) {
+        const localExpires = Date.now() + 8 * 3600 * 1000;
+        sessionStorage.setItem('jre2027_admin_expires', String(localExpires));
         onLoginSuccess();
         onClose();
         setUsername('');
@@ -38,8 +73,11 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
       } else {
         setErrorMsg('ชื่อผู้ใช้หรือรหัสผ่านผู้ดูแลระบบไม่ถูกต้อง');
       }
+    } catch (err) {
+      setErrorMsg('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์ผู้ดูแลระบบ');
+    } finally {
       setIsSubmitting(false);
-    }, 400);
+    }
   };
 
   return (

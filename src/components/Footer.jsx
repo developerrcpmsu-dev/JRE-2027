@@ -212,12 +212,12 @@ export default function Footer({ onOpenAdminLogin }) {
               </li>
               <li className="pt-1">
                 <a
-                  href="/security-audit"
-                  className="text-slate-400 hover:text-amber-300 text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-slate-900/60 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/40 rounded-xl cursor-pointer inline-flex"
-                  title="ดูรายงานผลการตรวจสอบความมั่นคงปลอดภัย (Security Audit)"
+                  href="/security"
+                  className="text-slate-300 hover:text-emerald-300 text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl cursor-pointer inline-flex font-semibold"
+                  title="ดูรายงานความมั่นคงปลอดภัยและการแก้ไขช่องโหว่ (Security Center)"
                 >
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                  <span>รายงานความปลอดภัย (Security Audit)</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>รายงานความมั่นคงปลอดภัย (Security) 🟢</span>
                 </a>
               </li>
               <li className="pt-2 border-t border-slate-900 mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 font-mono">

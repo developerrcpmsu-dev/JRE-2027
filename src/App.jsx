@@ -201,8 +201,16 @@ export default function App() {
         }
 
         const storedAdmin = localStorage.getItem('jre2027_is_admin');
+        const adminExpires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
         if (storedAdmin === 'true') {
-          setIsAdmin(true);
+          if (adminExpires && Date.now() > adminExpires) {
+            localStorage.removeItem('jre2027_is_admin');
+            sessionStorage.removeItem('jre2027_admin_token');
+            sessionStorage.removeItem('jre2027_admin_expires');
+            setIsAdmin(false);
+          } else {
+            setIsAdmin(true);
+          }
         }
 
         // Supabase Auth listener if configured
@@ -274,6 +282,7 @@ export default function App() {
   const handleAdminLoginSuccess = () => {
     setIsAdmin(true);
     localStorage.setItem('jre2027_is_admin', 'true');
+    sessionStorage.setItem('jre2027_admin_expires', String(Date.now() + 8 * 3600 * 1000));
     setCurrentTab('admin');
   };
 
@@ -287,6 +296,8 @@ export default function App() {
     setIsAdmin(false);
     localStorage.removeItem('jre2027_auth_user');
     localStorage.removeItem('jre2027_is_admin');
+    sessionStorage.removeItem('jre2027_admin_token');
+    sessionStorage.removeItem('jre2027_admin_expires');
     setMyRegistration(null);
     setCurrentTab('home');
   };
