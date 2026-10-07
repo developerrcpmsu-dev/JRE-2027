@@ -75,8 +75,21 @@ const ensureStaticSecurityFiles = () => ({
   }
 });
 
+const serveMarkdownAsUtf8 = () => ({
+  name: 'serve-markdown-as-utf8',
+  configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      const pathname = (req.url || '').split('?')[0];
+      if (pathname === '/SECURITY_AUDIT_REPORT.md') {
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      }
+      next();
+    });
+  }
+});
+
 export default defineConfig({
-  plugins: [react(), serveApiFile(), ensureStaticSecurityFiles()],
+  plugins: [react(), serveApiFile(), ensureStaticSecurityFiles(), serveMarkdownAsUtf8()],
   server: {
     port: 3000,
     open: true
