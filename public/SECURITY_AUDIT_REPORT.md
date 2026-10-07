@@ -41,6 +41,12 @@
 
 ภาพ Burp ที่ผู้ใช้แนบมาเป็น snapshot ก่อนส่ง traffic ซึ่งแสดง passive crawl ว่า `0 items`; จึงเก็บเป็น `public/images/security/burp-passive-crawl-before.png` พร้อมคำอธิบายว่าเป็น “ก่อนตรวจ” ไม่ใช่ผลสแกนที่ยืนยันช่องโหว่
 
+ภาพ Burp เพิ่มเติมจากรอบเดียวกัน:
+
+- `public/images/security/burp-http-redirect.png`: request HTTP `GET /security` ได้ `308` และ `Location: https://jre-2027.vercel.app/security` — เป็นการบังคับ HTTPS ที่คาดหวัง ไม่ใช่ช่องโหว่
+- `public/images/security/burp-site-map-https.png`: HTTPS `GET /` ได้ `200` และมี security headers หลายรายการ; ภาพนี้เห็น `Access-Control-Allow-Origin: *` บน HTML document แต่ยังไม่ใช่หลักฐานว่า API ที่มีข้อมูลหรือ credential เปิด wildcard CORS จึงต้องแยกตรวจ API ตาม origin และ credential
+- `public/images/security/burp-passive-crawl-after.png`: passive crawl หลังเปิด traffic แสดง `50 site-map items`, `13 responses processed` และ `0 responses queued`; ตัวเลขนี้เป็นจำนวนรายการ/response ที่ Burp ประมวลผล ไม่ใช่จำนวนช่องโหว่
+
 ## วิธีตรวจที่ทำจริง
 
 1. อ่านโครงสร้างโปรเจกต์และ source ด้วย `rg` โดยไม่เปิดเผยค่าจาก `.env`
@@ -50,7 +56,7 @@
 5. ตรวจ response headers: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy และ Permissions-Policy พบว่าตอบจริงบนหน้าเว็บ
 6. อ่าน Supabase REST metadata แบบ read-only ด้วย anon key จาก environment ในเครื่อง โดยไม่พิมพ์ key, email, ชื่อ หรือค่า hash ลงรายงาน
 7. สแกน production bundle แบบ pattern-only พบ string credential ใน code example ของหน้า presentation
-8. ใช้ Burp Suite Community listener ที่ `127.0.0.1:8080` รับ safe GET/OPTIONS ผ่าน proxy รวม 11 requests ครอบคลุมหน้าเว็บ, static assets และ API method/CORS checks โดยไม่ส่ง credential หรือ active-scan payload
+8. ใช้ Burp Suite Community listener ที่ `127.0.0.1:8080` รับ safe GET/OPTIONS ผ่าน proxy รวม 11 requests ครอบคลุมหน้าเว็บ, static assets และ API method/CORS checks โดยไม่ส่ง credential หรือ active-scan payload; ภาพ passive crawl ที่แนบเพิ่มเป็น browsing session ที่ Burp บันทึกได้ 50 site-map items และประมวลผล 13 responses
 
 ## หลักฐาน live ที่บันทึกแบบไม่เปิดเผยข้อมูล
 
@@ -60,6 +66,12 @@
 - `announcements`: พบ 7 records ที่อ่านได้ด้วย anon key
 - baseline ก่อนแพตช์ `GET /api/admin-auth`: 405 และ `POST {}`: 400; หลัง deploy แพตช์ใหม่ `GET`/`POST {}` ตอบ 503 เพราะยังไม่ยืนยันว่า `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET` ถูกตั้งครบใน Vercel — เป็น fail-closed แต่ Admin login ยังใช้ไม่ได้จนกว่าจะตั้งค่า
 - preflight จาก origin ภายนอกไม่ถูกสะท้อนกลับเป็น origin ของผู้โจมตี
+
+### หลักฐานจากภาพ Burp ที่แนบเพิ่ม
+
+- HTTP `/security` → `308` → HTTPS: เป็น secure redirect ที่คาดหวัง
+- HTTPS `/` → `200`: ยืนยันว่า production ตอบกลับและส่ง headers บางรายการจริง; `Access-Control-Allow-Origin: *` บนเอกสาร HTML ไม่ควรถูกสรุปเป็น API data exposure โดยลำพัง
+- Passive crawl หลังส่ง traffic: `50 site-map items` และ `13 responses processed`; ไม่มี active scan หรือ credential test ในหลักฐานชุดนี้
 
 ## Findings และแนวทางแก้
 
@@ -135,13 +147,13 @@
 - CORS preflight ไม่สะท้อน origin ภายนอกกลับไปเป็น allow-origin
 - File endpoint ที่ไม่มี id ตอบ 400
 - `security.txt` และ `robots.txt` ให้บริการจริง
-- Burp listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests; ไม่มี active scan/credential test
+- Burp listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests; ภาพ passive crawl เพิ่มเติมแสดง 50 site-map items และ 13 responses processed; ไม่มี active scan/credential test
 
 ## สถานะเครื่องมือและการติดตั้ง
 
 | เครื่องมือ | สถานะ | หมายเหตุ |
 |---|---|---|
-| Burp Suite Community | ติดตั้งแล้วและใช้ผ่าน proxy | PortSwigger package 2026.3.3; listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests; ยังไม่ได้ทำ active scan หรือ credential test |
+| Burp Suite Community | ติดตั้งแล้วและใช้ผ่าน proxy | PortSwigger package 2026.3.3; listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests และ passive crawl UI แสดง 50 site-map items / 13 responses processed; ยังไม่ได้ทำ active scan หรือ credential test |
 | Claude Desktop | มีอยู่แล้ว | เพิ่ม `jre2027-filesystem` MCP server แบบจำกัด path โปรเจกต์ใน `%APPDATA%\\Claude\\claude_desktop_config.json`; restart Claude เพื่อโหลด config |
 | MCP | พร้อมใช้งาน | รอบ audit นี้ใช้ MCP tools/local file inspection; ไม่ส่ง `.env` ให้โมเดลโดยอัตโนมัติ |
 | Kali Linux | ยังไม่พร้อม | WSL ยังไม่ติดตั้ง; Windows แจ้งว่าต้องใช้ Administrator (`0x80073d28`) |
