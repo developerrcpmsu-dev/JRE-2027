@@ -4099,20 +4099,17 @@ export default function RegisterView({
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-lg shrink-0">🌟</span>
-                    <span className="font-black text-white text-sm">จ่ายครบเต็มจำนวน</span>
-                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 rounded shrink-0">
-                      1 รอบ
-                    </span>
+                    <span className="font-black text-white text-sm truncate">จ่ายครบเต็มจำนวน</span>
                   </div>
-                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 ${
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
                     paymentPlan === 'full' 
                       ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm' 
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                      : 'bg-slate-800 text-amber-300 border-slate-700'
                   }`}>
-                    3 ขั้นตอน
+                    1 รอบ (3 ขั้นตอน)
                   </span>
                 </div>
                 <p className="text-slate-300 text-xs leading-relaxed">
@@ -4136,30 +4133,29 @@ export default function RegisterView({
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-lg shrink-0">💳</span>
-                    <span className="font-black text-white text-sm">แบ่งจ่าย 2 งวด</span>
-                    <span className="text-[10px] font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 rounded shrink-0">
-                      มัดจำ + คงค้าง
-                    </span>
+                    <span className="font-black text-white text-sm truncate">แบ่งจ่าย 2 งวด</span>
                   </div>
-                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 ${
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
                     paymentPlan === 'installment' 
                       ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sm' 
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                      : 'bg-slate-800 text-sky-300 border-slate-700'
                   }`}>
-                    4 ขั้นตอน
+                    มัดจำ (4 ขั้นตอน)
                   </span>
                 </div>
                 <p className="text-slate-300 text-xs leading-relaxed">
                   งวดที่ 1 มัดจำค่าเสื้อ 400 บ. (15–20 ต.ค. 69) และงวดที่ 2 ชำระส่วนที่เหลือ ({feeInfo.round2Amount} บ. วันที่ 1–5 พ.ย. 69)
                 </p>
-                <div className="text-[11px] text-sky-300 font-semibold pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
-                  <span>งวด 1: 400 บ.</span>
-                  <span className="text-slate-500">•</span>
-                  <span>งวด 2: {feeInfo.round2Amount} บ.</span>
-                  <span className="text-slate-400 font-bold">(รวม {feeInfo.totalFee} บ.)</span>
+                <div className="text-[11px] text-sky-300 font-semibold pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span>งวด 1: 400 บ.</span>
+                    <span className="text-slate-500">•</span>
+                    <span>งวด 2: {feeInfo.round2Amount} บ.</span>
+                  </div>
+                  <span className="text-white font-bold">(รวม {feeInfo.totalFee} บ.)</span>
                 </div>
               </div>
             </div>
@@ -4738,11 +4734,13 @@ export default function RegisterView({
                   ) : (
                     <div 
                       id="field-fullNameAffiliation"
-                      className="px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-700/60 font-mono text-xs sm:text-sm text-emerald-300 break-all select-all flex items-center justify-between gap-2"
+                      className="px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-700/60 font-mono text-xs sm:text-sm text-emerald-300 select-all flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                     >
-                      <span>{fullNameAffiliation || <span className="text-slate-500 italic">รอการกรอกข้อมูลในช่องด้านบน...</span>}</span>
+                      <span className="break-words leading-relaxed font-semibold">
+                        {fullNameAffiliation || <span className="text-slate-500 italic font-normal">รอการกรอกข้อมูลในช่องด้านบน...</span>}
+                      </span>
                       {fullNameAffiliation && (
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap self-start sm:self-auto shrink-0">
                           Auto-generated
                         </span>
                       )}
@@ -4850,12 +4848,12 @@ export default function RegisterView({
                             : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-xs text-white flex items-center gap-1.5">
-                            <span>🎓</span>
-                            <span>นิสิตมหาวิทยาลัยมหาสารคาม (มมส)</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-black text-xs text-white flex items-center gap-1.5 min-w-0">
+                            <span className="shrink-0">🎓</span>
+                            <span className="truncate">นิสิตมหาวิทยาลัยมหาสารคาม (มมส)</span>
                           </span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
                             isCurrentMsu ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}>
                             650 บาท
@@ -4884,12 +4882,12 @@ export default function RegisterView({
                             : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-xs text-white flex items-center gap-1.5">
-                            <span>🏨</span>
-                            <span>ต่างมหาวิทยาลัย / บุคคลภายนอก</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-black text-xs text-white flex items-center gap-1.5 min-w-0">
+                            <span className="shrink-0">🏨</span>
+                            <span className="truncate">ต่างมหาวิทยาลัย / บุคคลภายนอก</span>
                           </span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
                             !isCurrentMsu ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}>
                             850 บาท
@@ -4988,14 +4986,14 @@ export default function RegisterView({
                     }`}>
                       <Info className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
                       <div className="space-y-1 w-full">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-sm text-white">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                          <span className="font-black text-xs sm:text-sm text-white">
                             {fee.isMsu 
                               ? (isFull ? '🎓 สังกัดนิสิต มมส: ยอดรวม 650 บาท (จ่ายครบ 1 รอบ)' : '🎓 สังกัดนิสิต มมส: ยอดรวม 650 บาท (แบ่งจ่าย 2 งวด)')
                               : (isFull ? '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท (จ่ายครบ 1 รอบ)' : '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท (แบ่งจ่าย 2 งวด)')
                             }
                           </span>
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300">
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300 self-start sm:self-auto shrink-0 whitespace-nowrap">
                             {fee.isMsu 
                               ? (isFull ? 'ไม่มีค่าที่พัก • ชำระเต็มจำนวน' : 'ไม่มีค่าที่พัก • แผน 2 งวด')
                               : (isFull ? 'รวมที่พักหอกุดรัง มมส • ชำระเต็มจำนวน' : 'รวมที่พักหอกุดรัง มมส • แผน 2 งวด')
@@ -5690,16 +5688,16 @@ export default function RegisterView({
           <div className="space-y-8 animate-in fade-in duration-200">
             {/* Summary Card of Applicant & Shirt Order */}
             <div className="p-5 sm:p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-500/40 rounded-3xl space-y-4 shadow-xl">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-indigo-400" />
-                  <h3 className="text-sm sm:text-base font-black text-white">
+                  <CheckCircle className="w-5 h-5 text-indigo-400 shrink-0" />
+                  <h3 className="text-sm sm:text-base font-black text-white leading-tight">
                     {paymentPlan === 'full' 
-                      ? 'สรุปรายการใบสมัคร & ชำระเงินเต็มจำนวน (ขั้นตอนที่ 3 จาก 3)' 
-                      : 'สรุปรายการใบสมัคร & ชำระเงินรอบที่ 1 (ขั้นตอนที่ 3 จาก 4)'}
+                      ? 'สรุปรายการใบสมัคร & ชำระเงินเต็มจำนวน' 
+                      : 'สรุปรายการใบสมัคร & ชำระเงินรอบที่ 1'}
                   </h3>
                 </div>
-                <span className="text-[11px] text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full font-bold border border-indigo-500/30">
+                <span className="text-[11px] text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full font-bold border border-indigo-500/30 self-start sm:self-auto shrink-0 whitespace-nowrap">
                   {paymentPlan === 'full' ? 'ขั้นตอนสุดท้าย (3/3)' : 'ขั้นตอนที่ 3 จาก 4'}
                 </span>
               </div>
@@ -5754,25 +5752,27 @@ export default function RegisterView({
 
             {/* Section 5: บัญชีธนาคาร & หลักฐานการโอนเงิน (เต็มจำนวน หรือ รอบที่ 1) */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
                 <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-amber-500" />
-                  {paymentPlan === 'full' 
-                    ? `บัญชีธนาคาร & หลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท)` 
-                    : 'บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 1 (400 บาท)'}
+                  <CreditCard className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>
+                    {paymentPlan === 'full' 
+                      ? `บัญชีธนาคาร & หลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท)` 
+                      : 'บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 1 (400 บาท)'}
+                  </span>
                 </h3>
-                <span className="text-[11px] text-amber-300 font-bold">
+                <span className="text-[11px] text-amber-300 font-bold self-start sm:self-auto shrink-0">
                   ยอดชำระ: {paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : '400 บาท'}
                 </span>
               </div>
 
               {/* Official Bank Account Information Card */}
               <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-amber-500/40 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                   <span className="font-bold text-white flex items-center gap-1.5">
                     <span>🏦</span> บัญชีธนาคารสำหรับโอนเงินค่าลงทะเบียน:
                   </span>
-                  <span className="text-[10px] text-amber-300 font-bold">
+                  <span className="text-[10px] text-amber-300 font-bold self-start sm:self-auto shrink-0">
                     {paymentPlan === 'full' ? `ยอดเต็มจำนวน: ${feeInfo.totalFee} บาท` : 'รอบที่ 1: 400 บาท (15–20 ต.ค. 2569)'}
                   </span>
                 </div>
@@ -6252,14 +6252,14 @@ export default function RegisterView({
           <div className="space-y-8 animate-in fade-in duration-200">
             {/* Step 4 Summary Card */}
             <div className="p-5 sm:p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950/40 border border-sky-500/40 rounded-3xl space-y-4 shadow-xl">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-sky-400" />
-                  <h3 className="text-sm sm:text-base font-black text-white">
-                    ขั้นตอนที่ 4 จาก 4: สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 ({feeInfo.round2Amount} บาท)
+                  <CheckCircle className="w-5 h-5 text-sky-400 shrink-0" />
+                  <h3 className="text-sm sm:text-base font-black text-white leading-tight">
+                    สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 ({feeInfo.round2Amount} บาท)
                   </h3>
                 </div>
-                <span className="text-[11px] text-sky-300 bg-sky-500/20 px-3 py-1 rounded-full font-bold border border-sky-500/30">
+                <span className="text-[11px] text-sky-300 bg-sky-500/20 px-3 py-1 rounded-full font-bold border border-sky-500/30 self-start sm:self-auto shrink-0 whitespace-nowrap">
                   ขั้นตอนสุดท้าย (4/4)
                 </span>
               </div>
@@ -6295,23 +6295,23 @@ export default function RegisterView({
 
             {/* Bank Card for Round 2 */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
                 <h3 className="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-sky-400" />
-                  บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท)
+                  <CreditCard className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span>บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท)</span>
                 </h3>
-                <span className="text-[11px] text-sky-300 font-bold">
+                <span className="text-[11px] text-sky-300 font-bold self-start sm:self-auto shrink-0">
                   ยอดชำระ: {feeInfo.round2Amount} บาท
                 </span>
               </div>
 
               {/* Official Bank Account Information Card */}
               <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-sky-500/40 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                   <span className="font-bold text-white flex items-center gap-1.5">
                     <span>🏦</span> บัญชีธนาคารสำหรับโอนเงินรอบที่ 2:
                   </span>
-                  <span className="text-[10px] text-sky-300 font-bold">
+                  <span className="text-[10px] text-sky-300 font-bold self-start sm:self-auto shrink-0">
                     ยอดชำระ: {feeInfo.round2Amount} บาท (1–5 พ.ย. 2569)
                   </span>
                 </div>
