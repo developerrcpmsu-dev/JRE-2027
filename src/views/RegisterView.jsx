@@ -247,15 +247,62 @@ export default function RegisterView({
   const { confirmModalProps, askConfirm } = useConfirmModal();
 
   const effectivePaymentConfig = paymentConfig || DEFAULT_PAYMENT_CONFIG;
+
+  // Payment approval status calculation for applicant dashboard & edit/cancel behavior
+  const isApplicantSinglePaid = Boolean(
+    myRegistration &&
+    myRegistration.payment_plan !== 'installment' &&
+    (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified')
+  );
+  const isApplicantRound2Paid = Boolean(
+    myRegistration &&
+    myRegistration.installment_2_status === 'paid' &&
+    Boolean(myRegistration.installment_2_slip_url)
+  );
+  const isApplicantInstallmentsBothPaid = Boolean(
+    myRegistration &&
+    (myRegistration.installment_1_status === 'paid') &&
+    isApplicantRound2Paid
+  );
+  const isApplicantFullyPaid = isApplicantSinglePaid || isApplicantInstallmentsBothPaid;
+  const hasAnyPaymentApproved = Boolean(
+    myRegistration && (
+      isApplicantFullyPaid ||
+      (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified') ||
+      (myRegistration.installment_1_status === 'paid') ||
+      (myRegistration.installment_2_status === 'paid')
+    )
+  );
+
+  // Check if applicant has made any payment or attached any slip
+  const hasTransferredOrPaid = Boolean(
+    myRegistration && (
+      hasAnyPaymentApproved ||
+      myRegistration.payment_slip_url ||
+      myRegistration.installment_1_slip_url ||
+      myRegistration.installment_2_slip_url ||
+      myRegistration.slip_url ||
+      (myRegistration.payment_status && myRegistration.payment_status !== 'unpaid') ||
+      (myRegistration.installment_1_status && myRegistration.installment_1_status !== 'unpaid') ||
+      (myRegistration.installment_2_status && myRegistration.installment_2_status !== 'unpaid')
+    )
+  );
+
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (subRoute === 'dashboard') {
       setIsEditing(false);
     } else if (subRoute === 'form' && myRegistration) {
-      setIsEditing(true);
+      if (isApplicantFullyPaid) {
+        setIsEditing(false);
+        if (onSubRouteChange) onSubRouteChange('dashboard');
+        triggerToast('ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ไม่สามารถแก้ไขข้อมูลใบสมัครได้', 'info');
+      } else {
+        setIsEditing(true);
+      }
     }
-  }, [subRoute, myRegistration]);
+  }, [subRoute, myRegistration, isApplicantFullyPaid]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -468,38 +515,14 @@ export default function RegisterView({
     }
   }, [user]);
 
-  // Payment approval status calculation for applicant dashboard & edit/cancel behavior
-  const isApplicantSinglePaid = Boolean(
-    myRegistration &&
-    myRegistration.payment_plan !== 'installment' &&
-    (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified')
-  );
-  const isApplicantRound2Paid = Boolean(
-    myRegistration &&
-    myRegistration.installment_2_status === 'paid' &&
-    Boolean(myRegistration.installment_2_slip_url)
-  );
-  const isApplicantInstallmentsBothPaid = Boolean(
-    myRegistration &&
-    (myRegistration.installment_1_status === 'paid') &&
-    isApplicantRound2Paid
-  );
-  const isApplicantFullyPaid = isApplicantSinglePaid || isApplicantInstallmentsBothPaid;
-  const hasAnyPaymentApproved = Boolean(
-    myRegistration && (
-      isApplicantFullyPaid ||
-      (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified') ||
-      (myRegistration.installment_1_status === 'paid') ||
-      (myRegistration.installment_2_status === 'paid')
-    )
-  );
+
 
   const handleDeleteMyRegistration = async () => {
     if (!myRegistration || !user) return;
 
-    // Safeguard: Once paid, cannot cancel application
-    if (hasAnyPaymentApproved) {
-      triggerToast('ไม่สามารถยกเลิกใบสมัครได้เนื่องจากมีการชำระเงินเรียบร้อยแล้ว หากต้องการสละสิทธิ์กรุณาติดต่อผู้จัดโครงการโดยตรง', 'error');
+    // Safeguard: Once money transferred or slip attached, user cannot cancel application
+    if (hasTransferredOrPaid) {
+      triggerToast('ไม่สามารถยกเลิกใบสมัครได้เนื่องจากมีการแนบหลักฐานการโอนเงินในระบบแล้ว หากต้องการยกเลิกกรุณาติดต่อผู้จัดโครงการโดยตรง (เฉพาะ Admin โหมดแก้ไขขั้นสูงเท่านั้นที่สามารถลบได้)', 'error');
       setShowDeleteConfirmModal(false);
       return;
     }
@@ -1872,7 +1895,7 @@ export default function RegisterView({
   }
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
-  if (myRegistration && !isEditing) {
+  if (myRegistration && (!isEditing || isApplicantFullyPaid)) {
     const paymentStatus = myRegistration.payment_status || 'unpaid';
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
     const unreadMessagesCount = adminMessages.filter(m => !m.read).length;
@@ -2124,18 +2147,29 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditing(true);
-                  if (onSubRouteChange) onSubRouteChange('form');
-                }}
-                className="px-4 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
-                title={hasAnyPaymentApproved ? "แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม (Update Information)" : "แก้ไขข้อมูลรายละเอียดในใบสมัคร (Update Application)"}
-              >
-                <Edit className="w-3.5 h-3.5" />
-                <span>{hasAnyPaymentApproved ? 'แก้ไขข้อมูล' : 'แก้ไขใบสมัคร'}</span>
-              </button>
+              {/* EDIT REGISTRATION BUTTON: Locked once fully paid and confirmed */}
+              {isApplicantFullyPaid ? (
+                <div
+                  className="px-4 py-2.5 bg-slate-900/90 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
+                  title="ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ข้อมูลถูกล็อคเรียบร้อย หากต้องการแก้ไขกรุณาติดต่อผู้จัดโครงการ"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>ยืนยันสิทธิ์สมบูรณ์แล้ว (ล็อคข้อมูล)</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(true);
+                    if (onSubRouteChange) onSubRouteChange('form');
+                  }}
+                  className="px-4 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
+                  title={hasAnyPaymentApproved ? "แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม (Update Information)" : "แก้ไขข้อมูลรายละเอียดในใบสมัคร (Update Application)"}
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>{hasAnyPaymentApproved ? 'แก้ไขข้อมูล' : 'แก้ไขใบสมัคร'}</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -2175,14 +2209,14 @@ export default function RegisterView({
                 )}
               </button>
 
-              {/* CANCEL REGISTRATION BUTTON: Disabled if payment made / approved */}
-              {hasAnyPaymentApproved ? (
+              {/* CANCEL REGISTRATION BUTTON: Disabled if transferred or payment made */}
+              {hasTransferredOrPaid ? (
                 <div
                   className="px-3.5 py-2.5 bg-slate-900/90 text-slate-500 border border-slate-800 rounded-xl text-xs font-medium flex items-center gap-1.5 cursor-not-allowed select-none"
-                  title="ชำระเงินแล้ว ไม่สามารถยกเลิกใบสมัครได้ (หากต้องการสละสิทธิ์กรุณาติดต่อผู้จัดโครงการโดยตรง)"
+                  title="มีประวัติการแนบสลิปหรือโอนเงินแล้ว ไม่สามารถลบใบสมัครได้ (เพื่อความปลอดภัยทางบัญชี)"
                 >
-                  <Lock className="w-3.5 h-3.5 text-slate-600" />
-                  <span>ยกเลิกใบสมัครไม่ได้ (ชำระแล้ว)</span>
+                  <Lock className="w-3.5 h-3.5 text-amber-500/70" />
+                  <span>ยกเลิกใบสมัครไม่ได้ (แนบสลิปแล้ว)</span>
                 </div>
               ) : (
                 <button
@@ -3034,49 +3068,54 @@ export default function RegisterView({
               )}
             </div>
 
-            {/* Plan Switcher Pills (If allow_installments is true) */}
-            {dashboardPaymentConfig.allow_installments && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-2xl border border-slate-800">
-                <span className="text-xs text-slate-400 px-2 font-medium">
-                  เลือกรูปแบบการชำระเงิน:
-                </span>
-                <div className="flex items-center gap-1.5 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (onUpdateRegistration) {
-                        await onUpdateRegistration(myRegistration.user_id, { payment_plan: 'full' });
-                        triggerToast('เปลี่ยนเป็นแผนชำระเต็มจำนวนแล้ว', 'info');
-                      }
-                    }}
-                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      !isInstallmentPlan
-                        ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                        : 'bg-slate-800 text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    ชำระเต็มจำนวน ({dashboardPaymentConfig.fee_total} บ.)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (onUpdateRegistration) {
-                        await onUpdateRegistration(myRegistration.user_id, { payment_plan: 'installment' });
-                        triggerToast('เปลี่ยนเป็นแผนแบ่งจ่าย 2 งวดแล้ว', 'info');
-                      }
-                    }}
-                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      isInstallmentPlan
-                        ? 'bg-purple-600 text-white shadow-md font-black'
-                        : 'bg-slate-800 text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    แบ่งจ่าย 2 งวด ({dashboardPaymentConfig.installment_round1_amount} + {dashboardPaymentConfig.installment_round2_amount} บ.)
-                  </button>
+            {/* Payment Plan Indicator Banner (Locked on dashboard; can only change at Step 1 if unpaid) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="text-base shrink-0">📌</span>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium">รูปแบบการชำระเงินที่เลือกไว้:</span>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm ${
+                      isInstallmentPlan 
+                        ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40' 
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    }`}>
+                      {isInstallmentPlan ? (
+                        <>💳 แบ่งจ่าย 2 งวด ({dashboardPaymentConfig.installment_round1_amount} + {dashboardPaymentConfig.installment_round2_amount} บาท)</>
+                      ) : (
+                        <>🌟 ชำระเต็มจำนวน ({dashboardPaymentConfig.fee_total} บาท)</>
+                      )}
+                    </span>
+                    {hasTransferredOrPaid ? (
+                      <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-400" /> ล็อกตามประวัติการชำระ
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[10px] font-semibold">
+                        เลือกไว้ในแบบฟอร์ม
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            )}
+
+              {/* If unpaid and no slips attached, allow going to Step 1 to change plan */}
+              {!hasTransferredOrPaid && !isApplicantFullyPaid && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(true);
+                    setCurrentFormStep(1);
+                    if (onSubRouteChange) onSubRouteChange('form');
+                  }}
+                  className="text-xs text-sky-400 hover:text-sky-300 hover:underline flex items-center gap-1.5 cursor-pointer font-semibold py-1.5 px-3 rounded-xl bg-sky-950/30 border border-sky-800/40 transition-colors shrink-0"
+                  title="หากต้องการเปลี่ยนรูปแบบการชำระเงิน ให้กลับไปเลือกใหม่ที่แบบฟอร์มขั้นตอนที่ 1"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>ต้องการเปลี่ยนรูปแบบ? (แก้ไขที่ขั้นตอนที่ 1)</span>
+                </button>
+              )}
+            </div>
 
             {/* VIEW A: 2-ROUND INSTALLMENT VIEW */}
             {isInstallmentPlan ? (
@@ -3202,6 +3241,10 @@ export default function RegisterView({
                     <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
                     <span>กำหนดชำระ: <strong className="text-white">{dashboardPaymentConfig.installment_round2_due}</strong></span>
                   </p>
+                  <div className="mt-1 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 flex items-center gap-1.5">
+                    <span>💡</span>
+                    <span><strong>ชำระล่วงหน้าได้ทันที:</strong> สามารถชำระเงินและแนบสลิปงวดที่ 2 ก่อนกำหนดได้ตลอดเวลา โดยไม่ต้องรอถึงเดือนพฤศจิกายน</span>
+                  </div>
                 </div>
 
                 {/* Slip 2 Section */}
@@ -3829,19 +3872,19 @@ export default function RegisterView({
                   </div>
                 </div>
 
-                {hasAnyPaymentApproved ? (
+                {hasTransferredOrPaid ? (
                   <div className="p-3.5 bg-amber-950/40 border border-amber-600/50 rounded-xl text-xs text-amber-200 leading-relaxed flex items-start gap-2.5">
                     <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-amber-300 block mb-0.5">ไม่สามารถยกเลิกใบสมัครได้ (ชำระเงินแล้ว)</strong>
-                      <span>ท่านได้ชำระเงินค่าสมัครเข้าร่วมโครงการเรียบร้อยแล้ว จึงไม่สามารถยกเลิกใบสมัครหรือลบข้อมูลจากระบบได้ หากมีความประสงค์จะสละสิทธิ์ กรุณาติดต่อทีมงานผู้จัดโครงการโดยตรง</span>
+                      <strong className="text-amber-300 block mb-0.5">ไม่สามารถยกเลิกใบสมัครได้ (มีประวัติการชำระเงินหรือแนบสลิปแล้ว)</strong>
+                      <span>ท่านได้ทำการแนบสลิปหรือมีประวัติการชำระเงินในระบบแล้ว เพื่อความถูกต้องและปลอดภัยทางบัญชีจึงไม่สามารถยกเลิกใบสมัครได้ หากมีความประสงค์จะสละสิทธิ์หรือขอเงินคืน กรุณาติดต่อทีมงานผู้จัดโครงการโดยตรง (เฉพาะผู้ดูแลระบบในโหมดขั้นสูงเท่านั้นที่สามารถลบข้อมูลได้)</span>
                     </div>
                   </div>
                 ) : (
                   <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-[11px] text-rose-200 leading-relaxed flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <span>
-                      <strong>คำเตือน:</strong> การยกเลิกใบสมัครจะลบข้อมูลประวัติผู้สมัคร, คำสั่งจองเสื้อ, และภาพสลิปที่แนบไว้ทั้งหมดออกจากฐานข้อมูลอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้
+                      <strong>คำเตือน:</strong> การยกเลิกใบสมัครจะลบข้อมูลประวัติผู้สมัคร, คำสั่งจองเสื้อ, และข้อมูลทั้งหมดออกจากฐานข้อมูลอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้
                     </span>
                   </div>
                 )}
@@ -3858,7 +3901,7 @@ export default function RegisterView({
                   <button
                     type="button"
                     onClick={handleDeleteMyRegistration}
-                    disabled={isDeletingReg || hasAnyPaymentApproved}
+                    disabled={isDeletingReg || hasTransferredOrPaid}
                     className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {isDeletingReg ? (
@@ -3866,10 +3909,10 @@ export default function RegisterView({
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>กำลังลบข้อมูล...</span>
                       </>
-                    ) : hasAnyPaymentApproved ? (
+                    ) : hasTransferredOrPaid ? (
                       <>
                         <Lock className="w-4 h-4" />
-                        <span>ไม่สามารถลบได้ (ชำระแล้ว)</span>
+                        <span>ไม่สามารถลบได้ (แนบสลิปแล้ว)</span>
                       </>
                     ) : (
                       <>
@@ -4320,14 +4363,20 @@ export default function RegisterView({
               {/* Option 1: จ่ายครบเต็มจำนวน (Full Payment: 3 Steps) */}
               <div 
                 onClick={() => {
+                  if (isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'installment') {
+                    triggerToast('🔒 ไม่สามารถเปลี่ยนเป็นจ่ายเต็มจำนวนได้ เนื่องจากท่านมีประวัติการชำระเงินหรือแนบสลิปแบบแบ่งจ่าย 2 งวดแล้ว', 'warning');
+                    return;
+                  }
                   setPaymentPlan('full');
                   if (currentFormStep === 4) setCurrentFormStep(3);
                   triggerToast('เลือกรูปแบบ: จ่ายครบเต็มจำนวน (3 ขั้นตอน)', 'info');
                 }}
-                className={`p-4 sm:p-4.5 rounded-2xl border transition-all cursor-pointer space-y-2.5 select-none ${
-                  paymentPlan === 'full'
-                    ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/30 shadow-lg shadow-amber-500/10'
-                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                className={`p-4 sm:p-4.5 rounded-2xl border transition-all space-y-2.5 select-none ${
+                  isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'installment'
+                    ? 'bg-slate-900/40 border-slate-800 opacity-50 cursor-not-allowed'
+                    : paymentPlan === 'full'
+                      ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/30 shadow-lg shadow-amber-500/10 cursor-pointer'
+                      : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100 cursor-pointer'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -4346,6 +4395,16 @@ export default function RegisterView({
                 <p className="text-slate-300 text-xs leading-relaxed">
                   ชำระค่าลงทะเบียนและค่าเสื้อเต็มจำนวนในคราวเดียว ({feeInfo.isMsu ? 'นิสิต มมส 650 บ.' : 'ต่างมหาวิทยาลัย 850 บ.'}) รวดเร็ว สบายใจ ยืนยันสิทธิ์ทันที
                 </p>
+                {isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'full' && (
+                  <div className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" /> ล็อกตามประวัติการชำระ (โอนเต็มจำนวนแล้ว)
+                  </div>
+                )}
+                {isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'installment' && (
+                  <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5 text-amber-500/70" /> ล็อก (เริ่มชำระแบบแบ่งจ่าย 2 งวดแล้ว)
+                  </div>
+                )}
                 <div className="text-[11px] text-amber-300 font-semibold pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
                   <span>💵 ยอดชำระเต็มจำนวน:</span>
                   <span className="font-black text-sm text-white">{feeInfo.totalFee} บาท</span>
@@ -4355,13 +4414,19 @@ export default function RegisterView({
               {/* Option 2: แบ่งจ่าย 2 งวด (Installments: 4 Steps) */}
               <div 
                 onClick={() => {
+                  if (isEditing && hasTransferredOrPaid && myRegistration?.payment_plan !== 'installment') {
+                    triggerToast('🔒 ไม่สามารถเปลี่ยนเป็นแบ่งจ่ายได้ เนื่องจากท่านมีประวัติการชำระเงินหรือแนบสลิปเต็มจำนวนแล้ว', 'warning');
+                    return;
+                  }
                   setPaymentPlan('installment');
                   triggerToast('เลือกรูปแบบ: แบ่งจ่าย 2 งวด (4 ขั้นตอน)', 'info');
                 }}
-                className={`p-4 sm:p-4.5 rounded-2xl border transition-all cursor-pointer space-y-2.5 select-none ${
-                  paymentPlan === 'installment'
-                    ? 'bg-sky-500/15 border-sky-500 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
-                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                className={`p-4 sm:p-4.5 rounded-2xl border transition-all space-y-2.5 select-none ${
+                  isEditing && hasTransferredOrPaid && myRegistration?.payment_plan !== 'installment'
+                    ? 'bg-slate-900/40 border-slate-800 opacity-50 cursor-not-allowed'
+                    : paymentPlan === 'installment'
+                      ? 'bg-sky-500/15 border-sky-500 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10 cursor-pointer'
+                      : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100 cursor-pointer'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -4380,6 +4445,16 @@ export default function RegisterView({
                 <p className="text-slate-300 text-xs leading-relaxed">
                   งวดที่ 1 มัดจำค่าเสื้อ 400 บ. (15–20 ต.ค. 69) และงวดที่ 2 ชำระส่วนที่เหลือ ({feeInfo.round2Amount} บ. วันที่ 1–5 พ.ย. 69)
                 </p>
+                {isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'installment' && (
+                  <div className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" /> ล็อกตามประวัติการชำระ (ผ่อนชำระ 2 งวด)
+                  </div>
+                )}
+                {isEditing && hasTransferredOrPaid && myRegistration?.payment_plan !== 'installment' && (
+                  <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5 text-amber-500/70" /> ล็อก (ชำระเต็มจำนวนแล้ว)
+                  </div>
+                )}
                 <div className="text-[11px] text-sky-300 font-semibold pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1">
                   <div className="flex items-center gap-1.5">
                     <span>งวด 1: 400 บ.</span>

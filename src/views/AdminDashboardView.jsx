@@ -148,6 +148,7 @@ export default function AdminDashboardView({
   const [isEditingPaymentSettings, setIsEditingPaymentSettings] = useState(false);
   const [isEditingForms, setIsEditingForms] = useState(false);
   const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
 
   const getUrlSub = (t) => {
     if (t === 'payment_settings') return 'payment';
@@ -1604,10 +1605,31 @@ export default function AdminDashboardView({
     }
   };
 
-  const handleDeleteReg = async (userId, name) => {
+  const handleDeleteReg = async (userId, name, reg) => {
+    const hasTransferred = reg && Boolean(
+      reg.payment_status === 'paid' ||
+      reg.payment_status === 'verified' ||
+      reg.installment_1_status === 'paid' ||
+      reg.installment_2_status === 'paid' ||
+      reg.payment_slip_url ||
+      reg.installment_1_slip_url ||
+      reg.installment_2_slip_url ||
+      reg.slip_url ||
+      (reg.payment_status && reg.payment_status !== 'unpaid') ||
+      (reg.installment_1_status && reg.installment_1_status !== 'unpaid') ||
+      (reg.installment_2_status && reg.installment_2_status !== 'unpaid')
+    );
+
+    if (hasTransferred && !isAdvancedMode) {
+      triggerToast('🔒 ผู้สมัครท่านนี้มีประวัติการโอนเงิน/ส่งสลิปแล้ว การลบข้อมูลจำเป็นต้องเปิด "โหมดแก้ไขขั้นสูง" ก่อน เพื่อความปลอดภัยทางบัญชี', 'error');
+      return;
+    }
+
     const ok = await askConfirm({
-      title: 'ยืนยันการลบข้อมูลผู้สมัคร',
-      message: `คุณต้องการลบข้อมูลผู้สมัคร "${name}" ออกจากระบบใช่หรือไม่? ข้อมูลและประวัติการชำระเงินทั้งหมดจะถูกลบถาวร`,
+      title: hasTransferred ? '⚠️ ยืนยันการลบข้อมูล (โหมดขั้นสูง - มีประวัติโอนเงิน)' : 'ยืนยันการลบข้อมูลผู้สมัคร',
+      message: hasTransferred 
+        ? `คำเตือนระดับสูง: ผู้สมัคร "${name}" มีประวัติการชำระเงิน/แนบสลิปในระบบ การลบข้อมูลจะทำให้ข้อมูลบัญชีและสลิปถูกลบถาวร ต้องการยืนยันการลบจริงหรือไม่?`
+        : `คุณต้องการลบข้อมูลผู้สมัคร "${name}" ออกจากระบบใช่หรือไม่? ข้อมูลทั้งหมดจะถูกลบถาวร`,
       confirmText: 'ยืนยันลบข้อมูลผู้สมัคร',
       cancelText: 'ยกเลิก',
       variant: 'danger'
@@ -2626,6 +2648,37 @@ export default function AdminDashboardView({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isAdvancedMode) {
+                    askConfirm({
+                      title: '🛡️ เปิดโหมดแก้ไขขั้นสูง (Advanced Mode)',
+                      message: 'โหมดนี้อนุญาตให้ผู้ดูแลระบบสามารถลบข้อมูลผู้สมัครที่มีประวัติการโอนเงิน/ส่งสลิปได้ โปรดใช้ด้วยความระมัดระวังเพื่อป้องกันความผิดพลาดทางบัญชี',
+                      confirmText: 'เปิดใช้งานโหมดขั้นสูง',
+                      cancelText: 'ยกเลิก',
+                      variant: 'warning',
+                      onConfirm: () => {
+                        setIsAdvancedMode(true);
+                        triggerToast('🛡️ เปิดใช้งานโหมดแก้ไขขั้นสูงแล้ว (สามารถลบ/จัดการข้อมูลที่มีประวัติการโอนเงินได้)', 'warning');
+                      }
+                    });
+                  } else {
+                    setIsAdvancedMode(false);
+                    triggerToast('ปิดโหมดแก้ไขขั้นสูงแล้ว');
+                  }
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isAdvancedMode
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/40 ring-2 ring-rose-400 animate-pulse'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600'
+                }`}
+                title="โหมดแก้ไขและลบข้อมูลขั้นสูง (Master Override สำหรับผู้ดูแลระบบ)"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>{isAdvancedMode ? '🛡️ โหมดขั้นสูง (เปิดอยู่)' : '🛡️ โหมดแก้ไขขั้นสูง'}</span>
+              </button>
+
               <select
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
@@ -2935,13 +2988,44 @@ export default function AdminDashboardView({
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
 
-                              <button
-                                onClick={() => handleDeleteReg(reg.user_id, `${reg.first_name} ${reg.last_name}`)}
-                                className="p-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 rounded-xl transition-colors"
-                                title="ลบข้อมูล"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {(() => {
+                                const hasTransferredThis = Boolean(
+                                  reg.payment_status === 'paid' ||
+                                  reg.payment_status === 'verified' ||
+                                  reg.installment_1_status === 'paid' ||
+                                  reg.installment_2_status === 'paid' ||
+                                  reg.payment_slip_url ||
+                                  reg.installment_1_slip_url ||
+                                  reg.installment_2_slip_url ||
+                                  reg.slip_url ||
+                                  (reg.payment_status && reg.payment_status !== 'unpaid') ||
+                                  (reg.installment_1_status && reg.installment_1_status !== 'unpaid') ||
+                                  (reg.installment_2_status && reg.installment_2_status !== 'unpaid')
+                                );
+                                const isDeleteBlocked = hasTransferredThis && !isAdvancedMode;
+
+                                return (
+                                  <button
+                                    onClick={() => handleDeleteReg(reg.user_id, `${reg.first_name} ${reg.last_name}`, reg)}
+                                    className={`p-1.5 rounded-xl transition-colors ${
+                                      isDeleteBlocked
+                                        ? 'bg-slate-950 text-slate-600 border border-slate-800 cursor-not-allowed opacity-60'
+                                        : 'bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 cursor-pointer'
+                                    }`}
+                                    title={
+                                      isDeleteBlocked
+                                        ? 'ผู้สมัครมีประวัติโอนเงิน/สลิป (ต้องเปิด "โหมดแก้ไขขั้นสูง" ก่อนจึงจะลบได้)'
+                                        : 'ลบข้อมูล'
+                                    }
+                                  >
+                                    {isDeleteBlocked ? (
+                                      <Lock className="w-3.5 h-3.5 text-slate-500" />
+                                    ) : (
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           )}
                         </td>
