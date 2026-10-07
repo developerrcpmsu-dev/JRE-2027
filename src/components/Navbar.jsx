@@ -16,7 +16,8 @@ import {
   ExternalLink,
   Megaphone,
   Shirt,
-  Sparkles
+  Sparkles,
+  QrCode
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -167,6 +168,21 @@ export default function Navbar({
               >
                 <UserCheck className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
                 <span>แดชบอร์ด<span className="hidden 2xl:inline">ของฉัน</span></span>
+              </button>
+            )}
+
+            {myRegistration && (
+              <button
+                onClick={() => handleNav('id-card')}
+                className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  currentTab === 'id-card'
+                    ? 'bg-orange-500/20 text-orange-300 shadow-sm border border-orange-400/50'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-900'
+                }`}
+                title="เปิดบัตรประจำตัวดิจิทัล JRE 2027"
+              >
+                <QrCode className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-orange-400 shrink-0" />
+                <span>บัตร ID</span>
               </button>
             )}
 
@@ -504,6 +520,20 @@ export default function Navbar({
             >
               <UserCheck className="w-5 h-5" />
               <span>แดชบอร์ดผู้สมัครของฉัน</span>
+            </button>
+          )}
+
+          {myRegistration && (
+            <button
+              onClick={() => handleNav('id-card')}
+              className={`w-full text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 ${
+                currentTab === 'id-card'
+                  ? 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/20'
+                  : 'bg-slate-800 text-orange-300 border border-orange-500/30'
+              }`}
+            >
+              <QrCode className="w-5 h-5" />
+              <span>บัตรประจำตัว ID Card JRE 2027</span>
             </button>
           )}
 

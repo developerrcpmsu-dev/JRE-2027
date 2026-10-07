@@ -80,6 +80,7 @@ import {
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
+import AdminIDScannerModal from '../components/AdminIDScannerModal';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import ShirtOrderPrintModal from '../components/ShirtOrderPrintModal';
@@ -110,6 +111,7 @@ export default function AdminDashboardView({
   onMarkOrderReceived,
   userAccounts: propUserAccounts = [],
   onRefreshUserAccounts,
+  onRefreshRegistrations,
   onAdminLogout
 }) {
   const resolveInitialTab = (tab) => {
@@ -246,6 +248,7 @@ export default function AdminDashboardView({
   });
   const [isSavingMerch, setIsSavingMerch] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showIDCardScanner, setShowIDCardScanner] = useState(false);
   const [showShirtPrintModal, setShowShirtPrintModal] = useState(false);
   const [merchSearchQuery, setMerchSearchQuery] = useState('');
   const [merchStatusFilter, setMerchStatusFilter] = useState('all');
@@ -2390,6 +2393,16 @@ export default function AdminDashboardView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowIDCardScanner(true)}
+              className="px-4 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-orange-950/40 border border-orange-300/50 transition-all active:scale-95 cursor-pointer"
+              title="สแกน Barcode/QR บัตรประจำตัวเพื่อดูประวัติผู้สมัครและส่งข้อความ"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>สแกนบัตร ID</span>
+            </button>
+
             <button
               onClick={handleExportExcel}
               disabled={isExportingExcel}
@@ -8709,6 +8722,15 @@ export default function AdminDashboardView({
             }
           }}
           onVerifyPayment={onVerifyOrderPayment}
+        />
+      )}
+
+      {/* ADMIN ID CARD SCANNER & PARTICIPANT HISTORY */}
+      {showIDCardScanner && (
+        <AdminIDScannerModal
+          registrations={registrations}
+          onClose={() => setShowIDCardScanner(false)}
+          onRefreshRegistrations={onRefreshRegistrations}
         />
       )}
 

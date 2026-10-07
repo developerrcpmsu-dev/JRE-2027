@@ -14,6 +14,7 @@ import AdminDashboardView from './views/AdminDashboardView';
 import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import UserProfileView from './views/UserProfileView';
+import IDCardView from './views/IDCardView';
 import SecurityAuditView from './views/SecurityAuditView';
 import { DataService, supabase, isSupabaseConfigured, subscribeToRealtimeChanges, broadcastRealtimeChange } from './supabase';
 import { Analytics } from '@vercel/analytics/react';
@@ -39,6 +40,9 @@ export default function App() {
     } else if (newTab === 'orders') {
       main = 'announcements';
       sub = 'members';
+    } else if (newTab === 'id-card' || newTab === 'badge') {
+      main = 'id-card';
+      sub = null;
     } else if (newTab === 'dashboard') {
       main = 'register';
       sub = 'dashboard';
@@ -317,8 +321,10 @@ export default function App() {
         : (user ? await DataService.getRegistrations({ userId: user.id, email: user.email }) : await DataService.getRegistrations());
       if (Array.isArray(updated)) {
         setRegistrations(prev => isDifferent(prev, updated) ? updated : prev);
+        return updated;
       }
     } catch (e) {}
+    return [];
   };
 
   const refreshAnnouncements = async () => {
@@ -846,6 +852,7 @@ export default function App() {
             onMarkOrderReceived={handleMarkOrderReceived}
             userAccounts={userAccounts}
             onRefreshUserAccounts={refreshUserAccounts}
+            onRefreshRegistrations={refreshRegistrations}
             onAdminLogout={handleAdminLogout}
           />
         )}
@@ -881,6 +888,15 @@ export default function App() {
             onOpenAdminLogin={() => setAdminModalOpen(true)}
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin', 'users')}
+            onNavigateRegister={() => setCurrentTab('register')}
+          />
+        )}
+
+        {currentTab === 'id-card' && (
+          <IDCardView
+            user={user}
+            registration={myRegistration}
+            onNavigateDashboard={() => setCurrentTab('dashboard')}
             onNavigateRegister={() => setCurrentTab('register')}
           />
         )}

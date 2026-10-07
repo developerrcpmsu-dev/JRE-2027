@@ -29,6 +29,7 @@ export function parseCurrentRoute() {
     if (queryOrHash === 'schedule') return { mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' };
     if (queryOrHash === 'register' || queryOrHash === 'profile') return { mainTab: 'register', subRoute: null, canonicalPath: '/register' };
     if (queryOrHash === 'dashboard') return { mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' };
+    if (queryOrHash === 'id-card' || queryOrHash === 'badge') return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
     if (queryOrHash === 'pr') return { mainTab: 'announcements', subRoute: 'public', canonicalPath: '/announcements/pr' };
     if (queryOrHash === 'orders') return { mainTab: 'announcements', subRoute: 'members', canonicalPath: '/announcements/orders' };
     if (queryOrHash === 'announcements') return { mainTab: 'announcements', subRoute: 'all', canonicalPath: '/announcements' };
@@ -64,6 +65,9 @@ export function parseCurrentRoute() {
   }
 
   // Registration & Dashboard
+  if (first === 'id-card' || first === 'badge' || first === 'badge-card') {
+    return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
+  }
   if (first === 'register' || first === 'signup' || first === 'apply') {
     return { mainTab: 'register', subRoute: 'form', canonicalPath: '/register' };
   }
@@ -216,6 +220,9 @@ export function getPathForRoute(mainTab, subRoute) {
       return subRoute === 'dashboard' ? '/dashboard' : '/register';
     case 'dashboard':
       return '/dashboard';
+    case 'id-card':
+    case 'badge':
+      return '/id-card';
     case 'pr':
       return '/announcements/pr';
     case 'orders':

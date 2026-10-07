@@ -65,6 +65,7 @@ import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UserNotificationsModal from '../components/UserNotificationsModal';
+import IDCardPreview from '../components/IDCardPreview';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import { scanSlipImage } from '../utils/slipOcr';
@@ -333,6 +334,7 @@ export default function RegisterView({
   ]);
   const [nickname, setNickname] = useState('');
   const [callsign, setCallsign] = useState('');
+  const [unit, setUnit] = useState('');
   const [shirtSize, setShirtSize] = useState('L');
   const [idCardPhoto, setIdCardPhoto] = useState('');
   const [idCardFileName, setIdCardFileName] = useState('');
@@ -630,6 +632,7 @@ export default function RegisterView({
           if (d.lastName) setLastName(d.lastName);
           if (d.nickname) setNickname(d.nickname);
           if (d.callsign) setCallsign(d.callsign);
+          if (d.unit) setUnit(d.unit);
           if (d.institution) setInstitution(d.institution);
           if (d.phone) setPhone(d.phone);
           if (d.bloodGroup) setBloodGroup(d.bloodGroup);
@@ -679,6 +682,7 @@ export default function RegisterView({
         lastName,
         nickname,
         callsign,
+        unit,
         institution,
         phone,
         bloodGroup,
@@ -721,6 +725,7 @@ export default function RegisterView({
     lastName,
     nickname,
     callsign,
+    unit,
     institution,
     phone,
     bloodGroup,
@@ -746,6 +751,7 @@ export default function RegisterView({
     setFullNameAffiliation('');
     setNickname('');
     setCallsign('');
+    setUnit('');
     setPhone('');
     setMedicalHistory('');
     setFoodAllergy('');
@@ -952,6 +958,7 @@ export default function RegisterView({
     setFullNameAffiliation(reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim());
     setNickname(reg.nickname || '');
     setCallsign(reg.callsign || '');
+    setUnit(reg.unit || reg.unit_name || '');
     setShirtSize(reg.shirt_size || 'L');
     setIdCardPhoto(reg.id_card_photo || reg.id_card_url || '');
     setBloodGroup(reg.blood_group || 'O');
@@ -1338,6 +1345,7 @@ export default function RegisterView({
       full_name_affiliation: fullNameAffiliation.trim() || `${finalFirstName} ${finalLastName}`.trim(),
       nickname: nickname.trim(),
       callsign: callsign.trim(),
+      unit: unit.trim(),
       shirt_size: shirtSize,
       id_card_photo: idCardPhoto,
       id_card_url: idCardPhoto,
@@ -1357,6 +1365,7 @@ export default function RegisterView({
       room_assigned: myRegistration?.room_assigned || '',
       is_special_care: myRegistration?.is_special_care || false,
       special_notes: myRegistration?.special_notes || '',
+      admin_private_notes: myRegistration?.admin_private_notes || '',
       payment_plan: paymentPlan,
       payment_status: paymentPlan === 'full'
         ? (formSlipFull || myRegistration?.payment_slip_url ? 'pending_review' : 'unpaid')
@@ -1717,6 +1726,21 @@ export default function RegisterView({
             />
           </div>
         </div>
+
+        {/* Digital ID Card generated directly from the applicant record */}
+        <section className="rounded-3xl border border-orange-500/25 bg-gradient-to-br from-slate-900 via-[#0b1f3a] to-slate-950 p-4 shadow-2xl sm:p-6">
+          <div className="mb-4 flex flex-col gap-2 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">JRE 2027 Participant Badge</p>
+              <h2 className="mt-1 text-lg font-black text-white sm:text-xl">บัตรประจำตัวดิจิทัลของฉัน</h2>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">บัตรนี้สร้างจากข้อมูลผู้สมัครจริงและใช้ QR/Barcode สำหรับ Admin ตรวจสอบประวัติ</p>
+            </div>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold text-emerald-300">
+              <CheckCircle2 className="h-3.5 w-3.5" /> ข้อมูลเชื่อมต่อแล้ว
+            </span>
+          </div>
+          <IDCardPreview registration={myRegistration} user={user} />
+        </section>
 
         {/* Top Header Profile Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
@@ -4767,7 +4791,7 @@ export default function RegisterView({
               </div>
 
               {/* ฟิลด์ 2 & ฟิลด์ 3: ชื่อเล่น & รหัสนามเรียกขาน */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                     <span>ชื่อเล่น ภาษาไทย เเละ อังกฤษ <span className="text-rose-400 font-bold">*</span></span>
@@ -4822,6 +4846,21 @@ export default function RegisterView({
                       <span>{fieldErrors.callsign}</span>
                     </p>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    <span>หน่วย / Unit <span className="text-slate-500 font-normal">(ถ้ามี)</span></span>
+                  </label>
+                  <input
+                    id="field-unit"
+                    type="text"
+                    value={unit}
+                    onChange={e => setUnit(e.target.value)}
+                    placeholder="เช่น ทีมกู้ชีพ, ฝ่ายพยาบาล"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">ใช้แสดงบนบัตร ID Card และข้อมูล Admin</p>
                 </div>
               </div>
 
