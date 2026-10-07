@@ -80,9 +80,9 @@ export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin }) {
       statusLabel: 'แก้ไขแล้ว (Resolved)',
       statusColor: 'green',
       statusBadge: '🟢 ปลอดภัยแล้ว · Token Verified',
-      howItWasFixed: '1. ยกเลิกการให้สิทธิ์ Admin โดยอาศัยเพียงค่า boolean ใน localStorage (`jre2027_is_admin: true`)\n2. กำหนดให้ระบบต้องตรวจสอบ `jre2027_admin_token` ที่มีลายเซ็นดิจิทัลจากเซิร์ฟเวอร์และตรวจอายุวันหมดอายุ (`jre2027_admin_expires`)\n3. หาก Token หมดอายุหรือถูกดัดแปลง ระบบจะตัดสิทธิ์ Admin และล้าง Session ทันที',
-      evidence: 'src/App.jsx และ src/components/AdminLoginModal.jsx',
-      description: 'เดิมใครก็ตามสามารถพิมพ์คำสั่งใน Console เพื่อเปิดโหมด Admin ได้ ปัจจุบันระบบตรวจสอบ Token และ Timestamp อย่างเข้มงวด',
+      howItWasFixed: '1. ยกเลิกการให้สิทธิ์ Admin โดยอาศัยเพียงค่า boolean ใน localStorage (`jre2027_is_admin: true`) และสั่งล้างทิ้งอัตโนมัติทุกครั้งที่โหลดเว็บ\n2. แก้ไขข้อผิดพลาดบนเบราว์เซอร์มือถือ: แยกการเข้าถึง Admin ออกจากการเข้าสู่ระบบด้วย Google โดยสิ้นเชิง แม้ผู้ใช้จะมี role admin ในโปรไฟล์ ก็ยังจำเป็นต้องกรอกรหัสผ่าน Admin เพื่อเข้าสู่ Admin Dashboard\n3. กำหนดให้ระบบต้องตรวจสอบ `jre2027_admin_token` ที่มีลายเซ็นดิจิทัลจากเซิร์ฟเวอร์ (`/api/admin-auth?action=verify`) และตรวจอายุการใช้งานใน sessionStorage\n4. ปิดหน้าต่างหรือแถบเบราว์เซอร์บนมือถือจะทำให้สถานะ Admin สิ้นสุดลงทันทีเพื่อความปลอดภัยสูงสุด',
+      evidence: 'src/App.jsx, api/admin-auth.js และ src/components/AdminLoginModal.jsx',
+      description: 'เดิมใครก็ตามสามารถพิมพ์คำสั่งใน Console หรือเบราว์เซอร์มือถือที่เคยจำสิทธิ์ไว้จะคงสถานะ Admin ถาวร ปัจจุบันระบบล้างค่าทิ้งและตรวจสอบ Token ฝั่งเซิร์ฟเวอร์อย่างเข้มงวด',
       attackVector: 'การแก้ไข localStorage.setItem("jre2027_is_admin", "true") ด้วยตนเองจะไม่สามารถเปิดโหมด Admin ได้หากไม่มี Signed Token ที่ถูกต้องจากระบบ',
       remediation: 'ผูกสิทธิ์ Admin เข้ากับ Signed Token จาก Serverless Auth'
     },

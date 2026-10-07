@@ -187,30 +187,48 @@ export default function App() {
           }
         }
 
-        // Check stored auth
+        // 1. Wipe any legacy insecure admin flags stored in localStorage
+        localStorage.removeItem('jre2027_is_admin');
+
+        // 2. Check stored regular user auth (Participant profile)
         const storedUser = localStorage.getItem('jre2027_auth_user');
         if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          setUser(parsed);
-          if (parsed?.role === 'admin') {
-            setIsAdmin(true);
-            localStorage.setItem('jre2027_is_admin', 'true');
+          try {
+            const parsed = JSON.parse(storedUser);
+            setUser(parsed);
+            const found = matchRegistration(parsed, regs);
+            if (found) setMyRegistration(found);
+          } catch (e) {
+            localStorage.removeItem('jre2027_auth_user');
           }
-          const found = matchRegistration(parsed, regs);
-          if (found) setMyRegistration(found);
         }
 
-        const storedAdmin = localStorage.getItem('jre2027_is_admin');
+        // 3. Strict Admin Session Verification:
+        // Admin access is strictly separated from Google login and REQUIRES active session tokens
+        const adminToken = sessionStorage.getItem('jre2027_admin_token');
         const adminExpires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
-        if (storedAdmin === 'true') {
-          if (adminExpires && Date.now() > adminExpires) {
-            localStorage.removeItem('jre2027_is_admin');
-            sessionStorage.removeItem('jre2027_admin_token');
-            sessionStorage.removeItem('jre2027_admin_expires');
-            setIsAdmin(false);
-          } else {
-            setIsAdmin(true);
-          }
+
+        if (adminToken && adminExpires && Date.now() < adminExpires) {
+          setIsAdmin(true);
+          // Verify token validity with server in background
+          fetch('/api/admin-auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'verify', token: adminToken })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (!data?.valid) {
+              sessionStorage.removeItem('jre2027_admin_token');
+              sessionStorage.removeItem('jre2027_admin_expires');
+              setIsAdmin(false);
+            }
+          })
+          .catch(() => {});
+        } else {
+          sessionStorage.removeItem('jre2027_admin_token');
+          sessionStorage.removeItem('jre2027_admin_expires');
+          setIsAdmin(false);
         }
 
         // Supabase Auth listener if configured
@@ -268,21 +286,14 @@ export default function App() {
   // Auth Handlers
   const handleGoogleLoginSuccess = (userObj) => {
     setUser(userObj);
-    if (userObj?.role === 'admin') {
-      setIsAdmin(true);
-      localStorage.setItem('jre2027_is_admin', 'true');
-    } else {
-      setIsAdmin(false);
-      localStorage.removeItem('jre2027_is_admin');
-    }
+    // Security notice: Google login authenticates participant identity only.
+    // It strictly does NOT grant access to the Admin Dashboard without dedicated admin credentials.
     const found = matchRegistration(userObj, registrations);
     if (found) setMyRegistration(found);
   };
 
   const handleAdminLoginSuccess = () => {
     setIsAdmin(true);
-    localStorage.setItem('jre2027_is_admin', 'true');
-    sessionStorage.setItem('jre2027_admin_expires', String(Date.now() + 8 * 3600 * 1000));
     setCurrentTab('admin');
   };
 
@@ -301,6 +312,13 @@ export default function App() {
     setMyRegistration(null);
     setCurrentTab('home');
   };
+
+  // Auto-prompt Admin Login modal when user accesses /admin route while unauthenticated
+  useEffect(() => {
+    if (currentTab === 'admin' && !isAdmin && !loading) {
+      setAdminModalOpen(true);
+    }
+  }, [currentTab, isAdmin, loading]);
 
   // Data Mutation Handlers
   const handleSaveRegistration = async (payload) => {

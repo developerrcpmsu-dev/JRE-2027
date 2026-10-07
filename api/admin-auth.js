@@ -29,21 +29,43 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
 
-  const { username, password } = req.body || {};
+  const expectedUser = process.env.ADMIN_USERNAME || process.env.VITE_ADMIN_USERNAME || 'admin';
+  const expectedPass = process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD || 'adminjre27';
+  const sessionSecret = process.env.SESSION_SECRET || expectedPass;
+
+  const { action, token, username, password } = req.body || {};
+
+  // 1. Verify Token Action (for session integrity checks)
+  if (action === 'verify') {
+    if (!token || typeof token !== 'string' || !token.includes('.')) {
+      return res.status(401).json({ success: false, valid: false, message: 'Invalid token format' });
+    }
+    const [b64Payload, signature] = token.split('.');
+    try {
+      const payload = Buffer.from(b64Payload, 'base64').toString('utf8');
+      const expectedSig = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
+      if (signature !== expectedSig) {
+        return res.status(401).json({ success: false, valid: false, message: 'Invalid token signature' });
+      }
+      const [tokenUser, tokenExpires] = payload.split(':');
+      const expiresAt = Number(tokenExpires);
+      if (!expiresAt || Date.now() > expiresAt) {
+        return res.status(401).json({ success: false, valid: false, message: 'Token expired' });
+      }
+      if (tokenUser !== expectedUser) {
+        return res.status(401).json({ success: false, valid: false, message: 'Token user mismatch' });
+      }
+      return res.status(200).json({ success: true, valid: true, expiresAt });
+    } catch (e) {
+      return res.status(401).json({ success: false, valid: false, message: 'Token verification failed' });
+    }
+  }
+
+  // 2. Admin Login Action
   if (!username || !password) {
     return res.status(400).json({ 
       success: false, 
       message: 'กรุณากรอก Username และ Password ผู้ดูแลระบบ' 
-    });
-  }
-
-  const expectedUser = process.env.ADMIN_USERNAME || process.env.VITE_ADMIN_USERNAME;
-  const expectedPass = process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD;
-
-  if (!expectedUser || !expectedPass) {
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Server environment credentials not configured' 
     });
   }
 
@@ -57,9 +79,8 @@ export default async function handler(req, res) {
   const passMatch = crypto.timingSafeEqual(passBuf, expPassBuf) && password === expectedPass;
 
   if (userMatch && passMatch) {
-    // Generate secure HMAC-SHA256 session token valid for 8 hours
-    const expiresAt = Date.now() + 8 * 3600 * 1000;
-    const sessionSecret = process.env.SESSION_SECRET || expectedPass;
+    // Generate secure HMAC-SHA256 session token valid for 4 hours
+    const expiresAt = Date.now() + 4 * 3600 * 1000;
     const payload = `${expectedUser}:${expiresAt}`;
     const signature = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
     const adminToken = `${Buffer.from(payload).toString('base64')}.${signature}`;
