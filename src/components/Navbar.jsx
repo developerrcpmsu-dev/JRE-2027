@@ -47,45 +47,37 @@ export default function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-x-hidden">
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-3 xl:px-6 w-full">
-        <div className="flex items-center justify-between h-18 lg:h-20 gap-1.5 xl:gap-2">
+    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full">
+      <div className="w-full max-w-[1536px] mx-auto px-3 sm:px-4 lg:px-4 xl:px-6">
+        <div className="flex items-center justify-between h-16 sm:h-18 lg:h-20 gap-1.5 lg:gap-2">
           
           {/* Logo & Brand */}
           <div 
             onClick={() => handleNav('home')} 
-            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group select-none shrink-0"
+            className="flex items-center gap-2 cursor-pointer group select-none shrink-0"
           >
             <div className="relative shrink-0 flex items-center justify-center">
               <img 
                 src="/images/logo/jre_logo.png" 
                 alt="ตราสัญลักษณ์ JRE 2027" 
-                className="w-8 h-10 sm:w-10 sm:h-12 object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                className="w-8 h-9 sm:w-9 sm:h-10 object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
               />
             </div>
-            <div className="shrink-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-lg sm:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
-                  JRE <span className="text-rescue-500">2027</span>
-                </span>
-                <span className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
-                  มมส
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-medium hidden 2xl:block whitespace-nowrap">
-                ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม
-              </p>
-              <p className="text-[10px] text-slate-400 font-medium hidden sm:block lg:hidden whitespace-nowrap">
-                ชมรมกู้ภัยราชพฤกษ์ มมส
-              </p>
+            <div className="shrink-0 flex items-center gap-1.5">
+              <span className="text-lg sm:text-xl xl:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
+                JRE <span className="text-rescue-500">2027</span>
+              </span>
+              <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
+                มมส
+              </span>
             </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1.5 shrink-0">
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
             <button
               onClick={() => handleNav('home')}
-              className={`px-2 xl:px-3 py-1.5 xl:py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1 xl:gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 currentTab === 'home'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -97,7 +89,7 @@ export default function Navbar({
 
             <button
               onClick={() => handleNav('schedule')}
-              className={`px-2 xl:px-3 py-1.5 xl:py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1 xl:gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 currentTab === 'schedule'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -111,7 +103,7 @@ export default function Navbar({
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('pr')}
-                className={`px-2 xl:px-3 py-1.5 xl:py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1 xl:gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   currentTab === 'pr' || (currentTab === 'announcements' && currentSubRoute === 'public')
                     ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -119,13 +111,13 @@ export default function Navbar({
                 title="ประชาสัมพันธ์ข้อมูลและเงื่อนไขการรับสมัคร"
               >
                 <Megaphone className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-orange-400 shrink-0" />
-                <span>ข่าวสาร<span className="hidden xl:inline">ประชาสัมพันธ์</span></span>
+                <span>ข่าวสาร<span className="hidden 2xl:inline">ประชาสัมพันธ์</span></span>
               </button>
             ) : (
               /* คำสั่งและประกาศสำหรับสมาชิก (แสดงเมื่อสมัครแล้ว) */
               <button
                 onClick={() => handleNav('orders')}
-                className={`px-2 xl:px-3 py-1.5 xl:py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1 xl:gap-1.5 whitespace-nowrap shrink-0 cursor-pointer relative ${
+                className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
                   currentTab === 'orders' || (currentTab === 'announcements' && currentSubRoute === 'members')
                     ? 'bg-indigo-600/30 text-indigo-300 shadow-sm border border-indigo-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -140,7 +132,7 @@ export default function Navbar({
 
             <button
               onClick={() => handleNav('merchandise')}
-              className={`px-2 xl:px-3 py-1.5 xl:py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1 xl:gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 currentTab === 'merchandise' || currentTab === 'shop'
                   ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -148,60 +140,60 @@ export default function Navbar({
               title="สั่งซื้อเสื้อ & กางเกงกู้ภัยโครงการ JRE 2027"
             >
               <Shirt className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-orange-400 shrink-0" />
-              <span><span className="hidden xl:inline">สั่ง</span>เสื้อ/กางเกง</span>
+              <span>สั่งเสื้อ<span className="hidden 2xl:inline">/กางเกง</span></span>
             </button>
 
             {/* Applicant Registration CTA or Dashboard Button */}
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('register')}
-                className={`px-2.5 xl:px-3.5 py-1.5 xl:py-2 rounded-2xl text-xs xl:text-sm font-black transition-all duration-200 flex items-center gap-1 xl:gap-1.5 shadow-lg shadow-orange-500/30 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap cursor-pointer ${
                   currentTab === 'register'
-                    ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-xl shadow-orange-500/40 ring-2 ring-orange-400/80 -translate-y-0.5'
-                    : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white hover:shadow-orange-500/50 hover:-translate-y-0.5'
+                    ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-lg ring-2 ring-orange-400/80'
+                    : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white hover:shadow-orange-500/30'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
-                <span>สมัคร<span className="hidden xl:inline">เข้าร่วม</span>โครงการ</span>
+                <span>สมัคร<span className="hidden 2xl:inline">เข้าร่วม</span>โครงการ</span>
               </button>
             ) : (
               <button
                 onClick={() => handleNav('dashboard')}
-                className={`px-2.5 xl:px-3 py-1.5 xl:py-2 rounded-2xl text-xs xl:text-sm font-bold transition-all duration-200 flex items-center gap-1 xl:gap-1.5 shadow-sm active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap cursor-pointer ${
                   currentTab === 'dashboard' || currentTab === 'register'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
                     : 'bg-slate-900 text-emerald-400 border border-emerald-500/40 hover:bg-slate-850 hover:border-emerald-300'
                 }`}
               >
                 <UserCheck className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
-                <span>แดชบอร์ด<span className="hidden xl:inline">ของฉัน</span></span>
+                <span>แดชบอร์ด<span className="hidden 2xl:inline">ของฉัน</span></span>
               </button>
             )}
 
             {/* Admin Panel Tab in Nav with attached Admin Logout button */}
             {isAdmin && (
-              <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-2 rounded-2xl shrink-0 shadow-lg shadow-purple-950/40">
+              <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-2 rounded-xl shrink-0 shadow-sm">
                 <button
                   onClick={() => handleNav('admin')}
-                  className={`px-1.5 xl:px-2.5 py-1 xl:py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all flex items-center gap-1 xl:gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     currentTab === 'admin'
                       ? 'bg-purple-600 text-white shadow-md'
                       : 'text-purple-300 hover:text-white hover:bg-purple-900/60'
                   }`}
                   title="เปิดระบบจัดการ Admin"
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
                   <Award className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0 text-amber-300" />
-                  <span><span className="hidden xl:inline">ระบบ </span>Admin</span>
+                  <span>Admin</span>
                 </button>
                 <div className="w-[1px] h-4 bg-purple-800/80 mx-0.5 shrink-0" />
                 <button
                   onClick={onAdminLogout}
                   title="ออกจากระบบ Admin"
-                  className="p-1 xl:px-1.5 py-1 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-600/40 transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                  className="p-1.5 rounded-lg text-rose-300 hover:text-white hover:bg-rose-600/40 transition-all flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="text-[11px] whitespace-nowrap hidden 2xl:inline">ออก Admin</span>
+                  <span className="text-[11px] whitespace-nowrap hidden 2xl:inline font-medium">ออก Admin</span>
                 </button>
               </div>
             )}
