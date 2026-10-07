@@ -65,7 +65,8 @@ import {
   Globe,
   User,
   Mail,
-  Printer
+  Printer,
+  LogOut
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -106,7 +107,8 @@ export default function AdminDashboardView({
   merchandiseOrders = [],
   onUpdateMerchandiseOrder,
   onVerifyOrderPayment,
-  onMarkOrderReceived
+  onMarkOrderReceived,
+  onAdminLogout
 }) {
   const resolveInitialTab = (tab) => {
     if (tab === 'payment' || tab === 'payment_settings' || tab === 'finance') return 'payment_settings';
@@ -2402,6 +2404,17 @@ export default function AdminDashboardView({
               <Download className="w-4 h-4 text-slate-400" />
               <span>ดาวน์โหลด CSV</span>
             </button>
+
+            {onAdminLogout && (
+              <button
+                onClick={onAdminLogout}
+                className="px-3.5 py-2.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-200 border border-rose-800/80 hover:border-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                title="ออกจากระบบผู้ดูแลระบบ (Admin Logout)"
+              >
+                <LogOut className="w-4 h-4 text-rose-400" />
+                <span>ออกจากระบบ Admin</span>
+              </button>
+            )}
           </div>
         </div>
 

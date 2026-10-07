@@ -341,6 +341,16 @@ export default function App() {
     setCurrentTab('home');
   };
 
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    localStorage.removeItem('jre2027_is_admin');
+    sessionStorage.removeItem('jre2027_admin_token');
+    sessionStorage.removeItem('jre2027_admin_expires');
+    if (currentTab === 'admin') {
+      setCurrentTab('home');
+    }
+  };
+
   // Auto-prompt Admin Login modal when user accesses /admin route while unauthenticated
   useEffect(() => {
     if (currentTab === 'admin' && !isAdmin && !loading) {
@@ -540,6 +550,7 @@ export default function App() {
         onOpenGoogleLogin={() => setGoogleModalOpen(true)}
         onOpenAdminLogin={() => setAdminModalOpen(true)}
         onLogout={handleLogout}
+        onAdminLogout={handleAdminLogout}
         myRegistration={myRegistration}
         formsConfig={formsConfig}
         onOpenNotifications={() => setUserNotificationsOpen(true)}
@@ -644,6 +655,7 @@ export default function App() {
             onUpdateMerchandiseOrder={handleUpdateMerchandiseOrder}
             onVerifyOrderPayment={handleVerifyOrderPayment}
             onMarkOrderReceived={handleMarkOrderReceived}
+            onAdminLogout={handleAdminLogout}
           />
         )}
 
