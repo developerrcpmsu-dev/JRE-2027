@@ -819,7 +819,9 @@ export default function RegisterView({
           const ocr = await scanSlipImage(file, 400);
           setSlipOcrRound1(ocr);
           if (ocr.isDetected) {
-            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปมัดจำรอบ 1 เรียบร้อย (${ocr.amountFormatted})`, 'success');
+            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปมัดจำรอบ 1 เรียบร้อย (${ocr.amountFormatted})`, ocr.status === 'verified' ? 'success' : 'warning');
+          } else if (ocr.qrDetected) {
+            triggerToast(`ตรวจพบ QR Code ในสลิป (${ocr.qrData?.typeName || 'SlipVerify'}) รหัส: ${ocr.transRef || '-'}`, 'info');
           } else {
             triggerToast('แนบรูปหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
           }
@@ -855,7 +857,9 @@ export default function RegisterView({
           const ocr = await scanSlipImage(file, feeInfo.round2Amount);
           setSlipOcrRound2(ocr);
           if (ocr.isDetected) {
-            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปรอบที่ 2 เรียบร้อย (${ocr.amountFormatted})`, 'success');
+            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปรอบที่ 2 เรียบร้อย (${ocr.amountFormatted})`, ocr.status === 'verified' ? 'success' : 'warning');
+          } else if (ocr.qrDetected) {
+            triggerToast(`ตรวจพบ QR Code ในสลิป (${ocr.qrData?.typeName || 'SlipVerify'}) รหัส: ${ocr.transRef || '-'}`, 'info');
           } else {
             triggerToast('แนบรูปหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
           }
@@ -895,7 +899,9 @@ export default function RegisterView({
           setSlipOcrFull(ocr);
           setSlipOcrRound1(ocr);
           if (ocr.isDetected) {
-            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปเต็มจำนวนเรียบร้อย (${ocr.amountFormatted})`, 'success');
+            triggerToast(ocr.message || `อัปโหลดและตรวจสแกนสลิปเต็มจำนวนเรียบร้อย (${ocr.amountFormatted})`, ocr.status === 'verified' ? 'success' : 'warning');
+          } else if (ocr.qrDetected) {
+            triggerToast(`ตรวจพบ QR Code ในสลิป (${ocr.qrData?.typeName || 'SlipVerify'}) รหัส: ${ocr.transRef || '-'}`, 'info');
           } else {
             triggerToast('แนบรูปหลักฐานเรียบร้อย (ไม่พบตัวเลขยอดเงินในภาพ รอเจ้าหน้าที่ตรวจสลิป)', 'info');
           }
@@ -6060,6 +6066,52 @@ export default function RegisterView({
                         </div>
                       </div>
 
+                      {/* 📱 DETECTED SLIP QR CODE DETAILS */}
+                      {ocr?.qrData && (
+                        <div className="p-2.5 sm:p-3 bg-purple-950/40 rounded-xl border border-purple-500/30 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 border-b border-purple-900/40 pb-1.5">
+                            <span className="flex items-center gap-1.5 text-purple-300 font-bold text-[11px]">
+                              <QrCode className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                              <span>QR Code ในสลิป ({ocr.qrData.typeName})</span>
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold shrink-0">
+                              ✓ ถอดรหัสสำเร็จ
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                            {ocr.qrData.transRef && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">รหัสอ้างอิง (TransRef):</span>
+                                <span className="font-mono font-bold text-amber-300 truncate select-all">{ocr.qrData.transRef}</span>
+                              </div>
+                            )}
+                            {ocr.qrData.bank && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">ธนาคารใน QR:</span>
+                                <span className="font-semibold text-white truncate">{ocr.qrData.bank}</span>
+                              </div>
+                            )}
+                            {ocr.qrData.amount && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">ยอดเงินใน QR:</span>
+                                <span className="font-bold text-emerald-400">{ocr.qrData.amount.toFixed(2)} บาท</span>
+                              </div>
+                            )}
+                            {ocr.qrData.country && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">ประเทศ:</span>
+                                <span className="font-semibold text-slate-300">{ocr.qrData.country === 'TH' ? 'ไทย (TH)' : ocr.qrData.country}</span>
+                              </div>
+                            )}
+                          </div>
+                          {ocr.qrData.raw && (
+                            <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded-lg border border-slate-800 font-mono break-all select-all flex items-center justify-between gap-2">
+                              <span className="truncate">Payload: {ocr.qrData.raw}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {ocr?.message && (
                         <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 flex items-center gap-1.5">
                           <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -6577,6 +6629,52 @@ export default function RegisterView({
                           </span>
                         </div>
                       </div>
+
+                      {/* 📱 DETECTED SLIP QR CODE DETAILS (ROUND 2) */}
+                      {ocr?.qrData && (
+                        <div className="p-2.5 sm:p-3 bg-purple-950/40 rounded-xl border border-purple-500/30 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 border-b border-purple-900/40 pb-1.5">
+                            <span className="flex items-center gap-1.5 text-purple-300 font-bold text-[11px]">
+                              <QrCode className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                              <span>QR Code ในสลิป ({ocr.qrData.typeName})</span>
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold shrink-0">
+                              ✓ ถอดรหัสสำเร็จ
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                            {ocr.qrData.transRef && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">รหัสอ้างอิง (TransRef):</span>
+                                <span className="font-mono font-bold text-amber-300 truncate select-all">{ocr.qrData.transRef}</span>
+                              </div>
+                            )}
+                            {ocr.qrData.bank && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">ธนาคารใน QR:</span>
+                                <span className="font-semibold text-white truncate">{ocr.qrData.bank}</span>
+                              </div>
+                            )}
+                            {ocr.qrData.amount && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">ยอดเงินใน QR:</span>
+                                <span className="font-bold text-emerald-400">{ocr.qrData.amount.toFixed(2)} บาท</span>
+                              </div>
+                            )}
+                            {ocr.qrData.country && (
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-900/70 p-1.5 rounded-lg border border-purple-900/30">
+                                <span className="text-slate-400 shrink-0">ประเทศ:</span>
+                                <span className="font-semibold text-slate-300">{ocr.qrData.country === 'TH' ? 'ไทย (TH)' : ocr.qrData.country}</span>
+                              </div>
+                            )}
+                          </div>
+                          {ocr.qrData.raw && (
+                            <div className="text-[10px] text-slate-400 bg-slate-950/70 p-1.5 rounded-lg border border-slate-800 font-mono break-all select-all flex items-center justify-between gap-2">
+                              <span className="truncate">Payload: {ocr.qrData.raw}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {ocr.message && (
                         <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 flex items-center gap-1.5">
