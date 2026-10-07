@@ -26,7 +26,7 @@ import {
   CreditCard,
   UserCheck
 } from 'lucide-react';
-import { DataService } from '../supabase';
+import { DataService, subscribeToRealtimeChanges } from '../supabase';
 
 export default function UserProfileView({
   userUid,
@@ -34,6 +34,7 @@ export default function UserProfileView({
   isAdmin,
   registrations = [],
   merchandiseOrders = [],
+  userAccounts = [],
   onOpenAdminLogin,
   onNavigateHome,
   onNavigateAdmin,
@@ -51,8 +52,8 @@ export default function UserProfileView({
   };
 
   useEffect(() => {
-    async function fetchAccount() {
-      setLoading(true);
+    async function fetchAccount(silent = false) {
+      if (!silent) setLoading(true);
       try {
         const accounts = await DataService.getUserAccounts({ userId: userUid || currentUser?.id, email: currentUser?.email });
         const targetId = (userUid || '').trim().toLowerCase();
@@ -74,11 +75,19 @@ export default function UserProfileView({
       } catch (err) {
         console.error('Failed to load user profile:', err);
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     }
 
     fetchAccount();
+
+    const unsubscribe = subscribeToRealtimeChanges((payload) => {
+      if (payload?.type === 'user_accounts' || payload?.type === 'registrations' || payload?.type === 'all') {
+        fetchAccount(true);
+      }
+    });
+
+    return () => unsubscribe();
   }, [userUid, currentUser]);
 
   const targetEmail = userAccount?.email?.toLowerCase().trim();

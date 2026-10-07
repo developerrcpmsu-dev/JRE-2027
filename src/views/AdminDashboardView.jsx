@@ -108,6 +108,8 @@ export default function AdminDashboardView({
   onUpdateMerchandiseOrder,
   onVerifyOrderPayment,
   onMarkOrderReceived,
+  userAccounts: propUserAccounts = [],
+  onRefreshUserAccounts,
   onAdminLogout
 }) {
   const resolveInitialTab = (tab) => {
@@ -770,10 +772,16 @@ export default function AdminDashboardView({
   const [exportMerchProgress, setExportMerchProgress] = useState({ current: 0, total: 0 });
 
   // User Accounts Management State
-  const [userAccounts, setUserAccounts] = useState([]);
+  const [userAccounts, setUserAccounts] = useState(() => (propUserAccounts && propUserAccounts.length > 0) ? propUserAccounts : []);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userProviderFilter, setUserProviderFilter] = useState('all'); // all, email, google, both
+
+  React.useEffect(() => {
+    if (propUserAccounts && propUserAccounts.length > 0) {
+      setUserAccounts(propUserAccounts);
+    }
+  }, [propUserAccounts]);
 
   // Modal states for user account management
   const [editingUserAccount, setEditingUserAccount] = useState(null); // edit user
@@ -794,6 +802,9 @@ export default function AdminDashboardView({
   const loadUserAccounts = async () => {
     setIsLoadingUsers(true);
     try {
+      if (onRefreshUserAccounts) {
+        await onRefreshUserAccounts();
+      }
       const accs = await DataService.getUserAccounts({ admin: true });
       const deduped = mergeAndDeduplicateAccounts ? mergeAndDeduplicateAccounts(accs || []) : (accs || []);
       setUserAccounts(deduped);
@@ -805,7 +816,9 @@ export default function AdminDashboardView({
   };
 
   React.useEffect(() => {
-    loadUserAccounts();
+    if (!propUserAccounts || propUserAccounts.length === 0) {
+      loadUserAccounts();
+    }
   }, []);
 
   const handleSaveEditUser = async (e) => {

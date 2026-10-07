@@ -15,7 +15,7 @@ import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import UserProfileView from './views/UserProfileView';
 import SecurityAuditView from './views/SecurityAuditView';
-import { DataService, supabase, isSupabaseConfigured } from './supabase';
+import { DataService, supabase, isSupabaseConfigured, subscribeToRealtimeChanges, broadcastRealtimeChange } from './supabase';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
@@ -104,6 +104,7 @@ export default function App() {
   const [merchandiseOrders, setMerchandiseOrders] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [speakers, setSpeakers] = useState([]);
+  const [userAccounts, setUserAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Helper to match registration robustly (by user_id or case-insensitive email)
@@ -121,7 +122,7 @@ export default function App() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks] = await Promise.all([
+        const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks, accs] = await Promise.all([
           DataService.getRegistrations(),
           DataService.getAnnouncements(),
           DataService.getFormsConfig(),
@@ -129,7 +130,8 @@ export default function App() {
           DataService.getMerchandiseConfig(),
           DataService.getMerchandiseOrders(),
           DataService.getTeam(),
-          DataService.getSpeakers()
+          DataService.getSpeakers(),
+          DataService.getUserAccounts({ admin: true })
         ]);
         setRegistrations(regs);
         setAnnouncements(anns);
@@ -139,6 +141,7 @@ export default function App() {
         setMerchandiseOrders(merchOrds);
         setTeamMembers(team);
         setSpeakers(spks);
+        setUserAccounts(accs || []);
 
         // Check for Google OAuth Direct Redirect Hash Callback (#access_token=... or #id_token=...)
         if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('id_token='))) {
@@ -304,6 +307,188 @@ export default function App() {
     }
   }, [user, registrations]);
 
+  // Realtime Data Synchronization Engine
+  const isDifferent = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+
+  const refreshRegistrations = async () => {
+    try {
+      const updated = isAdmin
+        ? await DataService.getRegistrations({ admin: true })
+        : (user ? await DataService.getRegistrations({ userId: user.id, email: user.email }) : await DataService.getRegistrations());
+      if (Array.isArray(updated)) {
+        setRegistrations(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshAnnouncements = async () => {
+    try {
+      const updated = await DataService.getAnnouncements();
+      if (Array.isArray(updated)) {
+        setAnnouncements(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshMerchandiseOrders = async () => {
+    try {
+      const updated = await DataService.getMerchandiseOrders();
+      if (Array.isArray(updated)) {
+        setMerchandiseOrders(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshPaymentConfig = async () => {
+    try {
+      const updated = await DataService.getPaymentConfig();
+      if (updated) {
+        setPaymentConfig(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshFormsConfig = async () => {
+    try {
+      const updated = await DataService.getFormsConfig();
+      if (updated) {
+        setFormsConfig(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshMerchandiseConfig = async () => {
+    try {
+      const updated = await DataService.getMerchandiseConfig();
+      if (updated) {
+        setMerchandiseConfig(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshTeam = async () => {
+    try {
+      const updated = await DataService.getTeam();
+      if (Array.isArray(updated)) {
+        setTeamMembers(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshSpeakers = async () => {
+    try {
+      const updated = await DataService.getSpeakers();
+      if (Array.isArray(updated)) {
+        setSpeakers(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshUserAccounts = async () => {
+    try {
+      const updated = await DataService.getUserAccounts({ admin: true });
+      if (Array.isArray(updated)) {
+        setUserAccounts(prev => isDifferent(prev, updated) ? updated : prev);
+      }
+    } catch (e) {}
+  };
+
+  const refreshAllData = async () => {
+    await Promise.allSettled([
+      refreshRegistrations(),
+      refreshAnnouncements(),
+      refreshMerchandiseOrders(),
+      refreshPaymentConfig(),
+      refreshFormsConfig(),
+      refreshMerchandiseConfig(),
+      refreshTeam(),
+      refreshSpeakers(),
+      refreshUserAccounts()
+    ]);
+  };
+
+  const handleRealtimeChange = (detail) => {
+    const type = detail?.type;
+    if (!type || type === 'all') {
+      refreshAllData();
+      return;
+    }
+    if (type === 'registrations' || type === 'applicants') {
+      refreshRegistrations();
+    } else if (type === 'announcements') {
+      refreshAnnouncements();
+    } else if (type === 'merchandise_orders' || type === 'orders') {
+      refreshMerchandiseOrders();
+    } else if (type === 'payment_config' || type === 'payment') {
+      refreshPaymentConfig();
+    } else if (type === 'forms_config' || type === 'forms') {
+      refreshFormsConfig();
+    } else if (type === 'merchandise_config' || type === 'merchandise') {
+      refreshMerchandiseConfig();
+    } else if (type === 'team_members' || type === 'team') {
+      refreshTeam();
+    } else if (type === 'speakers_config' || type === 'speakers') {
+      refreshSpeakers();
+    } else if (type === 'user_accounts' || type === 'users') {
+      refreshUserAccounts();
+    } else {
+      refreshAllData();
+    }
+  };
+
+  // Realtime listeners & background heartbeat polling
+  useEffect(() => {
+    // 1. Subscribe to instant realtime broadcasts (local tabs + cloud websocket)
+    const unsubscribe = subscribeToRealtimeChanges((payload) => {
+      handleRealtimeChange(payload);
+    });
+
+    let isPolling = false;
+    const pollSafe = async () => {
+      if (isPolling) return;
+      isPolling = true;
+      try {
+        await refreshAllData();
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    // 2. Immediate check on visibilitychange & window focus
+    const handleVis = () => {
+      if (document.visibilityState === 'visible') {
+        pollSafe();
+      }
+    };
+    const handleFocus = () => {
+      pollSafe();
+    };
+
+    window.addEventListener('visibilitychange', handleVis);
+    window.addEventListener('focus', handleFocus);
+
+    // 3. Heartbeat convergence timer (every 4s active, 15s in background)
+    const activeTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        pollSafe();
+      }
+    }, 4000);
+
+    const bgTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        pollSafe();
+      }
+    }, 15000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(activeTimer);
+      clearInterval(bgTimer);
+      window.removeEventListener('visibilitychange', handleVis);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [user?.id, isAdmin]);
+
   // Auth Handlers
   const handleGoogleLoginSuccess = async (userObj) => {
     setUser(userObj);
@@ -320,8 +505,12 @@ export default function App() {
 
   const handleAdminLoginSuccess = async () => {
     setIsAdmin(true);
-    const adminRegistrations = await DataService.getRegistrations({ admin: true });
+    const [adminRegistrations, adminAccounts] = await Promise.all([
+      DataService.getRegistrations({ admin: true }),
+      DataService.getUserAccounts({ admin: true })
+    ]);
     setRegistrations(adminRegistrations);
+    setUserAccounts(adminAccounts);
     setCurrentTab('admin', currentSubRoute || 'applicants');
   };
 
@@ -655,6 +844,8 @@ export default function App() {
             onUpdateMerchandiseOrder={handleUpdateMerchandiseOrder}
             onVerifyOrderPayment={handleVerifyOrderPayment}
             onMarkOrderReceived={handleMarkOrderReceived}
+            userAccounts={userAccounts}
+            onRefreshUserAccounts={refreshUserAccounts}
             onAdminLogout={handleAdminLogout}
           />
         )}
@@ -686,6 +877,7 @@ export default function App() {
             isAdmin={isAdmin}
             registrations={registrations}
             merchandiseOrders={merchandiseOrders}
+            userAccounts={userAccounts}
             onOpenAdminLogin={() => setAdminModalOpen(true)}
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin', 'users')}

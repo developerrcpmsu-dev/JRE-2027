@@ -17,6 +17,10 @@ import {
   validateEmail, 
   validatePassword 
 } from './utils/cryptoUtils';
+import { broadcastRealtimeChange, subscribeToRealtimeChanges, initRealtimeService } from './utils/realtimeSync';
+
+export { broadcastRealtimeChange, subscribeToRealtimeChanges, initRealtimeService };
+
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -464,6 +468,7 @@ export const DataService = {
       updated = newEntry;
     }
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(regs));
+    broadcastRealtimeChange('registrations', { action: 'save', userId: updated.user_id || updated.id });
     return updated;
   },
 
@@ -532,6 +537,7 @@ export const DataService = {
     // 3. Keep the local cache consistent only after the server accepted the write.
     // When Supabase is not configured, localStorage remains the intentional fallback.
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
+    broadcastRealtimeChange('registrations', { action: 'update', userId: targetUserId || userId });
     return true;
   },
 
@@ -670,6 +676,7 @@ export const DataService = {
     const regs = readCachedRegistrations();
     const filtered = regs.filter(r => r.user_id !== userId);
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(filtered));
+    broadcastRealtimeChange('registrations', { action: 'delete', userId });
     return true;
   },
 
@@ -742,6 +749,7 @@ export const DataService = {
       items.unshift(updated);
     }
     localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(items));
+    broadcastRealtimeChange('announcements', { action: 'save', id: updated?.id });
     return updated;
   },
 
@@ -756,6 +764,7 @@ export const DataService = {
     const items = await this.getAnnouncements();
     const filtered = items.filter(i => i.id !== id);
     localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(filtered));
+    broadcastRealtimeChange('announcements', { action: 'delete', id });
     return true;
   },
 
@@ -905,6 +914,7 @@ export const DataService = {
       }
     }
     localStorage.setItem(STORAGE_KEYS.FORMS_CONFIG, JSON.stringify(config));
+    broadcastRealtimeChange('forms_config', { action: 'save' });
     return config;
   },
 
@@ -940,6 +950,7 @@ export const DataService = {
       }
     }
     localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(config));
+    broadcastRealtimeChange('payment_config', { action: 'save' });
     return config;
   },
 
@@ -1017,6 +1028,7 @@ export const DataService = {
       }
     }
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(config));
+    broadcastRealtimeChange('merchandise_config', { action: 'save' });
     return config;
   },
 
@@ -1081,6 +1093,7 @@ export const DataService = {
     }
 
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
+    broadcastRealtimeChange('merchandise_orders', { action: 'save_order', orderId: newOrder?.id });
     return newOrder;
   },
 
@@ -1108,6 +1121,7 @@ export const DataService = {
     }
 
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
+    broadcastRealtimeChange('merchandise_orders', { action: 'update_order', orderId });
     return updatedOrder;
   },
 
@@ -1159,6 +1173,7 @@ export const DataService = {
       }
     }
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(team));
+    broadcastRealtimeChange('team_members', { action: 'save' });
     return team;
   },
 
@@ -1193,6 +1208,7 @@ export const DataService = {
       }
     }
     localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(speakers));
+    broadcastRealtimeChange('speakers_config', { action: 'save' });
     return speakers;
   },
 
@@ -1312,6 +1328,7 @@ export const DataService = {
     }
 
     localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
+    broadcastRealtimeChange('user_accounts', { action: 'sync_user', email: cleanEmail });
     return userObj;
   },
 
@@ -1679,6 +1696,7 @@ export const DataService = {
       }
     }
     localStorage.setItem('jre2027_user_accounts', JSON.stringify(filtered));
+    broadcastRealtimeChange('user_accounts', { action: 'delete_user', userId });
 
     // Also remove registration if exists
     await this.deleteRegistration(userId);
