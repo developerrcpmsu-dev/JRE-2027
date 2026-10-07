@@ -6,7 +6,7 @@
 
 ## สรุปผู้บริหาร
 
-รอบนี้เป็นการตรวจแบบ evidence-based สำหรับเว็บของเจ้าของระบบ โดยใช้ static source review, build/dependency checks, production HTTP checks และการอ่าน Supabase metadata แบบ read-only เท่านั้น ไม่ได้ลองรหัสผ่านจริง ไม่ได้แก้หรือลบข้อมูล production และไม่ใช่ใบรับรอง penetration test
+รอบนี้เป็นการตรวจแบบ evidence-based สำหรับเว็บของเจ้าของระบบ โดยใช้ static source review, build/dependency checks, production HTTP checks และการอ่าน Supabase metadata แบบ read-only ก่อน จากนั้นเจ้าของระบบยืนยันให้รัน RLS hardening เฉพาะ Supabase staging ผ่าน SQL Editor แล้วตรวจซ้ำด้วย policy inventory และ role `anon` ไม่ได้ลองรหัสผ่านจริง ไม่ได้แก้หรือลบข้อมูล production และไม่ใช่ใบรับรอง penetration test
 
 ผลตรวจพบ 10 ประเด็นที่ต้องแก้:
 
@@ -19,9 +19,9 @@
 
 ข้อค้นพบที่เร่งด่วนที่สุดคือ public `user_accounts` payload ที่มี `password_hash`/`salt`, RLS policies แบบ `USING (true)`, magic OTP ใน production baseline (`123456`/`999999`) และการโหลด `registrations` ทั้งตารางจาก client ก่อนแยกสิทธิ์ Admin
 
-หลังเก็บหลักฐาน มีการทำแพตช์ใน working tree สำหรับ magic OTP, admin-auth fallback, CORS, scoped registration query และการ redacted credential ใน UI/export แล้ว รวมทั้งเพิ่ม `supabase_security_hardening_v2.sql` สำหรับ review/staging แต่ยังไม่ได้รัน migration บนฐานข้อมูลและต้อง deploy/test production ซ้ำ จึงคงสถานะ findings เป็น “เปิดอยู่”
+หลังเก็บหลักฐาน มีการทำแพตช์ใน working tree สำหรับ magic OTP, admin-auth fallback, CORS, scoped registration query และการ redacted credential ใน UI/export แล้ว รวมทั้งเพิ่ม `supabase_security_hardening_v2.sql` สำหรับ review และ `supabase_security_hardening_staging.sql` ที่ตรงกับ schema staging จริง เมื่อวันที่ 8 ตุลาคม 2569 เจ้าของระบบยืนยันให้รันไฟล์ staging-specific และตรวจ policy/anon visibility หลังรันสำเร็จแล้ว แต่ยังไม่ได้รันกับ production จึงคงสถานะ findings เป็น “เปิดอยู่” สำหรับ production
 
-ดังนั้นไม่ควรอ้างว่าแก้ครบทุกประเด็นหรือไม่มีความเสี่ยงเหลือ: SQL migration ยังไม่ถูกรัน, password verification เดิมยังต้องย้ายไป Supabase Auth/server-side KDF และ dependency audit ยังมีรายการเปิดอยู่
+ดังนั้นไม่ควรอ้างว่าแก้ครบทุกประเด็นหรือไม่มีความเสี่ยงเหลือ: production RLS ยังไม่ได้เปลี่ยน, password verification เดิมยังต้องย้ายไป Supabase Auth/server-side KDF, Admin env ยังไม่ครบ และ dependency audit ยังมีรายการเปิดอยู่
 
 ## URL สำหรับนำเสนอ
 
@@ -67,6 +67,16 @@
 - baseline ก่อนแพตช์ `GET /api/admin-auth`: 405 และ `POST {}`: 400; หลัง deploy แพตช์ใหม่ `GET`/`POST {}` ตอบ 503 เพราะยังไม่ยืนยันว่า `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET` ถูกตั้งครบใน Vercel — เป็น fail-closed แต่ Admin login ยังใช้ไม่ได้จนกว่าจะตั้งค่า
 - preflight จาก origin ภายนอกไม่ถูกสะท้อนกลับเป็น origin ของผู้โจมตี
 
+### ผลการรัน staging RLS hardening (ยืนยันแล้ว 8 ตุลาคม 2569)
+
+- เป้าหมาย: Supabase project `developer... Project` / ref `cksilfcjireystyludav` (staging, `main`) เท่านั้น ไม่ใช่ `JRE-2027` production
+- ไฟล์ที่ใช้: `supabase_security_hardening_staging.sql`; migration เปลี่ยน policy และเปิด RLS เท่านั้น ไม่ลบแถวข้อมูล
+- ก่อนรันพบ policy แบบ `{public}` และ `USING (true)` ใน `registrations`, `project_settings` และ `announcements`; staging ไม่มีตาราง `user_accounts` หรือ `merchandise_orders` จึงไม่ใช้ migration v2 ที่อ้างถึงตารางเหล่านั้นตรง ๆ
+- SQL Editor แสดงผล `Success. No rows returned` หลังยืนยัน dialog destructive-operation ของ Supabase
+- หลังรันพบ policy ใหม่ 8 รายการ: registrations 4 (owner/email/admin สำหรับ select/insert/update/delete), project_settings 2 (public read allow-list + admin write) และ announcements 2 (public read + admin write)
+- ทดสอบใน transaction ด้วย `SET LOCAL ROLE anon`: `registrations` เห็น 0 แถว, `project_settings` เห็นเฉพาะ key `forms_config`, และ `announcements` เห็น 0 แถวในฐานข้อมูลที่ยังว่าง
+- ผลนี้เป็นหลักฐานของ staging เท่านั้น ไม่ใช่การปิด F-01/F-02/F-03 บน production และยังต้องทำ authenticated owner/admin regression test ก่อนพิจารณา deploy production
+
 ### หลักฐานจากภาพ Burp ที่แนบเพิ่ม
 
 - HTTP `/security` → `308` → HTTPS: เป็น secure redirect ที่คาดหวัง
@@ -83,17 +93,17 @@
 
 ผลกระทบ: offline password guessing และการเปิดเผยข้อมูลบัญชี
 
-วิธีแก้: working tree redacts hash/salt/OTP จาก client views และ export แล้ว; ขั้นตอนปิดจริงคือย้ายไป Supabase Auth/server KDF, แยก public/private settings, รัน `supabase_security_hardening_v2.sql`, rotate credentials และตรวจว่า anon อ่าน key นี้ไม่ได้อีก
+วิธีแก้: working tree redacts hash/salt/OTP จาก client views และ export แล้ว; staging RLS ถูก harden และ anon test ไม่เห็น `user_accounts` เพราะตารางนี้ไม่มีใน staging แต่ production ยังต้องย้ายไป Supabase Auth/server KDF, แยก public/private settings, rotate credentials และตรวจ production endpoint ว่าไม่อ่าน key นี้ได้อีก
 
 ### F-02 — Critical — RLS policy แบบ public
 
-หลักฐาน: `supabase_schema.sql`, `migration_v4.sql`, `migration_v5_merchandise.sql` มี `USING (true)`/public full access ขณะที่ hardening script ลบชื่อ policy ไม่ครบ
+หลักฐานเดิม: `supabase_schema.sql`, `migration_v4.sql`, `migration_v5_merchandise.sql` มี `USING (true)`/public full access ขณะที่ hardening script เดิมลบชื่อ policy ไม่ครบ; staging inventory ก่อนรันยืนยัน policy `{public}` 5 รายการ และหลังรันเหลือ policy hardening 8 รายการตาม allow-list
 
-วิธีแก้: inventory `pg_policies`, drop ทุก public policy ที่ไม่จำเป็น, สร้าง owner/admin allow-list, ห้าม `WITH CHECK (true)` กับข้อมูลส่วนบุคคล และทดสอบ anon/applicant/admin แยกกัน
+วิธีแก้: ใช้ `supabase_security_hardening_staging.sql` บน staging, inventory `pg_policies`, drop ทุก public policy ที่ไม่จำเป็น, สร้าง owner/admin allow-list, ห้าม `WITH CHECK (true)` กับข้อมูลส่วนบุคคล และทดสอบ anon/applicant/admin แยกกัน; production ยังไม่ถูกรัน
 
 ### F-03 — High — โหลด registrations ทั้งตารางจาก client
 
-หลักฐาน baseline: `src/App.jsx` เรียก `DataService.getRegistrations()` ตอนเริ่มระบบ และ `src/supabase.js` ใช้ unscoped `.select('*')`; working tree เปลี่ยนเป็น `admin` หรือ `user_id/email` scoped query แล้ว แต่ยังต้องยืนยัน RLS จริง
+หลักฐาน baseline: `src/App.jsx` เรียก `DataService.getRegistrations()` ตอนเริ่มระบบ และ `src/supabase.js` ใช้ unscoped `.select('*')`; working tree เปลี่ยนเป็น `admin` หรือ `user_id/email` scoped query แล้ว และ staging RLS ทดสอบด้วย role `anon` เห็น 0 แถว แต่ production/authenticated owner-admin regression ยังต้องยืนยัน
 
 วิธีแก้: query owner แยกจาก admin query, โหลดทั้งหมดหลัง server-side admin authorization เท่านั้น, ล้าง state ตอน logout และรัน regression test หลัง migration
 
@@ -144,6 +154,7 @@
 - Build ผ่าน
 - Security response headers หลักทำงานบน production
 - Admin API fail-closed เมื่อ server env ไม่ครบ (503); ยังไม่มีหลักฐานว่า Admin login production ใช้งานได้หลังตั้งค่า env
+- Staging RLS hardening: migration สำเร็จ, policy inventory ได้ 8 policies และ role `anon` เห็น registrations 0 แถว / project_settings เฉพาะ `forms_config` / announcements 0 แถว; production ยังไม่เปลี่ยน
 - CORS preflight ไม่สะท้อน origin ภายนอกกลับไปเป็น allow-origin
 - File endpoint ที่ไม่มี id ตอบ 400
 - `security.txt` และ `robots.txt` ให้บริการจริง
@@ -170,15 +181,21 @@
 
 ## ขั้นตอนแก้ไขฐานข้อมูลที่เพิ่มในรอบนี้
 
-ไฟล์ `supabase_security_hardening_v2.sql` เป็น migration แบบ review-first: ลบ policy public จากชื่อที่พบใน schema/migrations, จำกัด `registrations`/`user_accounts` เป็น owner/admin และให้ `project_settings` อ่านได้เฉพาะ public-key allow-list โดยไม่ลบข้อมูลแถวใด ๆ
+มี migration สองไฟล์เพื่อแยกความเสี่ยง:
 
-1. สำรองฐานข้อมูลและใช้ staging project ก่อน
-2. ย้าย password login ไป Supabase Auth หรือ server-side KDF และเตรียม admin JWT claim ให้เสร็จ
-3. รันไฟล์ migration ใน Supabase SQL Editor ด้วย database owner
-4. ตรวจ `pg_policies` และทดสอบ anon/authenticated/admin แยกกัน
-5. ตรวจว่า anon อ่าน `user_accounts`, `merchandise_orders`, `file_*` และ `registrations` ไม่ได้ จากนั้นจึงพิจารณา production
+- `supabase_security_hardening_v2.sql` เป็นฉบับ review-first สำหรับ schema ที่มี `user_accounts`/`merchandise_orders`; ยังไม่ถูกรันกับ production
+- `supabase_security_hardening_staging.sql` เป็นฉบับ staging-specific ที่ตรงกับตารางที่มีอยู่จริง (`registrations`, `project_settings`, `announcements`) และถูกรันสำเร็จบน staging หลังเจ้าของระบบยืนยัน
 
-ยังไม่ได้รันไฟล์นี้กับ production อัตโนมัติ เพราะเป็นการเปลี่ยนสิทธิ์ฐานข้อมูลและอาจทำให้ auth flow แบบเดิมหยุดทำงานถ้ายังไม่ย้ายระบบ
+ขั้นตอนที่ทำจริงบน staging:
+
+1. สำรวจตารางและ `pg_policies` ก่อนรัน เพื่อไม่อ้างถึงตารางที่ไม่มีอยู่
+2. ตรวจพบ policy `{public}`/`USING (true)` ในตารางเป้าหมาย และเก็บ baseline row counts
+3. รัน migration ใน Supabase SQL Editor ด้วย role database owner หลังยืนยัน dialog ของ Supabase
+4. ตรวจ `pg_policies` หลังรัน ได้ policy ใหม่ 8 รายการตาม allow-list
+5. ใช้ transaction + `SET LOCAL ROLE anon` ตรวจ visibility: registrations 0, project_settings เฉพาะ `forms_config`, announcements 0
+6. ขั้นตอนถัดไปคือ authenticated owner/admin regression test และย้าย password login ไป Supabase Auth/server-side KDF ก่อนพิจารณา production
+
+ยังไม่ได้รันไฟล์ใดกับ production เพราะเป็นการเปลี่ยนสิทธิ์ฐานข้อมูลและอาจทำให้ auth flow แบบเดิมหยุดทำงานถ้ายังไม่ย้ายระบบ
 
 ## คำสั่งตรวจซ้ำที่ปลอดภัย
 
