@@ -48,6 +48,14 @@
 - `public/images/security/burp-http-redirect.png`: request HTTP `GET /security` ได้ `308` และ `Location: https://jre-2027.vercel.app/security` — เป็นการบังคับ HTTPS ที่คาดหวัง ไม่ใช่ช่องโหว่
 - `public/images/security/burp-site-map-https.png`: HTTPS `GET /` ได้ `200` และมี security headers หลายรายการ; ภาพนี้เห็น `Access-Control-Allow-Origin: *` บน HTML document แต่ยังไม่ใช่หลักฐานว่า API ที่มีข้อมูลหรือ credential เปิด wildcard CORS จึงต้องแยกตรวจ API ตาม origin และ credential
 - `public/images/security/burp-passive-crawl-after.png`: passive crawl หลังเปิด traffic แสดง `50 site-map items`, `13 responses processed` และ `0 responses queued`; ตัวเลขนี้เป็นจำนวนรายการ/response ที่ Burp ประมวลผล ไม่ใช่จำนวนช่องโหว่
+- `public/images/security/burp-site-map-dvwa-local.png`: ภาพ session ล่าสุดที่ Burp เห็นทั้ง DVWA lab ที่ `127.0.0.1:8081/login.php` และ production tree; ยืนยันการแยก local lab ออกจาก production ไม่ใช่หลักฐานว่า production มีช่องโหว่ของ DVWA
+- `public/images/security/burp-production-root-headers-live.png`: ภาพ session ล่าสุดของ production `GET /` ได้ `200` พร้อม HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` และ headers อื่น ๆ; `Access-Control-Allow-Origin: *` ในภาพอยู่บน HTML document จึงต้องไม่สรุปเป็น API data exposure โดยลำพัง
+
+ภาพหลักฐานรอบล่าสุด:
+
+![Burp site map แสดง DVWA local และ production](public/images/security/burp-site-map-dvwa-local.png)
+
+![Burp production root response headers](public/images/security/burp-production-root-headers-live.png)
 
 ## วิธีตรวจที่ทำจริง
 
@@ -106,6 +114,8 @@
 - HTTP `/security` → `308` → HTTPS: เป็น secure redirect ที่คาดหวัง
 - HTTPS `/` → `200`: ยืนยันว่า production ตอบกลับและส่ง headers บางรายการจริง; `Access-Control-Allow-Origin: *` บนเอกสาร HTML ไม่ควรถูกสรุปเป็น API data exposure โดยลำพัง
 - Passive crawl หลังส่ง traffic: `50 site-map items` และ `13 responses processed`; ไม่มี active scan หรือ credential test ในหลักฐานชุดนี้
+- Burp site map รอบล่าสุด: เห็น `127.0.0.1:8081/login.php` ของ DVWA และ `jre-2027.vercel.app` ใน project เดียวกัน; ผลนี้ใช้ยืนยัน workflow/proxy เท่านั้น ไม่ได้นำ traffic ของ DVWA ไปปนกับผล production
+- Burp production response รอบล่าสุด: `GET /` ได้ `HTTP/2 200 OK`, `Strict-Transport-Security`, `X-Frame-Options: DENY` และ `X-Content-Type-Options: nosniff`
 
 ## Findings และแนวทางแก้
 
