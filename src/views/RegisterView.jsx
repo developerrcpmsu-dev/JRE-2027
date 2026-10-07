@@ -276,6 +276,10 @@ export default function RegisterView({
 
   const [isManualFullName, setIsManualFullName] = useState(false);
 
+  // Anti-Spam & Bot Honeypot Protection
+  const [botHoneypot, setBotHoneypot] = useState('');
+  const [lastSubmitTime, setLastSubmitTime] = useState(0);
+
   const handleTitleThChange = (newTitleTh) => {
     setTitleTh(newTitleTh);
     if (TITLE_TH_TO_EN_MAP[newTitleTh]) {
@@ -1173,6 +1177,20 @@ export default function RegisterView({
       onOpenGoogleLogin();
       return;
     }
+
+    // Anti-Bot Honeypot Trap
+    if (botHoneypot) {
+      console.warn('Bot submission trapped by honeypot');
+      return;
+    }
+
+    // Anti-Spam Rate Limiter (Prevent rapid multi-clicks or automated spam)
+    const now = Date.now();
+    if (now - lastSubmitTime < 2500) {
+      triggerToast('กรุณารอสักครู่ก่อนทำรายการซ้ำ', 'warning');
+      return;
+    }
+    setLastSubmitTime(now);
 
     // Step-by-Step form progression
     if (currentFormStep === 1) {
@@ -4015,6 +4033,20 @@ export default function RegisterView({
 
       <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-8">
         
+        {/* Anti-Bot Honeypot: Invisible to human users, traps automated scrapers & spam bots */}
+        <div style={{ display: 'none', position: 'absolute', left: '-9999px', opacity: 0 }} aria-hidden="true">
+          <label htmlFor="hp_field_reg">Anti-bot website</label>
+          <input
+            id="hp_field_reg"
+            type="text"
+            name="hp_field_reg"
+            value={botHoneypot}
+            onChange={(e) => setBotHoneypot(e.target.value)}
+            tabIndex="-1"
+            autoComplete="off"
+          />
+        </div>
+
         {/* Form Header: เเบบฟอร์มสมัครเข้าร่วมโครงการ ( 1 ) */}
         <div className="flex flex-col items-center justify-center pb-6 border-b border-slate-800 text-center space-y-4">
           <div className="w-full max-w-lg bg-white p-2 sm:p-3 rounded-2xl shadow-xl border border-slate-700/50 flex items-center justify-center">

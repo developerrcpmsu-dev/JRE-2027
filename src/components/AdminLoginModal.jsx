@@ -24,58 +24,28 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
     setErrorMsg('');
 
     try {
-      // 1. Try Server-Side Verification First (Protects credentials from bundle exposure)
-      let serverVerified = false;
-      try {
-        const response = await fetch('/api/admin-auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username.trim(), password })
-        });
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData.success && resData.token) {
-            sessionStorage.setItem('jre2027_admin_token', resData.token);
-            sessionStorage.setItem('jre2027_admin_expires', String(resData.expiresAt));
-            localStorage.removeItem('jre2027_is_admin');
-            serverVerified = true;
-          }
-        } else if (response.status === 401) {
-          setErrorMsg('ชื่อผู้ใช้หรือรหัสผ่านผู้ดูแลระบบไม่ถูกต้อง');
-          setIsSubmitting(false);
-          return;
-        }
-      } catch (apiErr) {
-        // Fallback gracefully if running in environment without serverless support
-      }
+      // Server-Side Verification ONLY (Guarantees zero credentials leaked into client bundle)
+      const response = await fetch('/api/admin-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password })
+      });
 
-      if (serverVerified) {
-        onLoginSuccess();
-        onClose();
-        setUsername('');
-        setPassword('');
-        setIsSubmitting(false);
-        return;
-      }
+      const resData = await response.json().catch(() => ({}));
 
-      // 2. Client-side fallback for local development
-      const expectedUser = import.meta.env.VITE_ADMIN_USERNAME || 'admin';
-      const expectedPass = import.meta.env.VITE_ADMIN_PASSWORD || 'adminjre27';
-
-      if (username.trim() === expectedUser && password === expectedPass) {
-        const localExpires = Date.now() + 4 * 3600 * 1000;
-        sessionStorage.setItem('jre2027_admin_token', 'local_dev_token.' + localExpires);
-        sessionStorage.setItem('jre2027_admin_expires', String(localExpires));
+      if (response.ok && resData.success && resData.token) {
+        sessionStorage.setItem('jre2027_admin_token', resData.token);
+        sessionStorage.setItem('jre2027_admin_expires', String(resData.expiresAt));
         localStorage.removeItem('jre2027_is_admin');
         onLoginSuccess();
         onClose();
         setUsername('');
         setPassword('');
       } else {
-        setErrorMsg('ชื่อผู้ใช้หรือรหัสผ่านผู้ดูแลระบบไม่ถูกต้อง');
+        setErrorMsg(resData.message || 'ชื่อผู้ใช้หรือรหัสผ่านผู้ดูแลระบบไม่ถูกต้อง');
       }
     } catch (err) {
-      setErrorMsg('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์ผู้ดูแลระบบ');
+      setErrorMsg('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsSubmitting(false);
     }

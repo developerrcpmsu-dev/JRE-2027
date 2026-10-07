@@ -64,10 +64,10 @@ export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin }) {
       statusLabel: 'แก้ไขแล้ว (Resolved)',
       statusColor: 'green',
       statusBadge: '🟢 ปลอดภัยแล้ว · Serverless Auth',
-      howItWasFixed: '1. สร้าง Serverless Endpoint ใหม่ `/api/admin-auth.js` เพื่อย้ายตรรกะการตรวจสอบรหัสผ่าน Admin ไปทำบนเซิร์ฟเวอร์หลังบ้าน 100%\n2. ใช้อัลกอริทึม `crypto.timingSafeEqual` ตรวจสอบข้อมูลเพื่อป้องกันการโจมตีแบบ Timing Attack\n3. ออก Session Token ด้วย HMAC-SHA256 ที่มีอายุจำกัด (8 ชั่วโมง) ส่งกลับมาให้ Client เก็บใน sessionStorage\n4. ปรับปรุง `AdminLoginModal.jsx` ให้ส่งคำขอตรวจสอบไปยัง API เซิร์ฟเวอร์ และลบการเทียบรหัสผ่าน plaintext ใน Client ออกอย่างถาวร',
-      evidence: 'สร้าง api/admin-auth.js และอัปเดต src/components/AdminLoginModal.jsx',
-      description: 'เดิมรหัสผ่านถูกอ่านผ่าน import.meta.env ซึ่ง Vite จะคอมไพล์ลงไฟล์ bundle (.js) ทำให้บุคคลภายนอก inspect ดูได้ ปัจจุบันย้ายไปประมวลผลฝั่งเซิร์ฟเวอร์เรียบร้อยแล้ว',
-      attackVector: 'การเปิด Browser DevTools เพื่อค้นหาคำว่า ADMIN ในไฟล์ JavaScript จะไม่พบรหัสผ่านจริงอีกต่อไป เนื่องจากรหัสผ่านจริงถูกเก็บไว้ใน Server Environment Variables',
+      howItWasFixed: '1. ลบตัวแปร `VITE_ADMIN_USERNAME` และ `VITE_ADMIN_PASSWORD` รวมถึงข้อความรหัสผ่านดิบออกจากฝั่ง Client-Side 100% ป้องกันการ Inspect หรือค้นหาในไฟล์ bundle (.js)\n2. ย้ายการยืนยันตัวตนไปทำงานผ่าน Serverless API `/api/admin-auth` หลังบ้าน โดยใช้การแฮชแบบ Cryptographic Salted Hash และ `crypto.timingSafeEqual`\n3. ติดตั้งเกราะป้องกัน Brute-Force & Spam: หากพยายามสุ่มรหัสผ่านผิดเกิน 5 ครั้ง ระบบจะระงับการเข้าถึงจาก IP นั้น 15 นาทีทันที (HTTP 429)\n4. ติดตั้งกับดัก Anti-Bot Honeypot และ Rate Limiting ในฟอร์มสมัคร ป้องกันการส่งสแปมใบสมัครซ้ำซ้อน\n5. เพิ่มระบบตรวจจับสิทธิ์ (IDOR Protection) ในการแก้ไขและลบข้อมูล ป้องกันไม่ให้ผู้ใช้แอบแก้ไขหรือลบใบสมัครของผู้สมัครท่านอื่น',
+      evidence: 'api/admin-auth.js, src/App.jsx, src/views/RegisterView.jsx และ src/components/AdminLoginModal.jsx',
+      description: 'เดิมรหัสผ่านถูกอ่านผ่าน import.meta.env ซึ่ง Vite จะคอมไพล์ลงไฟล์ bundle (.js) ทำให้บุคคลภายนอก inspect ดูได้ ปัจจุบันลบข้อมูลลับออกจากโค้ดหน้าบ้าน 100% พร้อมเสริมระบบป้องกัน Brute-Force และป้องกันการแก้ไขข้อมูลผู้อื่น',
+      attackVector: 'การเปิด Browser DevTools เพื่อค้นหาคำว่า admin หรือรหัสผ่านในไฟล์ JavaScript จะไม่พบข้อมูลลับอีกต่อไป และหากพยายามยิง Brute Force หรือยิงสแปมจะถูกระบบ Rate Limiting และ Honeypot สกัดกั้นทันที',
       remediation: 'ใช้ Serverless API ตรวจสอบสิทธิ์ฝั่งเซิร์ฟเวอร์ และออก Token ควบคุม Session แทนการเก็บค่าดิบ'
     },
     {

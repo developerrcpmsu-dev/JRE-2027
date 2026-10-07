@@ -320,8 +320,13 @@ export default function App() {
     }
   }, [currentTab, isAdmin, loading]);
 
-  // Data Mutation Handlers
+  // Data Mutation Handlers with Strict Access Controls
   const handleSaveRegistration = async (payload) => {
+    // SECURITY GUARD: Ensure applicant cannot spoof another user's identity!
+    if (!isAdmin && user) {
+      payload.user_id = user.id;
+      payload.user_email = user.email;
+    }
     const saved = await DataService.saveRegistration(payload);
     const updated = await DataService.getRegistrations();
     setRegistrations(updated);
@@ -330,7 +335,11 @@ export default function App() {
   };
 
   const handleUpdateAllocation = async (userId, allocations) => {
-    // 1. Instant optimistic update in React state (0ms)
+    // SECURITY GUARD: Group and room allocations are RESTRICTED to verified Admin!
+    if (!isAdmin) {
+      console.warn('Unauthorized allocation update attempt rejected');
+      return;
+    }
     setRegistrations(prev => prev.map(r => 
       (r.user_id === userId || r.id === userId || (r.user_email && r.user_email === userId))
         ? { ...r, ...allocations, updated_at: new Date().toISOString() }
@@ -339,12 +348,29 @@ export default function App() {
     if (user && (user.id === userId || myRegistration?.user_id === userId || myRegistration?.id === userId)) {
       setMyRegistration(prev => prev ? { ...prev, ...allocations } : prev);
     }
-    // 2. Persist in background
     await DataService.updateRegistrationAllocations(userId, allocations);
   };
 
   const handleUpdateRegistration = async (userId, updates) => {
-    // 1. Instant optimistic update in React state (0ms)
+    // SECURITY GUARD: Prevent editing other people's registration records!
+    if (!isAdmin) {
+      if (!user) {
+        throw new Error('กรุณาเข้าสู่ระบบก่อนทำการแก้ไขข้อมูล');
+      }
+      const isOwner = (myRegistration && (myRegistration.user_id === userId || myRegistration.id === userId)) ||
+                      (user && (user.id === userId || user.email?.toLowerCase() === String(userId).toLowerCase()));
+      if (!isOwner) {
+        throw new Error('การเข้าถึงถูกปฏิเสธ: ท่านไม่มีสิทธิ์แก้ไขข้อมูลของผู้สมัครท่านอื่น');
+      }
+      // If registration has already paid or partial paid, protect financial & institution fields!
+      if (myRegistration?.payment_status === 'full' || myRegistration?.payment_status === 'installment_1_paid') {
+        delete updates.payment_status;
+        delete updates.institution;
+        delete updates.fee_total;
+        delete updates.payment_type;
+      }
+    }
+
     setRegistrations(prev => prev.map(r => 
       (r.user_id === userId || r.id === userId || (r.user_email && r.user_email === userId))
         ? { ...r, ...updates, updated_at: new Date().toISOString() }
@@ -353,11 +379,23 @@ export default function App() {
     if (user && (user.id === userId || myRegistration?.user_id === userId || myRegistration?.id === userId)) {
       setMyRegistration(prev => prev ? { ...prev, ...updates } : prev);
     }
-    // 2. Persist in background
     await DataService.updateRegistrationDetails(userId, updates);
   };
 
   const handleDeleteRegistration = async (userId) => {
+    // SECURITY GUARD: Prevent deleting other people's registrations!
+    if (!isAdmin) {
+      if (!user) {
+        throw new Error('ไม่อนุญาตให้ดำเนินการ');
+      }
+      const isOwner = (myRegistration && (myRegistration.user_id === userId || myRegistration.id === userId));
+      if (!isOwner) {
+        throw new Error('การเข้าถึงถูกปฏิเสธ: ท่านไม่มีสิทธิ์ยกเลิกใบสมัครของผู้อื่น');
+      }
+      if (myRegistration?.payment_status === 'full' || myRegistration?.payment_status === 'installment_1_paid') {
+        throw new Error('ใบสมัครที่ชำระเงินแล้วไม่สามารถยกเลิกได้ กรุณาติดต่อแอดมิน');
+      }
+    }
     await DataService.deleteRegistration(userId);
     const updated = await DataService.getRegistrations();
     setRegistrations(updated);
