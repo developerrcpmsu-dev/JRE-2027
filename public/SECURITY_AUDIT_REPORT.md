@@ -62,6 +62,28 @@
 
 ## หลักฐาน live ที่บันทึกแบบไม่เปิดเผยข้อมูล
 
+## รอบตรวจซ้ำล่าสุด: Burp Suite + MCP + Kali Linux (8 ตุลาคม 2569)
+
+รอบนี้ตรวจ production URL แบบ read-only โดยให้ Kali Linux ทำ HTTP/header/method checks, ใช้ Burp Suite Community เป็น local proxy (`127.0.0.1:8080`) และใช้ MCP เปิดตรวจหน้า `/security` กับ `/presentation` ในเบราว์เซอร์จริงเพื่อยืนยันว่าหน้ารายงาน/หน้าพรีเซนต์โหลดได้ ไม่ส่ง credential ไม่ทำ active scan และไม่ส่งคำขอที่แก้ไขข้อมูล
+
+| ระบบ | การใช้งานจริง | ผลที่ยืนยันได้ |
+|---|---|---|
+| Kali Linux/WSL2 | `curl` ตรวจ production, headers, redirect, API methods และ CORS preflight | Kali Rolling, user `best`, Docker 28.5.2/Compose 2.40.3 และ DVWA `Up` ที่ `127.0.0.1:8081` |
+| Burp Suite Community | Burp Browser ส่ง safe GET ผ่าน listener `127.0.0.1:8080` ไปยังหน้าเว็บ, report, API และ security files | Burp Suite Community v2026.9.1 ทำงาน; HTTP `/security` และ `/presentation` ได้ 308 ไป HTTPS; HTTPS ผ่าน Burp Browser ได้ผลหน้าเว็บ/API ตามที่รายงาน |
+| MCP | เปิด `/security` และ `/presentation` แล้วอ่าน accessibility tree/ข้อความที่แสดงจริง | หน้า Security แสดง 10 findings และหน้า Presentation แสดงสไลด์ 1/11 พร้อมลิงก์รายงาน Markdown |
+
+ผล production ที่สรุปได้จาก Kali และ Burp:
+
+- `/`, `/security`, `/presentation` และ `SECURITY_AUDIT_REPORT.md` ตอบ `200`; HTTP URL ตอบ `308` พร้อม `Location: https://jre-2027.vercel.app/...`
+- หน้าเว็บมี `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` และ `Permissions-Policy`
+- `GET /api/admin-auth` และ `POST {}` ตอบ `503` พร้อมข้อความระบบยังไม่พร้อมใช้งาน — เป็น fail-closed แต่ยืนยันว่า `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET` ยังไม่ครบ/ยังไม่พร้อมบน Vercel
+- `OPTIONS /api/admin-auth` และ `OPTIONS /api/file` จาก origin ภายนอกไม่ถูกสะท้อนกลับ; response คืน official origin `https://jre-2027.vercel.app`
+- `GET /api/file` ที่ไม่มี `id` ตอบ `400 Missing file id` และไม่ทำการอ่าน/เขียนไฟล์
+- `/.env` และ `/.git/HEAD` ตอบ `200` แต่ `Content-Disposition: inline; filename="index.html"`, `Content-Type: text/html` และ body hash ตรงกับ `/`; จึงเป็น SPA fallback ไม่ใช่การเปิดเผย `.env` หรือ `.git/HEAD` จริง
+- Burp Browser สามารถโหลด HTTPS ผ่าน proxy และพบ API response แบบเดียวกับ Kali; ภาพ Burp `0 items` ที่แนบคือหลักฐาน “ก่อนส่ง traffic” ส่วนภาพ passive crawl หลัง traffic ในรายงานเป็นหลักฐานชุดก่อนหน้าที่แสดง `50 site-map items / 13 responses processed`
+
+ข้อจำกัดของรอบนี้: ไม่ล็อกอิน Admin, ไม่ส่ง OTP/credential, ไม่ทำ active scan/Intruder และไม่แก้ข้อมูล production ดังนั้น 10 findings เดิมยังเป็นรายการที่ต้องแก้/ยืนยันต่อ ไม่ใช่ผลรับรองว่าเว็บปลอดภัยทั้งหมด
+
 - `registrations`: ณ เวลาตรวจพบ 0 แถว จึงยังไม่พบ PII ของผู้สมัครจาก endpoint ในช่วงเวลานั้น แต่ source/query และ policy ยังมีความเสี่ยงเมื่อมีข้อมูลจริง
 - `project_settings`: พบ 9 records ที่อ่านได้ด้วย anon key
 - `project_settings` key `user_accounts`: พบ 1 record ภายในมี 4 account objects และ field names ได้แก่ `password_hash` และ `salt` (ค่าจริงถูก redacted); working-tree patch ไม่ส่ง field เหล่านี้ไปยัง profile/admin list/export แต่ public REST exposure จะปิดได้เมื่อรัน RLS migration และย้าย auth แล้วเท่านั้น
@@ -166,7 +188,7 @@
 
 | เครื่องมือ | สถานะ | หมายเหตุ |
 |---|---|---|
-| Burp Suite Community | ติดตั้งแล้วและใช้ผ่าน proxy | PortSwigger package 2026.3.3; listener `127.0.0.1:8080` รับ safe GET/OPTIONS 11 requests และ passive crawl UI แสดง 50 site-map items / 13 responses processed; ยังไม่ได้ทำ active scan หรือ credential test |
+| Burp Suite Community | ติดตั้งแล้วและใช้ผ่าน proxy | PortSwigger package 2026.9.1; listener `127.0.0.1:8080` รับ safe traffic จาก Burp Browser และ HTTP redirect checks; ภาพ passive crawl ชุดก่อนหน้าแสดง 50 site-map items / 13 responses processed; ยังไม่ได้ทำ active scan หรือ credential test |
 | Claude Desktop | มีอยู่แล้ว | เพิ่ม `jre2027-filesystem` MCP server แบบจำกัด path โปรเจกต์ใน `%APPDATA%\\Claude\\claude_desktop_config.json`; restart Claude เพื่อโหลด config |
 | MCP | พร้อมใช้งาน | รอบ audit นี้ใช้ MCP tools/local file inspection; ไม่ส่ง `.env` ให้โมเดลโดยอัตโนมัติ |
 | Kali Linux | ติดตั้งและใช้งานได้ | WSL2 distribution `kali-linux` อยู่สถานะ Running; Linux user สร้างแล้ว; systemd มี warning เรื่อง user session แต่ shell ใช้งานได้ |
@@ -229,4 +251,3 @@ Invoke-WebRequest "$env:VITE_SUPABASE_URL/rest/v1/project_settings?select=key&li
 - RLS policy inventory มีหลักฐานก่อน/หลัง พร้อม test matrix anon/applicant/admin
 - `npm audit --audit-level=high` ผ่านหรือมี exception ที่อนุมัติอย่างมีวันหมดอายุ
 - staging regression tests ผ่าน, screenshots ถูก redact และค่อย deploy production
-
