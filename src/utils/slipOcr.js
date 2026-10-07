@@ -19,6 +19,22 @@ export const THAI_BANK_CODES = {
 };
 
 /**
+ * Known Thai Bank Name Patterns for Text Detection
+ */
+export const THAI_BANK_NAME_PATTERNS = [
+  { match: /krungthai|กรุงไทย|ktb|next/i, name: 'ธนาคารกรุงไทย (Krungthai NEXT)' },
+  { match: /kbank|กสิกร|k plus|kasikorn|i<\+|a\.nans/i, name: 'ธนาคารกสิกรไทย (K PLUS)' },
+  { match: /scb|ไทยพาณิชย์|easy/i, name: 'ธนาคารไทยพาณิชย์ (SCB EASY)' },
+  { match: /bangkok\s*bank|กรุงเทพ|bbl|bualuang/i, name: 'ธนาคารกรุงเทพ (BBL)' },
+  { match: /ttb|ทหารไทยธนชาต|thanachart/i, name: 'ธนาคารทหารไทยธนชาต (ttb)' },
+  { match: /gsb|ออมสิน|mymo/i, name: 'ธนาคารออมสิน (MyMo)' },
+  { match: /bay|krungsri|กรุงศรี/i, name: 'ธนาคารกรุงศรีอยุธยา (KMA)' },
+  { match: /baac|ธ\.ก\.ส\.|ธกส/i, name: 'ธ.ก.ส. (BAAC)' },
+  { match: /truemoney|true\s*money|wallet|ทรูมันนี่|วอลเล็ท|ooal/i, name: 'ทรูมันนี่ วอลเล็ท (TrueMoney Wallet)' },
+  { match: /promptpay|พร้อมเพย์|wdouwe/i, name: 'พร้อมเพย์ (PromptPay)' }
+];
+
+/**
  * Format current date-time in readable Thai
  */
 export function formatThaiDateTime(date = new Date()) {
@@ -192,7 +208,6 @@ function getOrCreateQrSandbox() {
 async function getImageCanvas(blob) {
   if (typeof window === 'undefined' || !blob) return null;
 
-  // Modern browsers: createImageBitmap is ultra-fast and handles EXIF orientation
   if (typeof createImageBitmap === 'function') {
     try {
       const bitmap = await createImageBitmap(blob);
@@ -205,7 +220,6 @@ async function getImageCanvas(blob) {
     } catch (e) {}
   }
 
-  // Fallback: HTMLImageElement
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
@@ -250,7 +264,7 @@ export async function scanQrCodeFromImageBlob(blob) {
       code = jsQR(trData.data, trW, trH, { inversionAttempts: 'attemptBoth' });
       if (code?.data) return code.data;
 
-      // Pass 3: Bottom Half (Standard location for SCB, KBank, PromptPay slips)
+      // Pass 3: Bottom Half (Standard location for GSB MyMo, SCB, KBank, PromptPay slips)
       const bH = Math.floor(height * 0.65);
       const bY = height - bH;
       const bData = ctx.getImageData(0, bY, width, bH);
@@ -291,16 +305,16 @@ export async function scanQrCodeFromImageBlob(blob) {
 }
 
 /**
- * Extract time from slip text safely without matching decimal numbers (e.g. 650.00)
+ * Extract time from slip text safely
  */
-function extractTime(str) {
+export function extractTime(str) {
   if (!str) return null;
-  // 1. Colon separated: 00:13 or 14:35:20
-  const m1 = str.match(/\b([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(?:น\.|น|am|pm)?\b/i);
+  // 1. Colon separated: 00:13, 03:20, 14:35:20, 18:24
+  const m1 = str.match(/\b([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?:\s*(?:น\.|น|am|pm))?/i);
   if (m1) return m1[0].trim();
 
-  // 2. Dot separated only if followed by น. or am/pm to avoid matching decimal amounts like 400.00
-  const m2 = str.match(/\b([01]?\d|2[0-3])\.([0-5]\d)\s*(?:น\.|น|am|pm)\b/i);
+  // 2. Dot separated only if followed by น. or am/pm
+  const m2 = str.match(/\b([01]?\d|2[0-3])\.([0-5]\d)\s*(?:น\.|น|am|pm)/i);
   if (m2) return m2[0].trim();
 
   return null;
@@ -309,13 +323,14 @@ function extractTime(str) {
 /**
  * Extract date from slip text (Thai and International formats)
  */
-function extractDate(str) {
+export function extractDate(str) {
   if (!str) return null;
-  // 1. Thai date: e.g. 23 มี.ค. 2569 or 23 มี.ค. 69 or common OCR patterns
-  const mThai = str.match(/([0-3]?\d\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|ii\.[a-z]\.|ila\.|[0-9]\.A\.)\s*(?:25)?\d{2})/i);
+
+  // 1. Thai date: e.g. 19มี.ค.2569 or 23 มี.ค. 2569 or 23 มี.ค..69 or 23 มี.ค. 69
+  const mThai = str.match(/([0-3]?\d\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\.?\s*(?:25)?\d{2})/i);
   if (mThai) {
     let d = mThai[1].trim();
-    d = d.replace(/ii\.p\./i, 'มี.ค.').replace(/ila\./i, 'มี.ค.').replace(/[0-9]\.A\./i, 'มี.ค.').replace(/ii\.n\./i, 'มี.ค.');
+    d = d.replace(/\.\./g, '.').replace(/\s+/g, ' ');
     return d;
   }
 
@@ -340,29 +355,27 @@ export function parseSlipText(text, expectedAmount = null) {
       bankDetected: null,
       detectedAmount: null,
       transferDate: null,
-      transferTime: null
+      transferTime: null,
+      transRef: null
     };
   }
 
   let cleaned = text.replace(/\r\n/g, '\n').trim();
 
   // Normalize spaces around dots and commas between numbers (e.g. "650 . 00" -> "650.00", "10 . 00" -> "10.00")
-  cleaned = cleaned.replace(/(\d+)\s*[\.]\s*(\d{2})\b/g, '$1.$2');
-  cleaned = cleaned.replace(/(\d+)\s*[,]\s*(\d{2})\b/g, '$1.$2');
+  cleaned = cleaned.replace(/(\d+)\s*[\.]\s*(\d{2})/g, '$1.$2');
+  cleaned = cleaned.replace(/(\d+)\s*[,]\s*(\d{2})/g, '$1.$2');
 
   // 1. Detect Bank
   let bankDetected = null;
-  if (/krungthai|กรุงไทย|ktb|next/i.test(cleaned)) bankDetected = 'ธนาคารกรุงไทย (Krungthai NEXT)';
-  else if (/kbank|กสิกร|k plus|kasikorn|i<\+|a\.nans/i.test(cleaned)) bankDetected = 'ธนาคารกสิกรไทย (K PLUS)';
-  else if (/scb|ไทยพาณิชย์|easy/i.test(cleaned)) bankDetected = 'ธนาคารไทยพาณิชย์ (SCB EASY)';
-  else if (/bangkok\s*bank|กรุงเทพ|bbl|bualuang/i.test(cleaned)) bankDetected = 'ธนาคารกรุงเทพ (BBL)';
-  else if (/ttb|ทหารไทยธนชาต|thanachart/i.test(cleaned)) bankDetected = 'ธนาคารทหารไทยธนชาต (ttb)';
-  else if (/gsb|ออมสิน|mymo/i.test(cleaned)) bankDetected = 'ธนาคารออมสิน (MyMo by GSB)';
-  else if (/bay|krungsri|กรุงศรี/i.test(cleaned)) bankDetected = 'ธนาคารกรุงศรีอยุธยา (KMA)';
-  else if (/truemoney|true\s*money|wallet|ทรูมันนี่|วอลเล็ท|ooal/i.test(cleaned)) bankDetected = 'ทรูมันนี่ วอลเล็ท (TrueMoney Wallet)';
-  else if (/promptpay|พร้อมเพย์|wdouwe/i.test(cleaned)) bankDetected = 'พร้อมเพย์ (PromptPay)';
+  for (const item of THAI_BANK_NAME_PATTERNS) {
+    if (item.match.test(cleaned)) {
+      bankDetected = item.name;
+      break;
+    }
+  }
 
-  // General transfer indicators in Thai bank slips (including English OCR transcriptions like JuduLdU, a1sssu)
+  // General transfer indicators in Thai bank slips
   const hasTransferKeyword = /โอนเงิน|โอนสำเร็จ|สำเร็จ|รายการสำเร็จ|ผู้รับเงิน|ผู้โอน|ยอดโอน|จำนวนเงิน|ยอดเงิน|ยอดเงินรวม|รหัสอ้างอิง|เลขที่รายการ|เลขที่อ้างอิง|transfer|transferred|successful|success|payment|paid|bscan|slip|juduldu|judul|juduan|tuau|fuudu|goqaldusou|j7uduru|a1sssu|ska3103|truemoney|wallet|mymo|toutsu/i.test(cleaned);
 
   const isBankSlip = Boolean(bankDetected || hasTransferKeyword);
@@ -384,57 +397,54 @@ export function parseSlipText(text, expectedAmount = null) {
       }
     }
 
-    // B. Explicit amount keywords:
-    // "จำนวนเงิน 50.00 บาท", "JuduLdU 10.00 un", "ยอดเงินรวม 50.00 บาท", "J7UdURU 50.00"
+    // B. Keyword-anchored amount with 2 decimals:
+    // "จำนวนเงิน\n10.00", "จำนวน: 50.00 บาท", "ยอดเงิน 650.00"
     if (!detectedAmount) {
-      const explicitAmountPatterns = [
-        /(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|ยอดชำระ|ยอดเงินรวม|amount|transferred|paid|juduldu|judul|juduan|tuau|fuudu|goqaldusou|j7uduru)\s*[:\s-]*\s*([1-9][0-9]{0,4}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i,
-        /([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:บาท|thb|baht|un|uin|uln|vn|uin|8|฿)?\b/i
-      ];
-
-      for (const regex of explicitAmountPatterns) {
-        const match = cleaned.match(regex);
-        if (match && match[1]) {
-          const num = parseFloat(match[1].replace(/,/g, ''));
-          // Any positive non-zero transfer amount
-          if (!isNaN(num) && num > 0 && num <= 100000) {
-            detectedAmount = num;
-            break;
-          }
-        }
-      }
-    }
-
-    // C. Decimal currency amount fallback (skip 0.00 fee)
-    if (!detectedAmount) {
-      const allDecimals = [...cleaned.matchAll(/\b([1-9][0-9]{0,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g)];
-      for (const m of allDecimals) {
-        const num = parseFloat(m[1].replace(/,/g, ''));
-        // Filter out 0.00 which is typically fee (ค่าธรรมเนียม 0.00 บาท)
-        if (!isNaN(num) && num > 0 && num <= 100000) {
-          if (expectedAmount && Math.abs(num - Number(expectedAmount)) < 0.01) {
-            detectedAmount = num;
-            break;
-          }
-          if (!detectedAmount) {
-            detectedAmount = num;
-          }
-        }
-      }
-    }
-
-    // D. Integer amount if followed by Thai or currency indicators
-    if (!detectedAmount) {
-      const intMatch = cleaned.match(/\b([1-9][0-9]{0,4})\s*(?:บาท|thb|baht|un|uin|฿)\b/i);
-      if (intMatch) {
-        const num = parseFloat(intMatch[1]);
+      const labelAmountMatch = cleaned.match(/(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|amount|transferred)[\s\S]{0,35}?([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})/i);
+      if (labelAmountMatch) {
+        const num = parseFloat(labelAmountMatch[1].replace(/,/g, ''));
         if (!isNaN(num) && num > 0 && num <= 100000) {
           detectedAmount = num;
         }
       }
     }
-  }
 
+    // C. Explicit currency patterns (NO \b after Thai word 'บาท'):
+    // "50.00 บาท", "10.00 บาท", "650.00฿", "50.00 un"
+    if (!detectedAmount) {
+      const currMatch = cleaned.match(/([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:บาท|thb|baht|฿|un|uin|8)/i);
+      if (currMatch) {
+        const num = parseFloat(currMatch[1].replace(/,/g, ''));
+        if (!isNaN(num) && num > 0 && num <= 100000) {
+          detectedAmount = num;
+        }
+      }
+    }
+
+    // D. Decimal currency amount fallback (skip fee lines)
+    if (!detectedAmount) {
+      const lines = cleaned.split('\n');
+      for (const line of lines) {
+        // Skip lines mentioning fee or month abbreviations to prevent collision with dates
+        if (/ค่าธรรมเนียม|fee|ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\./i.test(line)) continue;
+
+        const lineMatches = [...line.matchAll(/([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})/g)];
+        for (const lm of lineMatches) {
+          const val = parseFloat(lm[1].replace(/,/g, ''));
+          if (!isNaN(val) && val > 0 && val <= 100000) {
+            if (expectedAmount && Math.abs(val - Number(expectedAmount)) < 0.01) {
+              detectedAmount = val;
+              break;
+            }
+            if (!detectedAmount) {
+              detectedAmount = val;
+            }
+          }
+        }
+        if (detectedAmount) break;
+      }
+    }
+  }
 
   // 3. Detect Transfer Date & Time
   let transferDate = null;
@@ -445,31 +455,70 @@ export function parseSlipText(text, expectedAmount = null) {
     transferDate = extractDate(cleaned);
   }
 
+  // 4. Extract TransRef from text if available
+  let transRef = null;
+  const refMatch = cleaned.match(/(?:รหัสอ้างอิง|เลขที่รายการ|เลขที่อ้างอิง|transref|ref)[\s:]*([A-Za-z0-9_-]{10,35})/i);
+  if (refMatch) {
+    transRef = refMatch[1].trim();
+  }
+
   return {
     isBankSlip,
     bankDetected,
     detectedAmount,
     transferDate,
-    transferTime
+    transferTime,
+    transRef
   };
 }
 
 /**
- * Reusable singleton Tesseract worker for high performance
+ * Reusable singleton Tesseract worker with Thai + English support
  */
 let sharedTesseractWorker = null;
 
 async function getSharedWorker() {
   if (!sharedTesseractWorker) {
     try {
-      const worker = await createWorker('eng');
+      // Load both Thai and English models for high precision on Thai bank slips
+      const worker = await createWorker(['tha', 'eng']);
       sharedTesseractWorker = worker;
     } catch (err) {
       console.warn('Worker initialization error:', err);
-      sharedTesseractWorker = null;
+      // Fallback to English if Thai traineddata fails network load
+      try {
+        const fallbackWorker = await createWorker('eng');
+        sharedTesseractWorker = fallbackWorker;
+      } catch (fallbackErr) {
+        sharedTesseractWorker = null;
+      }
     }
   }
   return sharedTesseractWorker;
+}
+
+/**
+ * Helper to create a cropped Canvas region focused on amount area
+ * (Amounts in Thai bank slips consistently sit in the top 10% - 42% region)
+ */
+function cropAmountAreaCanvas(sourceCanvas) {
+  if (!sourceCanvas) return null;
+  try {
+    const w = sourceCanvas.width;
+    const h = sourceCanvas.height;
+    const cropY = Math.floor(h * 0.08);
+    const cropH = Math.floor(h * 0.35);
+
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = w;
+    cropCanvas.height = cropH;
+    const cropCtx = cropCanvas.getContext('2d');
+    cropCtx.drawImage(sourceCanvas, 0, cropY, w, cropH, 0, 0, w, cropH);
+
+    return cropCanvas;
+  } catch (e) {
+    return null;
+  }
 }
 
 /**
@@ -531,40 +580,108 @@ export async function scanSlipImage(file, expectedAmount = null) {
     console.warn('QR scan processing notice:', qrErr);
   }
 
-  // 2. Optical Character Recognition (Tesseract OCR)
+  // 2. Attempt Vercel Serverless Function (/api/slip-ocr) for Google Vision / AI For Thai
+  let serverOcrSuccess = false;
   try {
-    const ocrPromise = (async () => {
-      const worker = await getSharedWorker();
-      if (!worker) return '';
-      const ret = await worker.recognize(file);
-      return ret?.data?.text || '';
-    })();
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      const base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
 
-    // 12-second generous timeout for high-res mobile photos
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(''), 12000));
-    const ocrText = await Promise.race([ocrPromise, timeoutPromise]);
+      if (base64Data) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-    if (ocrText) {
-      result.rawText = ocrText;
-      const parsed = parseSlipText(ocrText, expectedAmount);
-      
-      if (parsed.isBankSlip) {
-        result.isBankSlip = true;
-        if (parsed.bankDetected && !result.bankDetected) {
-          result.bankDetected = parsed.bankDetected;
+        const res = await fetch('/api/slip-ocr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64Data, expectedAmount }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const apiJson = await res.json();
+          if (apiJson?.success) {
+            serverOcrSuccess = true;
+            result.isBankSlip = true;
+            if (apiJson.rawText) result.rawText = apiJson.rawText;
+            if (apiJson.amount) result.amount = apiJson.amount;
+            if (apiJson.transferDate) result.transferDate = apiJson.transferDate;
+            if (apiJson.transferTime) result.transferTime = apiJson.transferTime;
+            if (apiJson.bankDetected && !result.bankDetected) result.bankDetected = apiJson.bankDetected;
+            if (apiJson.transRef && !result.transRef) result.transRef = apiJson.transRef;
+          }
         }
-        if (!result.amount && parsed.detectedAmount) {
-          result.amount = parsed.detectedAmount;
-        }
-        result.transferDate = parsed.transferDate;
-        result.transferTime = parsed.transferTime;
       }
     }
-  } catch (ocrErr) {
-    console.warn('OCR processing notice:', ocrErr);
+  } catch (apiErr) {
+    // Serverless endpoint offline or timed out; continue to client-side pipeline
   }
 
-  // 3. Format Date/Time
+  // 3. Client-Side High-Accuracy Thai+Eng OCR Pipeline (if amount or date/time not yet found)
+  if (!serverOcrSuccess || !result.amount || !result.transferDate) {
+    try {
+      const worker = await getSharedWorker();
+      if (worker) {
+        // Pass A: Full Image Recognition
+        const ocrPromise = (async () => {
+          const ret = await worker.recognize(file);
+          return ret?.data?.text || '';
+        })();
+
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(''), 15000));
+        let ocrText = await Promise.race([ocrPromise, timeoutPromise]);
+
+        // Pass B: If amount not found, run focused crop on top 35% region
+        let cropText = '';
+        if (typeof window !== 'undefined') {
+          const canvasData = await getImageCanvas(file);
+          if (canvasData?.canvas) {
+            const cropCanvas = cropAmountAreaCanvas(canvasData.canvas);
+            if (cropCanvas) {
+              try {
+                const cropRet = await worker.recognize(cropCanvas);
+                cropText = cropRet?.data?.text || '';
+              } catch (cropErr) {}
+            }
+          }
+        }
+
+        const combinedText = `${ocrText}\n${cropText}`.trim();
+        if (combinedText) {
+          result.rawText = combinedText;
+          const parsed = parseSlipText(combinedText, expectedAmount);
+
+          if (parsed.isBankSlip) {
+            result.isBankSlip = true;
+            if (parsed.bankDetected && !result.bankDetected) {
+              result.bankDetected = parsed.bankDetected;
+            }
+            if (!result.amount && parsed.detectedAmount) {
+              result.amount = parsed.detectedAmount;
+            }
+            if (!result.transferDate && parsed.transferDate) {
+              result.transferDate = parsed.transferDate;
+            }
+            if (!result.transferTime && parsed.transferTime) {
+              result.transferTime = parsed.transferTime;
+            }
+            if (!result.transRef && parsed.transRef) {
+              result.transRef = parsed.transRef;
+            }
+          }
+        }
+      }
+    } catch (ocrErr) {
+      console.warn('Client OCR processing notice:', ocrErr);
+    }
+  }
+
+  // 4. Format Date/Time
   if (result.transferDate && result.transferTime) {
     result.transferDateTimeStr = `${result.transferDate} เวลา ${result.transferTime}`;
   } else if (result.transferDate) {
@@ -575,7 +692,7 @@ export async function scanSlipImage(file, expectedAmount = null) {
     result.transferDateTimeStr = null;
   }
 
-  // 4. Evaluate Detection Status and Validation
+  // 5. Evaluate Detection Status and Validation
   if (result.amount) {
     result.isDetected = true;
     result.isBankSlip = true;
