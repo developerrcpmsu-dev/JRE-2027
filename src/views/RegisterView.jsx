@@ -77,6 +77,11 @@ import {
   getRegistrationFeeDetails,
   isMsuInstitution
 } from '../data/defaultData';
+import RegistrationCountdown from '../components/RegistrationCountdown';
+import { 
+  getRegistrationScheduleStatus, 
+  formatThaiDateTime 
+} from '../utils/registrationSchedule';
 
 export const TITLE_THAI_OPTIONS = [
   'นาย',
@@ -329,6 +334,11 @@ export default function RegisterView({
     )
   );
 
+  const scheduleStatus = getRegistrationScheduleStatus(effectivePaymentConfig);
+  const isRegistrationClosed = scheduleStatus.isClosed;
+  const isRegistrationUpcoming = scheduleStatus.isUpcoming;
+  const isRegistrationOpen = scheduleStatus.isOpen;
+
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -339,11 +349,15 @@ export default function RegisterView({
         setIsEditing(false);
         if (onSubRouteChange) onSubRouteChange('dashboard');
         triggerToast('ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ไม่สามารถแก้ไขข้อมูลใบสมัครได้', 'info');
+      } else if (isRegistrationClosed) {
+        setIsEditing(false);
+        if (onSubRouteChange) onSubRouteChange('dashboard');
+        triggerToast('โครงการได้ปิดรับสมัครแล้ว ไม่อนุญาตให้แก้ไขข้อมูลใบสมัคร แต่ท่านยังสามารถชำระเงินงวดที่ 2 ได้ตามปกติ', 'warning');
       } else {
         setIsEditing(true);
       }
     }
-  }, [subRoute, myRegistration, isApplicantFullyPaid]);
+  }, [subRoute, myRegistration, isApplicantFullyPaid, isRegistrationClosed]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -1389,6 +1403,19 @@ export default function RegisterView({
       return;
     }
 
+    // Registration Schedule Open/Close Enforcement
+    const currentSchedule = getRegistrationScheduleStatus(effectivePaymentConfig);
+    if (!myRegistration && currentSchedule.isClosed) {
+      triggerToast('ขออภัย โครงการ JRE 2027 ได้ปิดรับสมัครแล้วอย่างเป็นทางการ ไม่สามารถส่งใบสมัครใหม่ได้', 'error');
+      setStatusMessage({ type: 'error', text: 'โครงการ JRE 2027 ได้ปิดรับสมัครแล้วอย่างเป็นทางการ ไม่สามารถส่งใบสมัครใหม่ได้' });
+      return;
+    }
+    if (!myRegistration && currentSchedule.isUpcoming) {
+      triggerToast('ขออภัย ระบบรับสมัคร JRE 2027 ยังไม่เปิดให้บริการในขณะนี้', 'warning');
+      setStatusMessage({ type: 'warning', text: 'ระบบรับสมัคร JRE 2027 ยังไม่เปิดให้บริการ กรุณารอนับเวลาเปิดรับสมัคร' });
+      return;
+    }
+
     // Anti-Bot Honeypot Trap
     if (botHoneypot) {
       console.warn('Bot submission trapped by honeypot');
@@ -1878,6 +1905,86 @@ export default function RegisterView({
 
   // If user is not logged in with Google yet
   if (!user) {
+    if (isRegistrationUpcoming) {
+      return (
+        <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
+          <div className="flex justify-center">
+            <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+              <img
+                src="/images/logo/jre_header_banner.png"
+                alt="Joint Response Exercise (JRE 2027)"
+                className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+              />
+            </div>
+          </div>
+
+          <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="card" />
+
+          {/* Quick Pre-login with Google Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-4">
+            <h4 className="text-base font-bold text-white">
+              เข้าสู่ระบบด้วย Google ไว้ล่วงหน้า เพื่อเตรียมความพร้อม
+            </h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              เมื่อระบบเปิดรับสมัคร ท่านจะสามารถเริ่มกรอกแบบฟอร์มได้ทันทีโดยไม่ต้องเสียเวลายืนยันตัวตนใหม่
+            </p>
+            <button
+              onClick={onOpenGoogleLogin}
+              className="px-6 py-3.5 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-2xl shadow-lg transition-all inline-flex items-center gap-2.5 text-xs sm:text-sm cursor-pointer"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              <span>เข้าสู่ระบบด้วย Google ไว้ล่วงหน้า</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (isRegistrationClosed) {
+      return (
+        <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
+          <div className="flex justify-center">
+            <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+              <img
+                src="/images/logo/jre_header_banner.png"
+                alt="Joint Response Exercise (JRE 2027)"
+                className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+              />
+            </div>
+          </div>
+
+          <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="card" />
+
+          {/* Login for Existing Applicants */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-4">
+            <h4 className="text-base font-bold text-white">
+              สำหรับผู้ที่ได้ลงทะเบียนเข้าร่วมโครงการไว้แล้ว
+            </h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              ท่านสามารถเข้าสู่ระบบด้วย Google เพื่อเข้าสู่หน้าแดชบอร์ด ตรวจสอบผลการอนุมัติสิทธิ์ และส่งสลิปชำระเงินงวดที่ 2 ได้ตามปกติ
+            </p>
+            <button
+              onClick={onOpenGoogleLogin}
+              className="px-6 py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-xl transition-all inline-flex items-center gap-2.5 text-xs sm:text-sm cursor-pointer"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              <span>เข้าสู่ระบบ Google เพื่อดูแดชบอร์ด / จ่ายงวด 2</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
         
@@ -1891,6 +1998,9 @@ export default function RegisterView({
             />
           </div>
         </div>
+
+        {/* Live Closing Countdown Banner for Open Status */}
+        <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" />
 
         {/* Step Indicator Header */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2052,6 +2162,34 @@ export default function RegisterView({
             />
           </div>
         </div>
+
+        {/* Registration Schedule Notification Banner in Dashboard */}
+        {isRegistrationClosed ? (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-slate-800 shadow-xl flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 shrink-0">
+                <Lock className="w-5 h-5 text-slate-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase text-slate-200 tracking-wider">
+                    การรับสมัครบุคคลทั่วไปปิดแล้วอย่างเป็นทางการ
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                    ✓ สิทธิ์ของท่านได้รับการบันทึกแล้ว
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {myRegistration.payment_plan === 'installment'
+                    ? 'สำหรับผู้ที่เลือกแบ่งชำระ 2 งวด: ท่านยังคงสามารถส่งสลิปชำระเงินงวดที่ 2 (250/450 บ.) ด้านล่างได้ตามปกติ'
+                    : 'ข้อมูลการสมัครของท่านได้รับการยืนยันและคุ้มครองในระบบเรียบร้อย'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" />
+        )}
 
         {/* Digital ID Card generated directly from the applicant record */}
         <section className="rounded-3xl border border-orange-500/25 bg-gradient-to-br from-slate-900 via-[#0b1f3a] to-slate-950 p-4 shadow-2xl sm:p-6">
@@ -2260,7 +2398,7 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-              {/* EDIT REGISTRATION BUTTON: Locked once fully paid and confirmed */}
+              {/* EDIT REGISTRATION BUTTON: Locked once fully paid and confirmed, or if registration is closed */}
               {isApplicantFullyPaid ? (
                 <div
                   className="px-4 py-2.5 bg-slate-900/90 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
@@ -2268,6 +2406,14 @@ export default function RegisterView({
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   <span>ยืนยันสิทธิ์สมบูรณ์แล้ว (ล็อคข้อมูล)</span>
+                </div>
+              ) : isRegistrationClosed ? (
+                <div
+                  className="px-4 py-2.5 bg-slate-900/90 text-slate-400 border border-slate-700/60 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
+                  title="โครงการได้ปิดรับสมัครแล้ว ไม่อนุญาตให้แก้ไขข้อมูลใบสมัคร แต่ท่านยังสามารถชำระเงินงวดที่ 2 ได้ตามปกติ"
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>ปิดรับสมัครแล้ว (ล็อคข้อมูล)</span>
                 </div>
               ) : (
                 <button
@@ -3212,8 +3358,8 @@ export default function RegisterView({
                 </div>
               </div>
 
-              {/* If unpaid and no slips attached, allow going to Step 1 to change plan */}
-              {!hasTransferredOrPaid && !isApplicantFullyPaid && (
+              {/* If unpaid and no slips attached, allow going to Step 1 to change plan (Only while registration is open) */}
+              {!hasTransferredOrPaid && !isApplicantFullyPaid && !isRegistrationClosed && (
                 <button
                   type="button"
                   onClick={() => {
@@ -4280,6 +4426,108 @@ export default function RegisterView({
     );
   }
 
+  // IF USER IS LOGGED IN BUT HAS NO REGISTRATION YET:
+  // Check registration schedule status (Wait screen if Upcoming, Closed screen if Closed)
+  if (!myRegistration) {
+    if (isRegistrationUpcoming) {
+      return (
+        <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
+          <div className="flex justify-center">
+            <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+              <img
+                src="/images/logo/jre_header_banner.png"
+                alt="Joint Response Exercise (JRE 2027)"
+                className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+              />
+            </div>
+          </div>
+
+          {/* User Logged-in State Card */}
+          <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              {user.avatar ? (
+                <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover border border-slate-700" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold">
+                  {user.name?.[0] || 'U'}
+                </div>
+              )}
+              <div>
+                <span className="font-bold text-white block">{user.name}</span>
+                <span className="text-[11px] text-slate-400">{user.email}</span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full font-bold text-[10px]">
+              ✓ บัญชียืนยันตัวตนเรียบร้อย
+            </span>
+          </div>
+
+          <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="card" />
+
+          {/* Guidance on what to prepare */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-xs text-slate-300 space-y-3">
+            <div className="flex items-center gap-2 font-bold text-white text-sm border-b border-slate-800 pb-2">
+              <Calendar className="w-4 h-4 text-amber-400" />
+              <span>ระบบรับสมัครยังไม่เปิด — เตรียมข้อมูลก่อนเริ่มเปิดรับสมัคร:</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              เมื่อถึงเวลาเปิดรับสมัครตามตัวนับเวลาด้านบน ระบบจะเปิดแบบฟอร์มให้กรอกข้อมูลทันที ท่านสามารถเตรียมข้อมูลล่วงหน้า เช่น ขนาดไซส์เสื้อ (S - 5XL), ภาพถ่ายบัตรประชาชน/นิสิต, ข้อมูลประวัติแพ้ยา/อาหาร และสลิปการโอนเงิน (ชำระเต็มจำนวน 650/850 บ. หรือแบ่งจ่ายงวดที่ 1 400 บ.)
+            </p>
+          </div>
+
+          <Toast toast={toast} onClose={() => setToast(null)} />
+        </div>
+      );
+    }
+
+    if (isRegistrationClosed) {
+      return (
+        <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">
+          <div className="flex justify-center">
+            <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+              <img
+                src="/images/logo/jre_header_banner.png"
+                alt="Joint Response Exercise (JRE 2027)"
+                className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+              />
+            </div>
+          </div>
+
+          {/* User Logged-in State Card */}
+          <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              {user.avatar ? (
+                <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover border border-slate-700" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold">
+                  {user.name?.[0] || 'U'}
+                </div>
+              )}
+              <div>
+                <span className="font-bold text-white block">{user.name}</span>
+                <span className="text-[11px] text-slate-400">{user.email}</span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full font-bold text-[10px]">
+              ไม่มีข้อมูลใบสมัคร
+            </span>
+          </div>
+
+          <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="card" />
+
+          {/* Guidance for closed state */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-3">
+            <p className="text-xs text-slate-300 leading-relaxed max-w-lg mx-auto">
+              บัญชีนี้ไม่มีประวัติการสมัครในโครงการ JRE 2027 และโครงการได้ปิดรับสมัครอย่างเป็นทางการแล้ว จึงไม่สามารถเปิดรับสมัครใหม่ได้ หากท่านมีข้อสงสัยหรือต้องการสอบถามเพิ่มเติม โปรดติดต่อผู้จัดโครงการที่เบอร์ {effectivePaymentConfig.contact_phone || '098-329-6762'}
+            </p>
+          </div>
+
+          <Toast toast={toast} onClose={() => setToast(null)} />
+        </div>
+      );
+    }
+  }
+
   // REGISTRATION / EDIT FORM
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -4294,6 +4542,9 @@ export default function RegisterView({
           />
         </div>
       </div>
+
+      {/* Live Closing Countdown Banner in Registration Form */}
+      <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" className="mb-4" />
 
       <div className="text-center space-y-2 mb-4">
         <div className="inline-flex items-center gap-2 px-4 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider">

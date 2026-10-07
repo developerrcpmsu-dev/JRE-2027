@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
+import RegistrationCountdown from '../components/RegistrationCountdown';
+import { getRegistrationScheduleStatus } from '../utils/registrationSchedule';
 
 export default function HomeView({ 
   teamMembers, 
@@ -25,7 +27,8 @@ export default function HomeView({
   onNavigateSchedule,
   onNavigateMerchandise,
   myRegistration,
-  onOpenGoogleLogin
+  onOpenGoogleLogin,
+  paymentConfig
 }) {
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
   // Dynamic university resolution helper
@@ -131,24 +134,46 @@ export default function HomeView({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
-            {myRegistration ? (
-              <button
-                onClick={onNavigateRegister}
-                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-95 cursor-pointer"
-              >
-                <FileCheck2 className="w-4 h-4" />
-                <span>ดูสถานะห้องนอน & กลุ่มฝึกของฉัน</span>
-              </button>
-            ) : (
-              <button
-                onClick={onNavigateRegister}
-                className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
-              >
-                <span>สมัครเข้าร่วมโครงการ JRE 2027</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
+          <div className="space-y-3">
+            {!myRegistration && (
+              <div className="flex items-center gap-2">
+                <RegistrationCountdown paymentConfig={paymentConfig} variant="badge" />
+              </div>
             )}
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+              {myRegistration ? (
+                <button
+                  onClick={onNavigateRegister}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-95 cursor-pointer"
+                >
+                  <FileCheck2 className="w-4 h-4" />
+                  <span>ดูสถานะห้องนอน & กลุ่มฝึกของฉัน</span>
+                </button>
+              ) : getRegistrationScheduleStatus(paymentConfig).isUpcoming ? (
+                <button
+                  onClick={onNavigateRegister}
+                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 hover:from-amber-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-amber-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                >
+                  <span>⏳ รอนับเวลาเปิดรับสมัคร JRE 2027 (ดูรายละเอียด)</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              ) : getRegistrationScheduleStatus(paymentConfig).isClosed ? (
+                <button
+                  onClick={onNavigateRegister}
+                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rose-900 via-slate-900 to-slate-900 hover:from-rose-800 hover:to-slate-800 text-white font-extrabold rounded-2xl shadow-xl border border-rose-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                >
+                  <span>🔒 ปิดรับสมัครแล้ว (เข้าสู่ระบบเพื่อดูสิทธิ์ / จ่ายงวด 2)</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              ) : (
+                <button
+                  onClick={onNavigateRegister}
+                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                >
+                  <span>สมัครเข้าร่วมโครงการ JRE 2027</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
 
             <button
               onClick={onNavigateSchedule}
@@ -165,6 +190,7 @@ export default function HomeView({
               <Shirt className="w-4 h-4 text-orange-400" />
               <span>สั่งซื้อเสื้อ & กางเกงกู้ภัย</span>
             </button>
+            </div>
           </div>
 
         </div>

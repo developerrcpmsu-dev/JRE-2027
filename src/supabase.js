@@ -1047,15 +1047,16 @@ export const DataService = {
           .eq('key', 'payment_config')
           .maybeSingle();
         if (!error && data?.value) {
-          localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(data.value));
-          return data.value;
+          const merged = { ...DEFAULT_PAYMENT_CONFIG, ...data.value };
+          localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(merged));
+          return merged;
         }
       } catch (e) {
         console.warn('Supabase payment_config query error, fallback', e);
       }
     }
     const raw = localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG);
-    return raw ? JSON.parse(raw) : DEFAULT_PAYMENT_CONFIG;
+    return raw ? { ...DEFAULT_PAYMENT_CONFIG, ...JSON.parse(raw) } : DEFAULT_PAYMENT_CONFIG;
   },
 
   async savePaymentConfig(config) {

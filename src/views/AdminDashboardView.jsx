@@ -85,6 +85,12 @@ import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import ShirtOrderPrintModal from '../components/ShirtOrderPrintModal';
+import RegistrationCountdown from '../components/RegistrationCountdown';
+import { 
+  formatDateTimeLocalInput, 
+  formatThaiDateTime, 
+  getRegistrationScheduleStatus 
+} from '../utils/registrationSchedule';
 import * as XLSX from 'xlsx';
 
 export default function AdminDashboardView({
@@ -637,13 +643,13 @@ export default function AdminDashboardView({
 
   // Payment Settings Config State
   const [localPayment, setLocalPayment] = useState(() => {
-    return paymentConfig || DEFAULT_PAYMENT_CONFIG;
+    return { ...DEFAULT_PAYMENT_CONFIG, ...(paymentConfig || {}) };
   });
   const [isSavingPayment, setIsSavingPayment] = useState(false);
 
   React.useEffect(() => {
     if (paymentConfig) {
-      setLocalPayment(paymentConfig);
+      setLocalPayment({ ...DEFAULT_PAYMENT_CONFIG, ...paymentConfig });
     }
   }, [paymentConfig]);
 
@@ -2523,7 +2529,7 @@ export default function AdminDashboardView({
             >
               <option value="applicants">📋 จัดการผู้สมัคร & ตรวจสอบสลิป ({registrations.length} คน)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
-              <option value="payment_settings">💳 ตั้งค่าค่าสมัคร & ระบบแบ่งจ่าย 2 งวด</option>
+              <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
               <option value="announcements">📢 ระบบประกาศ & สื่อประชาสัมพันธ์ ({announcements.length})</option>
               <option value="speakers">🎖️ วิทยากรประจำโครงการ ({localSpeakers.length} ท่าน)</option>
@@ -2567,8 +2573,8 @@ export default function AdminDashboardView({
                 : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
             }`}
           >
-            <CreditCard className="w-4 h-4 shrink-0" />
-            <span>ตั้งค่าค่าสมัคร & 2 งวด</span>
+            <Clock className="w-4 h-4 shrink-0" />
+            <span>เปิด-ปิดรับสมัคร & ค่าธรรมเนียม</span>
           </button>
 
           <button
@@ -4874,6 +4880,187 @@ export default function AdminDashboardView({
           )}
 
           <div className="space-y-6">
+            {/* CARD 0: REGISTRATION SCHEDULE & DUAL COUNTDOWN SETTINGS */}
+            <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-white font-bold text-base">
+                  <Clock className="w-5 h-5 text-amber-400" />
+                  <h4>กำหนดวันเวลาเปิด-ปิดรับสมัครโครงการ & ระบบนับเวลาถอยหลัง (Registration Schedule & Countdown)</h4>
+                </div>
+                <span className="text-xs text-slate-400">ควบคุมการเปิด/ปิดรับสมัครอัตโนมัติหรือบังคับด้วยตนเอง</span>
+              </div>
+
+              {/* Realtime Live Admin Preview of Current Status */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">
+                  ตัวอย่างสถานะที่ผู้สมัครเห็นในขณะนี้ (Live Realtime Status Preview):
+                </label>
+                <RegistrationCountdown paymentConfig={localPayment} variant="admin" />
+              </div>
+
+              {/* Status Override / Mode Select */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div 
+                  onClick={() => isEditingPaymentSettings && setLocalPayment(prev => ({ ...prev, reg_status_override: 'auto' }))}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    (localPayment.reg_status_override || 'auto') === 'auto'
+                      ? 'bg-amber-500/10 border-amber-500/60 ring-2 ring-amber-500/30'
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                  } ${!isEditingPaymentSettings ? 'cursor-not-allowed opacity-80' : ''}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <input 
+                      type="radio" 
+                      name="reg_status_override" 
+                      disabled={!isEditingPaymentSettings}
+                      checked={(localPayment.reg_status_override || 'auto') === 'auto'}
+                      onChange={() => setLocalPayment(prev => ({ ...prev, reg_status_override: 'auto' }))}
+                      className="text-amber-500 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-amber-300">⏱️ อัตโนมัติ (Auto)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    เปิดและปิดรับสมัครตามวันเวลาจริงที่กำหนดด้านล่าง (รอนับเวลาเปิด / นับถอยหลังปิด)
+                  </p>
+                </div>
+
+                <div 
+                  onClick={() => isEditingPaymentSettings && setLocalPayment(prev => ({ ...prev, reg_status_override: 'force_open' }))}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    localPayment.reg_status_override === 'force_open'
+                      ? 'bg-emerald-500/10 border-emerald-500/60 ring-2 ring-emerald-500/30'
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                  } ${!isEditingPaymentSettings ? 'cursor-not-allowed opacity-80' : ''}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <input 
+                      type="radio" 
+                      name="reg_status_override" 
+                      disabled={!isEditingPaymentSettings}
+                      checked={localPayment.reg_status_override === 'force_open'}
+                      onChange={() => setLocalPayment(prev => ({ ...prev, reg_status_override: 'force_open' }))}
+                      className="text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-emerald-300">🟢 บังคับเปิดทันที (Force Open)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    บังคับเปิดรับสมัครทันที โดยข้ามการตรวจสอบวันเวลา (เปิดให้กรอกใบสมัครได้ทันที)
+                  </p>
+                </div>
+
+                <div 
+                  onClick={() => isEditingPaymentSettings && setLocalPayment(prev => ({ ...prev, reg_status_override: 'force_closed' }))}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    localPayment.reg_status_override === 'force_closed'
+                      ? 'bg-rose-500/10 border-rose-500/60 ring-2 ring-rose-500/30'
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                  } ${!isEditingPaymentSettings ? 'cursor-not-allowed opacity-80' : ''}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <input 
+                      type="radio" 
+                      name="reg_status_override" 
+                      disabled={!isEditingPaymentSettings}
+                      checked={localPayment.reg_status_override === 'force_closed'}
+                      onChange={() => setLocalPayment(prev => ({ ...prev, reg_status_override: 'force_closed' }))}
+                      className="text-rose-500 focus:ring-rose-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-rose-300">🔴 บังคับปิดทันที (Force Closed)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    บังคับปิดรับสมัครทันที ยุติการส่งใบสมัครใหม่ (ผู้สมัครผ่อนชำระยังจ่ายงวด 2 ได้)
+                  </p>
+                </div>
+              </div>
+
+              {/* Datetime Pickers (Open & Close) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-amber-300">
+                      📅 วันและเวลาเปิดรับสมัคร (Open Date & Time):
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      เริ่มแสดงนับเวลารอ
+                    </span>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    required
+                    disabled={!isEditingPaymentSettings}
+                    value={formatDateTimeLocalInput(localPayment.reg_open_datetime || '2026-10-15T08:30:00')}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, reg_open_datetime: e.target.value ? `${e.target.value}:00` : '' }))}
+                    className={`w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-950 border border-slate-700 focus:ring-2 focus:ring-amber-500'
+                    }`}
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    แสดงเป็นภาษาไทย: <strong className="text-white">{formatThaiDateTime(localPayment.reg_open_datetime)}</strong>
+                  </p>
+                </div>
+
+                <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-rose-300">
+                      📅 วันและเวลาปิดรับสมัคร (Close Date & Time):
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      สิ้นสุดนับเวลาถอยหลัง
+                    </span>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    required
+                    disabled={!isEditingPaymentSettings}
+                    value={formatDateTimeLocalInput(localPayment.reg_close_datetime || '2026-10-20T23:59:59')}
+                    onChange={e => setLocalPayment(prev => ({ ...prev, reg_close_datetime: e.target.value ? `${e.target.value}:00` : '' }))}
+                    className={`w-full px-4 py-2.5 rounded-xl text-white font-mono text-sm outline-none transition-all ${
+                      !isEditingPaymentSettings
+                        ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                        : 'bg-slate-950 border border-slate-700 focus:ring-2 focus:ring-rose-500'
+                    }`}
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    แสดงเป็นภาษาไทย: <strong className="text-white">{formatThaiDateTime(localPayment.reg_close_datetime)}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Message displayed when closed */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  ข้อความชี้แจงสำหรับผู้สมัครเมื่อระบบปิดรับสมัคร (Closed Notice Message):
+                </label>
+                <textarea
+                  rows="2"
+                  disabled={!isEditingPaymentSettings}
+                  value={localPayment.reg_closed_message ?? ''}
+                  onChange={e => setLocalPayment(prev => ({ ...prev, reg_closed_message: e.target.value }))}
+                  className={`w-full px-4 py-2.5 rounded-xl text-white text-xs leading-relaxed outline-none transition-all ${
+                    !isEditingPaymentSettings
+                      ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                      : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                  }`}
+                  placeholder="โครงการ JRE 2027 ได้ปิดรับสมัครผู้เข้าร่วมการฝึกอบรมอย่างเป็นทางการแล้ว..."
+                />
+              </div>
+
+              {/* Installment Applicant Exception Clarification */}
+              <div className="p-4 bg-indigo-950/30 border border-indigo-500/40 rounded-xl flex items-start gap-3 text-xs text-indigo-200">
+                <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-bold text-white block">
+                    🛡️ สิทธิ์ของผู้สมัครที่เลือกแบ่งจ่าย 2 งวด เมื่อระบบปิดรับสมัครทั่วไป:
+                  </span>
+                  <p className="text-indigo-200/90 leading-relaxed text-[11px]">
+                    ผู้สมัครที่เลือกแผนแบ่งชำระ 2 งวด และชำระงวดที่ 1 แล้ว <strong>ถือเป็นผู้สมัครที่ลงทะเบียนสำเร็จแล้ว</strong> และจะไม่ถูกบล็อกจากระบบเมื่อปิดรับสมัคร ผู้สมัครยังคงสามารถเข้าสู่ระบบเพื่อตรวจสอบสถานะและส่งสลิปชำระเงินงวดที่ 2 (250 / 450 บาท) ตามกำหนดการได้อย่างอิสระ
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* CARD 1: GENERAL FEE & BANK INFO */}
             <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-5">
               <div className="flex items-center gap-2 text-white font-bold text-base border-b border-slate-800 pb-3">

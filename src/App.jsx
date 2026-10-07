@@ -23,6 +23,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/router';
 import { decodeJwtResponse } from './utils/googleAuth';
 import { forceUnlockAll } from './utils/scrollLock';
+import { getRegistrationScheduleStatus } from './utils/registrationSchedule';
 
 export default function App() {
   const [route, setRoute] = useState(parseCurrentRoute);
@@ -573,6 +574,16 @@ export default function App() {
 
   // Data Mutation Handlers with Strict Access Controls
   const handleSaveRegistration = async (payload) => {
+    // SECURITY GUARD: Registration open/close status enforcement
+    if (!isAdmin && !myRegistration) {
+      const schedule = getRegistrationScheduleStatus(paymentConfig);
+      if (schedule.isClosed) {
+        throw new Error('ขออภัย โครงการ JRE 2027 ได้ปิดรับสมัครแล้วอย่างเป็นทางการ ไม่สามารถส่งใบสมัครใหม่ได้');
+      }
+      if (schedule.isUpcoming) {
+        throw new Error('ขออภัย ระบบรับสมัคร JRE 2027 ยังไม่เปิดให้บริการในขณะนี้');
+      }
+    }
     // SECURITY GUARD: Ensure applicant cannot spoof another user's identity!
     if (!isAdmin && user) {
       payload.user_id = user.id;
@@ -783,6 +794,7 @@ export default function App() {
             onNavigateMerchandise={() => setCurrentTab('merchandise')}
             myRegistration={myRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+            paymentConfig={paymentConfig}
           />
         )}
 
