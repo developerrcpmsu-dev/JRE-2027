@@ -4099,15 +4099,15 @@ export default function RegisterView({
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                     <span className="text-lg shrink-0">🌟</span>
-                    <span className="font-black text-white text-sm whitespace-nowrap">จ่ายครบเต็มจำนวน</span>
-                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                    <span className="font-black text-white text-sm">จ่ายครบเต็มจำนวน</span>
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 rounded shrink-0">
                       1 รอบ
                     </span>
                   </div>
-                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 ${
                     paymentPlan === 'full' 
                       ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm' 
                       : 'bg-slate-800 text-slate-400 border-slate-700'
@@ -4136,15 +4136,15 @@ export default function RegisterView({
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                     <span className="text-lg shrink-0">💳</span>
-                    <span className="font-black text-white text-sm whitespace-nowrap">แบ่งจ่าย 2 งวด</span>
-                    <span className="text-[10px] font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                    <span className="font-black text-white text-sm">แบ่งจ่าย 2 งวด</span>
+                    <span className="text-[10px] font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 rounded shrink-0">
                       มัดจำ + คงค้าง
                     </span>
                   </div>
-                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 ${
                     paymentPlan === 'installment' 
                       ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sm' 
                       : 'bg-slate-800 text-slate-400 border-slate-700'
@@ -4208,11 +4208,13 @@ export default function RegisterView({
 
         {/* Dynamic Wizard Navigation Stepper Header (3 steps for Full / 4 steps for Installment) */}
         <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl">
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80">
-            <span className="text-[11px] font-black uppercase tracking-wider text-rescue-400 flex items-center gap-1.5">
-              <span>🚀</span> ขั้นตอนการสมัครและชำระค่าใช้จ่าย ({paymentPlan === 'full' ? '3 ขั้นตอน (จ่ายครั้งเดียว)' : '4 ขั้นตอน (แบ่งจ่าย 2 รอบ)'})
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 mb-2 border-b border-slate-800/80">
+            <span className="text-[11px] font-black uppercase tracking-wider text-rescue-400 flex items-center gap-1.5 flex-wrap">
+              <span>🚀</span>
+              <span>ขั้นตอนการสมัครและชำระค่าใช้จ่าย</span>
+              <span className="text-[10px] text-rescue-300 font-semibold">({paymentPlan === 'full' ? '3 ขั้นตอน (จ่ายครั้งเดียว)' : '4 ขั้นตอน (แบ่งจ่าย 2 รอบ)'})</span>
             </span>
-            <span className="text-[10px] text-slate-400">
+            <span className="text-[10px] text-slate-400 font-medium self-end sm:self-auto shrink-0">
               ขั้นตอนที่ {currentFormStep} จาก {paymentPlan === 'full' ? 3 : 4}
             </span>
           </div>
@@ -4242,11 +4244,11 @@ export default function RegisterView({
               }`}>
                 {currentFormStep > 1 ? <Check className="w-4 h-4" /> : '1'}
               </div>
-              <div className="min-w-0">
-                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80">
                   ขั้นตอนที่ 1
                 </p>
-                <p className="text-xs sm:text-sm font-black truncate">
+                <p className="text-xs sm:text-sm font-black leading-tight">
                   ข้อมูล & รูป ID
                 </p>
               </div>
@@ -4280,12 +4282,12 @@ export default function RegisterView({
               }`}>
                 {currentFormStep > 2 ? <Check className="w-4 h-4" /> : '2'}
               </div>
-              <div className="min-w-0">
-                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80">
                   ขั้นตอนที่ 2
                 </p>
-                <p className="text-xs sm:text-sm font-black truncate">
-                  สั่งเสื้อ JRE 2027
+                <p className="text-xs sm:text-sm font-black leading-tight">
+                  สั่งเสื้อโครงการ
                 </p>
               </div>
             </button>
@@ -4318,12 +4320,12 @@ export default function RegisterView({
               }`}>
                 {currentFormStep > 3 ? <Check className="w-4 h-4" /> : '3'}
               </div>
-              <div className="min-w-0">
-                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80">
                   ขั้นตอนที่ 3
                 </p>
-                <p className="text-xs sm:text-sm font-black truncate">
-                  {paymentPlan === 'full' ? 'สรุป & ชำระเต็มจำนวน' : 'ชำระรอบ 1 (มัดจำ 400.-)'}
+                <p className="text-xs sm:text-sm font-black leading-tight">
+                  {paymentPlan === 'full' ? 'สรุป & ชำระครบ' : 'รอบ 1 (มัดจำ)'}
                 </p>
               </div>
             </button>
@@ -4350,12 +4352,12 @@ export default function RegisterView({
                 }`}>
                   4
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-80">
                     ขั้นตอนที่ 4
                   </p>
-                  <p className="text-xs sm:text-sm font-black truncate">
-                    ชำระรอบ 2 (คงค้าง)
+                  <p className="text-xs sm:text-sm font-black leading-tight">
+                    รอบ 2 (คงค้าง)
                   </p>
                 </div>
               </button>
@@ -4370,13 +4372,13 @@ export default function RegisterView({
           <div className="space-y-8 animate-in fade-in duration-200">
             {/* Section 1: ข้อมูลผู้สมัคร */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
                 <h3 className="text-sm font-bold text-rescue-400 uppercase tracking-wider flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  1. ข้อมูลประจำตัวผู้สมัคร (ผูกกับบัญชี Google)
+                  <User className="w-4 h-4 shrink-0" />
+                  <span>1. ข้อมูลประจำตัวผู้สมัคร (ผูกกับบัญชี Google)</span>
                 </h3>
                 {user && (
-                  <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-semibold">
+                  <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-semibold shrink-0 self-start sm:self-auto">
                     <CheckCircle2 className="w-3.5 h-3.5" /> ยืนยันผ่าน Google แล้ว
                   </span>
                 )}
@@ -4384,12 +4386,12 @@ export default function RegisterView({
 
               {/* Locked Verified Google Email */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
                   <span className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-blue-400" />
-                    อีเมล Google ที่ใช้ในการสมัครและติดต่อ
+                    <Mail className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span>อีเมล Google ที่ใช้ในการสมัครและติดต่อ</span>
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full font-bold">
+                  <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full font-bold shrink-0">
                     ✓ ดึงจาก Google อัตโนมัติ
                   </span>
                 </label>
@@ -4698,17 +4700,17 @@ export default function RegisterView({
                     ? 'bg-rose-950/20 border-rose-500 ring-2 ring-rose-500/40' 
                     : 'bg-slate-950/90 border-slate-800'
                 }`}>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-rescue-400" />
-                      ผลลัพธ์ข้อความรวมต่อกัน (สำหรับพิมพ์บนบัตรและเกียรติบัตร)
+                      <Sparkles className="w-3.5 h-3.5 text-rescue-400 shrink-0" />
+                      <span>ผลลัพธ์ข้อความรวม (พิมพ์บนบัตรและเกียรติบัตร)</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => setIsManualFullName(!isManualFullName)}
-                      className="text-[11px] text-rescue-400 hover:text-rescue-300 underline font-medium cursor-pointer"
+                      className="text-[11px] text-rescue-400 hover:text-rescue-300 underline font-medium cursor-pointer self-start sm:self-auto shrink-0"
                     >
-                      {isManualFullName ? '✓ กลับสู่โหมดรวมอัตโนมัติ' : '✏️ ปรับแก้ข้อความรวมด้วยตนเอง'}
+                      {isManualFullName ? '✓ กลับสู่โหมดรวมอัตโนมัติ' : '✏️ ปรับแก้ข้อความด้วยตนเอง'}
                     </button>
                   </div>
 
@@ -4821,7 +4823,7 @@ export default function RegisterView({
 
               {/* ฟิลด์ 4: สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) * */}
               <div className="space-y-3.5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="block text-xs font-semibold text-slate-300">
                     ประเภทผู้สมัคร & สังกัดสถาบันการศึกษา <span className="text-rose-400 font-bold">*</span>
                   </label>
@@ -5031,15 +5033,15 @@ export default function RegisterView({
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">
+              <div className="grid grid-cols-12 gap-2.5 sm:gap-3">
+                <div className="col-span-4 sm:col-span-4">
+                  <label className="block text-xs font-medium text-slate-400 mb-1 truncate">
                     วันเกิด
                   </label>
                   <select
                     value={birthDay}
                     onChange={e => setBirthDay(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
+                    className="w-full px-2.5 sm:px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                       <option key={d} value={d.toString()}>{d}</option>
@@ -5047,14 +5049,14 @@ export default function RegisterView({
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">
+                <div className="col-span-8 sm:col-span-4">
+                  <label className="block text-xs font-medium text-slate-400 mb-1 truncate">
                     เดือนเกิด
                   </label>
                   <select
                     value={birthMonth}
                     onChange={e => setBirthMonth(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
+                    className="w-full px-2.5 sm:px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-rescue-500 outline-none cursor-pointer"
                   >
                     {[
                       '1 - มกราคม', '2 - กุมภาพันธ์', '3 - มีนาคม', '4 - เมษายน',
@@ -5066,10 +5068,10 @@ export default function RegisterView({
                   </select>
                 </div>
 
-                <div>
+                <div className="col-span-12 sm:col-span-4">
                   <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center justify-between">
                     <span>ปีเกิด (พ.ศ.) *</span>
-                    <span className="text-[10px] text-rescue-400 font-bold">15 ปี+</span>
+                    <span className="text-[10px] text-rescue-400 font-bold shrink-0">15 ปี+</span>
                   </label>
                   <select
                     id="field-birthYearBE"
@@ -5078,7 +5080,7 @@ export default function RegisterView({
                       setBirthYearBE(e.target.value);
                       clearFieldError('birthYearBE');
                     }}
-                    className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-sm focus:ring-2 outline-none cursor-pointer transition-all ${
+                    className={`w-full px-2.5 sm:px-3 py-2.5 bg-slate-950 border rounded-xl text-white text-xs sm:text-sm focus:ring-2 outline-none cursor-pointer transition-all ${
                       fieldErrors.birthYearBE 
                         ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
                         : 'border-slate-700 focus:ring-rescue-500'
@@ -5668,7 +5670,7 @@ export default function RegisterView({
               <button
                 type="button"
                 onClick={handleNextToStep3}
-                className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-orange-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-black rounded-2xl shadow-xl shadow-orange-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer text-center"
               >
                 <span>
                   {paymentPlan === 'full' 

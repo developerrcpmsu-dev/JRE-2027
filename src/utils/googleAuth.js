@@ -106,17 +106,17 @@ export function renderGoogleButton(containerElement, options = {}) {
 
   try {
     containerElement.innerHTML = '';
-    window.google.accounts.id.renderButton(containerElement, {
+    const renderConfig = {
       type: 'standard',
       theme: 'outline',
       size: 'large',
       text: 'signin_with', // Renders "ลงชื่อเข้าใช้ด้วย Google" (Universal, not locked)
-      shape: 'pill',
+      shape: 'rectangular', // 'rectangular' (4px radius) prevents the right-edge vertical clipping bug of 'pill' with Thai text
       logo_alignment: 'left',
-      width: options.width || 320,
       locale: 'th',
       ...options
-    });
+    };
+    window.google.accounts.id.renderButton(containerElement, renderConfig);
     return true;
   } catch (e) {
     console.warn('Google renderButton notice:', e);

@@ -125,9 +125,9 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
       if (googleBtnContainerRef.current) {
         const rendered = renderGoogleButton(googleBtnContainerRef.current, {
-          width: 320,
           theme: 'outline',
-          text: 'signin_with'
+          text: 'signin_with',
+          shape: 'rectangular'
         });
         if (rendered && !isCancelled) {
           setIsGsiLoaded(true);
@@ -591,8 +591,8 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
             {/* Google Sign-in Section */}
             <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner flex flex-col items-center justify-center gap-2.5">
-              <div className="min-h-[44px] w-full flex justify-center items-center">
-                <div ref={googleBtnContainerRef} id="google-official-btn" className="flex justify-center" />
+              <div className="min-h-[44px] w-full flex justify-center items-center overflow-visible">
+                <div ref={googleBtnContainerRef} id="google-official-btn" className="flex justify-center overflow-visible w-full" />
               </div>
 
               <button

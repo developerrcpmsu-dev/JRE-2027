@@ -71,9 +71,9 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
 
       if (googleBtnContainerRef.current) {
         const rendered = renderGoogleButton(googleBtnContainerRef.current, {
-          width: 300,
           theme: 'outline',
-          text: 'signin_with'
+          text: 'signin_with',
+          shape: 'rectangular'
         });
         if (rendered && !isCancelled) setIsGsiLoaded(true);
       }
@@ -213,8 +213,8 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
               <p className="text-[11px] text-slate-400 mb-2 font-medium">
                 คลิกปุ่มของ Google เพื่อเข้าสู่ระบบทันที:
               </p>
-              <div className="min-h-[46px] flex items-center justify-center">
-                <div ref={googleBtnContainerRef} id="google-official-btn-portal" className="flex justify-center" />
+              <div className="min-h-[46px] w-full flex items-center justify-center overflow-visible">
+                <div ref={googleBtnContainerRef} id="google-official-btn-portal" className="flex justify-center overflow-visible w-full" />
               </div>
               {!isGsiLoaded && (
                 <div className="flex items-center gap-2 text-xs text-slate-400 py-1">
