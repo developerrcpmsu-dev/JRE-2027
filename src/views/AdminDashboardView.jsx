@@ -64,7 +64,8 @@ import {
   Filter,
   Globe,
   User,
-  Mail
+  Mail,
+  Printer
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -80,6 +81,7 @@ import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
+import ShirtOrderPrintModal from '../components/ShirtOrderPrintModal';
 import * as XLSX from 'xlsx';
 
 export default function AdminDashboardView({
@@ -107,8 +109,14 @@ export default function AdminDashboardView({
   onMarkOrderReceived
 }) {
   const resolveInitialTab = (tab) => {
-    if (tab === 'payment') return 'payment_settings';
-    if (tab === 'users') return 'users';
+    if (tab === 'payment' || tab === 'payment_settings' || tab === 'finance') return 'payment_settings';
+    if (tab === 'shirts' || tab === 'shirt' || tab === 'merchandise' || tab === 'merch' || tab === 'orders') return 'merchandise';
+    if (tab === 'users' || tab === 'accounts') return 'users';
+    if (tab === 'forms' || tab === 'tests' || tab === 'evaluations') return 'forms';
+    if (tab === 'announcements' || tab === 'news' || tab === 'posts') return 'announcements';
+    if (tab === 'speakers') return 'speakers';
+    if (tab === 'team' || tab === 'staff') return 'team';
+    if (tab === 'scanner' || tab === 'qr') return 'merchandise';
     return tab || 'applicants';
   };
 
@@ -119,6 +127,9 @@ export default function AdminDashboardView({
       const resolved = resolveInitialTab(initialTab);
       if (resolved !== activeTab) {
         setActiveTab(resolved);
+      }
+      if (initialTab === 'scanner' || initialTab === 'qr') {
+        setShowQRScanner(true);
       }
     }
   }, [initialTab]);
@@ -131,6 +142,12 @@ export default function AdminDashboardView({
   const [isEditingPaymentSettings, setIsEditingPaymentSettings] = useState(false);
   const [isEditingForms, setIsEditingForms] = useState(false);
   const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
+
+  const getUrlSub = (t) => {
+    if (t === 'payment_settings') return 'payment';
+    if (t === 'merchandise') return 'shirts';
+    return t;
+  };
 
   const handleTabChange = (tab) => {
     if (tab === activeTab) return;
@@ -161,7 +178,7 @@ export default function AdminDashboardView({
           }
           setActiveTab(tab);
           if (onTabChange) {
-            onTabChange(tab === 'payment_settings' ? 'payment' : tab);
+            onTabChange(getUrlSub(tab));
           }
           if (tab === 'users') {
             loadUserAccounts();
@@ -173,7 +190,7 @@ export default function AdminDashboardView({
 
     setActiveTab(tab);
     if (onTabChange) {
-      onTabChange(tab === 'payment_settings' ? 'payment' : tab);
+      onTabChange(getUrlSub(tab));
     }
     if (tab === 'users') {
       loadUserAccounts();
@@ -225,6 +242,7 @@ export default function AdminDashboardView({
   });
   const [isSavingMerch, setIsSavingMerch] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showShirtPrintModal, setShowShirtPrintModal] = useState(false);
   const [merchSearchQuery, setMerchSearchQuery] = useState('');
   const [merchStatusFilter, setMerchStatusFilter] = useState('all');
   const [merchSourceFilter, setMerchSourceFilter] = useState('all'); // 'all', 'registration', 'merchandise'
@@ -2389,141 +2407,167 @@ export default function AdminDashboardView({
         </div>
 
         {/* Quick Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5 mt-6">
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-3.5 mt-6">
+          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-slate-800">
             <span className="text-[11px] text-slate-400 font-medium">ผู้สมัครทั้งหมด</span>
-            <p className="text-2xl font-black text-white mt-1">{registrations.length} คน</p>
+            <p className="text-xl sm:text-2xl font-black text-white mt-1">{registrations.length} คน</p>
           </div>
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-900/40">
+          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-amber-900/40">
             <span className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" /> รอตรวจสลิป
             </span>
-            <p className="text-2xl font-black text-amber-400 mt-1">
+            <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">
               {registrations.filter(r => r.payment_status === 'pending_review').length} คน
             </p>
           </div>
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-emerald-900/40">
+          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-emerald-900/40">
             <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
               <CheckCircle className="w-3.5 h-3.5" /> ชำระเงินแล้ว
             </span>
-            <p className="text-2xl font-black text-emerald-400 mt-1">
+            <p className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
               {registrations.filter(r => r.payment_status === 'paid').length} คน
             </p>
           </div>
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-rose-900/40">
+          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-rose-900/40">
             <span className="text-[11px] text-rose-400 font-bold flex items-center gap-1">
               ⭐ ดูแลเป็นพิเศษ
             </span>
-            <p className="text-2xl font-black text-rose-400 mt-1">
+            <p className="text-xl sm:text-2xl font-black text-rose-400 mt-1">
               {registrations.filter(r => r.is_special_care).length} คน
             </p>
           </div>
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800">
+          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-slate-800 col-span-2 sm:col-span-1">
             <span className="text-[11px] text-slate-400 font-medium">จัดกลุ่มแล้ว</span>
-            <p className="text-2xl font-black text-indigo-400 mt-1">
+            <p className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">
               {registrations.filter(r => r.group_assigned).length} คน
             </p>
           </div>
         </div>
       </div>
 
-      {/* Admin Tabs */}
-      <div className="flex border-b border-slate-800 gap-2 overflow-x-auto pb-1">
-        <button
-          onClick={() => handleTabChange('applicants')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'applicants'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>จัดการผู้สมัคร & ตรวจสอบสลิป/เอกสาร ({registrations.length})</span>
-        </button>
+      {/* Admin Tabs - Multi-Platform Responsive (Mobile, Tablet, Desktop) */}
+      <div className="space-y-2">
+        {/* Mobile Dropdown Selector (< 768px) */}
+        <div className="block md:hidden">
+          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+            เลือกส่วนงานผู้ดูแลระบบ (Admin Section):
+          </label>
+          <div className="relative">
+            <select
+              value={activeTab}
+              onChange={(e) => handleTabChange(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900 border-2 border-purple-500/60 rounded-2xl text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 shadow-xl shadow-purple-950/40 cursor-pointer"
+            >
+              <option value="applicants">📋 จัดการผู้สมัคร & ตรวจสอบสลิป ({registrations.length} คน)</option>
+              <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
+              <option value="payment_settings">💳 ตั้งค่าค่าสมัคร & ระบบแบ่งจ่าย 2 งวด</option>
+              <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
+              <option value="announcements">📢 ระบบประกาศ & สื่อประชาสัมพันธ์ ({announcements.length})</option>
+              <option value="speakers">🎖️ วิทยากรประจำโครงการ ({localSpeakers.length} ท่าน)</option>
+              <option value="team">👥 คณะดำเนินงาน & ทีมงาน ({localTeam.length} คน)</option>
+              <option value="users">👤 จัดการบัญชีผู้ใช้ ({userAccounts.length} บัญชี)</option>
+            </select>
+          </div>
+        </div>
 
-        <button
-          onClick={() => handleTabChange('payment_settings')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'payment_settings'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>ตั้งค่าค่าสมัคร & ระบบแบ่งจ่าย 2 งวด</span>
-        </button>
+        {/* Scrollable Pills Bar for Mobile, Tablet & Desktop Navigation */}
+        <div className="flex border-b border-slate-800 gap-1.5 sm:gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => handleTabChange('applicants')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'applicants'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            <span>จัดการผู้สมัคร ({registrations.length})</span>
+          </button>
 
-        <button
-          onClick={() => handleTabChange('forms')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'forms'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>แบบทดสอบ & ประเมิน Google Forms</span>
-        </button>
+          <button
+            onClick={() => handleTabChange('merchandise')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'merchandise'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Shirt className="w-4 h-4 text-rescue-400 shrink-0" />
+            <span>จัดการเสื้อ & QR ({sizeStats.totalShirts} ตัว)</span>
+          </button>
 
-        <button
-          onClick={() => handleTabChange('announcements')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'announcements'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Bell className="w-4 h-4" />
-          <span>ระบบประกาศ & อัปโหลดรูป/PDF ({announcements.length})</span>
-        </button>
+          <button
+            onClick={() => handleTabChange('payment_settings')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'payment_settings'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <CreditCard className="w-4 h-4 shrink-0" />
+            <span>ตั้งค่าค่าสมัคร & 2 งวด</span>
+          </button>
 
-        <button
-          onClick={() => handleTabChange('merchandise')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'merchandise'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Shirt className="w-4 h-4 text-rescue-400" />
-          <span>จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</span>
-        </button>
+          <button
+            onClick={() => handleTabChange('forms')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'forms'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span>แบบทดสอบ & ประเมิน</span>
+          </button>
 
-        <button
-          onClick={() => handleTabChange('speakers')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'speakers'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Award className="w-4 h-4 text-amber-400" />
-          <span>วิทยากรประจำโครงการ ({localSpeakers.length})</span>
-        </button>
+          <button
+            onClick={() => handleTabChange('announcements')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'announcements'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Bell className="w-4 h-4 shrink-0" />
+            <span>ระบบประกาศ ({announcements.length})</span>
+          </button>
 
-        <button
-          onClick={() => handleTabChange('team')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'team'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4 text-blue-400" />
-          <span>คณะดำเนินงาน & ทีมงาน ({localTeam.length})</span>
-        </button>
+          <button
+            onClick={() => handleTabChange('speakers')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'speakers'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Award className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>วิทยากร ({localSpeakers.length})</span>
+          </button>
 
-        <button
-          onClick={() => handleTabChange('users')}
-          className={`px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'users'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <UserCheck className="w-4 h-4 text-emerald-400" />
-          <span>จัดการบัญชีผู้ใช้ ({userAccounts.length})</span>
-        </button>
+          <button
+            onClick={() => handleTabChange('team')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'team'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Users className="w-4 h-4 text-blue-400 shrink-0" />
+            <span>ทีมงาน ({localTeam.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('users')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'users'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>บัญชีผู้ใช้ ({userAccounts.length})</span>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: APPLICANTS & ALLOCATION & PROFILE VIEWER */}
@@ -2573,8 +2617,8 @@ export default function AdminDashboardView({
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto rounded-2xl border border-slate-800">
-            <table className="w-full text-left text-xs text-slate-300">
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 scrollbar-none">
+            <table className="w-full min-w-[800px] text-left text-xs text-slate-300">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
                 <tr>
                   <th className="py-4 px-4">ผู้สมัคร & สังกัด</th>
@@ -5790,6 +5834,16 @@ export default function AdminDashboardView({
 
               <button
                 type="button"
+                onClick={() => setShowShirtPrintModal(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/40 border border-blue-400/40 transition-all active:scale-95 cursor-pointer"
+                title="พิมพ์รายงานสรุปยอดสั่งเสื้อฝึก และส่งออกเป็นเอกสาร PDF A4"
+              >
+                <Printer className="w-4 h-4 text-white" />
+                <span>พิมพ์รายงาน PDF / พริ้นท์หน้านี้</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleExportMerchandiseExcel}
                 disabled={isExportingMerchExcel}
                 className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-900/40 border border-emerald-400/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
@@ -7760,8 +7814,8 @@ export default function AdminDashboardView({
           </div>
 
           {/* Users Table */}
-          <div className="overflow-x-auto rounded-2xl border border-slate-800">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 scrollbar-none">
+            <table className="w-full min-w-[850px] text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-4">#</th>
@@ -8715,6 +8769,28 @@ export default function AdminDashboardView({
             }
           }}
           onVerifyPayment={onVerifyOrderPayment}
+        />
+      )}
+
+      {/* SHIRT ORDER & SIZE SUMMARY PRINT / PDF MODAL */}
+      {showShirtPrintModal && (
+        <ShirtOrderPrintModal
+          isOpen={showShirtPrintModal}
+          onClose={() => setShowShirtPrintModal(false)}
+          sizeStats={sizeStats}
+          sizeMeasurements={SIZE_MEASUREMENTS}
+          allItems={[...traineeShirtRecords, ...merchandiseStoreRecords]}
+          filteredItems={filteredShirtItems}
+          currentFilterLabel={
+            merchSizeFilter !== 'all'
+              ? `ไซส์ ${merchSizeFilter}`
+              : merchSourceFilter !== 'all'
+              ? (merchSourceFilter === 'registration' ? 'เสื้อฝึกผู้สมัคร' : 'สั่งซื้อเพิ่มหน้าร้าน')
+              : merchSearchQuery
+              ? `ค้นหา "${merchSearchQuery}"`
+              : 'ทั้งหมด'
+          }
+          merchandiseConfig={localMerchConfig}
         />
       )}
 

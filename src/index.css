@@ -55,3 +55,74 @@ body.modal-scroll-locked {
   position: relative;
   z-index: 9999;
 }
+
+/* ========================================================
+   PRINT STYLESHEET (PDF & Paper Print Optimization)
+   ======================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 8mm 10mm 8mm;
+  }
+
+  /* Hide everything outside of print containers by default */
+  body > * {
+    visibility: hidden !important;
+  }
+
+  /* Hide elements marked with .no-print */
+  .no-print,
+  nav,
+  header,
+  footer,
+  aside,
+  button:not(.print-include) {
+    display: none !important;
+  }
+
+  /* Make modal portal and printable report container visible */
+  .modal-portal-wrapper,
+  .modal-portal-wrapper * {
+    visibility: visible !important;
+  }
+
+  #printable-shirt-report {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: none !important;
+    visibility: visible !important;
+  }
+
+  #printable-shirt-report * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Table print optimization: Repeat headers and prevent split rows */
+  thead {
+    display: table-header-group !important;
+  }
+
+  tr, .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+}
+

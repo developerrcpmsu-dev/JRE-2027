@@ -35,7 +35,11 @@ export function parseCurrentRoute() {
     if (queryOrHash === 'merchandise' || queryOrHash === 'shop' || queryOrHash === 'store') {
       return { mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' };
     }
-    if (queryOrHash === 'admin') return { mainTab: 'admin', subRoute: 'applicants', canonicalPath: '/admin' };
+    if (queryOrHash === 'admin') {
+      const section = url.searchParams.get('section')?.toLowerCase() || 'applicants';
+      const sub = (section === 'shirts' || section === 'merchandise') ? 'shirts' : (section === 'payment' || section === 'finance') ? 'payment' : section;
+      return { mainTab: 'admin', subRoute: sub, canonicalPath: sub === 'applicants' ? '/admin' : `/admin/${sub}` };
+    }
     if (queryOrHash === 'security' || queryOrHash === 'security-audit' || queryOrHash === 'audit') {
       return { mainTab: 'security', subRoute: null, canonicalPath: '/security-audit' };
     }
@@ -101,13 +105,62 @@ export function parseCurrentRoute() {
 
   // Admin & Sub-pages
   if (first === 'admin') {
-    const validSections = ['applicants', 'announcements', 'merchandise', 'payment', 'payment_settings', 'speakers', 'team', 'forms', 'settings', 'users'];
-    const rawSection = validSections.includes(second) ? second : 'applicants';
-    const subRoute = (rawSection === 'payment' || rawSection === 'payment_settings') ? 'payment_settings' : rawSection;
-    const canonicalPath = subRoute === 'applicants' ? '/admin' : subRoute === 'payment_settings' ? '/admin/payment' : `/admin/${subRoute}`;
+    const adminMap = {
+      '': 'applicants',
+      'overview': 'applicants',
+      'applicants': 'applicants',
+      'registrations': 'applicants',
+      'members': 'applicants',
+      'trainees': 'applicants',
+
+      'shirts': 'shirts',
+      'shirt': 'shirts',
+      'merchandise': 'shirts',
+      'merch': 'shirts',
+      'orders': 'shirts',
+
+      'payment': 'payment',
+      'payments': 'payment',
+      'payment_settings': 'payment',
+      'finance': 'payment',
+
+      'forms': 'forms',
+      'tests': 'forms',
+      'evaluations': 'forms',
+
+      'announcements': 'announcements',
+      'news': 'announcements',
+      'posts': 'announcements',
+
+      'speakers': 'speakers',
+
+      'team': 'team',
+      'staff': 'team',
+
+      'users': 'users',
+      'accounts': 'users',
+
+      'scanner': 'scanner',
+      'qr': 'scanner'
+    };
+
+    const targetSub = second ? (adminMap[second] || 'applicants') : 'applicants';
+    
+    let canonicalPath = '/admin';
+    if (targetSub === 'shirts') canonicalPath = '/admin/shirts';
+    else if (targetSub === 'payment') canonicalPath = '/admin/payment';
+    else if (targetSub === 'forms') canonicalPath = '/admin/forms';
+    else if (targetSub === 'announcements') canonicalPath = '/admin/announcements';
+    else if (targetSub === 'speakers') canonicalPath = '/admin/speakers';
+    else if (targetSub === 'team') canonicalPath = '/admin/team';
+    else if (targetSub === 'users') canonicalPath = '/admin/users';
+    else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
+    else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
+    else canonicalPath = '/admin';
+
     return { 
       mainTab: 'admin', 
-      subRoute, 
+      subRoute: targetSub, 
       canonicalPath 
     };
   }
@@ -158,7 +211,15 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'my_orders' || subRoute === 'orders' || subRoute === 'cart') return '/merchandise/orders';
       return '/merchandise';
     case 'admin':
-      if (subRoute === 'payment' || subRoute === 'payment_settings') return '/admin/payment';
+      if (subRoute === 'payment' || subRoute === 'payment_settings' || subRoute === 'finance') return '/admin/payment';
+      if (subRoute === 'shirts' || subRoute === 'merchandise' || subRoute === 'shirt' || subRoute === 'merch') return '/admin/shirts';
+      if (subRoute === 'forms' || subRoute === 'tests' || subRoute === 'evaluations') return '/admin/forms';
+      if (subRoute === 'announcements' || subRoute === 'news' || subRoute === 'posts') return '/admin/announcements';
+      if (subRoute === 'speakers') return '/admin/speakers';
+      if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
+      if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
+      if (subRoute === 'scanner' || subRoute === 'qr') return '/admin/scanner';
+      if (subRoute === 'applicants' || subRoute === 'registrations') return '/admin/applicants';
       if (subRoute && subRoute !== 'applicants') return `/admin/${subRoute}`;
       return '/admin';
     case 'users':

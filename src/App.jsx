@@ -294,7 +294,7 @@ export default function App() {
 
   const handleAdminLoginSuccess = () => {
     setIsAdmin(true);
-    setCurrentTab('admin');
+    setCurrentTab('admin', currentSubRoute || 'applicants');
   };
 
   const handleLogout = async () => {
