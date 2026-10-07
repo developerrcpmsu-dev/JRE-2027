@@ -61,7 +61,10 @@ import {
   Tag,
   ShoppingBag,
   Copy,
-  Filter
+  Filter,
+  Globe,
+  User,
+  Mail
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -3003,18 +3006,112 @@ export default function AdminDashboardView({
                   })()}
                 </div>
 
-                {profileModalReg.full_name_affiliation && (
-                  <p className="text-xs text-indigo-300 mt-1 font-semibold">
-                    ชื่อ-สกุล (สถาบัน) ไทย/อังกฤษ: <span className="text-slate-200">{profileModalReg.full_name_affiliation}</span>
-                  </p>
-                )}
+                {(() => {
+                  let thFullName = '';
+                  let enFullName = '';
 
-                <p className="text-xs text-slate-300 mt-0.5">
-                  สังกัด: <span className="text-white font-medium">{profileModalReg.institution}</span>
-                </p>
-                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                  อีเมล: {profileModalReg.user_email} • รหัสอ้างอิง: JRE27-{profileModalReg.id?.slice(0, 6).toUpperCase()}
-                </p>
+                  if (profileModalReg.full_name_affiliation) {
+                    const parts = profileModalReg.full_name_affiliation.split('/');
+                    if (parts.length >= 2) {
+                      thFullName = parts[0].trim();
+                      enFullName = parts.slice(1).join('/').trim();
+                    } else {
+                      thFullName = profileModalReg.full_name_affiliation.trim();
+                    }
+                  }
+
+                  if (!thFullName) {
+                    thFullName = `${profileModalReg.title || ''}${profileModalReg.first_name || ''} ${profileModalReg.last_name || ''}`.trim();
+                  }
+                  if (!enFullName && (profileModalReg.first_name_en || profileModalReg.last_name_en)) {
+                    enFullName = `${profileModalReg.title_en ? profileModalReg.title_en + ' ' : ''}${profileModalReg.first_name_en || ''} ${profileModalReg.last_name_en || ''}`.trim();
+                  }
+
+                  return (
+                    <div className="mt-3.5 pt-3 border-t border-slate-800/80 space-y-2 text-xs">
+                      {/* บรรทัด 1: ชื่อ-สกุล (ไทย) */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span>ชื่อ-สกุล (ไทย):</span>
+                        </span>
+                        <span className="text-slate-100 font-bold text-sm">
+                          {thFullName || `${profileModalReg.first_name || ''} ${profileModalReg.last_name || ''}`}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 2: ชื่อ-สกุล (อังกฤษ) - ถ้ามี */}
+                      {enFullName && (
+                        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                          <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                            <span>ชื่อ-สกุล (อังกฤษ):</span>
+                          </span>
+                          <span className="text-indigo-200 font-semibold font-sans">
+                            {enFullName}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* บรรทัด 3: สังกัด / สถาบัน */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>สังกัด:</span>
+                        </span>
+                        <span className="text-slate-200 font-semibold">
+                          {profileModalReg.institution || '-'}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 4: เบอร์โทรศัพท์ (ถ้ามี) */}
+                      {profileModalReg.phone && (
+                        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                          <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>เบอร์โทรศัพท์:</span>
+                          </span>
+                          <span className="text-emerald-300 font-mono font-bold tracking-wider">
+                            {profileModalReg.phone}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* บรรทัด 5: อีเมล */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                          <span>อีเมล:</span>
+                        </span>
+                        <span className="text-sky-300 font-mono font-semibold">
+                          {profileModalReg.user_email || '-'}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 6: รหัสอ้างอิงใบสมัคร */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>รหัสอ้างอิง:</span>
+                        </span>
+                        <span className="text-amber-400 font-mono font-black tracking-wider bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md inline-block w-fit">
+                          JRE27-{(profileModalReg.id || profileModalReg.user_id || '').slice(0, 6).toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 7: วันเวลาที่สมัคร */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>วันเวลาที่สมัคร:</span>
+                        </span>
+                        <span className="text-emerald-400 font-semibold font-mono">
+                          {profileModalReg.created_at ? new Date(profileModalReg.created_at).toLocaleString('th-TH') : '-'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

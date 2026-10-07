@@ -54,7 +54,9 @@ import {
   Bell,
   BellOff,
   CheckCheck,
-  ChevronRight
+  ChevronRight,
+  Globe,
+  Tag
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed } from '../utils/ageCalculator';
@@ -460,8 +462,42 @@ export default function RegisterView({
     }
   }, [user]);
 
+  // Payment approval status calculation for applicant dashboard & edit/cancel behavior
+  const isApplicantSinglePaid = Boolean(
+    myRegistration &&
+    myRegistration.payment_plan !== 'installment' &&
+    (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified')
+  );
+  const isApplicantRound2Paid = Boolean(
+    myRegistration &&
+    myRegistration.installment_2_status === 'paid' &&
+    Boolean(myRegistration.installment_2_slip_url)
+  );
+  const isApplicantInstallmentsBothPaid = Boolean(
+    myRegistration &&
+    (myRegistration.installment_1_status === 'paid') &&
+    isApplicantRound2Paid
+  );
+  const isApplicantFullyPaid = isApplicantSinglePaid || isApplicantInstallmentsBothPaid;
+  const hasAnyPaymentApproved = Boolean(
+    myRegistration && (
+      isApplicantFullyPaid ||
+      (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified') ||
+      (myRegistration.installment_1_status === 'paid') ||
+      (myRegistration.installment_2_status === 'paid')
+    )
+  );
+
   const handleDeleteMyRegistration = async () => {
     if (!myRegistration || !user) return;
+
+    // Safeguard: Once paid, cannot cancel application
+    if (hasAnyPaymentApproved) {
+      triggerToast('ไม่สามารถยกเลิกใบสมัครได้เนื่องจากมีการชำระเงินเรียบร้อยแล้ว หากต้องการสละสิทธิ์กรุณาติดต่อผู้จัดโครงการโดยตรง', 'error');
+      setShowDeleteConfirmModal(false);
+      return;
+    }
+
     // Ownership check (Criterion 3: User A cannot delete User B's data)
     const isOwner = (myRegistration.user_id && myRegistration.user_id === user.id) ||
                     (myRegistration.id && myRegistration.id === user.id) ||
@@ -1726,25 +1762,112 @@ export default function RegisterView({
                   )}
                 </div>
 
-                {myRegistration.full_name_affiliation && (
-                  <p className="text-xs text-indigo-300 mt-1 font-semibold">
-                    ชื่อ-สกุล (สถาบัน) ไทย/อังกฤษ: <span className="text-slate-200">{myRegistration.full_name_affiliation}</span>
-                  </p>
-                )}
+                {(() => {
+                  let thFullName = '';
+                  let enFullName = '';
 
-                <p className="text-xs text-slate-400 mt-0.5">
-                  สังกัด: <span className="text-slate-200 font-semibold">{myRegistration.institution}</span>
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
-                  <span>อีเมล: <strong className="text-slate-300 font-mono">{myRegistration.user_email}</strong></span>
-                  <span>•</span>
-                  <span>รหัสอ้างอิง: <strong className="text-amber-400 font-mono">JRE27-{(myRegistration.id || myRegistration.user_id || '').slice(0, 6).toUpperCase()}</strong></span>
-                  <span>•</span>
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-emerald-400" />
-                    วันเวลาที่สมัคร: {myRegistration.created_at ? new Date(myRegistration.created_at).toLocaleString('th-TH') : '-'}
-                  </span>
-                </div>
+                  if (myRegistration.full_name_affiliation) {
+                    const parts = myRegistration.full_name_affiliation.split('/');
+                    if (parts.length >= 2) {
+                      thFullName = parts[0].trim();
+                      enFullName = parts.slice(1).join('/').trim();
+                    } else {
+                      thFullName = myRegistration.full_name_affiliation.trim();
+                    }
+                  }
+
+                  if (!thFullName) {
+                    thFullName = `${myRegistration.title || ''}${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim();
+                  }
+                  if (!enFullName && (myRegistration.first_name_en || myRegistration.last_name_en)) {
+                    enFullName = `${myRegistration.title_en ? myRegistration.title_en + ' ' : ''}${myRegistration.first_name_en || ''} ${myRegistration.last_name_en || ''}`.trim();
+                  }
+
+                  return (
+                    <div className="mt-3.5 pt-3 border-t border-slate-800/80 space-y-2 text-xs">
+                      {/* บรรทัด 1: ชื่อ-สกุล (ไทย) */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span>ชื่อ-สกุล (ไทย):</span>
+                        </span>
+                        <span className="text-slate-100 font-bold text-sm">
+                          {thFullName || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 2: ชื่อ-สกุล (อังกฤษ) - ถ้ามี */}
+                      {enFullName && (
+                        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                          <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                            <span>ชื่อ-สกุล (อังกฤษ):</span>
+                          </span>
+                          <span className="text-indigo-200 font-semibold font-sans">
+                            {enFullName}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* บรรทัด 3: สังกัด / สถาบัน */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>สังกัด:</span>
+                        </span>
+                        <span className="text-slate-200 font-semibold">
+                          {myRegistration.institution || '-'}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 4: เบอร์โทรศัพท์ (ถ้ามี) */}
+                      {myRegistration.phone && (
+                        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                          <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>เบอร์โทรศัพท์:</span>
+                          </span>
+                          <span className="text-emerald-300 font-mono font-bold tracking-wider">
+                            {myRegistration.phone}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* บรรทัด 5: อีเมล */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                          <span>อีเมล:</span>
+                        </span>
+                        <span className="text-sky-300 font-mono font-semibold">
+                          {myRegistration.user_email || '-'}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 6: รหัสอ้างอิงใบสมัคร */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>รหัสอ้างอิง:</span>
+                        </span>
+                        <span className="text-amber-400 font-mono font-black tracking-wider bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md inline-block w-fit">
+                          JRE27-{(myRegistration.id || myRegistration.user_id || '').slice(0, 6).toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 7: วันเวลาที่สมัคร */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>วันเวลาที่สมัคร:</span>
+                        </span>
+                        <span className="text-emerald-400 font-semibold font-mono">
+                          {myRegistration.created_at ? new Date(myRegistration.created_at).toLocaleString('th-TH') : '-'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1756,10 +1879,10 @@ export default function RegisterView({
                   if (onSubRouteChange) onSubRouteChange('form');
                 }}
                 className="px-4 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
-                title="แก้ไขข้อมูลรายละเอียดในใบสมัคร (Update)"
+                title={hasAnyPaymentApproved ? "แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม (Update Information)" : "แก้ไขข้อมูลรายละเอียดในใบสมัคร (Update Application)"}
               >
                 <Edit className="w-3.5 h-3.5" />
-                <span>แก้ไขใบสมัคร</span>
+                <span>{hasAnyPaymentApproved ? 'แก้ไขข้อมูล' : 'แก้ไขใบสมัคร'}</span>
               </button>
 
               <button
@@ -1800,15 +1923,26 @@ export default function RegisterView({
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirmModal(true)}
-                className="px-3.5 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 border border-rose-600/40 hover:border-rose-500 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
-                title="ยกเลิกใบสมัครและลบข้อมูลของฉันออกจากฐานข้อมูล (Delete with Ownership Check)"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                <span>ยกเลิกใบสมัคร</span>
-              </button>
+              {/* CANCEL REGISTRATION BUTTON: Disabled if payment made / approved */}
+              {hasAnyPaymentApproved ? (
+                <div
+                  className="px-3.5 py-2.5 bg-slate-900/90 text-slate-500 border border-slate-800 rounded-xl text-xs font-medium flex items-center gap-1.5 cursor-not-allowed select-none"
+                  title="ชำระเงินแล้ว ไม่สามารถยกเลิกใบสมัครได้ (หากต้องการสละสิทธิ์กรุณาติดต่อผู้จัดโครงการโดยตรง)"
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-600" />
+                  <span>ยกเลิกใบสมัครไม่ได้ (ชำระแล้ว)</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirmModal(true)}
+                  className="px-3.5 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 border border-rose-600/40 hover:border-rose-500 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
+                  title="ยกเลิกใบสมัครและลบข้อมูลของฉันออกจากฐานข้อมูล (Delete with Ownership Check)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>ยกเลิกใบสมัคร</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -3443,12 +3577,22 @@ export default function RegisterView({
                   </div>
                 </div>
 
-                <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-[11px] text-rose-200 leading-relaxed flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>คำเตือน:</strong> การยกเลิกใบสมัครจะลบข้อมูลประวัติผู้สมัคร, คำสั่งจองเสื้อ, และภาพสลิปที่แนบไว้ทั้งหมดออกจากฐานข้อมูลอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้
-                  </span>
-                </div>
+                {hasAnyPaymentApproved ? (
+                  <div className="p-3.5 bg-amber-950/40 border border-amber-600/50 rounded-xl text-xs text-amber-200 leading-relaxed flex items-start gap-2.5">
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-amber-300 block mb-0.5">ไม่สามารถยกเลิกใบสมัครได้ (ชำระเงินแล้ว)</strong>
+                      <span>ท่านได้ชำระเงินค่าสมัครเข้าร่วมโครงการเรียบร้อยแล้ว จึงไม่สามารถยกเลิกใบสมัครหรือลบข้อมูลจากระบบได้ หากมีความประสงค์จะสละสิทธิ์ กรุณาติดต่อทีมงานผู้จัดโครงการโดยตรง</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-xl text-[11px] text-rose-200 leading-relaxed flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>คำเตือน:</strong> การยกเลิกใบสมัครจะลบข้อมูลประวัติผู้สมัคร, คำสั่งจองเสื้อ, และภาพสลิปที่แนบไว้ทั้งหมดออกจากฐานข้อมูลอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-3 pt-2">
                   <button
@@ -3462,13 +3606,18 @@ export default function RegisterView({
                   <button
                     type="button"
                     onClick={handleDeleteMyRegistration}
-                    disabled={isDeletingReg}
-                    className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    disabled={isDeletingReg || hasAnyPaymentApproved}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {isDeletingReg ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>กำลังลบข้อมูล...</span>
+                      </>
+                    ) : hasAnyPaymentApproved ? (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        <span>ไม่สามารถลบได้ (ชำระแล้ว)</span>
                       </>
                     ) : (
                       <>
@@ -3741,10 +3890,10 @@ export default function RegisterView({
       <div className="text-center space-y-2 mb-4">
         <div className="inline-flex items-center gap-2 px-4 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
           <FileText className="w-4 h-4" />
-          {isEditing ? 'แก้ไขข้อมูลประวัติผู้สมัคร' : 'ระบบรับสมัครเข้าร่วมโครงการ'}
+          {isEditing ? (hasAnyPaymentApproved ? 'แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม' : 'แก้ไขข้อมูลประวัติผู้สมัคร') : 'ระบบรับสมัครเข้าร่วมโครงการ'}
         </div>
         <h1 className="text-3xl font-black text-white">
-          {isEditing ? 'แก้ไขข้อมูลและประวัติการฝึกอบรม' : 'ใบสมัครโครงการฝึกอบรมเชิงปฏิบัติการ JRE 2027'}
+          {isEditing ? (hasAnyPaymentApproved ? 'แก้ไขข้อมูลและประวัติการฝึกอบรม' : 'แก้ไขข้อมูลใบสมัครโครงการ JRE 2027') : 'ใบสมัครโครงการฝึกอบรมเชิงปฏิบัติการ JRE 2027'}
         </h1>
         <p className="text-slate-400 text-xs sm:text-sm">
           กรอกข้อมูลตามความเป็นจริงเพื่อใช้ในการทำประกันอุบัติเหตุ สวัสดิการความปลอดภัย จัดสรรกลุ่ม และจัดห้องนอน
@@ -3783,10 +3932,10 @@ export default function RegisterView({
             <span className="text-2xl animate-pulse">✏️</span>
             <div>
               <p className="font-bold text-sm sm:text-base text-amber-300">
-                คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัคร
+                {hasAnyPaymentApproved ? 'คุณกำลังอยู่ในโหมดแก้ไขข้อมูล (ผู้เข้ารับการฝึกอบรม)' : 'คุณกำลังอยู่ในโหมดแก้ไขข้อมูลใบสมัคร'}
               </p>
               <p className="text-xs text-amber-200/80">
-                หากแก้ไขเสร็จแล้ว กรุณาไปที่ขั้นตอนสรุปและกดบันทึก หรือกดยกเลิกเพื่อคืนค่าเดิม
+                {hasAnyPaymentApproved ? 'ท่านชำระเงินเรียบร้อยแล้ว การแก้ไขจะอัปเดตข้อมูลประวัติ/สวัสดิการ โดยสถานะการเงินยังคงเดิม' : 'หากแก้ไขเสร็จแล้ว กรุณาไปที่ขั้นตอนสรุปและกดบันทึก หรือกดยกเลิกเพื่อคืนค่าเดิม'}
               </p>
             </div>
           </div>
@@ -5946,7 +6095,7 @@ export default function RegisterView({
                     <Save className="w-5 h-5 shrink-0" />
                     <span className="text-center">
                       {isEditing
-                        ? 'บันทึกการแก้ไขข้อมูลใบสมัคร'
+                        ? (hasAnyPaymentApproved ? 'บันทึกการแก้ไขข้อมูล' : 'บันทึกการแก้ไขข้อมูลใบสมัคร')
                         : paymentPlan === 'full'
                         ? (formSlipFull || myRegistration?.payment_slip_url
                             ? `ยืนยันและส่งใบสมัคร + สลิปชำระเต็มจำนวน (${feeInfo.totalFee} บ.) 💾 [ยืนยันสิทธิ์ทันที]` 
