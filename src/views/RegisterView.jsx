@@ -951,8 +951,7 @@ export default function RegisterView({
     setEmergencyPhone(reg.emergency_phone || '');
     setMedicalHistory(reg.medical_history || '');
     setFoodAllergy(reg.food_allergy || '');
-    setPreviousTraining(reg.previous_training || '');
-    setPaymentPlan(reg.payment_plan || 'installment');
+    setPaymentPlan(reg.payment_plan ? reg.payment_plan : ((reg.installment_1_slip_url || reg.installment_2_slip_url) ? 'installment' : 'full'));
     
     // Parse relation if present
     if (reg.emergency_name && reg.emergency_name.includes('(')) {
@@ -1335,8 +1334,8 @@ export default function RegisterView({
       special_notes: myRegistration?.special_notes || '',
       payment_plan: paymentPlan,
       payment_status: paymentPlan === 'full'
-        ? 'pending_review'
-        : ((formSlipRound2 || (currentFormStep === 4 && myRegistration?.installment_2_slip_url)) ? 'pending_review' : 'partial_paid'),
+        ? (formSlipFull || myRegistration?.payment_slip_url ? 'pending_review' : 'unpaid')
+        : ((formSlipRound2 || (currentFormStep === 4 && myRegistration?.installment_2_slip_url)) ? 'pending_review' : (formSlipRound1 ? 'partial_paid' : 'unpaid')),
       payment_amount: feeInfo.totalFee,
       payment_bank_info: `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
       payment_slip_url: paymentPlan === 'full' 
@@ -1345,16 +1344,16 @@ export default function RegisterView({
       payment_slip_date: (paymentPlan === 'full' ? formSlipFull : (formSlipRound2 || formSlipRound1)) 
         ? new Date().toISOString() 
         : (myRegistration?.payment_slip_date || ''),
-      installment_1_status: formSlipRound1 ? 'pending_review' : (myRegistration?.installment_1_status || 'pending_review'),
+      installment_1_status: paymentPlan === 'full' ? 'unpaid' : (formSlipRound1 ? 'pending_review' : (myRegistration?.installment_1_status || 'unpaid')),
       installment_1_amount: feeInfo.round1Amount,
       installment_1_due: feeInfo.round1Due,
-      installment_1_slip_url: formSlipRound1 || myRegistration?.installment_1_slip_url || '',
-      installment_1_slip_date: formSlipRound1 ? new Date().toISOString() : (myRegistration?.installment_1_slip_date || ''),
-      installment_2_status: formSlipRound2 ? 'pending_review' : (myRegistration?.installment_2_status || 'unpaid'),
+      installment_1_slip_url: paymentPlan === 'full' ? '' : (formSlipRound1 || myRegistration?.installment_1_slip_url || ''),
+      installment_1_slip_date: (paymentPlan !== 'full' && formSlipRound1) ? new Date().toISOString() : (paymentPlan === 'full' ? '' : (myRegistration?.installment_1_slip_date || '')),
+      installment_2_status: paymentPlan === 'full' ? 'unpaid' : (formSlipRound2 ? 'pending_review' : (myRegistration?.installment_2_status || 'unpaid')),
       installment_2_amount: feeInfo.round2Amount,
       installment_2_due: feeInfo.round2Due,
-      installment_2_slip_url: formSlipRound2 || myRegistration?.installment_2_slip_url || '',
-      installment_2_slip_date: formSlipRound2 ? new Date().toISOString() : (myRegistration?.installment_2_slip_date || ''),
+      installment_2_slip_url: paymentPlan === 'full' ? '' : (formSlipRound2 || myRegistration?.installment_2_slip_url || ''),
+      installment_2_slip_date: (paymentPlan !== 'full' && formSlipRound2) ? new Date().toISOString() : (paymentPlan === 'full' ? '' : (myRegistration?.installment_2_slip_date || '')),
       slip_ocr_round1: slipOcrRound1 || myRegistration?.slip_ocr_round1 || null,
       slip_ocr_round2: slipOcrRound2 || myRegistration?.slip_ocr_round2 || null,
       slip_ocr_full: slipOcrFull || myRegistration?.slip_ocr_full || null,
@@ -1413,6 +1412,7 @@ export default function RegisterView({
         await DataService.submitPaymentSlip(myRegistration.user_id, uploadResult.url);
         if (onUpdateRegistration) {
           await onUpdateRegistration(myRegistration.user_id, {
+            payment_plan: 'full',
             payment_slip_url: uploadResult.url,
             payment_slip_date: new Date().toISOString(),
             payment_status: 'pending_review',
@@ -1665,7 +1665,9 @@ export default function RegisterView({
       if (isSinglePaid) paidAmount = totalFee;
     }
     const remainingAmount = Math.max(0, totalFee - paidAmount);
-    const isInstallmentPlan = myRegistration.payment_plan === 'installment';
+    const isInstallmentPlan = myRegistration.payment_plan 
+      ? (myRegistration.payment_plan === 'installment') 
+      : Boolean(myRegistration.installment_1_slip_url || myRegistration.installment_2_slip_url);
 
     const dashboardPaymentConfig = {
       ...effectivePaymentConfig,
@@ -2670,7 +2672,7 @@ export default function RegisterView({
                   <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
                     <span>ข้อมูลค่าสมัคร & สถานะการชำระเงิน</span>
                     <span className="text-[11px] font-normal text-slate-400">
-                      ({myRegistration.payment_plan === 'installment' ? 'แผนแบ่งจ่าย 2 งวด' : 'แผนชำระเต็มจำนวน'})
+                      ({isInstallmentPlan ? 'แผนแบ่งจ่าย 2 งวด' : 'แผนชำระเต็มจำนวน (จ่ายครบ 1 รอบ)'})
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -2798,7 +2800,7 @@ export default function RegisterView({
                       }
                     }}
                     className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      myRegistration.payment_plan !== 'installment'
+                      !isInstallmentPlan
                         ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                         : 'bg-slate-800 text-slate-300 hover:text-white'
                     }`}
@@ -2815,7 +2817,7 @@ export default function RegisterView({
                       }
                     }}
                     className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      myRegistration.payment_plan === 'installment'
+                      isInstallmentPlan
                         ? 'bg-purple-600 text-white shadow-md font-black'
                         : 'bg-slate-800 text-slate-300 hover:text-white'
                     }`}
@@ -2827,7 +2829,7 @@ export default function RegisterView({
             )}
 
             {/* VIEW A: 2-ROUND INSTALLMENT VIEW */}
-            {myRegistration.payment_plan === 'installment' ? (
+            {isInstallmentPlan ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                 {/* Round 1 Installment Box */}
                 <div className="bg-slate-900/90 border border-purple-500/40 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
@@ -4927,9 +4929,10 @@ export default function RegisterView({
                   })}
                 </div>
 
-                {/* Dynamic Fee Calculation Alert based on institution */}
+                {/* Dynamic Fee Calculation Alert based on institution & paymentPlan */}
                 {(() => {
                   const fee = getRegistrationFeeDetails(institution);
+                  const isFull = paymentPlan === 'full';
                   return (
                     <div className={`mt-2 p-4 rounded-2xl border text-xs flex items-start gap-3 shadow-sm ${
                       fee.isMsu 
@@ -4940,16 +4943,29 @@ export default function RegisterView({
                       <div className="space-y-1 w-full">
                         <div className="flex items-center justify-between">
                           <span className="font-black text-sm text-white">
-                            {fee.isMsu ? '🎓 สังกัดนิสิต มมส: ยอดรวม 650 บาท' : '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท'}
+                            {fee.isMsu 
+                              ? (isFull ? '🎓 สังกัดนิสิต มมส: ยอดรวม 650 บาท (จ่ายครบ 1 รอบ)' : '🎓 สังกัดนิสิต มมส: ยอดรวม 650 บาท (แบ่งจ่าย 2 งวด)')
+                              : (isFull ? '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท (จ่ายครบ 1 รอบ)' : '🏨 สังกัดต่างมหาวิทยาลัย: ยอดรวม 850 บาท (แบ่งจ่าย 2 งวด)')
+                            }
                           </span>
                           <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300">
-                            {fee.isMsu ? 'ไม่มีค่าที่พัก' : 'รวมที่พักหอกุดรัง มมส'}
+                            {fee.isMsu 
+                              ? (isFull ? 'ไม่มีค่าที่พัก • ชำระเต็มจำนวน' : 'ไม่มีค่าที่พัก • แผน 2 งวด')
+                              : (isFull ? 'รวมที่พักหอกุดรัง มมส • ชำระเต็มจำนวน' : 'รวมที่พักหอกุดรัง มมส • แผน 2 งวด')
+                            }
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-300 leading-relaxed">
-                          {fee.isMsu 
-                            ? '• งวดที่ 1: 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ 15–20 ต.ค. 69) • งวดที่ 2: 250 บาท (ค่าอาหารและกิจกรรม 1–5 พ.ย. 69)'
-                            : '• งวดที่ 1: 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ 15–20 ต.ค. 69) • งวดที่ 2: 450 บาท (ค่าที่พักหอกุดรัง มมส และอาหาร 1–5 พ.ย. 69)'}
+                          {isFull
+                            ? (fee.isMsu
+                                ? '• ชำระครั้งเดียวเต็มจำนวน: 650 บาท (ค่าจัดทำเสื้อพรีออเดอร์ + ค่าอาหารและกิจกรรม 15–20 ต.ค. 69) [จ่ายครบ 1 รอบ]'
+                                : '• ชำระครั้งเดียวเต็มจำนวน: 850 บาท (ค่าจัดทำเสื้อพรีออเดอร์ + ค่าที่พักหอกุดรัง มมส และอาหาร 15–20 ต.ค. 69) [จ่ายครบ 1 รอบ]'
+                              )
+                            : (fee.isMsu 
+                                ? '• งวดที่ 1: 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ 15–20 ต.ค. 69) • งวดที่ 2: 250 บาท (ค่าอาหารและกิจกรรม 1–5 พ.ย. 69) [แบ่งจ่าย 2 งวด]'
+                                : '• งวดที่ 1: 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ 15–20 ต.ค. 69) • งวดที่ 2: 450 บาท (ค่าที่พักหอกุดรัง มมส และอาหาร 1–5 พ.ย. 69) [แบ่งจ่าย 2 งวด]'
+                              )
+                          }
                         </p>
                       </div>
                     </div>

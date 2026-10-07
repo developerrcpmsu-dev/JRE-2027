@@ -541,6 +541,7 @@ export default function AdminDashboardView({
   const [modalTraining, setModalTraining] = useState('');
   
   // Payment Modal Fields
+  const [modalPaymentPlan, setModalPaymentPlan] = useState('full');
   const [modalPaymentStatus, setModalPaymentStatus] = useState('unpaid');
   const [modalPaymentAmount, setModalPaymentAmount] = useState(650);
   const [modalPaymentBank, setModalPaymentBank] = useState('');
@@ -1324,7 +1325,9 @@ export default function AdminDashboardView({
     const isMsu = isMsuInstitution(reg.institution);
     const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
     const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-    const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url) || Boolean(reg.installment_2_slip_url);
+    const isInstallment = reg.payment_plan 
+      ? (reg.payment_plan === 'installment') 
+      : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
     const isR1Paid = reg.installment_1_status === 'paid';
     const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
     const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid');
@@ -1344,9 +1347,10 @@ export default function AdminDashboardView({
         effAmount = totalFee;
       }
     } else {
-      effAmount = reg.payment_amount || totalFee;
+      effAmount = (reg.payment_status === 'paid') ? 0 : (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee);
     }
 
+    setModalPaymentPlan(isInstallment ? 'installment' : 'full');
     setModalPaymentStatus(effStatus);
     setModalPaymentAmount(effAmount);
     setModalPaymentBank(reg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
@@ -1376,7 +1380,9 @@ export default function AdminDashboardView({
         const isMsu = isMsuInstitution(profileModalReg.institution);
         const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
         const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-        const isInstallment = profileModalReg.payment_plan === 'installment' || Boolean(profileModalReg.installment_1_slip_url) || Boolean(profileModalReg.installment_2_slip_url);
+        const isInstallment = profileModalReg.payment_plan 
+          ? (profileModalReg.payment_plan === 'installment') 
+          : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url);
         const isR1Paid = profileModalReg.installment_1_status === 'paid';
         const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
         const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (profileModalReg.payment_status === 'paid');
@@ -1396,9 +1402,10 @@ export default function AdminDashboardView({
             effAmount = totalFee;
           }
         } else {
-          effAmount = profileModalReg.payment_amount || totalFee;
+          effAmount = (profileModalReg.payment_status === 'paid') ? 0 : (profileModalReg.payment_amount !== undefined && profileModalReg.payment_amount !== null ? profileModalReg.payment_amount : totalFee);
         }
 
+        setModalPaymentPlan(isInstallment ? 'installment' : 'full');
         setModalPaymentStatus(effStatus);
         setModalPaymentAmount(effAmount);
         setModalPaymentBank(profileModalReg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
@@ -1445,8 +1452,9 @@ export default function AdminDashboardView({
         medical_history: modalMedical.trim(),
         food_allergy: modalAllergy.trim(),
         previous_training: modalTraining.trim(),
+        payment_plan: modalPaymentPlan,
         payment_status: modalPaymentStatus,
-        payment_amount: Number(modalPaymentAmount) || (isMsuInstitution(profileModalReg.institution) ? 650 : 850),
+        payment_amount: Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : (isMsuInstitution(profileModalReg.institution) ? 650 : 850),
         payment_bank_info: modalPaymentBank.trim(),
         payment_notes: modalPaymentNotes.trim()
       };
@@ -2668,7 +2676,7 @@ export default function AdminDashboardView({
 
                         {/* Payment Status & Slip */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          {reg.payment_plan === 'installment' || reg.installment_1_slip_url || reg.installment_2_slip_url ? (() => {
+                          {(reg.payment_plan ? reg.payment_plan === 'installment' : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url)) ? (() => {
                             const isMsu = isMsuInstitution(reg.institution);
                             const round2Amount = isMsu 
                               ? (paymentConfig?.installment_round2_amount_msu || 250) 
@@ -2708,31 +2716,33 @@ export default function AdminDashboardView({
                                 </div>
                               </button>
                             );
-                          })() : paymentStatus === 'paid' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenProfileModal(reg, 'payment')}
-                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <CheckCircle className="w-3 h-3" /> ชำระแล้ว ({reg.payment_amount || (isMsuInstitution(reg.institution) ? 650 : 850)} บ.)
-                            </button>
-                          ) : paymentStatus === 'pending_review' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenProfileModal(reg, 'payment')}
-                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors animate-pulse cursor-pointer"
-                            >
-                              <Clock className="w-3 h-3" /> รอตรวจสลิป (คลิก)
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenProfileModal(reg, 'payment')}
-                              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <AlertCircle className="w-3 h-3" /> ค้างชำระ ({reg.payment_amount || (isMsuInstitution(reg.institution) ? 650 : 850)} บ.)
-                            </button>
-                          )}
+                          })() : (() => {
+                            const isMsu = isMsuInstitution(reg.institution);
+                            const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProfileModal(reg, 'payment')}
+                                className="text-left group cursor-pointer block hover:opacity-90"
+                              >
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[9px] font-bold">
+                                    จ่ายครบ 1 รอบ
+                                  </span>
+                                  {paymentStatus === 'paid' ? (
+                                    <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระแล้ว</span>
+                                  ) : paymentStatus === 'pending_review' ? (
+                                    <span className="text-[10px] text-amber-300 font-bold animate-pulse">⏳ รอตรวจสลิป</span>
+                                  ) : (
+                                    <span className="text-[10px] text-rose-400 font-bold">🔴 ค้างชำระ</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono">
+                                  ยอดเต็ม: {reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee} บ.
+                                </div>
+                              </button>
+                            );
+                          })()}
                         </td>
 
                         {/* Documents Status */}
@@ -2939,7 +2949,9 @@ export default function AdminDashboardView({
                     </span>
                   )}
                   {(() => {
-                    const isInstallment = profileModalReg.payment_plan === 'installment' || Boolean(profileModalReg.installment_1_slip_url) || Boolean(profileModalReg.installment_2_slip_url);
+                    const isInstallment = profileModalReg.payment_plan 
+                      ? (profileModalReg.payment_plan === 'installment') 
+                      : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url);
                     const isR1Paid = profileModalReg.installment_1_status === 'paid';
                     const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
                     const isBothPaid = isR1Paid && isR2Paid;
@@ -2948,60 +2960,74 @@ export default function AdminDashboardView({
                       ? (paymentConfig?.installment_round2_amount_msu || 250) 
                       : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
 
+                    let statusBadge = null;
                     if (isInstallment) {
                       if (isBothPaid || modalPaymentStatus === 'paid') {
-                        return (
+                        statusBadge = (
                           <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
                             ✓ ชำระครบ 2 งวดแล้ว
                           </span>
                         );
-                      }
-                      if (isR1Paid) {
+                      } else if (isR1Paid) {
                         if (profileModalReg.installment_2_status === 'pending_review') {
-                          return (
+                          statusBadge = (
                             <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
                               ⏳ รอตรวจสลิปงวดที่ 2 (ชำระงวด 1 แล้ว)
                             </span>
                           );
+                        } else {
+                          statusBadge = (
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
+                              🟡 ชำระงวด 1 แล้ว (ค้างงวด 2: {round2Amount} บ.)
+                            </span>
+                          );
                         }
-                        return (
-                          <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
-                            🟡 ชำระงวด 1 แล้ว (ค้างงวด 2: {round2Amount} บ.)
-                          </span>
-                        );
-                      }
-                      if (profileModalReg.installment_1_status === 'pending_review') {
-                        return (
+                      } else if (profileModalReg.installment_1_status === 'pending_review') {
+                        statusBadge = (
                           <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
                             ⏳ รอตรวจสลิปงวดที่ 1
                           </span>
                         );
+                      } else {
+                        statusBadge = (
+                          <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                            🔴 ค้างชำระ ({modalPaymentAmount} บ.)
+                          </span>
+                        );
                       }
-                      return (
-                        <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
-                          🔴 ค้างชำระ ({modalPaymentAmount} บ.)
-                        </span>
-                      );
+                    } else {
+                      if (modalPaymentStatus === 'paid') {
+                        statusBadge = (
+                          <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                            ✓ ชำระเงินแล้ว
+                          </span>
+                        );
+                      } else if (modalPaymentStatus === 'pending_review') {
+                        statusBadge = (
+                          <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                            ⏳ รอตรวจสลิป
+                          </span>
+                        );
+                      } else {
+                        statusBadge = (
+                          <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                            🔴 ค้างชำระ ({modalPaymentAmount} บ.)
+                          </span>
+                        );
+                      }
                     }
 
-                    if (modalPaymentStatus === 'paid') {
-                      return (
-                        <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
-                          ✓ ชำระเงินแล้ว
-                        </span>
-                      );
-                    }
-                    if (modalPaymentStatus === 'pending_review') {
-                      return (
-                        <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
-                          ⏳ รอตรวจสลิป
-                        </span>
-                      );
-                    }
                     return (
-                      <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
-                        🔴 ค้างชำระ ({modalPaymentAmount} บ.)
-                      </span>
+                      <>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                          isInstallment 
+                            ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {isInstallment ? '💳 แผนแบ่งจ่าย 2 งวด' : '🌟 แผนจ่ายครบ 1 รอบ'}
+                        </span>
+                        {statusBadge}
+                      </>
                     );
                   })()}
                 </div>
@@ -3481,7 +3507,44 @@ export default function AdminDashboardView({
                     การจัดการยอดชำระเงินและตรวจสอบสลิป
                   </h4>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-slate-300 mb-1 font-semibold">แผนการชำระเงิน:</label>
+                      <select
+                        disabled={!isEditingProfileModal}
+                        value={modalPaymentPlan}
+                        onChange={e => {
+                          const newPlan = e.target.value;
+                          setModalPaymentPlan(newPlan);
+                          const isMsu = isMsuInstitution(profileModalReg.institution);
+                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                          const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                          if (newPlan === 'installment') {
+                            const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                            if (isR1Paid) {
+                              setModalPaymentAmount(round2Fee);
+                            } else {
+                              setModalPaymentAmount(totalFee);
+                            }
+                          } else {
+                            if (modalPaymentStatus === 'paid') {
+                              setModalPaymentAmount(0);
+                            } else {
+                              setModalPaymentAmount(totalFee);
+                            }
+                          }
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl text-white font-bold transition-all ${
+                          !isEditingProfileModal 
+                            ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                            : 'bg-slate-900 border border-slate-700'
+                        }`}
+                      >
+                        <option value="full">🌟 จ่ายครบ 1 รอบ</option>
+                        <option value="installment">💳 แบ่งจ่าย 2 งวด</option>
+                      </select>
+                    </div>
+
                     <div>
                       <label className="block text-slate-300 mb-1 font-semibold">สถานะการชำระเงิน:</label>
                       <select
@@ -3582,8 +3645,8 @@ export default function AdminDashboardView({
                   </div>
                 </div>
 
-                {/* 2-Round Installments Review if participant opted for installments or uploaded installment slips */}
-                {(profileModalReg.payment_plan === 'installment' || profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url) ? (
+                {/* 2-Round Installments Review if participant opted for installments */}
+                {(profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url)) ? (
                   <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                       <div className="flex items-center gap-2">
@@ -4011,7 +4074,11 @@ export default function AdminDashboardView({
 
                 {/* Uploaded Slip Card (Standard Full Payment or additional slip) */}
                 <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
-                  <h4 className="font-bold text-white text-sm">หลักฐานสลิปการโอนเงิน (ชำระเต็มจำนวน / ทั่วไป)</h4>
+                  <h4 className="font-bold text-white text-sm">
+                    {(profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url))
+                      ? 'หลักฐานสลิปการโอนเงินเพิ่มเติม / ทั่วไป'
+                      : 'หลักฐานสลิปการโอนเงิน (ชำระเต็มจำนวน 1 รอบ)'}
+                  </h4>
                   
                   {profileModalReg.payment_slip_url ? (
                     <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -4186,7 +4253,9 @@ export default function AdminDashboardView({
                     </div>
                   ) : (
                     <p className="text-slate-500 italic py-2">
-                      {profileModalReg.payment_plan === 'installment' ? 'ผู้สมัครเลือกแผนแบ่งจ่าย 2 งวด (ดูสลิปด้านบน)' : 'ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน'}
+                      {(profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url))
+                        ? 'ผู้สมัครเลือกแผนแบ่งจ่าย 2 งวด (ดูสลิปด้านบน)'
+                        : 'ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน (ชำระเต็มจำนวน 1 รอบ)'}
                     </p>
                   )}
                 </div>
