@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AcademicPresentationSection from '../components/AcademicPresentationSection';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -34,14 +35,37 @@ import {
   CheckCheck
 } from 'lucide-react';
 
-export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin }) {
+export default function SecurityAuditView({ 
+  onNavigateHome, 
+  onNavigateAdmin, 
+  subRoute, 
+  onSwitchSubRoute 
+}) {
+  const [activeTab, setActiveTab] = useState(subRoute === 'audit' ? 'audit' : 'presentation');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const reportUrl = typeof window !== 'undefined' ? window.location.href : 'https://jre-2027.vercel.app/security';
+  useEffect(() => {
+    if (subRoute === 'presentation') {
+      setActiveTab('presentation');
+    } else if (subRoute === 'audit') {
+      setActiveTab('audit');
+    }
+  }, [subRoute]);
+
+  const handleSwitchTab = (tab) => {
+    setActiveTab(tab);
+    if (onSwitchSubRoute) {
+      onSwitchSubRoute(tab);
+    }
+  };
+
+  const reportUrl = typeof window !== 'undefined' 
+    ? (activeTab === 'presentation' ? window.location.origin + '/presentation' : window.location.origin + '/security')
+    : 'https://jre-2027.vercel.app/presentation';
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(reportUrl);
@@ -516,8 +540,50 @@ export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin }) {
         </div>
       </div>
 
-      {/* HERO BANNER & EXECUTIVE SUMMARY */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 border-2 border-emerald-500/40 p-6 sm:p-10 shadow-2xl">
+      {/* MODE TOGGLE TABS (Academic Presentation vs 20 Vulnerabilities Audit) */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-2 sm:p-2.5 rounded-2xl shadow-xl">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => handleSwitchTab('presentation')}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'presentation'
+                ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>🎓 นำเสนอวิจัย AI & MCP</span>
+          </button>
+
+          <button
+            onClick={() => handleSwitchTab('audit')}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'audit'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-300" />
+            <span>🛡️ รายการช่องโหว่ (20 จุด)</span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-400 hidden sm:flex items-center gap-2 pr-2">
+          <span className="font-mono text-indigo-400 font-bold">
+            {activeTab === 'presentation' ? 'URL: /presentation' : 'URL: /security'}
+          </span>
+        </div>
+      </div>
+
+      {activeTab === 'presentation' ? (
+        <AcademicPresentationSection 
+          onSwitchToAudit={() => handleSwitchTab('audit')}
+          onNavigateHome={onNavigateHome}
+        />
+      ) : (
+        <>
+          {/* HERO BANNER & EXECUTIVE SUMMARY */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 border-2 border-emerald-500/40 p-6 sm:p-10 shadow-2xl">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
         
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -896,6 +962,8 @@ export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin }) {
       <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-center text-xs text-slate-500">
         รายงานนี้ถูกจัดทำขึ้นเพื่อการประเมินและยกระดับความมั่นคงปลอดภัยของโครงการ Joint Response Exercise (JRE 2027) · พัฒนาระบบโดยทีมงาน RCPDEV
       </div>
+        </>
+      )}
 
     </div>
   );

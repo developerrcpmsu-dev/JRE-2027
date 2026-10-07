@@ -40,8 +40,11 @@ export function parseCurrentRoute() {
       const sub = (section === 'shirts' || section === 'merchandise') ? 'shirts' : (section === 'payment' || section === 'finance') ? 'payment' : section;
       return { mainTab: 'admin', subRoute: sub, canonicalPath: sub === 'applicants' ? '/admin' : `/admin/${sub}` };
     }
+    if (queryOrHash === 'presentation' || queryOrHash === 'research' || queryOrHash === 'ai-security') {
+      return { mainTab: 'security', subRoute: 'presentation', canonicalPath: '/presentation' };
+    }
     if (queryOrHash === 'security' || queryOrHash === 'security-audit' || queryOrHash === 'audit') {
-      return { mainTab: 'security', subRoute: null, canonicalPath: '/security-audit' };
+      return { mainTab: 'security', subRoute: 'audit', canonicalPath: '/security' };
     }
   }
 
@@ -175,11 +178,27 @@ export function parseCurrentRoute() {
     };
   }
 
-  // Security Audit Report (/security or /security-audit or /audit)
-  if (first === 'security' || first === 'security-audit' || first === 'audit' || first === 'vulnerabilities') {
+  // Academic Presentation (/presentation, /ai-security, /research)
+  if (first === 'presentation' || first === 'ai-security' || first === 'research') {
     return {
       mainTab: 'security',
-      subRoute: null,
+      subRoute: 'presentation',
+      canonicalPath: '/presentation'
+    };
+  }
+
+  // Security Audit Report (/security or /security-audit or /audit)
+  if (first === 'security' || first === 'security-audit' || first === 'audit' || first === 'vulnerabilities') {
+    if (second === 'presentation' || second === 'ai' || second === 'research') {
+      return {
+        mainTab: 'security',
+        subRoute: 'presentation',
+        canonicalPath: '/presentation'
+      };
+    }
+    return {
+      mainTab: 'security',
+      subRoute: 'audit',
       canonicalPath: '/security'
     };
   }
@@ -225,9 +244,14 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'users':
     case 'user':
       return subRoute ? `/users/${subRoute}` : '/users';
+    case 'presentation':
+    case 'research':
+    case 'ai-security':
+      return '/presentation';
     case 'security':
     case 'security-audit':
     case 'audit':
+      if (subRoute === 'presentation' || subRoute === 'research' || subRoute === 'ai') return '/presentation';
       return '/security';
     default:
       return '/';

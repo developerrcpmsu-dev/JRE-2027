@@ -48,9 +48,12 @@ export default function App() {
     } else if (newTab === 'users' || newTab === 'user') {
       main = 'users';
       sub = newSubRoute;
+    } else if (newTab === 'presentation' || newTab === 'research' || newTab === 'ai-security') {
+      main = 'security';
+      sub = 'presentation';
     } else if (newTab === 'security' || newTab === 'security-audit' || newTab === 'audit') {
       main = 'security';
-      sub = null;
+      sub = newSubRoute || 'audit';
     }
 
     syncUrlToRoute(main, sub, false, options);
@@ -651,6 +654,8 @@ export default function App() {
 
         {currentTab === 'security' && (
           <SecurityAuditView
+            subRoute={currentSubRoute}
+            onSwitchSubRoute={(sub) => setCurrentTab('security', sub)}
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin')}
           />

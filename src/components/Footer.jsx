@@ -10,7 +10,8 @@ import {
   ExternalLink,
   Code2,
   Database,
-  ShieldAlert
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import PDPAModal from './PDPAModal';
 
@@ -211,6 +212,16 @@ export default function Footer({ onOpenAdminLogin }) {
                 </button>
               </li>
               <li className="pt-1">
+                <a
+                  href="/presentation"
+                  className="text-indigo-300 hover:text-white text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-indigo-950/40 hover:bg-indigo-950/70 border border-indigo-500/40 hover:border-indigo-400 rounded-xl cursor-pointer inline-flex font-bold shadow-sm"
+                  title="ดูหน้าสไลด์และผลการวิจัย AI & MCP สำหรับนำเสนออาจารย์"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>🎓 นำเสนอวิจัย AI & MCP (Presentation)</span>
+                </a>
+              </li>
+              <li className="pt-0.5">
                 <a
                   href="/security"
                   className="text-slate-300 hover:text-emerald-300 text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl cursor-pointer inline-flex font-semibold"
