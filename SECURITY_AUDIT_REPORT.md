@@ -53,9 +53,9 @@
 
 ภาพหลักฐานรอบล่าสุด:
 
-![Burp site map แสดง DVWA local และ production](public/images/security/burp-site-map-dvwa-local.png)
+![Burp site map แสดง DVWA local และ production](/images/security/burp-site-map-dvwa-local.png)
 
-![Burp production root response headers](public/images/security/burp-production-root-headers-live.png)
+![Burp production root response headers](/images/security/burp-production-root-headers-live.png)
 
 ## วิธีตรวจที่ทำจริง
 
@@ -72,7 +72,7 @@
 
 ## รอบตรวจซ้ำล่าสุด: Burp Suite + MCP + Kali Linux (8 ตุลาคม 2569)
 
-รอบนี้ตรวจ production URL แบบ read-only โดยให้ Kali Linux ทำ HTTP/header/method checks, ใช้ Burp Suite Community เป็น local proxy (`127.0.0.1:8080`) และใช้ MCP เปิดตรวจหน้า `/security` กับ `/presentation` ในเบราว์เซอร์จริงเพื่อยืนยันว่าหน้ารายงาน/หน้าพรีเซนต์โหลดได้ ไม่ส่ง credential ไม่ทำ active scan และไม่ส่งคำขอที่แก้ไขข้อมูล
+รอบนี้ตรวจ production URL แบบ read-only โดยให้ Kali Linux ทำ HTTP/header/method checks, ใช้ Burp Suite Community เป็น local proxy (`127.0.0.1:8080`) และใช้ MCP เปิดตรวจหน้า `/security` กับ `/presentation` ในเบราว์เซอร์จริงเพื่อยืนยันว่าหน้ารายงาน/หน้าพรีเซนต์โหลดได้ จากนั้นจึงทดสอบ mutation แบบจำกัดขอบเขตกับ canary สังเคราะห์ใน Supabase staging เท่านั้น ไม่ส่ง credential จริง ไม่ทำ active scan และไม่แก้ข้อมูล production
 
 | ระบบ | การใช้งานจริง | ผลที่ยืนยันได้ |
 |---|---|---|
@@ -108,6 +108,32 @@
 - หลังรันพบ policy ใหม่ 8 รายการ: registrations 4 (owner/email/admin สำหรับ select/insert/update/delete), project_settings 2 (public read allow-list + admin write) และ announcements 2 (public read + admin write)
 - ทดสอบใน transaction ด้วย `SET LOCAL ROLE anon`: `registrations` เห็น 0 แถว, `project_settings` เห็นเฉพาะ key `forms_config`, และ `announcements` เห็น 0 แถวในฐานข้อมูลที่ยังว่าง
 - ผลนี้เป็นหลักฐานของ staging เท่านั้น ไม่ใช่การปิด F-01/F-02/F-03 บน production และยังต้องทำ authenticated owner/admin regression test ก่อนพิจารณา deploy production
+
+## Controlled Burp mutation test — staging canary
+
+การทดสอบนี้ทำเพื่อพิสูจน์ว่าการแก้ยอดเงิน/ข้อมูลผู้สมัครที่พยายามส่งผ่าน Burp ไม่สามารถทำให้ข้อมูล staging เปลี่ยนได้ โดยใช้ UUID และอีเมลสังเคราะห์เท่านั้น และลบ canary ออกหลังทดสอบจนตรวจยืนยันเหลือ `0 rows` แล้ว ทั้ง production database และข้อมูลผู้สมัครจริงไม่ได้ถูกเขียน
+
+| ขั้นตอน | หลักฐานผลลัพธ์ |
+|---|---|
+| Baseline ก่อนทดสอบ | พบว่า UI guard เป็น client-side และ client เขียน Supabase โดยตรง จึงต้องให้ RLS/trigger เป็นด่านบังคับจริง |
+| Burp GET ใน staging | `GET /registrations?...canary...` ผ่าน `127.0.0.1:8080` ได้ `200 []` สำหรับ anon เพราะ RLS ไม่เปิดเผยแถว |
+| Burp PATCH จำลอง | ส่ง `group_assigned=BURP-HACK`, `room_assigned=BURP-HACK`, `status=cancelled` ได้ `200 []` แต่ไม่มีแถวที่ anon อ่าน/แก้ไขได้ |
+| ตรวจด้วย database owner | ค่า canary ยังเป็น `status=confirmed`, `group_assigned=''`, `room_assigned=''` — ไม่เกิดการแก้ไข |
+| Trigger regression | transaction ที่ส่งค่า `HACK-*` ถูก sanitize เป็นค่าว่าง/`confirmed` แล้ว `ROLLBACK` ไม่ทิ้งข้อมูล |
+| Cleanup | ลบ canary สังเคราะห์สำเร็จ และ query ยืนยัน `remaining_canary_rows = 0` |
+
+![Burp before/traffic baseline](/images/security/burp-site-map-dvwa-local.png)
+
+![Burp after hardening evidence summary](/images/security/burp-canary-after-staging.svg)
+
+ภาพแรกเป็น screenshot จาก Burp จริงที่แนบไว้ ส่วนภาพที่สองเป็นภาพสรุปหลักฐาน after ที่สร้างจาก response และ database re-check ที่บันทึกไว้ ไม่ใช่ภาพหน้าต่าง Burp โดยตรง จึงไม่ควรนำไปอ้างว่าเป็น native Burp screenshot
+
+### สิ่งที่แก้และสิ่งที่ยังต้องทำ
+
+1. เพิ่ม `supabase_financial_integrity_staging.sql` และรันเฉพาะฐานข้อมูล staging เพื่อให้ trigger ป้องกันฟิลด์สถานะ/การเงินที่มีอยู่ใน schema นั้น
+2. ปรับ `src/supabase.js` ให้เขียน local cache หลัง Supabase ตอบรับเท่านั้น; หาก RLS/trigger ปฏิเสธหรือคืนศูนย์แถว UI จะได้รับ error ไม่แสดงผลสำเร็จปลอม
+3. staging ไม่มีคอลัมน์ payment บางรายการ จึงไม่ใช้ผล `400` จาก payment-field probe เป็นข้อสรุปเรื่อง authorization; ฟิลด์การเงินจริงบน production ยังต้องย้ายไป server-side/Auth และทำ migration ที่ตรวจ schema ก่อน
+4. production ยังไม่ได้รัน RLS/auth migration และยังมีความเสี่ยง public `user_accounts`: read-only anon probe ปัจจุบันตอบ `200` พบ 4 account objects และ field names รวม `password_hash`/`salt` (ค่าจริงไม่แสดงในรายงาน) ต้องแก้ก่อนอ้างว่าปลอดภัย
 
 ### หลักฐานจากภาพ Burp ที่แนบเพิ่ม
 

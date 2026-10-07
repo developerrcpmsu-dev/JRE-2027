@@ -492,7 +492,6 @@ export const DataService = {
     const targetUserId = target?.user_id || userId;
     const targetId = target?.id;
 
-    // 2. Immediately update local storage so local UI state is always 100% updated in 0ms
     const updated = regs.map(r => {
       if (
         r.user_id === targetUserId || 
@@ -505,28 +504,34 @@ export const DataService = {
       }
       return r;
     });
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
 
-    // 3. Persist to Supabase in the background
+    // 2. Persist to Supabase first. The database/RLS/trigger is authoritative;
+    // do not make the UI look successful when a tampered or unauthorized write
+    // was rejected or matched zero rows.
     if (isSupabaseConfigured && supabase) {
-      try {
-        const merged = { ...(target || {}), ...fields };
-        const payload = packRegistrationForSupabase(merged);
+      const merged = { ...(target || {}), ...fields };
+      const payload = packRegistrationForSupabase(merged);
 
-        let updateQuery = supabase.from('registrations').update(payload);
-        if (targetUserId) {
-          updateQuery = updateQuery.eq('user_id', targetUserId);
-        } else if (targetId) {
-          updateQuery = updateQuery.eq('id', targetId);
-        }
-        const { error } = await updateQuery;
-        if (error && targetId && targetId !== targetUserId) {
-          await supabase.from('registrations').update(payload).eq('id', targetId);
-        }
-      } catch (e) {
-        console.warn('Supabase update details failed, fallback to local', e);
+      let updateQuery = supabase.from('registrations').update(payload);
+      if (targetUserId) {
+        updateQuery = updateQuery.eq('user_id', targetUserId);
+      } else if (targetId) {
+        updateQuery = updateQuery.eq('id', targetId);
+      }
+
+      const { data, error } = await updateQuery.select('id');
+      if (error) {
+        console.warn('Supabase update details rejected', error);
+        throw error;
+      }
+      if (!data || data.length === 0) {
+        throw new Error('ไม่พบสิทธิ์หรือไม่พบใบสมัครสำหรับการแก้ไข');
       }
     }
+
+    // 3. Keep the local cache consistent only after the server accepted the write.
+    // When Supabase is not configured, localStorage remains the intentional fallback.
+    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     return true;
   },
 
