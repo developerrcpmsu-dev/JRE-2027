@@ -55,7 +55,7 @@
 - `project_settings`: พบ 9 records ที่อ่านได้ด้วย anon key
 - `project_settings` key `user_accounts`: พบ 1 record ภายในมี 4 account objects และ field names ได้แก่ `password_hash` และ `salt` (ค่าจริงถูก redacted)
 - `announcements`: พบ 7 records ที่อ่านได้ด้วย anon key
-- `GET /api/admin-auth`: 405; `POST {}`: 400; ไม่ได้ลอง credential จริง
+- baseline ก่อนแพตช์ `GET /api/admin-auth`: 405 และ `POST {}`: 400; หลัง deploy แพตช์ใหม่ `GET`/`POST {}` ตอบ 503 เพราะยังไม่ยืนยันว่า `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET` ถูกตั้งครบใน Vercel — เป็น fail-closed แต่ Admin login ยังใช้ไม่ได้จนกว่าจะตั้งค่า
 - preflight จาก origin ภายนอกไม่ถูกสะท้อนกลับเป็น origin ของผู้โจมตี
 
 ## Findings และแนวทางแก้
@@ -96,7 +96,7 @@
 
 ### F-06 — High — deterministic fallback admin auth
 
-หลักฐาน baseline: `api/admin-auth.js` มี `SECRET_SALT`, `DEFAULT_USER_HASH`, `DEFAULT_PASS_HASH` และ fallback เมื่อ environment ไม่ครบ; working tree เปลี่ยนเป็น fail-closed ด้วย server env แล้ว แต่ production ยังต้อง deploy/retest
+หลักฐาน baseline: `api/admin-auth.js` มี `SECRET_SALT`, `DEFAULT_USER_HASH`, `DEFAULT_PASS_HASH` และ fallback เมื่อ environment ไม่ครบ; working tree เปลี่ยนเป็น fail-closed ด้วย server env แล้ว และ live หลัง deploy ตอบ 503 เมื่อ env ไม่ครบ จึงต้องตั้งค่า env แล้ว retest login ใน staging
 
 วิธีแก้: fail closed ด้วย 503, บังคับ `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET`, ใช้ timing-safe digest comparison และ durable rate-limit store
 
@@ -128,7 +128,7 @@
 
 - Build ผ่าน
 - Security response headers หลักทำงานบน production
-- Admin API ปฏิเสธ method/JSON ว่างตามที่คาด
+- Admin API fail-closed เมื่อ server env ไม่ครบ (503); ยังไม่มีหลักฐานว่า Admin login production ใช้งานได้หลังตั้งค่า env
 - CORS preflight ไม่สะท้อน origin ภายนอกกลับไปเป็น allow-origin
 - File endpoint ที่ไม่มี id ตอบ 400
 - `security.txt` และ `robots.txt` ให้บริการจริง

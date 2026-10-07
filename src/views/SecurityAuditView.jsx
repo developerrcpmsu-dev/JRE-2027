@@ -86,7 +86,7 @@ const findings = [
     id: 'F-06', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-798 / CWE-321', status: 'open',
     title: 'Serverless admin auth มี deterministic fallback salt/hash ใน source',
     evidence: 'baseline ก่อนแก้พบ deterministic fallback ใน api/admin-auth.js; local working tree เปลี่ยนเป็น fail-closed + server env แต่ production ต้อง deploy/retest',
-    observed: 'ฝั่ง client เรียก API จริงและ API ปฏิเสธคำขอว่างเปล่า 400; ยังไม่ได้ลอง credential guessing หรือ login สำเร็จ',
+    observed: 'baseline ก่อนแก้ตอบ 405/400; หลัง deploy production ตอบ 503 เมื่อยังไม่ยืนยัน server env ครบ ซึ่งเป็น fail-closed แต่ทำให้ Admin login ใช้งานไม่ได้จนกว่าจะตั้งค่า',
     impact: 'ถ้า production env ผิดหรือหาย ระบบอาจกลับไปใช้ credential fallback ที่เดา/แตกได้ และ session secret ผูกกับค่าเดิม',
     fix: [
       'ลบ fallback credential/hash/salt ออกจาก source และ fail closed ด้วย 503 เมื่อ ADMIN_USERNAME, ADMIN_PASSWORD, SESSION_SECRET ไม่ครบ',
@@ -160,7 +160,7 @@ const findings = [
 const verifiedControls = [
   ['Build', 'npm run build ผ่าน (Vite exit 0)'],
   ['Headers', 'หน้าเว็บจริงส่ง X-Frame-Options: DENY, nosniff, HSTS, Referrer-Policy และ Permissions-Policy'],
-  ['Admin API', 'GET /api/admin-auth ได้ 405 และ POST ว่างได้ 400 โดยไม่ได้ลอง credential จริง'],
+  ['Admin API', 'baseline GET/POST ว่างได้ 405/400; หลัง deployตอบ 503 เมื่อ env ไม่ครบ ซึ่งเป็น fail-closed และยังไม่ได้ลอง credential จริง'],
   ['CORS preflight', 'Origin ภายนอกไม่ถูกสะท้อนกลับเป็น allow-origin ของผู้โจมตี'],
   ['File API', 'GET /api/file ที่ไม่มี id ได้ 400'],
   ['Discovery', '/.well-known/security.txt และ /robots.txt เปิดอ่านได้จริง']
