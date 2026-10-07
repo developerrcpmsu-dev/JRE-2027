@@ -183,6 +183,13 @@
 6. ทดสอบ payload กับ DVWA ก่อน แล้วค่อยทำ non-destructive verification กับ staging JRE 2027
 7. เก็บ screenshot ของ request/response โดย redaction token, cookie, email, phone และ PII ก่อนแนบรายงาน
 
+### การแก้ปัญหาที่พบระหว่างติดตั้ง lab
+
+- ถ้าเห็น `permission denied ... /var/run/docker.sock` ใน shell เดิม ให้ปิดแล้วเปิด Kali ใหม่ หรือรัน `newgrp docker` จากนั้นตรวจด้วย `id` ว่ามีกลุ่ม `docker` และรัน `docker ps` จาก prompt Linux (`best@...$`)
+- ถ้าอยู่ที่ PowerShell (`PS C:\...>`), Docker ของ lab อยู่ใน Kali จึงต้องใช้ `wsl.exe --distribution kali-linux --exec docker ps`; การพิมพ์ `docker ps` ตรง ๆ ใน PowerShell จะขึ้นว่าไม่รู้จักคำสั่ง
+- ถ้า DVWA ขึ้น `ERR_EMPTY_RESPONSE` หลัง WSL ถูก terminate/restart ให้ตรวจ `docker ps`; ถ้า container ยัง `Up` แต่ Apache ไม่ตอบ ให้ล้าง stale PID แล้วเริ่ม Apache ใหม่ด้วย `docker exec dvwa sh -lc "rm -f /var/run/apache2/apache2.pid; service apache2 start"`
+- บัญชี Kali กับบัญชี DVWA เป็นคนละระบบ การล็อกอิน DVWA ต้องใช้บัญชีทดสอบของ DVWA เท่านั้น และไม่ควรใช้ password ของ Kali/JRE ซ้ำใน lab
+
 ## ขั้นตอนแก้ไขฐานข้อมูลที่เพิ่มในรอบนี้
 
 มี migration สองไฟล์เพื่อแยกความเสี่ยง:
