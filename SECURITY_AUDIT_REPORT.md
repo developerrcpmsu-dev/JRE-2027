@@ -84,7 +84,7 @@
 
 ### F-04 — Critical — magic OTP
 
-หลักฐาน baseline: `src/supabase.js` ยอมรับ `123456` และ `999999` ใน verify/reset แม้ไม่ตรงรหัส OTP จริง; working tree ลบ fallback แล้ว แต่ production ยังต้อง deploy/retest
+หลักฐาน baseline: `src/supabase.js` ยอมรับ `123456` และ `999999` ใน verify/reset แม้ไม่ตรงรหัส OTP จริง; หลัง deploy bundle scan ไม่พบ fallback path แต่ยังไม่มี functional OTP test กับบัญชี staging
 
 วิธีแก้: ลบ bypass, ใช้ server/provider-issued one-time token, expiry, attempt limit และ Supabase Auth recovery flow
 
@@ -102,7 +102,7 @@
 
 ### F-07 — High — credential-like string ใน production bundle
 
-หลักฐาน baseline: code diff ใน presentation มี fallback credential และ production JS scan พบ pattern เดียวกัน; working tree เขียน presentation ใหม่แล้ว แต่ต้อง deploy/re-scan production bundle
+หลักฐาน baseline: code diff ใน presentation มี fallback credential และ production JS scan พบ pattern เดียวกัน; bundle หลัง deploy สแกนซ้ำแล้วไม่พบ literal เดิม แต่ historical deployment/Git history ยังต้องจัดการตามนโยบาย retention
 
 วิธีแก้: เปลี่ยนเป็น `<REDACTED>`, ระบุ pseudocode, เพิ่ม CI secret scan และ rotate หากค่าเดิมเคยใช้งานจริง
 
@@ -120,7 +120,7 @@
 
 ### F-10 — Low — CORS `startsWith`
 
-หลักฐาน baseline: `api/file.js` และ `api/admin-auth.js` ตรวจ origin ด้วย `startsWith`; working tree ใช้ exact allow-list/regex แล้ว แต่ production ยังต้อง deploy/retest
+หลักฐาน baseline: `api/file.js` และ `api/admin-auth.js` ตรวจ origin ด้วย `startsWith`; หลัง deploy OPTIONS จาก evil.example และ prefix-confusion origin ไม่ถูกสะท้อน และคืน official origin แทน
 
 วิธีแก้: ใช้ exact `allowedOrigins.includes(origin)`, normalize origin และทดสอบ prefix-confusion domain
 

@@ -55,8 +55,8 @@ const findings = [
   {
     id: 'F-04', severity: 'critical', severityLabel: 'วิกฤต', cwe: 'CWE-798 / CWE-640', status: 'open',
     title: 'มี magic OTP 123456 และ 999999 ในโค้ดตรวจยืนยัน/รีเซ็ตรหัสผ่าน',
-    evidence: 'baseline ก่อนแก้พบใน src/supabase.js และ GoogleLoginModal.jsx; local working tree ลบ fallback แล้ว แต่ production ต้อง deploy/retest',
-    observed: 'หลักฐานเดิมเป็น static analysis เท่านั้น ยังไม่ได้ส่งคำขอ reset หรือใช้กับบัญชีจริง; สถานะ open หมายถึง production ยังไม่ได้ยืนยันแพตช์',
+    evidence: 'baseline ก่อนแก้พบใน src/supabase.js และ GoogleLoginModal.jsx; หลัง deploy bundle scan ไม่พบ fallback path แต่ยังไม่มี functional OTP test กับบัญชี staging',
+    observed: 'หลักฐานเดิมเป็น static analysis เท่านั้น; production ใช้ source ที่ลบ fallback แล้ว แต่ยังไม่ได้ส่งคำขอ reset หรือใช้กับบัญชีจริง จึงยังไม่ปิด finding อย่างเป็นทางการ',
     impact: 'ผู้ที่รู้ email อาจข้ามการยืนยันหรือรีเซ็ตรหัสผ่านโดยไม่ต้องครอบครอง OTP จริง',
     fix: [
       'ลบค่าคงที่ bypass ออกจาก production code ทันที',
@@ -85,7 +85,7 @@ const findings = [
   {
     id: 'F-06', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-798 / CWE-321', status: 'open',
     title: 'Serverless admin auth มี deterministic fallback salt/hash ใน source',
-    evidence: 'baseline ก่อนแก้พบ deterministic fallback ใน api/admin-auth.js; local working tree เปลี่ยนเป็น fail-closed + server env แต่ production ต้อง deploy/retest',
+    evidence: 'baseline ก่อนแก้พบ deterministic fallback ใน api/admin-auth.js; หลัง deploy production ตอบ 503 เมื่อ server env ไม่ครบ ซึ่งยืนยัน fail-closed แต่ต้องตั้งค่าและทดสอบ login ใน staging',
     observed: 'baseline ก่อนแก้ตอบ 405/400; หลัง deploy production ตอบ 503 เมื่อยังไม่ยืนยัน server env ครบ ซึ่งเป็น fail-closed แต่ทำให้ Admin login ใช้งานไม่ได้จนกว่าจะตั้งค่า',
     impact: 'ถ้า production env ผิดหรือหาย ระบบอาจกลับไปใช้ credential fallback ที่เดา/แตกได้ และ session secret ผูกกับค่าเดิม',
     fix: [
@@ -100,8 +100,8 @@ const findings = [
   {
     id: 'F-07', severity: 'high', severityLabel: 'สูง', cwe: 'CWE-200 / CWE-798', status: 'open',
     title: 'Public bundle มีรหัสผ่านตัวอย่างจาก code diff ในหน้า presentation',
-    evidence: 'production JS scan รอบ baseline พบ credential-like string จาก code example; local presentation ถูกเขียนใหม่และต้อง deploy/re-scan เพื่อยืนยันการหายไป',
-    observed: 'นี่เป็นข้อความตัวอย่างในหน้า presentation ไม่ใช่เส้นทาง login ปัจจุบัน แต่ production bundle เดิมเผยแพร่ข้อความดังกล่าวสู่ CDN/cache ได้',
+    evidence: 'production JS scan รอบ baseline พบ credential-like string จาก code example; bundle หลัง deploy สแกนซ้ำแล้วไม่พบ literal เดิม แต่ historical deployment/Git history ยังต้องจัดการตามนโยบาย retention',
+    observed: 'นี่เป็นข้อความตัวอย่างในหน้า presentation ไม่ใช่เส้นทาง login ปัจจุบัน; current bundle ไม่พบ literal เดิม แต่ finding ยังติดตามเพื่อยืนยัน cache/history cleanup',
     impact: 'สร้างความสับสนว่าเป็น credential จริง และทำให้ secret-like value ถูกเก็บถาวรใน CDN/cache หรือ search index',
     fix: [
       'แทนค่า credential ในตัวอย่างด้วย <REDACTED> และระบุว่าเป็น pseudocode',
@@ -144,8 +144,8 @@ const findings = [
   {
     id: 'F-10', severity: 'low', severityLabel: 'ต่ำ', cwe: 'CWE-942: Overly Permissive CORS', status: 'open',
     title: 'CORS ตรวจ origin ด้วย startsWith ใน serverless handlers',
-    evidence: 'baseline ก่อนแก้พบ startsWith ใน api/file.js และ api/admin-auth.js; local working tree ใช้ exact allow-list/regex แล้ว แต่ production ต้อง deploy/retest',
-    observed: 'source baseline มีความเสี่ยง prefix-confusion; ยังไม่สรุปว่า production exploit ได้จาก preflight ที่ทดสอบเพียง origin ภายนอกทั่วไป',
+    evidence: 'baseline ก่อนแก้พบ startsWith ใน api/file.js และ api/admin-auth.js; หลัง deploy OPTIONS จาก evil.example และ prefix-confusion origin ไม่ถูกสะท้อน และคืน official origin แทน',
+    observed: 'source baseline มีความเสี่ยง prefix-confusion; production patch ผ่าน safe preflight check แล้ว แต่ยังควรเก็บ regression test เป็น CI evidence ก่อนปิด finding',
     impact: 'ลดความแม่นยำของ origin policy และทำให้การ review/incident response ยากขึ้น',
     fix: [
       'ใช้ allowedOrigins.includes(origin) และ normalize origin ด้วย URL parser',
