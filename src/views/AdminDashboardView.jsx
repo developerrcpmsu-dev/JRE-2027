@@ -81,6 +81,7 @@ import {
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import AdminQRScannerModal from '../components/AdminQRScannerModal';
 import AdminIDScannerModal from '../components/AdminIDScannerModal';
+import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import ShirtOrderPrintModal from '../components/ShirtOrderPrintModal';
@@ -2738,6 +2739,7 @@ export default function AdminDashboardView({
                     const paymentStatus = reg.payment_status || 'unpaid';
                     const docs = Array.isArray(reg.requested_docs) ? reg.requested_docs : [];
                     const submittedDocsCount = docs.filter(d => d.file_url).length;
+                    const cardData = getRegistrationCardData(reg);
 
                     return (
                       <tr 
@@ -2800,7 +2802,7 @@ export default function AdminDashboardView({
                                 )}
                               </div>
                               <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
-                                {reg.institution}
+                                หน่วย: {cardData.unit} • สังกัด: {cardData.affiliation}
                               </div>
                               <div className="text-[10px] text-slate-500 font-mono">
                                 {reg.phone} • {reg.user_email}
@@ -3245,14 +3247,25 @@ export default function AdminDashboardView({
                         </div>
                       )}
 
-                      {/* บรรทัด 3: สังกัด / สถาบัน */}
+                      {/* บรรทัด 3: หน่วยงาน */}
                       <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
                         <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
                           <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>สังกัด:</span>
+                          <span>หน่วย / Unit:</span>
                         </span>
                         <span className="text-slate-200 font-semibold">
-                          {profileModalReg.institution || '-'}
+                          {getRegistrationCardData(profileModalReg).unit || '-'}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 4: มหาวิทยาลัย/สถาบัน */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                          <span>สังกัด / Affiliation:</span>
+                        </span>
+                        <span className="text-slate-200 font-semibold">
+                          {getRegistrationCardData(profileModalReg).affiliation || '-'}
                         </span>
                       </div>
 

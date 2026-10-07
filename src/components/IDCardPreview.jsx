@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
   Check,
@@ -34,6 +34,8 @@ export default function IDCardPreview({
 }) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [isDownloadingCard, setIsDownloadingCard] = useState(false);
+  const cardRef = useRef(null);
   const cardData = useMemo(() => getRegistrationCardData(registration), [registration]);
 
   useEffect(() => {
@@ -91,6 +93,42 @@ export default function IDCardPreview({
     document.body.removeChild(link);
   };
 
+  const handleDownloadCard = async () => {
+    if (!cardRef.current || isDownloadingCard) return;
+
+    setIsDownloadingCard(true);
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: '#07172f',
+        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
+        useCORS: true,
+        allowTaint: false,
+        imageTimeout: 15000,
+        logging: false
+      });
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (result) resolve(result);
+          else reject(new Error('Unable to create PNG blob'));
+        }, 'image/png');
+      });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${cardData.cardCode}-id-card.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error('JRE full ID card PNG export failed:', error);
+      window.alert('บันทึกภาพบัตรไม่สำเร็จ กรุณารอให้รูปและ QR โหลดเสร็จ แล้วลองใหม่อีกครั้ง');
+    } finally {
+      setIsDownloadingCard(false);
+    }
+  };
+
   return (
     <div className="jre-id-card-print-root w-full">
       {showActions && (
@@ -107,6 +145,15 @@ export default function IDCardPreview({
             >
               {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'คัดลอกแล้ว' : cardData.cardCode}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadCard}
+              disabled={isDownloadingCard}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-orange-400/40 bg-orange-500/10 px-3 py-2 text-[11px] font-bold text-orange-200 transition-colors hover:bg-orange-500/20 disabled:cursor-wait disabled:opacity-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {isDownloadingCard ? 'กำลังสร้าง PNG…' : 'บัตร PNG'}
             </button>
             <button
               type="button"
@@ -131,6 +178,7 @@ export default function IDCardPreview({
 
       <div className="overflow-x-auto pb-2">
         <div
+          ref={cardRef}
           className={`jre-id-card relative aspect-[1.585/1] w-full min-w-[520px] overflow-hidden rounded-[22px] border border-slate-600/80 bg-[#07172f] shadow-2xl shadow-black/40 ${compact ? 'max-w-[650px]' : 'max-w-[760px]'}`}
         >
           <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
@@ -153,6 +201,7 @@ export default function IDCardPreview({
                   <img
                     src={photo}
                     alt={`รูปประจำตัว ${cardData.thaiName}`}
+                    crossOrigin="anonymous"
                     className="h-full w-full object-cover"
                     onError={(event) => {
                       event.currentTarget.src = FALLBACK_PHOTO;

@@ -112,8 +112,20 @@ export default function AdminIDScannerModal({
       setIsScanning(true);
       if (!scannerRef.current) scannerRef.current = new Html5Qrcode(qrRegionId);
 
+      // Prefer the rear camera on phones. Falling back to facingMode keeps the
+      // scanner usable on browsers that do not expose camera labels yet.
+      let cameraConfig = { facingMode: 'environment' };
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        const rearCamera = cameras.find(camera => /back|rear|environment|หลัง/i.test(camera.label || ''));
+        if (rearCamera?.id) cameraConfig = rearCamera.id;
+        else if (cameras[0]?.id) cameraConfig = cameras[0].id;
+      } catch (cameraListError) {
+        console.info('JRE camera list unavailable; using facingMode fallback:', cameraListError);
+      }
+
       await scannerRef.current.start(
-        { facingMode: 'environment' },
+        cameraConfig,
         { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
           await stopScanner();
@@ -123,8 +135,15 @@ export default function AdminIDScannerModal({
       );
     } catch (error) {
       console.warn('JRE ID scanner start failed:', error);
+      await stopScanner();
       setIsScanning(false);
-      setScanError('เปิดกล้องไม่สำเร็จ กรุณาอนุญาตสิทธิ์กล้อง หรือค้นหาด้วยรหัสบัตร/ชื่อ/Call sign แทน');
+      const errorName = error?.name || '';
+      const errorMessage = errorName === 'NotAllowedError'
+        ? 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้อง กรุณากดไอคอนแม่กุญแจข้าง URL แล้วตั้งค่า Camera เป็น Allow จากนั้นรีเฟรชหน้าเว็บ'
+        : errorName === 'NotFoundError'
+          ? 'ไม่พบกล้องในอุปกรณ์นี้ กรุณาค้นหาด้วยรหัสบัตร/ชื่อ/Call sign แทน'
+          : 'เปิดกล้องไม่สำเร็จ กรุณาอนุญาตสิทธิ์กล้องและใช้หน้าเว็บผ่าน HTTPS หรือ localhost แล้วลองใหม่';
+      setScanError(errorMessage);
     }
   };
 

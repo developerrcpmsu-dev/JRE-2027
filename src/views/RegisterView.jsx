@@ -66,6 +66,7 @@ import Toast from '../components/Toast';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UserNotificationsModal from '../components/UserNotificationsModal';
 import IDCardPreview from '../components/IDCardPreview';
+import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import { scanSlipImage } from '../utils/slipOcr';
@@ -247,6 +248,7 @@ export default function RegisterView({
   const { confirmModalProps, askConfirm } = useConfirmModal();
 
   const effectivePaymentConfig = paymentConfig || DEFAULT_PAYMENT_CONFIG;
+  const myCardData = myRegistration ? getRegistrationCardData(myRegistration) : null;
 
   // Payment approval status calculation for applicant dashboard & edit/cancel behavior
   const isApplicantSinglePaid = Boolean(
@@ -338,9 +340,15 @@ export default function RegisterView({
   };
 
   const handleInstitutionSelect = (instName) => {
-    setInstitution(instName);
+    const selectedInstitution = OFFICIAL_NETWORK_INSTITUTIONS.find(
+      inst => inst.fullName === instName || inst.university === instName
+    );
+
+    // Keep Unit (rescue club/agency) and Affiliation (university) separate.
+    setUnit(selectedInstitution?.club || '');
+    setInstitution(selectedInstitution?.university || instName);
     clearFieldError('institution');
-    const mapped = INSTITUTION_ABBR_MAP[instName];
+    const mapped = INSTITUTION_ABBR_MAP[instName] || INSTITUTION_ABBR_MAP[selectedInstitution?.university];
     if (mapped) {
       setInstitutionAbbrTh(mapped.th);
       setInstitutionAbbrEn(mapped.en);
@@ -415,7 +423,7 @@ export default function RegisterView({
 
   const [bloodGroup, setBloodGroup] = useState('B');
   const [phone, setPhone] = useState('');
-  const [institution, setInstitution] = useState('ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)');
+  const [institution, setInstitution] = useState('มหาวิทยาลัยมหาสารคาม (มมส)');
   const [emergencyName, setEmergencyName] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [emergencyRelation, setEmergencyRelation] = useState('ผู้ปกครอง');
@@ -656,7 +664,17 @@ export default function RegisterView({
           if (d.nickname) setNickname(d.nickname);
           if (d.callsign) setCallsign(d.callsign);
           if (d.unit) setUnit(d.unit);
-          if (d.institution) setInstitution(d.institution);
+          if (d.institution) {
+            const selectedInstitution = OFFICIAL_NETWORK_INSTITUTIONS.find(
+              inst => inst.fullName === d.institution || inst.university === d.institution
+            );
+            if (selectedInstitution) {
+              if (!d.unit) setUnit(selectedInstitution.club);
+              setInstitution(selectedInstitution.university);
+            } else {
+              setInstitution(d.institution);
+            }
+          }
           if (d.phone) setPhone(d.phone);
           if (d.bloodGroup) setBloodGroup(d.bloodGroup);
           if (d.birthDay) setBirthDay(d.birthDay);
@@ -1057,12 +1075,24 @@ export default function RegisterView({
     setFullNameAffiliation(reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim());
     setNickname(reg.nickname || '');
     setCallsign(reg.callsign || '');
-    setUnit(reg.unit || reg.unit_name || '');
+    const selectedInstitution = OFFICIAL_NETWORK_INSTITUTIONS.find(
+      inst => inst.fullName === reg.affiliation || inst.fullName === reg.institution ||
+        inst.university === reg.affiliation || inst.university === reg.institution
+    );
+    const storedAffiliation = reg.affiliation || reg.institution || '';
+    const universityMarker = storedAffiliation.search(/มหาวิทยาลัย|วิทยาลัย|สถาบัน/);
+    const inferredUnit = !reg.unit && !reg.unit_name && universityMarker > 0
+      ? storedAffiliation.slice(0, universityMarker).trim()
+      : '';
+    const inferredAffiliation = selectedInstitution?.university || (
+      inferredUnit ? storedAffiliation.slice(inferredUnit.length).trim() : storedAffiliation
+    );
+    setUnit(reg.unit || reg.unit_name || selectedInstitution?.club || inferredUnit || '');
     setShirtSize(reg.shirt_size || 'L');
     setIdCardPhoto(reg.id_card_photo || reg.id_card_url || '');
     setBloodGroup(reg.blood_group || 'O');
     setPhone(reg.phone || '');
-    setInstitution(reg.institution || 'มหาวิทยาลัยมหาสารคาม (มมส)');
+    setInstitution(inferredAffiliation || 'มหาวิทยาลัยมหาสารคาม (มมส)');
     setEmergencyName(reg.emergency_name ? reg.emergency_name.split(' (')[0] : '');
     setEmergencyPhone(reg.emergency_phone || '');
     setMedicalHistory(reg.medical_history || '');
@@ -1161,7 +1191,7 @@ export default function RegisterView({
     if (!fullNameAffiliation.trim()) errs.fullNameAffiliation = 'กรุณาระบุคำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน';
     if (!nickname.trim()) errs.nickname = 'กรุณาระบุชื่อเล่น ภาษาไทย และ อังกฤษ';
     if (!callsign.trim()) errs.callsign = 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01';
-    if (!institution.trim()) errs.institution = 'กรุณาระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย';
+    if (!institution.trim()) errs.institution = 'กรุณาระบุสังกัด / Affiliation (มหาวิทยาลัยหรือสถาบัน)';
 
     if (ageResult.years < 15) {
       errs.birthYearBE = `ไม่อนุญาตให้ดำเนินการต่อ: ผู้เข้าร่วมโครงการ JRE 2027 ต้องมีอายุตั้งแต่ 15 ปีบริบูรณ์ขึ้นไป (ปัจจุบันคำนวณได้ ${ageResult.years} ปี)`;
@@ -1481,6 +1511,7 @@ export default function RegisterView({
         nickname: nickname.trim(),
         callsign: callsign.trim(),
         unit: unit.trim(),
+        affiliation: institution.trim(),
         shirt_size: shirtSize,
         id_card_photo: idCardPhoto,
         id_card_url: idCardPhoto,
@@ -2084,14 +2115,25 @@ export default function RegisterView({
                         </div>
                       )}
 
-                      {/* บรรทัด 3: สังกัด / สถาบัน */}
+                      {/* บรรทัด 3: หน่วยงาน */}
                       <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
                         <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
                           <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>สังกัด:</span>
+                          <span>หน่วย / Unit:</span>
                         </span>
                         <span className="text-slate-200 font-semibold">
-                          {myRegistration.institution || '-'}
+                          {myCardData?.unit || '-'}
+                        </span>
+                      </div>
+
+                      {/* บรรทัด 4: มหาวิทยาลัย/สถาบัน */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                        <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                          <span>สังกัด / Affiliation:</span>
+                        </span>
+                        <span className="text-slate-200 font-semibold">
+                          {myCardData?.affiliation || '-'}
                         </span>
                       </div>
 
@@ -3863,8 +3905,8 @@ export default function RegisterView({
                     <span className="font-mono text-amber-400 font-bold">JRE27-{(myRegistration.id || myRegistration.user_id || '').slice(0, 6).toUpperCase()}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-800/80 pb-2">
-                    <span className="text-slate-400">สถาบัน:</span>
-                    <span className="text-slate-200">{myRegistration.institution}</span>
+                    <span className="text-slate-400">สังกัด / Affiliation:</span>
+                    <span className="text-slate-200">{myCardData?.affiliation || '-'}</span>
                   </div>
                   <div className="flex justify-between pt-1">
                     <span className="text-slate-400">เจ้าของบัญชี:</span>
@@ -5126,25 +5168,25 @@ export default function RegisterView({
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    <span>หน่วย / Unit <span className="text-slate-500 font-normal">(ถ้ามี)</span></span>
+                    <span>หน่วย / Unit <span className="text-slate-500 font-normal">(ชื่อหน่วยงาน/ชมรม)</span></span>
                   </label>
                   <input
                     id="field-unit"
                     type="text"
                     value={unit}
                     onChange={e => setUnit(e.target.value)}
-                    placeholder="เช่น ทีมกู้ชีพ, ฝ่ายพยาบาล"
+                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์, ฝ่ายพยาบาล"
                     className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
                   />
                   <p className="mt-1 text-[10px] text-slate-500">ใช้แสดงบนบัตร ID Card และข้อมูล Admin</p>
                 </div>
               </div>
 
-              {/* ฟิลด์ 4: สังกัด / มหาวิทยาลัย / ชมรมกู้ภัยทั่วประเทศ (ทุกภูมิภาค) * */}
+              {/* ฟิลด์ 4: สังกัด / Affiliation = มหาวิทยาลัยหรือสถาบัน */}
               <div className="space-y-3.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="block text-xs font-semibold text-slate-300">
-                    ประเภทผู้สมัคร & สังกัดสถาบันการศึกษา <span className="text-rose-400 font-bold">*</span>
+                    สังกัด / Affiliation (มหาวิทยาลัยหรือสถาบัน) <span className="text-rose-400 font-bold">*</span>
                   </label>
                   <span className="text-[11px] text-rescue-400 font-medium">
                     เปิดรับทุกมหาวิทยาลัยและหน่วยกู้ภัยทั่วประเทศ
@@ -5229,7 +5271,7 @@ export default function RegisterView({
                 {/* Quick Dropdown Picker */}
                 <div>
                   <select
-                    value={OFFICIAL_NETWORK_INSTITUTIONS.find(i => i.fullName === institution)?.fullName || ''}
+                    value={OFFICIAL_NETWORK_INSTITUTIONS.find(i => i.university === institution || i.fullName === institution)?.fullName || ''}
                     onChange={e => {
                       if (e.target.value) {
                         handleInstitutionSelect(e.target.value);
@@ -5255,7 +5297,7 @@ export default function RegisterView({
                     setInstitution(e.target.value);
                     if (e.target.value.trim()) clearFieldError('institution');
                   }}
-                  placeholder="ระบุสังกัด / มหาวิทยาลัย / ชมรมกู้ภัย เช่น ชมรมกู้ภัยราชพฤกษ์ มมส, อาสาสมัครกู้ภัย มข ฯลฯ"
+                  placeholder="เช่น มหาวิทยาลัยมหาสารคาม (มมส), มหาวิทยาลัยขอนแก่น (มข)"
                   className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-medium transition-all ${
                     fieldErrors.institution 
                       ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
@@ -5276,7 +5318,7 @@ export default function RegisterView({
                     เลือกด่วน (8 สถาบัน):
                   </span>
                   {OFFICIAL_NETWORK_INSTITUTIONS.map(inst => {
-                    const isSelected = institution === inst.fullName;
+                    const isSelected = institution === inst.university || institution === inst.fullName;
                     return (
                       <button
                         type="button"
@@ -6039,8 +6081,11 @@ export default function RegisterView({
                   <p className="font-mono font-bold text-sky-300 text-xs truncate">
                     📡 {callsign || '-'}
                   </p>
-                  <p className="text-[11px] text-slate-300 truncate mt-0.5" title={institution}>
-                    {institution || '-'}
+                  <p className="text-[11px] text-slate-300 truncate mt-0.5" title={unit}>
+                    หน่วย: {unit || '-'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate" title={institution}>
+                    สังกัด: {institution || '-'}
                   </p>
                 </div>
 
