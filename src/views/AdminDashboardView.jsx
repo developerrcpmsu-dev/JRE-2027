@@ -79,8 +79,7 @@ import {
   getRegistrationFeeDetails
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
-import AdminQRScannerModal from '../components/AdminQRScannerModal';
-import AdminIDScannerModal from '../components/AdminIDScannerModal';
+import UniversalScannerModal from '../components/UniversalScannerModal';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -142,7 +141,7 @@ export default function AdminDashboardView({
         setActiveTab(resolved);
       }
       if (initialTab === 'scanner' || initialTab === 'qr') {
-        setShowQRScanner(true);
+        setShowUniversalScanner(true);
       }
     }
   }, [initialTab]);
@@ -255,6 +254,7 @@ export default function AdminDashboardView({
     return sanitizeAdminMerchConfig(merchandiseConfig, paymentConfig);
   });
   const [isSavingMerch, setIsSavingMerch] = useState(false);
+  const [showUniversalScanner, setShowUniversalScanner] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showIDCardScanner, setShowIDCardScanner] = useState(false);
   const [showShirtPrintModal, setShowShirtPrintModal] = useState(false);
@@ -2426,12 +2426,12 @@ export default function AdminDashboardView({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
-              onClick={() => setShowIDCardScanner(true)}
+              onClick={() => setShowUniversalScanner(true)}
               className="px-4 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-orange-950/40 border border-orange-300/50 transition-all active:scale-95 cursor-pointer"
-              title="สแกน Barcode/QR บัตรประจำตัวเพื่อดูประวัติผู้สมัครและส่งข้อความ"
+              title="สแกน QR Code อัจฉริยะ (ตรวจบัตร ID, เช็คชื่อรับเสื้อฝึก, ส่งมอบสินค้า/ออเดอร์ ที่เดียวครบ)"
             >
               <QrCode className="w-4 h-4" />
-              <span>สแกนบัตร ID</span>
+              <span>📷 สแกน QR อัจฉริยะ (Universal Scanner)</span>
             </button>
 
             <button
@@ -6245,11 +6245,12 @@ export default function AdminDashboardView({
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setShowQRScanner(true)}
+                onClick={() => setShowUniversalScanner(true)}
                 className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95 cursor-pointer"
+                title="สแกน QR Code เพื่อส่งมอบสินค้า/เสื้อ หรือตรวจบัตรผู้สมัคร (Universal Scanner)"
               >
                 <Camera className="w-4 h-4" />
-                <span>เปิดกล้องสแกน QR รับสินค้า</span>
+                <span>📷 สแกน QR อัจฉริยะ (ส่งมอบสินค้า & ตรวจบัตร)</span>
               </button>
 
               <button
@@ -9086,13 +9087,17 @@ export default function AdminDashboardView({
         </ModalPortal>
       )}
 
-      {/* ADMIN QR SCANNER MODAL */}
-      {showQRScanner && (
-        <AdminQRScannerModal
+      {/* UNIVERSAL QR & BARCODE SCANNER MODAL (STANDARDIZED ALL-IN-ONE SCANNER) */}
+      {(showUniversalScanner || showQRScanner || showIDCardScanner) && (
+        <UniversalScannerModal
           orders={merchandiseOrders}
           registrations={registrations}
-          onClose={() => setShowQRScanner(false)}
-          onMarkReceived={onMarkOrderReceived}
+          onClose={() => {
+            setShowUniversalScanner(false);
+            setShowQRScanner(false);
+            setShowIDCardScanner(false);
+          }}
+          onMarkOrderReceived={onMarkOrderReceived}
           onMarkRegistrationShirtReceived={async (userId, received) => {
             if (onUpdateAllocation) {
               await onUpdateAllocation(userId, {
@@ -9104,15 +9109,8 @@ export default function AdminDashboardView({
             }
           }}
           onVerifyPayment={onVerifyOrderPayment}
-        />
-      )}
-
-      {/* ADMIN ID CARD SCANNER & PARTICIPANT HISTORY */}
-      {showIDCardScanner && (
-        <AdminIDScannerModal
-          registrations={registrations}
-          onClose={() => setShowIDCardScanner(false)}
           onRefreshRegistrations={onRefreshRegistrations}
+          onUpdateAllocation={onUpdateAllocation}
         />
       )}
 

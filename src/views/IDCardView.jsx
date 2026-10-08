@@ -43,7 +43,7 @@ export default function IDCardView({
           </div>
           <h1 className="mt-3 text-2xl font-black text-white sm:text-3xl">บัตรประจำตัวผู้เข้าร่วมโครงการ</h1>
           <p className="mt-1 text-xs leading-relaxed text-slate-400 sm:text-sm">
-            ใช้รูปถ่ายและข้อมูลจากใบสมัครจริง • พิมพ์เป็นบัตรแนวนอนขนาดมาตรฐานได้ • QR/Barcode สำหรับเจ้าหน้าที่ Admin เท่านั้น
+            ใช้รูปถ่ายและข้อมูลจากใบสมัครจริง • พิมพ์เป็นบัตรแนวนอนขนาดมาตรฐานได้ • QR Code สำหรับเจ้าหน้าที่ Admin สแกนตรวจสอบ (Universal Scanner)
           </p>
         </div>
 

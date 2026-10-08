@@ -36,7 +36,7 @@ export default function PickupQRModal({ order, onClose }) {
       width: 320,
       margin: 2,
       color: {
-        dark: '#0f172a',
+        dark: '#000000',
         light: '#ffffff'
       }
     })

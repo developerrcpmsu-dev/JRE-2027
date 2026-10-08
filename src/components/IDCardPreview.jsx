@@ -44,10 +44,10 @@ export default function IDCardPreview({
 
     QRCode.toDataURL(getIdCardQrPayload(registration), {
       width: 320,
-      margin: 1,
+      margin: 2,
       errorCorrectionLevel: 'M',
       color: {
-        dark: '#0b1f3a',
+        dark: '#000000',
         light: '#ffffff'
       }
     })
@@ -265,14 +265,14 @@ export default function IDCardPreview({
                 <div className="flex w-[18%] shrink-0 flex-col items-center justify-end gap-1">
                   <div className="relative w-full rounded-lg bg-white p-1 shadow-lg">
                     {qrDataUrl ? (
-                      <img src={qrDataUrl} alt="Barcode สำหรับ Admin สแกน" className="aspect-square w-full" />
+                      <img src={qrDataUrl} alt="QR Code สำหรับ Admin สแกน" className="aspect-square w-full" />
                     ) : (
                       <div className="aspect-square w-full animate-pulse rounded bg-slate-200" />
                     )}
                   </div>
                   <div className="flex items-center gap-1 text-[8px] font-black tracking-[0.12em] text-orange-300">
                     <QrCode className="h-2.5 w-2.5" />
-                    ADMIN SCAN
+                    ADMIN QR SCAN
                   </div>
                 </div>
 
@@ -295,7 +295,7 @@ export default function IDCardPreview({
       {showActions && (
         <div className="no-print mt-2 flex items-center gap-2 text-[10px] text-slate-500">
           <QrCode className="h-3 w-3 text-orange-400" />
-          QR/Barcode นี้เก็บเฉพาะรหัสอ้างอิง และต้องสแกนจากหน้าผู้ดูแลระบบเพื่อดูข้อมูลละเอียด
+          QR Code นี้เป็นมาตรฐานสำหรับระบบสแกนผู้ดูแลระบบ (Universal Scanner) เพื่อเช็คชื่อ ตรวจบัตร และส่งมอบเสื้อฝึก
         </div>
       )}
     </div>
