@@ -15,10 +15,10 @@ const FALLBACK_PHOTO = '/images/logo/jre_logo_square.png';
 function CardField({ label, value, className = '' }) {
   return (
     <div className={`min-w-0 rounded-lg border border-white/10 bg-white/[0.055] px-2 py-1.5 ${className}`}>
-      <span className="block text-[8px] font-semibold uppercase tracking-wide text-slate-400 leading-tight">
+      <span className="block text-[clamp(6px,2cqw,8px)] font-semibold uppercase tracking-wide text-slate-400 leading-tight">
         {label}
       </span>
-      <span className="mt-0.5 block truncate text-[10px] font-bold leading-tight text-white" title={value}>
+      <span className="mt-0.5 block truncate text-[clamp(7px,2.5cqw,10px)] font-bold leading-tight text-white" title={value}>
         {value || '-'}
       </span>
     </div>
@@ -176,10 +176,10 @@ export default function IDCardPreview({
         </div>
       )}
 
-      <div className="overflow-x-auto pb-2">
+      <div className="w-full min-w-0 pb-2">
         <div
           ref={cardRef}
-          className={`jre-id-card relative aspect-[1.585/1] w-full min-w-[520px] overflow-hidden rounded-[22px] border border-slate-600/80 bg-[#07172f] shadow-2xl shadow-black/40 ${compact ? 'max-w-[650px]' : 'max-w-[760px]'}`}
+          className={`jre-id-card relative mx-auto aspect-[1.585/1] w-full min-w-0 overflow-hidden rounded-[clamp(12px,3vw,22px)] border border-slate-600/80 bg-[#07172f] shadow-2xl shadow-black/40 ${compact ? 'max-w-[650px]' : 'max-w-[760px]'}`}
         >
           <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-sky-500/10 blur-3xl" />
@@ -226,17 +226,17 @@ export default function IDCardPreview({
                   </div>
 
                   <p className="mt-2 text-[8px] font-bold uppercase tracking-[0.18em] text-slate-400">ชื่อ–สกุล / Full name</p>
-                  <h2 className="mt-0.5 truncate text-[clamp(16px,2.6vw,28px)] font-black leading-tight text-white" title={cardData.thaiName}>
+                  <h2 className="mt-0.5 truncate text-[clamp(10px,4.2cqw,28px)] font-black leading-tight text-white" title={cardData.thaiName}>
                     {cardData.thaiName}
                   </h2>
-                  <p className="mt-1 truncate text-[clamp(9px,1.25vw,14px)] font-semibold leading-tight text-orange-300" title={cardData.englishName}>
+                  <p className="mt-1 truncate text-[clamp(7px,1.8cqw,14px)] font-semibold leading-tight text-orange-300" title={cardData.englishName}>
                     {cardData.englishName}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-[9px] font-black font-mono text-sky-200">
+                    <span className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-[clamp(6px,2.2cqw,9px)] font-black font-mono text-sky-200">
                       📡 {cardData.callsign}
                     </span>
-                    <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[9px] font-bold text-amber-200">
+                    <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[clamp(6px,2.2cqw,9px)] font-bold text-amber-200">
                       Nickname: {cardData.nickname}
                     </span>
                   </div>

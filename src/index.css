@@ -24,6 +24,14 @@
   }
 }
 
+/* The ID card uses container-relative typography so it scales with the card,
+   not with the viewport. This keeps the same layout usable on phones, tablets,
+   desktop screens, and narrow admin panels. */
+.jre-id-card {
+  container-type: inline-size;
+  min-inline-size: 0;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
