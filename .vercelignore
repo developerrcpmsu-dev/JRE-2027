@@ -1,0 +1,9 @@
+.git
+.vscode
+*.py
+*.sql
+*.traineddata
+msu*
+test*
+warp_perfect.py
+public/msu*
