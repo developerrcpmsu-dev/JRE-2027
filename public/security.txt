@@ -6,7 +6,7 @@
 # ==============================================================================
 
 # Contact Channels for Security Researchers & Vulnerability Reports
-Contact: mailto:bestcynix@gmail.com
+Contact: mailto:developer.rcpmsu@gmail.com
 Contact: mailto:rescue.rajapruek@msu.ac.th
 Contact: tel:+66-88-946-3459
 Contact: https://github.com/bestcynix/JRE-2027/issues

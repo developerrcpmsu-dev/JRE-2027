@@ -126,11 +126,11 @@ export default function Footer({ onOpenAdminLogin }) {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <a 
-                    href="mailto:bestcynix@gmail.com" 
+                    href="mailto:developer.rcpmsu@gmail.com" 
                     className="text-sky-300 hover:text-sky-200 font-mono hover:underline break-all cursor-pointer"
                     title="คลิกเพื่อส่งอีเมลติดต่อผู้ดูแลระบบ"
                   >
-                    bestcynix@gmail.com
+                    developer.rcpmsu@gmail.com
                   </a>
                   <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-semibold shrink-0">
                     กรณีระบบเร่งด่วน
