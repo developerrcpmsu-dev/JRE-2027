@@ -660,7 +660,7 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
       allow_order: true,
       category: 'shirt',
       base_price: 400,
-      description: 'เสื้อฝึก Joint Response Exercise (JRE 2027) ออกแบบในรูปแบบ เสื้อคอเต่าซิป แขนสั้น โทนสี เทา–ดำ แขนสโลปสีดำ ปักตรา RCPMSU และตราสัญลักษณ์ USVN พร้อมตราภาคีเครือข่ายด้านหลัง เนื้อผ้าคุณภาพสูง ใส่สบาย ระบายอากาศได้ดี พร้อมลุยทุกภารกิจ (พรีออเดอร์ รวมอยู่ในค่างวดที่ 1 ของผู้สมัคร หรือสั่งซื้อเพิ่มเติม)',
+      description: 'เสื้อฝึก Joint Response Exercise (JRE 2027) ออกแบบในรูปแบบ เสื้อคอเต่าซิป แขนสั้น โทนสี เทา–ดำ แขนสโลปสีดำ ปักตรา JRE 2027 และตราสัญลักษณ์ USVN พร้อมตราภาคีเครือข่ายด้านหลัง เนื้อผ้าคุณภาพสูง ใส่สบาย ระบายอากาศได้ดี พร้อมลุยทุกภารกิจ (พรีออเดอร์ รวมอยู่ในค่างวดที่ 1 ของผู้สมัคร หรือสั่งซื้อเพิ่มเติม)',
       image: '/images/merchandise/jre_shirt_official.jpg',
       size_chart_image: '/images/merchandise/jre_shirt_size_chart.jpg',
       images: [

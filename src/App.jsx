@@ -67,6 +67,11 @@ export default function App() {
 
   // Sync browser back/forward buttons and hash navigation
   useEffect(() => {
+    // If user arrived with incident route, redirect immediately to clean home path
+    if (window.location.pathname.toLowerCase().startsWith('/incident')) {
+      window.history.replaceState({ mainTab: 'home', subRoute: null }, '', '/');
+    }
+
     // If user arrived with legacy ?tab= or hash, normalize immediately to clean path
     const initial = parseCurrentRoute();
     if (window.location.search.includes('tab=') || window.location.hash) {

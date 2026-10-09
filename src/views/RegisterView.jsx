@@ -1272,7 +1272,7 @@ export default function RegisterView({
     if (!fullNameAffiliation.trim()) errs.fullNameAffiliation = 'กรุณาระบุคำนำหน้า ชื่อ - สกุล (ตัวย่อสถานศึกษา) ภาษาไทย เเละ ภาษาอังกฤษ ต่อกัน';
     if (!nicknameTh.trim()) errs.nicknameTh = 'กรุณากรอกชื่อเล่นภาษาไทย';
     if (!nicknameEn.trim()) errs.nicknameEn = 'กรุณากรอกชื่อเล่นภาษาอังกฤษ (Nickname in English)';
-    if (!callsign.trim()) errs.callsign = 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น RCPMSU 15-01';
+    if (!callsign.trim()) errs.callsign = 'กรุณาระบุรหัสนามเรียกขานหน่วยตัวเอง เช่น JRE-01 หรือรหัสประจำตัว';
     if (!institution.trim()) errs.institution = 'กรุณาระบุสังกัด / Affiliation (มหาวิทยาลัยหรือสถาบัน)';
 
     if (ageResult.years < 15) {
@@ -5506,7 +5506,7 @@ export default function RegisterView({
                       setCallsign(e.target.value);
                       if (e.target.value.trim()) clearFieldError('callsign');
                     }}
-                    placeholder="RCPMSU 15-01 (ตัวอย่าง)"
+                    placeholder="JRE-01 หรือรหัสประจำตัว (ตัวอย่าง)"
                     className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-mono font-medium transition-all ${
                       fieldErrors.callsign 
                         ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 

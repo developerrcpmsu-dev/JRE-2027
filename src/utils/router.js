@@ -59,6 +59,11 @@ export function parseCurrentRoute() {
   const first = segments[0];
   const second = segments[1];
 
+  // Incident route block: JRE 2027 does not host rescue incident reports
+  if (first === 'incidents' || first === 'incident') {
+    return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
+  }
+
   // Schedule
   if (first === 'schedule' || first === 'timeline') {
     return { mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' };

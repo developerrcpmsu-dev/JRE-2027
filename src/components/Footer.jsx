@@ -86,11 +86,11 @@ export default function Footer({ onOpenAdminLogin }) {
             </div>
           </div>
 
-          {/* Col 3: Developer & Web Admin Team (RCPDEV) */}
+          {/* Col 3: Developer & Web Admin Team (JRE DEV) */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200 border-b border-slate-800 pb-2 flex items-center gap-1.5">
               <Code2 className="w-4 h-4 text-sky-400" />
-              <span>ทีมพัฒนาเว็บไซต์ผู้ดูแลระบบ RCPDEV</span>
+              <span>ทีมพัฒนาและเทคโนโลยีระบบ JRE DEV</span>
             </h4>
             <div className="space-y-2.5 text-xs">
               <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[11px] text-amber-300 leading-snug">
@@ -103,7 +103,7 @@ export default function Footer({ onOpenAdminLogin }) {
 
               <div>
                 <span className="text-[11px] text-slate-400 block">ผู้ดูแลระบบเว็บไซต์:</span>
-                <span className="font-bold text-white">นายพงศ์ภรณ์ ทองศิริ · RCPDEV</span>
+                <span className="font-bold text-white">นายพงศ์ภรณ์ ทองศิริ · JRE DEV (BestCyniX)</span>
               </div>
 
               <p className="text-[11px] text-slate-400">
@@ -126,11 +126,11 @@ export default function Footer({ onOpenAdminLogin }) {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <a 
-                    href="mailto:developer.rcpmsu@gmail.com" 
+                    href="mailto:bestcynix@gmail.com" 
                     className="text-sky-300 hover:text-sky-200 font-mono hover:underline break-all cursor-pointer"
                     title="คลิกเพื่อส่งอีเมลติดต่อผู้ดูแลระบบ"
                   >
-                    developer.rcpmsu@gmail.com
+                    bestcynix@gmail.com
                   </a>
                   <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-semibold shrink-0">
                     กรณีระบบเร่งด่วน
@@ -152,7 +152,7 @@ export default function Footer({ onOpenAdminLogin }) {
             <ul className="space-y-2 text-xs">
               <li>
                 <a 
-                  href="https://github.com/developerrcpmsu-dev/JRE-2027" 
+                  href="https://github.com/bestcynix/JRE-2027" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="hover:text-white flex items-center gap-1.5 transition-colors group cursor-pointer"
@@ -179,13 +179,13 @@ export default function Footer({ onOpenAdminLogin }) {
               </li>
               <li>
                 <a 
-                  href="https://vercel.com/new?teamSlug=rcp-msu" 
+                  href="https://jre-2027.vercel.app" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="hover:text-white flex items-center gap-1.5 transition-colors group cursor-pointer"
                 >
                   <span className="text-white font-bold">▲</span>
-                  <span>Vercel Deployment (rcp-msu)</span>
+                  <span>Vercel Production (jre-2027)</span>
                   <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-white" />
                 </a>
               </li>
@@ -258,7 +258,7 @@ export default function Footer({ onOpenAdminLogin }) {
                 <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 shadow-lg">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                   <span className="text-rescue-400 font-black">
-                    Dev RCP16-37 นายพงศ์ภรณ์ ทองศิริ
+                    Dev JRE-2027 นายพงศ์ภรณ์ ทองศิริ (BestCyniX)
                   </span>
                   <span className="text-slate-500">•</span>
                   <span className="font-mono text-slate-300 font-semibold">68011211206</span>

@@ -28,7 +28,7 @@
 - หน้า presentation: <https://jre-2027.vercel.app/presentation>
 - หน้ารายงานหลักฐาน: <https://jre-2027.vercel.app/security>
 - security.txt: <https://jre-2027.vercel.app/.well-known/security.txt>
-- Repository ตามลิงก์ที่หน้าเว็บประกาศ: <https://github.com/developerrcpmsu-dev/JRE-2027>
+- Repository ตามลิงก์ที่หน้าเว็บประกาศ: <https://github.com/bestcynix/JRE-2027>
 
 ## คำขอของผู้วิจัยและไฟล์แนบ
 

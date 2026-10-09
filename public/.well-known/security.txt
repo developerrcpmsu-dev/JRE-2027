@@ -6,10 +6,10 @@
 # ==============================================================================
 
 # Contact Channels for Security Researchers & Vulnerability Reports
-Contact: mailto:developer.rcpmsu@gmail.com
+Contact: mailto:bestcynix@gmail.com
 Contact: mailto:rescue.rajapruek@msu.ac.th
 Contact: tel:+66-88-946-3459
-Contact: https://github.com/developerrcpmsu-dev/JRE-2027/issues
+Contact: https://github.com/bestcynix/JRE-2027/issues
 
 # Expiration Date for this security policy (RFC 3339)
 Expires: 2027-12-31T23:59:59.000Z
@@ -25,4 +25,4 @@ Acknowledgments: https://jre-2027.vercel.app/security-audit
 # Preferred Languages
 Preferred-Languages: th, en
 
-# Lead Systems Architect & Developer: นายพงศ์ภรณ์ ทองศิริ (Dev RCP16-37)
+# Lead Systems Architect & Developer: นายพงศ์ภรณ์ ทองศิริ (BestCyniX Dev / JRE 2027)

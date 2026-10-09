@@ -47,6 +47,18 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/incidents(.*)",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/incident(.*)",
+      "destination": "/",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/.well-known/security.txt",
