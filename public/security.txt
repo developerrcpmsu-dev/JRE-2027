@@ -9,7 +9,7 @@
 Contact: mailto:developer.rcpmsu@gmail.com
 Contact: mailto:rescue.rajapruek@msu.ac.th
 Contact: tel:+66-88-946-3459
-Contact: https://github.com/bestcynix/JRE-2027/issues
+Contact: https://github.com/developerrcpmsu-dev/JRE-2027/issues
 
 # Expiration Date for this security policy (RFC 3339)
 Expires: 2027-12-31T23:59:59.000Z

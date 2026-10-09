@@ -152,7 +152,7 @@ export default function Footer({ onOpenAdminLogin }) {
             <ul className="space-y-2 text-xs">
               <li>
                 <a 
-                  href="https://github.com/bestcynix/JRE-2027" 
+                  href="https://github.com/developerrcpmsu-dev/JRE-2027" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="hover:text-white flex items-center gap-1.5 transition-colors group cursor-pointer"

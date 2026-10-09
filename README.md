@@ -236,7 +236,7 @@ flowchart TD
 ## 🚀 วิธีการ Deploy ขึ้น Production (Vercel Deployment)
 
 ### ขั้นตอนที่ 1: Deploy ผ่าน Vercel Dashboard
-1. นำเข้า Repository [bestcynix/JRE-2027](https://github.com/bestcynix/JRE-2027) บน Vercel
+1. นำเข้า Repository [developerrcpmsu-dev/JRE-2027](https://github.com/developerrcpmsu-dev/JRE-2027) บน Vercel
 2. เลือก Framework Preset เป็น **Vite**
 3. Build Command: `npm run build`
 4. Output Directory: `dist`
@@ -286,4 +286,4 @@ npm run preview
 
 - **ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)**  
 - ☎️ โทรศัพท์ผู้ประสานงาน: **098-329-6762**  
-- 🌐 GitHub Repository: [bestcynix/JRE-2027](https://github.com/bestcynix/JRE-2027)
+- 🌐 GitHub Repository: [developerrcpmsu-dev/JRE-2027](https://github.com/developerrcpmsu-dev/JRE-2027)
