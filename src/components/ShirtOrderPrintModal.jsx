@@ -13,6 +13,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import { DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
 
 export default function ShirtOrderPrintModal({
   isOpen,
@@ -196,7 +197,9 @@ export default function ShirtOrderPrintModal({
                   <p><strong>วันที่พิมพ์:</strong> {currentDateStr}</p>
                   <p><strong>เวลา:</strong> {currentTimeStr} น.</p>
                   <p><strong>ผู้จัดทำ:</strong> ฝ่ายพัสดุและสถานที่ JRE 2027</p>
-                  <p className="text-emerald-700 font-bold">จุดส่งมอบ: อาคารพลศึกษา มมส (13 ก.พ. 2570)</p>
+                  <p className="text-emerald-700 font-bold">
+                    จุดส่งมอบ: {merchandiseConfig?.pickup?.short_location || DEFAULT_MERCHANDISE_CONFIG.pickup.short_location} ({merchandiseConfig?.pickup?.schedule || DEFAULT_MERCHANDISE_CONFIG.pickup.schedule})
+                  </p>
                 </div>
               </div>
             </div>

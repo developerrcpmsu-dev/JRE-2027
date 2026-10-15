@@ -16,9 +16,9 @@ import {
   Eye,
   RefreshCw,
   Loader2
-} from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import { DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
 
 export default function AdminQRScannerModal({ 
   orders = [], 
@@ -126,7 +126,7 @@ export default function AdminQRScannerModal({
         user_email: matchedReg.user_email || '',
         shirt_size: matchedReg.shirt_size || 'L',
         pickup_method: 'pickup',
-        pickup_location: 'อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (13 ก.พ. 2570)',
+        pickup_location: `${DEFAULT_MERCHANDISE_CONFIG.pickup.location} (${DEFAULT_MERCHANDISE_CONFIG.pickup.schedule})`,
         pickup_status: isReceived ? 'received' : 'pending',
         pickup_at: matchedReg.shirt_received_date || null,
         payment_status: isFullyPaid ? 'paid_verified' : (isRound1Paid ? 'paid_verified' : 'pending_verification'),

@@ -155,7 +155,7 @@ export default function UserProfileView({
     });
 
     return () => unsubscribe();
-  }, [userUid, currentUser, isAdmin]);
+  }, [userUid, currentUser?.id, currentUser?.email, isAdmin]);
 
   const targetEmail = userAccount?.email?.toLowerCase().trim();
   const regInfo = userReg || registrations.find(r => 

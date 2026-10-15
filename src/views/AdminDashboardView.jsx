@@ -7067,8 +7067,8 @@ export default function AdminDashboardView({
               <p className="text-2xl sm:text-3xl font-black text-amber-400">
                 {sizeStats.totalPendingShirts} <span className="text-xs font-normal text-slate-400">ตัว</span>
               </p>
-              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80 truncate">
-                รอรับ ณ อาคารพลศึกษา มมส (13 ก.พ. 2570)
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80 leading-snug">
+                รอรับ ณ {localMerchConfig?.pickup?.short_location || DEFAULT_MERCHANDISE_CONFIG.pickup.short_location} ({localMerchConfig?.pickup?.schedule || DEFAULT_MERCHANDISE_CONFIG.pickup.schedule})
               </p>
             </div>
 

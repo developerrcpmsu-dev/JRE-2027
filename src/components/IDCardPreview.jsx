@@ -40,7 +40,12 @@ export default function IDCardPreview({
   const [copied, setCopied] = useState(false);
   const [isDownloadingCard, setIsDownloadingCard] = useState(false);
   const [zoomMode, setZoomMode] = useState('fit'); // 'fit' or 'actual'
-  const [containerWidth, setContainerWidth] = useState(BASE_WIDTH);
+  const [containerWidth, setContainerWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return Math.min(BASE_WIDTH, Math.max(260, window.innerWidth - 32));
+    }
+    return BASE_WIDTH;
+  });
 
   const containerRef = useRef(null);
   const cardRef = useRef(null);
@@ -64,7 +69,7 @@ export default function IDCardPreview({
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           if (entry.contentRect && entry.contentRect.width > 0) {
-            setContainerWidth(entry.contentRect.width);
+            setContainerWidth(Math.floor(entry.contentRect.width));
           }
         }
       });
@@ -178,6 +183,14 @@ export default function IDCardPreview({
           clonedElement.style.width = `${effectiveBaseWidth}px`;
           clonedElement.style.height = `${effectiveBaseHeight}px`;
           clonedElement.style.margin = '0';
+          // Ensure parent wrapper does not clip html2canvas bounding box on mobile devices
+          if (clonedElement.parentElement) {
+            clonedElement.parentElement.style.width = `${effectiveBaseWidth}px`;
+            clonedElement.parentElement.style.height = `${effectiveBaseHeight}px`;
+            clonedElement.parentElement.style.overflow = 'visible';
+            clonedElement.parentElement.style.maxWidth = 'none';
+            clonedElement.parentElement.style.maxHeight = 'none';
+          }
         }
       });
 
@@ -206,7 +219,7 @@ export default function IDCardPreview({
   const hasNickname = cardData.nickname && cardData.nickname !== '-';
 
   return (
-    <div className="jre-id-card-print-root w-full min-w-0">
+    <div className="jre-id-card-print-root w-full min-w-0 overflow-hidden">
       {/* High-Fidelity Print Stylesheet */}
       <style>{`
         @media print {

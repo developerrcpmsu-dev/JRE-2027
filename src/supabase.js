@@ -1363,7 +1363,7 @@ export const DataService = {
   async getUserAccounts({ includeSecrets = false, admin = false, userId = null, email = null } = {}) {
     let accounts = [];
     const cleanEmail = email ? String(email).trim().toLowerCase() : null;
-    const shouldReadRemote = isSupabaseConfigured && supabase && (includeSecrets || admin || userId || cleanEmail);
+    const shouldReadRemote = isSupabaseConfigured && supabase && (includeSecrets || admin);
     if (shouldReadRemote) {
       try {
         const { data, error } = await supabase
@@ -1375,13 +1375,17 @@ export const DataService = {
           accounts = data.value;
         }
       } catch (e) {
-        console.warn('Supabase user_accounts query notice, fallback to local', e);
+        // Silently fallback to local cache
       }
     }
 
     if (accounts.length === 0) {
-      const raw = localStorage.getItem('jre2027_user_accounts');
-      accounts = raw ? JSON.parse(raw) : [];
+      try {
+        const raw = localStorage.getItem('jre2027_user_accounts');
+        accounts = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        accounts = [];
+      }
     }
 
     const deduped = mergeAndDeduplicateAccounts(accounts);

@@ -367,7 +367,7 @@ export default function App() {
           DataService.getMerchandiseOrders(),
           DataService.getTeam(),
           DataService.getSpeakers(),
-          DataService.getUserAccounts({ admin: true })
+          hasValidAdminSession ? DataService.getUserAccounts({ admin: true }) : Promise.resolve([])
         ]);
 
         if (Array.isArray(regs)) setRegistrations(regs);
