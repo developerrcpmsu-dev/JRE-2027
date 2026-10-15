@@ -320,6 +320,9 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
         id: chooseId(existing.id, acc.id, cleanEmail),
         name: chooseName(existing.name, acc.name),
         email: cleanEmail || existing.email,
+        phone: acc.phone || existing.phone || '',
+        student_id: acc.student_id || existing.student_id || '',
+        affiliation: acc.affiliation || existing.affiliation || '',
         avatar: chooseAvatar(existing.avatar, acc.avatar),
         role: mergedRole,
         provider: hasBoth ? 'both' : (hasPassThis || hasPassExisting ? 'email' : 'google'),
@@ -1373,6 +1376,18 @@ export const DataService = {
               value: deduped,
               updated_at: new Date().toISOString()
             });
+
+          const rows = deduped.map(u => ({
+            id: u.id,
+            name: u.name,
+            email: (u.email || '').toLowerCase().trim(),
+            avatar: u.avatar || '',
+            role: u.role || 'applicant',
+            provider: u.provider || 'email',
+            created_at: u.created_at || new Date().toISOString(),
+            last_login_at: u.last_login_at || new Date().toISOString()
+          }));
+          await supabase.from('user_accounts').upsert(rows, { onConflict: 'email' });
         } catch (e) {
           console.warn('Supabase auto-deduplicate sync notice:', e);
         }
@@ -1442,6 +1457,18 @@ export const DataService = {
             value: deduped,
             updated_at: new Date().toISOString()
           });
+
+        const rows = deduped.map(u => ({
+          id: u.id,
+          name: u.name,
+          email: (u.email || '').toLowerCase().trim(),
+          avatar: u.avatar || '',
+          role: u.role || 'applicant',
+          provider: u.provider || 'email',
+          created_at: u.created_at || new Date().toISOString(),
+          last_login_at: u.last_login_at || new Date().toISOString()
+        }));
+        await supabase.from('user_accounts').upsert(rows, { onConflict: 'email' });
       } catch (err) {
         console.warn('Sync user account note:', err);
       }

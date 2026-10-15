@@ -91,6 +91,7 @@ import {
   getRegistrationScheduleStatus 
 } from '../utils/registrationSchedule';
 import * as XLSX from 'xlsx';
+import { resolveUserExtraDetails } from '../utils/userUtils';
 
 export default function AdminDashboardView({
   initialTab = 'applicants',
@@ -798,6 +799,9 @@ export default function AdminDashboardView({
   const [editingUserAccount, setEditingUserAccount] = useState(null); // edit user
   const [editUserName, setEditUserName] = useState('');
   const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserPhone, setEditUserPhone] = useState('');
+  const [editUserStudentId, setEditUserStudentId] = useState('');
+  const [editUserAffiliation, setEditUserAffiliation] = useState('');
   const [editUserRole, setEditUserRole] = useState('user');
   const [editUserVerified, setEditUserVerified] = useState(true);
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -840,6 +844,9 @@ export default function AdminDashboardView({
       await DataService.adminUpdateUser(editingUserAccount.id, {
         name: editUserName.trim(),
         email: editUserEmail.trim().toLowerCase(),
+        phone: editUserPhone.trim(),
+        student_id: editUserStudentId.trim(),
+        affiliation: editUserAffiliation.trim(),
         role: editUserRole,
         verified: editUserVerified,
         email_verified: editUserVerified
@@ -920,7 +927,12 @@ export default function AdminDashboardView({
       'รหัสผู้ใช้ (UID)',
       'ชื่อ-นามสกุล (Name)',
       'อีเมล (Email)',
-      'ยืนยันอีเมลแล้ว (Email Verified)',
+      'เบอร์โทรศัพท์ (Phone)',
+      'รหัสนิสิต (Student ID)',
+      'สถาบัน/สังกัด (Affiliation)',
+      'นามเรียกขาน (Call Sign)',
+      'สถานะการสมัครเข้าร่วมโครงการ',
+      'สถานะการยืนยันตัวตน',
       'ผู้ให้บริการเข้าสู่ระบบ (Auth Provider)',
       'ข้อมูล credential (ไม่ส่งออก secret)',
       'สถานะการจัดเก็บ credential (ไม่ส่งออก hash/salt)',
@@ -939,19 +951,27 @@ export default function AdminDashboardView({
       return 'รอยืนยันบัญชี';
     };
 
-    const dataRows = userAccounts.map((u, idx) => [
-      idx + 1,
-      u.id || '-',
-      u.name || '-',
-      u.email || '-',
-      getVerificationStatusText(u),
-      u.provider === 'both' ? 'Google OAuth + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
-      'ไม่แสดง/ไม่ส่งออกเพื่อป้องกันข้อมูลลับ',
-      u.provider === 'email' || u.provider === 'both' ? 'มี credential — รายละเอียดไม่แสดง' : 'จัดการโดย Google OAuth',
-      u.role || 'user',
-      u.created_at ? new Date(u.created_at).toLocaleString('th-TH') : '-',
-      u.updated_at ? new Date(u.updated_at).toLocaleString('th-TH') : '-'
-    ]);
+    const dataRows = userAccounts.map((u, idx) => {
+      const details = resolveUserExtraDetails(u, registrations);
+      return [
+        idx + 1,
+        u.id || '-',
+        u.name || '-',
+        u.email || '-',
+        details.phone || u.phone || '-',
+        details.studentId || u.student_id || '-',
+        details.affiliation || u.affiliation || '-',
+        details.callsign || '-',
+        details.isRegistered ? `สมัครแล้ว (${details.registrationStatus})` : 'ยังไม่ได้สมัคร',
+        getVerificationStatusText(u),
+        u.provider === 'both' ? 'Google OAuth + Email & Password' : u.provider === 'email' ? 'Email & Password' : 'Google OAuth',
+        'ไม่แสดง/ไม่ส่งออกเพื่อป้องกันข้อมูลลับ',
+        u.provider === 'email' || u.provider === 'both' ? 'มี credential — รายละเอียดไม่แสดง' : 'จัดการโดย Google OAuth',
+        u.role || 'user',
+        u.created_at ? new Date(u.created_at).toLocaleString('th-TH') : '-',
+        u.updated_at ? new Date(u.updated_at).toLocaleString('th-TH') : '-'
+      ];
+    });
 
     const sanitizeCell = (val) => {
       if (val === null || val === undefined) return '-';
@@ -8236,12 +8256,14 @@ export default function AdminDashboardView({
 
           {/* Users Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-800 scrollbar-none">
-            <table className="w-full min-w-[850px] text-left text-xs border-collapse">
+            <table className="w-full min-w-[1050px] text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-4">#</th>
                   <th className="py-3 px-4">ผู้ใช้งาน (User Info)</th>
+                  <th className="py-3 px-4">เบอร์โทรศัพท์ (Phone)</th>
                   <th className="py-3 px-4">อีเมล & สถานะ (Email)</th>
+                  <th className="py-3 px-4">สถาบัน / สังกัด & สถานะสมัคร</th>
                   <th className="py-3 px-4">ช่องทางยืนยันตัวตน</th>
                   <th className="py-3 px-4">Credential status (ไม่แสดง hash/salt)</th>
                   <th className="py-3 px-4">บทบาท (Role)</th>
@@ -8262,12 +8284,20 @@ export default function AdminDashboardView({
                       const matchName = (u.name || '').toLowerCase().includes(q);
                       const matchEmail = (u.email || '').toLowerCase().includes(q);
                       const matchId = (u.id || '').toLowerCase().includes(q);
-                      return matchName || matchEmail || matchId;
+                      const matchPhone = (u.phone || '').toLowerCase().includes(q);
+                      const matchStudentId = (u.student_id || '').toLowerCase().includes(q);
+                      const matchAffiliation = (u.affiliation || '').toLowerCase().includes(q);
+                      return matchName || matchEmail || matchId || matchPhone || matchStudentId || matchAffiliation;
                     }
                     return true;
                   })
                   .map((acc, index) => {
                     const hasPassword = acc.provider === 'email' || acc.provider === 'both';
+                    const details = resolveUserExtraDetails(acc, registrations);
+                    const displayPhone = details.formattedPhone || acc.phone || '';
+                    const displayStudentId = details.studentId || acc.student_id || '';
+                    const displayAffiliation = details.affiliation || acc.affiliation || '';
+
                     return (
                       <tr key={acc.id || acc.email || index} className="hover:bg-slate-800/40 transition-colors">
                         <td className="py-3.5 px-4 font-mono text-slate-500 font-bold">
@@ -8289,6 +8319,17 @@ export default function AdminDashboardView({
                                 <span className="font-mono text-[10px] text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded font-bold tracking-wide">
                                   UID: {acc.id || '-'}
                                 </span>
+                                {displayStudentId && (
+                                  <span className="font-mono text-[10px] text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-bold tracking-wide flex items-center gap-1">
+                                    <GraduationCap className="w-3 h-3 text-emerald-400" />
+                                    <span>{displayStudentId}</span>
+                                  </span>
+                                )}
+                                {details.callsign && (
+                                  <span className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold tracking-wide">
+                                    {details.callsign}
+                                  </span>
+                                )}
                                 {acc.id && (
                                   <>
                                     <button
@@ -8320,6 +8361,33 @@ export default function AdminDashboardView({
                           </div>
                         </td>
 
+                        {/* Phone Column */}
+                        <td className="py-3.5 px-4">
+                          {displayPhone ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-emerald-300 font-bold text-xs bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                                <Phone className="w-3 h-3 text-emerald-400" />
+                                <span>{displayPhone}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const raw = details.phone || acc.phone || displayPhone;
+                                  navigator.clipboard.writeText(raw);
+                                  triggerToast(`คัดลอกเบอร์โทร ${raw} สำเร็จ!`, 'success');
+                                }}
+                                className="p-1 hover:bg-slate-700/60 text-slate-400 hover:text-emerald-300 rounded transition-colors cursor-pointer"
+                                title="คัดลอกเบอร์โทรศัพท์"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 font-mono text-[11px]">-</span>
+                          )}
+                        </td>
+
                         <td className="py-3.5 px-4">
                           <div className="font-mono text-slate-200 font-medium">
                             {acc.email}
@@ -8344,6 +8412,39 @@ export default function AdminDashboardView({
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
                                 <Clock className="w-3 h-3 text-amber-400" />
                                 <span>รอยืนยันบัญชี</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Affiliation & Registration Column */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-200 text-[11px] max-w-[210px] truncate" title={displayAffiliation || '-'}>
+                            {displayAffiliation || '-'}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1 flex-wrap">
+                            {details.isRegistered ? (
+                              <>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 rounded text-[9px] font-bold">
+                                  ✓ สมัครโครงการแล้ว
+                                </span>
+                                {details.paymentStatus === 'verified' ? (
+                                  <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded text-[9px] font-bold">
+                                    ชำระแล้ว
+                                  </span>
+                                ) : details.paymentStatus === 'pending' ? (
+                                  <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold">
+                                    รอตรวจสลิป
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[9px]">
+                                    ยังไม่ชำระ
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-slate-800/80 text-slate-400 border border-slate-700/60 rounded text-[9px]">
+                                ยังไม่ส่งใบสมัครโครงการ
                               </span>
                             )}
                           </div>
@@ -8415,6 +8516,9 @@ export default function AdminDashboardView({
                                 setEditingUserAccount(acc);
                                 setEditUserName(acc.name || '');
                                 setEditUserEmail(acc.email || '');
+                                setEditUserPhone(acc.phone || details.phone || '');
+                                setEditUserStudentId(acc.student_id || details.studentId || '');
+                                setEditUserAffiliation(acc.affiliation || details.affiliation || '');
                                 setEditUserRole(acc.role || 'user');
                                 setEditUserVerified(Boolean(acc.email_verified || acc.verified || acc.provider === 'google' || acc.provider === 'both' || (typeof acc.id === 'string' && acc.id.startsWith('google_'))));
                               }}
@@ -8511,6 +8615,45 @@ export default function AdminDashboardView({
                   value={editUserEmail}
                   onChange={e => setEditUserEmail(e.target.value)}
                   required
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  เบอร์โทรศัพท์ติดต่อ (Phone)
+                </label>
+                <input
+                  type="tel"
+                  value={editUserPhone}
+                  onChange={e => setEditUserPhone(e.target.value)}
+                  placeholder="เช่น 098-329-6762 หรือ 080-278-3786"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  รหัสนิสิต / นักศึกษา (Student ID)
+                </label>
+                <input
+                  type="text"
+                  value={editUserStudentId}
+                  onChange={e => setEditUserStudentId(e.target.value)}
+                  placeholder="เช่น 68010310452"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  มหาวิทยาลัย / หน่วยงานสังกัด (Affiliation)
+                </label>
+                <input
+                  type="text"
+                  value={editUserAffiliation}
+                  onChange={e => setEditUserAffiliation(e.target.value)}
+                  placeholder="เช่น มหาวิทยาลัยมหาสารคาม (มมส) / ชมรมกู้ภัยราชพฤกษ์"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
