@@ -67,7 +67,8 @@ import {
   Mail,
   Printer,
   LogOut,
-  Crown
+  Crown,
+  MapPin
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -267,7 +268,11 @@ export default function AdminDashboardView({
     return {
       ...base,
       payment: cleanPayment,
-      products: products.length > 0 ? products : DEFAULT_MERCHANDISE_CONFIG.products
+      products: products.length > 0 ? products : DEFAULT_MERCHANDISE_CONFIG.products,
+      pickup: {
+        ...DEFAULT_MERCHANDISE_CONFIG.pickup,
+        ...(base.pickup || {})
+      }
     };
   };
 
@@ -7873,6 +7878,167 @@ export default function AdminDashboardView({
                     placeholder="สั่งซื้อเสื้อ/กางเกงโครงการผ่าน Google Form (ช่องทางสำรอง)"
                     className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* 2.5 Pickup Location & Schedule Settings (สถานที่รับของ & กำหนดการส่งมอบ) */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                <div className="space-y-0.5">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-emerald-400" />
+                    <span>ตั้งค่าสถานที่รับของ & วันเวลากำหนดรับเสื้อ (Pickup Logistics & Schedule Settings)</span>
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    กำหนดจุดรับสินค้า วันเวลารายงานตัวรับเสื้อ และคำแนะนำที่จะแสดงบนบัตรดิจิทัลและ QR Code ของผู้สมัครทุกคน
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                    isEditingMerchConfig 
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse' 
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  }`}>
+                    {isEditingMerchConfig ? '✏️ กำลังอยู่ในโหมดแก้ไข' : '🔒 โหมดดูข้อมูล (กดแก้ไขเพื่อปรับค่า)'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. จุดรับสินค้า (แบบเต็ม) */}
+                <div>
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>จุดรับสินค้า / สถานที่รับของ (ชื่อเต็ม แสดงใน QR Modal & รายละเอียด):</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isEditingMerchConfig}
+                    value={localMerchConfig.pickup?.location || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        pickup: {
+                          ...(localMerchConfig.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup),
+                          location: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (มมส)"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950 font-medium"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    ตัวอย่าง: อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (มมส)
+                  </span>
+                </div>
+
+                {/* 2. ชื่อสถานที่แบบย่อ */}
+                <div>
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-sky-400" />
+                    <span>ชื่อสถานที่แบบย่อ (สำหรับบัตร & แท็กสรุป):</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isEditingMerchConfig}
+                    value={localMerchConfig.pickup?.short_location || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        pickup: {
+                          ...(localMerchConfig.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup),
+                          short_location: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="อาคารพลศึกษา มมส"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950 font-medium"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    ตัวอย่าง: อาคารพลศึกษา มมส
+                  </span>
+                </div>
+
+                {/* 3. วันเวลากำหนดรับของ */}
+                <div>
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                    <span>วันเวลาที่รับของ / กำหนดการส่งมอบเสื้อ:</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isEditingMerchConfig}
+                    value={localMerchConfig.pickup?.schedule || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        pickup: {
+                          ...(localMerchConfig.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup),
+                          schedule: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570 (เวลา 08:30 - 16:30 น.)"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950 font-medium"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    ตัวอย่าง: วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570 (เวลา 08:30 - 16:30 น.)
+                  </span>
+                </div>
+
+                {/* 4. เบอร์โทรประสานงานจุดรับของ */}
+                <div>
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>เบอร์โทรประสานงานจุดรับเสื้อ / ผู้ประสานงาน:</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isEditingMerchConfig}
+                    value={localMerchConfig.pickup?.contact_phone || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        pickup: {
+                          ...(localMerchConfig.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup),
+                          contact_phone: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="098-329-6762"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    เบอร์โทรติดต่อเจ้าหน้าที่ฝ่ายพัสดุและจัดเตรียมเสื้อผ้า
+                  </span>
+                </div>
+
+                {/* 5. หมายเหตุ / คำแนะนำ */}
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>คำแนะนำ ณ จุดรับของ (แสดงใต้บัตรรับเสื้อ & ป็อปอัป QR):</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isEditingMerchConfig}
+                    value={localMerchConfig.pickup?.note || ''}
+                    onChange={(e) => {
+                      setLocalMerchConfig({
+                        ...localMerchConfig,
+                        pickup: {
+                          ...(localMerchConfig.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup),
+                          note: e.target.value
+                        }
+                      });
+                    }}
+                    placeholder="แสดงบัตรนี้หรือบัตรประจำตัวประชาชนต่อเจ้าหน้าที่ ณ จุดลงทะเบียนรับเสื้อ"
+                    className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    คำแนะนำระบุเอกสารหรือขั้นตอนที่ผู้มารับของต้องเตรียมพร้อม
+                  </span>
                 </div>
               </div>
             </div>

@@ -36,7 +36,8 @@ import ModalPortal from '../components/ModalPortal';
 import { 
   getRegistrationFeeDetails, 
   isMsuInstitution,
-  SHIRT_SIZE_OPTIONS 
+  SHIRT_SIZE_OPTIONS,
+  DEFAULT_MERCHANDISE_CONFIG
 } from '../data/defaultData';
 
 export default function MerchandiseView({
@@ -129,6 +130,8 @@ export default function MerchandiseView({
     const orderNumber = `JRE27-SHIRT-${(myRegistration.id || myRegistration.user_id || 'REG').slice(0, 6).toUpperCase()}`;
     const isShirtReceived = myRegistration.shirt_pickup_status === 'received' || myRegistration.shirt_received === true;
 
+    const pickupSettings = merchandiseConfig?.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup;
+
     return {
       id: `reg_shirt_${myRegistration.id || myRegistration.user_id}`,
       order_number: orderNumber,
@@ -136,7 +139,11 @@ export default function MerchandiseView({
       customer_name: myRegistration.full_name_affiliation || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim(),
       customer_phone: myRegistration.phone || '',
       pickup_method: 'pickup',
-      pickup_location: 'อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (13 ก.พ. 2570)',
+      pickup_location: pickupSettings?.location || 'อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (มมส)',
+      pickup_short_location: pickupSettings?.short_location || 'อาคารพลศึกษา มมส',
+      pickup_schedule: pickupSettings?.schedule || 'วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570 (เวลา 08:30 - 16:30 น.)',
+      pickup_contact_phone: pickupSettings?.contact_phone || '098-329-6762',
+      pickup_note: pickupSettings?.note || 'แสดงบัตรนี้หรือบัตรประจำตัวประชาชนต่อเจ้าหน้าที่ ณ จุดลงทะเบียนรับเสื้อ',
       payment_status: isFullyPaid ? 'paid_verified' : (isRound1Paid ? 'paid_verified' : 'pending_verification'),
       pickup_status: isShirtReceived ? 'received' : 'pending',
       pickup_at: myRegistration.shirt_received_date || myRegistration.shirt_pickup_at || null,
@@ -161,7 +168,7 @@ export default function MerchandiseView({
       ],
       created_at: myRegistration.created_at || new Date().toISOString()
     };
-  }, [myRegistration, applicantFeeInfo, msuFeeDetails, user]);
+  }, [myRegistration, applicantFeeInfo, msuFeeDetails, user, merchandiseConfig]);
 
   // Filter external / past merchandise orders
   const searchedOrders = orders.filter(o => {
@@ -645,7 +652,7 @@ export default function MerchandiseView({
                     บัตรรับเสื้อโครงการ & ดิจิทัล QR Code
                   </h3>
                   <p className="text-xs text-slate-300">
-                    แสดงบัตรนี้ต่อเจ้าหน้าที่ ณ วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570
+                    {applicantShirtOrder.pickup_note} • {applicantShirtOrder.pickup_schedule}
                   </p>
                 </div>
 
@@ -707,51 +714,100 @@ export default function MerchandiseView({
                 </div>
 
                 {/* Details Column */}
-                <div className="md:col-span-8 space-y-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">ขนาดไซส์เสื้อ:</span>
-                      <strong className="text-base text-amber-300 font-black">
-                        ไซส์ {applicantShirtOrder.shirt_size}
-                      </strong>
+                <div className="md:col-span-8 space-y-3.5">
+                  {/* Top Stats Row: Badges for Quick Scanning */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div className="p-3 bg-slate-950/90 rounded-2xl border border-slate-800 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                        <Shirt className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-medium">ขนาดไซส์เสื้อ:</span>
+                        <strong className="text-base text-amber-300 font-black tracking-wide">
+                          ไซส์ {applicantShirtOrder.shirt_size}
+                        </strong>
+                      </div>
                     </div>
 
-                    <div className={`p-3 rounded-xl border ${
+                    <div className={`p-3 rounded-2xl border flex items-center gap-3 ${
                       applicantShirtOrder.pickup_status === 'received'
                         ? 'bg-emerald-950/40 border-emerald-500/40'
-                        : 'bg-amber-950/20 border-amber-500/30'
+                        : 'bg-amber-950/30 border-amber-500/30'
                     }`}>
-                      <span className="text-[10px] text-slate-400 block mb-0.5">สถานะการรับของ:</span>
-                      {applicantShirtOrder.pickup_status === 'received' ? (
-                        <strong className="text-xs text-emerald-300 font-bold flex items-center gap-1">
-                          <PackageCheck className="w-3.5 h-3.5 text-emerald-400" /> รับเสื้อแล้ว
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                        applicantShirtOrder.pickup_status === 'received'
+                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                          : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                      }`}>
+                        {applicantShirtOrder.pickup_status === 'received' ? (
+                          <PackageCheck className="w-5 h-5" />
+                        ) : (
+                          <Clock className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-medium">สถานะรับเสื้อ:</span>
+                        {applicantShirtOrder.pickup_status === 'received' ? (
+                          <strong className="text-xs text-emerald-300 font-bold block">
+                            รับเสื้อแล้ว
+                          </strong>
+                        ) : (
+                          <strong className="text-xs text-amber-300 font-bold block">
+                            ยังไม่ได้รับ (รอรับของ)
+                          </strong>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-950/90 rounded-2xl border border-slate-800 flex items-center gap-3 col-span-2 sm:col-span-1">
+                      <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0 text-sky-400">
+                        <Award className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-400 block font-medium">รหัสนามเรียกขาน:</span>
+                        <strong className="text-xs text-sky-300 font-mono font-bold block break-words">
+                          {applicantShirtOrder.callsign || '-'}
                         </strong>
-                      ) : (
-                        <strong className="text-xs text-amber-300 font-bold flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-amber-400" /> ยังไม่ได้รับ
-                        </strong>
-                      )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer & Location Cards (No Truncate, Full Legibility) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    {/* Customer Info Card */}
+                    <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold">
+                        <User className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>ผู้สั่งจอง / ผู้มีสิทธิ์รับเสื้อ:</span>
+                      </div>
+                      <div className="pl-5">
+                        <p className="text-sm font-black text-white break-words leading-snug">
+                          {applicantShirtOrder.customer_name}
+                        </p>
+                        {applicantShirtOrder.customer_phone && (
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-500" />
+                            <span>{applicantShirtOrder.customer_phone}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">รหัสนามเรียกขาน:</span>
-                      <strong className="text-xs text-sky-300 font-mono font-bold block truncate">
-                        {applicantShirtOrder.callsign}
-                      </strong>
-                    </div>
-
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">ผู้สั่งจอง:</span>
-                      <strong className="text-xs text-white font-bold block truncate">
-                        {applicantShirtOrder.customer_name}
-                      </strong>
-                    </div>
-
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 col-span-2 sm:col-span-1">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">สถานที่รับของ:</span>
-                      <strong className="text-xs text-slate-200 block truncate" title="อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม">
-                        อาคารพลศึกษา มมส
-                      </strong>
+                    {/* Pickup Location Card */}
+                    <div className="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>สถานที่รับของ:</span>
+                      </div>
+                      <div className="pl-5 space-y-0.5">
+                        <p className="text-xs font-black text-emerald-300 break-words leading-snug">
+                          {applicantShirtOrder.pickup_location}
+                        </p>
+                        <p className="text-[11px] text-slate-300 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span className="break-words">{applicantShirtOrder.pickup_schedule}</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -1125,6 +1181,7 @@ export default function MerchandiseView({
       {activePickupOrder && (
         <PickupQRModal
           order={activePickupOrder}
+          pickupConfig={merchandiseConfig?.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup}
           onClose={() => setActivePickupOrder(null)}
         />
       )}

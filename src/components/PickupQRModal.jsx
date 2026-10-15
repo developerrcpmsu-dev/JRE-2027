@@ -14,11 +14,13 @@ import {
   AlertCircle,
   Copy,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  Award
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import { DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
 
-export default function PickupQRModal({ order, onClose }) {
+export default function PickupQRModal({ order, pickupConfig, onClose }) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -45,6 +47,11 @@ export default function PickupQRModal({ order, onClose }) {
   }, [order]);
 
   if (!order) return null;
+
+  const effectiveLocation = order.pickup_location || pickupConfig?.location || DEFAULT_MERCHANDISE_CONFIG.pickup.location;
+  const effectiveShortLocation = order.pickup_short_location || pickupConfig?.short_location || DEFAULT_MERCHANDISE_CONFIG.pickup.short_location;
+  const effectiveSchedule = order.pickup_schedule || pickupConfig?.schedule || DEFAULT_MERCHANDISE_CONFIG.pickup.schedule;
+  const effectiveNote = order.pickup_note || pickupConfig?.note || DEFAULT_MERCHANDISE_CONFIG.pickup.note;
 
   const handleCopyOrderNumber = () => {
     navigator.clipboard.writeText(order.order_number);
@@ -133,7 +140,7 @@ export default function PickupQRModal({ order, onClose }) {
                       <span>🟡 ยังไม่ได้รับสินค้า (รอรับของหน้างาน)</span>
                     </p>
                     <p className="text-[11px] text-slate-300 leading-relaxed">
-                      ชำระเงินเรียบร้อยแล้ว • ยื่น QR Code นี้ต่อเจ้าหน้าที่ ณ จุดรับของ อาคารพลศึกษา มมส
+                      ชำระเงินเรียบร้อยแล้ว • ยื่น QR Code นี้ต่อเจ้าหน้าที่ ณ จุดรับของ {effectiveShortLocation}
                     </p>
                   </div>
                 </div>
@@ -236,29 +243,58 @@ export default function PickupQRModal({ order, onClose }) {
                 )}
               </div>
 
-              {/* Customer Info */}
-              <div className="flex justify-between items-center text-slate-300">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <User className="w-3.5 h-3.5" /> ผู้สั่งซื้อ:
+              {/* Customer Info - Full wrapping without truncate */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-slate-300 pb-2 border-b border-slate-800/60">
+                <span className="flex items-center gap-1.5 text-slate-400 shrink-0 font-medium">
+                  <User className="w-3.5 h-3.5 text-indigo-400" /> ผู้สั่งซื้อ / ผู้มีสิทธิ์รับของ:
                 </span>
-                <span className="font-bold text-white truncate max-w-[200px] text-right">{order.customer_name}</span>
+                <span className="font-black text-white text-left sm:text-right break-words leading-snug">
+                  {order.customer_name}
+                </span>
               </div>
 
-              <div className="flex justify-between items-center text-slate-300">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <Phone className="w-3.5 h-3.5" /> เบอร์โทรศัพท์:
+              {order.callsign && order.callsign !== '-' && (
+                <div className="flex justify-between items-center text-slate-300 pb-2 border-b border-slate-800/60">
+                  <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <Award className="w-3.5 h-3.5 text-sky-400" /> รหัสนามเรียกขาน:
+                  </span>
+                  <span className="font-bold text-sky-300 font-mono">{order.callsign}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center text-slate-300 pb-2 border-b border-slate-800/60">
+                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                  <Phone className="w-3.5 h-3.5 text-slate-400" /> เบอร์โทรศัพท์:
                 </span>
                 <span className="font-semibold text-white font-mono">{order.customer_phone || '-'}</span>
               </div>
 
-              <div className="flex justify-between items-center text-slate-300">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <MapPin className="w-3.5 h-3.5" /> จุดรับสินค้า:
+              {/* Pickup Location - Full text without clipping */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 text-slate-300 pb-2 border-b border-slate-800/60">
+                <span className="flex items-center gap-1.5 text-slate-400 shrink-0 font-medium mt-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-400" /> จุดรับสินค้า / สถานที่:
                 </span>
-                <span className="text-slate-300 text-[11px] text-right truncate max-w-[200px]">
-                  {order.pickup_location || 'อาคารพลศึกษา มมส (13 ก.พ. 2570)'}
+                <span className="text-emerald-300 font-bold text-left sm:text-right break-words leading-snug">
+                  {effectiveLocation}
                 </span>
               </div>
+
+              {/* Pickup Schedule */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 text-slate-300 pb-2 border-b border-slate-800/60">
+                <span className="flex items-center gap-1.5 text-slate-400 shrink-0 font-medium mt-0.5">
+                  <Calendar className="w-3.5 h-3.5 text-amber-400" /> วันเวลาที่รับของ:
+                </span>
+                <span className="text-amber-300 font-medium text-left sm:text-right break-words leading-snug">
+                  {effectiveSchedule}
+                </span>
+              </div>
+
+              {effectiveNote && (
+                <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-300 flex items-start gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{effectiveNote}</span>
+                </div>
+              )}
 
               {/* Items List */}
               <div className="border-t border-slate-800 pt-2.5">

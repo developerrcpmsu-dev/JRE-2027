@@ -1133,7 +1133,11 @@ export const DataService = {
       return {
         ...cfg,
         payment: cleanPayment,
-        products: products.length > 0 ? products : DEFAULT_MERCHANDISE_CONFIG.products
+        products: products.length > 0 ? products : DEFAULT_MERCHANDISE_CONFIG.products,
+        pickup: {
+          ...DEFAULT_MERCHANDISE_CONFIG.pickup,
+          ...(cfg.pickup || {})
+        }
       };
     };
 
