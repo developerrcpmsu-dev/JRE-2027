@@ -24,9 +24,14 @@ import {
   AlertCircle,
   Shield,
   CreditCard,
-  UserCheck
+  UserCheck,
+  PackageCheck,
+  Eye,
+  GraduationCap,
+  X
 } from 'lucide-react';
 import { DataService, subscribeToRealtimeChanges } from '../supabase';
+import { resolveUserExtraDetails } from '../utils/userUtils';
 
 export default function UserProfileView({
   userUid,
@@ -41,6 +46,8 @@ export default function UserProfileView({
   onNavigateRegister
 }) {
   const [userAccount, setUserAccount] = useState(null);
+  const [userReg, setUserReg] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
@@ -55,23 +62,83 @@ export default function UserProfileView({
     async function fetchAccount(silent = false) {
       if (!silent) setLoading(true);
       try {
-        const accounts = await DataService.getUserAccounts({ userId: userUid || currentUser?.id, email: currentUser?.email });
-        const targetId = (userUid || '').trim().toLowerCase();
+        const targetId = (userUid || '').trim();
+        const isEmailTarget = targetId.includes('@');
+
+        let accounts = [];
+        if (isAdmin) {
+          // Admin has full access to inspect any user
+          accounts = await DataService.getUserAccounts({ admin: true });
+        } else if (targetId) {
+          // Query specific account by ID or email
+          accounts = await DataService.getUserAccounts({
+            userId: !isEmailTarget ? targetId : null,
+            email: isEmailTarget ? targetId : null
+          });
+          // Fallback if not found with scoped query
+          if (!accounts || accounts.length === 0) {
+            accounts = await DataService.getUserAccounts();
+          }
+        } else if (currentUser) {
+          accounts = await DataService.getUserAccounts({ userId: currentUser.id, email: currentUser.email });
+        } else {
+          accounts = await DataService.getUserAccounts();
+        }
 
         let found = null;
         if (targetId) {
-          found = accounts.find(a => 
-            (a.id && a.id.toLowerCase() === targetId) ||
-            (a.email && a.email.toLowerCase() === targetId)
+          found = (accounts || []).find(a => 
+            (a.id && a.id.toLowerCase() === targetId.toLowerCase()) ||
+            (a.email && a.email.toLowerCase() === targetId.toLowerCase())
           );
+          // If still not found, check if targetId matches student_id or phone
+          if (!found) {
+            found = (accounts || []).find(a => 
+              (a.student_id && a.student_id === targetId) ||
+              (a.phone && a.phone.replace(/\D/g, '') === targetId.replace(/\D/g, ''))
+            );
+          }
+          // If still not found, check if targetId matches any registration user_id or id
+          if (!found) {
+            const matchedReg = (registrations || []).find(r => 
+              (r.user_id && r.user_id.toLowerCase() === targetId.toLowerCase()) ||
+              (r.id && r.id.toLowerCase() === targetId.toLowerCase())
+            );
+            if (matchedReg) {
+              const matchedEmail = (matchedReg.user_email || '').toLowerCase().trim();
+              found = (accounts || []).find(a => a.email && a.email.toLowerCase().trim() === matchedEmail);
+            }
+          }
         } else if (currentUser) {
-          found = accounts.find(a => 
+          found = (accounts || []).find(a => 
             (a.id && a.id === currentUser.id) ||
             (a.email && a.email.toLowerCase() === (currentUser.email || '').toLowerCase())
           );
         }
 
         setUserAccount(found || null);
+
+        // Fetch registration for this specific user directly from Supabase
+        const targetEmail = found?.email?.toLowerCase().trim() || (isEmailTarget ? targetId.toLowerCase() : null);
+        const resolvedUserId = found?.id || (!isEmailTarget ? targetId : null);
+        
+        let directReg = null;
+        // Check registrations prop first
+        if (registrations && registrations.length > 0) {
+          directReg = registrations.find(r => 
+            (resolvedUserId && (r.user_id === resolvedUserId || r.id === resolvedUserId)) ||
+            (targetEmail && r.user_email && r.user_email.toLowerCase().trim() === targetEmail)
+          );
+        }
+        // If not found in prop, query Supabase directly
+        if (!directReg && (resolvedUserId || targetEmail)) {
+          try {
+            directReg = await DataService.getRegistrationByUserId(resolvedUserId, targetEmail);
+          } catch (e) {
+            console.warn('Failed to load direct registration:', e);
+          }
+        }
+        setUserReg(directReg || null);
       } catch (err) {
         console.error('Failed to load user profile:', err);
       } finally {
@@ -88,13 +155,14 @@ export default function UserProfileView({
     });
 
     return () => unsubscribe();
-  }, [userUid, currentUser]);
+  }, [userUid, currentUser, isAdmin]);
 
   const targetEmail = userAccount?.email?.toLowerCase().trim();
-  const regInfo = registrations.find(r => 
+  const regInfo = userReg || registrations.find(r => 
     (userAccount?.id && (r.user_id === userAccount.id || r.id === userAccount.id)) ||
     (targetEmail && r.user_email?.toLowerCase().trim() === targetEmail)
   );
+  const extraDetails = resolveUserExtraDetails(userAccount, regInfo ? [regInfo] : registrations);
 
   const merchInfo = merchandiseOrders.find(o => 
     (targetEmail && o.user_email?.toLowerCase().trim() === targetEmail) ||
@@ -218,6 +286,36 @@ export default function UserProfileView({
         </div>
       </div>
 
+      {/* Admin Quick Action Banner (Shown when Admin views profile) */}
+      {isAdmin && (
+        <div className="p-4 bg-gradient-to-r from-purple-950/70 via-indigo-950/60 to-slate-900 border border-purple-500/40 rounded-3xl flex flex-wrap items-center justify-between gap-3 shadow-xl shadow-purple-950/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/40 text-purple-300 flex items-center justify-center font-bold text-lg">
+              👑
+            </div>
+            <div>
+              <div className="text-xs font-black text-white flex items-center gap-2">
+                <span>โหมดผู้ดูแลระบบ (Admin Inspection Mode)</span>
+                <span className="px-2 py-0.5 bg-purple-500/30 text-purple-200 rounded text-[10px] font-bold">Verified Admin</span>
+              </div>
+              <p className="text-[11px] text-purple-300/80 mt-0.5">
+                กำลังดูข้อมูลผู้ใช้แบบเจาะจงรายบุคคล สามารถเปิดหน้า Admin Console เพื่อแก้ไขหรือจัดการได้ทันที
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onNavigateAdmin}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>เปิดแดชบอร์ด Admin</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero Profile Card */}
       <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -325,7 +423,7 @@ export default function UserProfileView({
       {/* Trainee Card / Registration Badge */}
       {regInfo ? (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xl space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center shrink-0">
                 <Award className="w-5 h-5" />
@@ -336,21 +434,66 @@ export default function UserProfileView({
               </div>
             </div>
 
-            <span className="px-3 py-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>ลงทะเบียนแล้ว</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>ลงทะเบียนโครงการแล้ว</span>
+              </span>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={onNavigateAdmin}
+                  className="px-3 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 rounded-full text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                  title="เปิดดูและจัดการในระบบ Admin"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>จัดการใน Admin</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
             <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
-              <span className="text-slate-500 block mb-1">นามเรียกขาน (Call Sign)</span>
-              <span className="font-bold text-white text-sm font-mono">{regInfo.call_sign || 'N/A'}</span>
+              <span className="text-slate-500 block mb-1">ชื่อ-นามสกุล / ชื่อเล่น</span>
+              <span className="font-bold text-white text-sm block">
+                {regInfo.first_name || ''} {regInfo.last_name || ''}
+                {regInfo.nickname && <span className="text-amber-300 ml-1.5">({regInfo.nickname})</span>}
+              </span>
+            </div>
+
+            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
+              <span className="text-slate-500 block mb-1">นามเรียกขาน (Callsign)</span>
+              <span className="font-bold text-sky-400 text-sm font-mono flex items-center gap-1">
+                <span>📡 {regInfo.callsign || regInfo.call_sign || extraDetails.callsign || 'N/A'}</span>
+              </span>
             </div>
 
             <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
               <span className="text-slate-500 block mb-1">สังกัดสถาบัน / ชมรมกู้ภัย</span>
-              <span className="font-bold text-white text-sm truncate block">{regInfo.institution || 'ชมรมกู้ภัยราชพฤกษ์ มมส'}</span>
+              <span className="font-bold text-white text-sm truncate block" title={regInfo.institution || extraDetails.affiliation || '-'}>
+                {regInfo.institution || extraDetails.affiliation || 'ชมรมกู้ภัยราชพฤกษ์ มมส'}
+              </span>
+            </div>
+
+            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
+              <span className="text-slate-500 block mb-1">เบอร์โทรศัพท์ติดต่อ</span>
+              <div className="flex items-center justify-between font-mono font-bold text-sm text-emerald-400">
+                <span>{extraDetails.formattedPhone || regInfo.phone || '-'}</span>
+                {(regInfo.phone || extraDetails.phone) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(regInfo.phone || extraDetails.phone);
+                      showToast('คัดลอกเบอร์โทรศัพท์สำเร็จ');
+                    }}
+                    className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                    title="คัดลอกเบอร์โทร"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
@@ -366,16 +509,127 @@ export default function UserProfileView({
             <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
               <span className="text-slate-500 block mb-1">ไซส์เสื้อฝึกโครงการ JRE 2027</span>
               <span className="font-bold text-amber-300 text-sm font-mono">
-                {regInfo.shirt_size ? `ไซส์ ${regInfo.shirt_size}` : 'ไม่ระบุ'}
+                {regInfo.shirt_size ? `👕 ไซส์ ${regInfo.shirt_size}` : 'ไม่ระบุ'}
               </span>
             </div>
 
             <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
-              <span className="text-slate-500 block mb-1">สถานะชำระค่าธรรมเนียม</span>
-              <span className={`font-bold text-sm ${regInfo.payment_status === 'full' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {regInfo.payment_status === 'full' ? 'ชำระครบ 100%' : 'แบ่งชำระ 2 งวด'}
+              <span className="text-slate-500 block mb-1">กรุ๊ปเลือด / ข้อมูลสุขภาพ</span>
+              <span className="font-bold text-rose-300 text-sm">
+                🩸 กรุ๊ป {regInfo.blood_group || '-'} {regInfo.medical_history && regInfo.medical_history !== 'ไม่มี' ? `• ${regInfo.medical_history}` : ''}
               </span>
             </div>
+
+            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl">
+              <span className="text-slate-500 block mb-1">ผู้ติดต่อฉุกเฉิน</span>
+              <span className="font-bold text-white text-xs truncate block" title={`${regInfo.emergency_name || '-'} (${regInfo.emergency_phone || '-'})`}>
+                {regInfo.emergency_name ? `${regInfo.emergency_name} (${regInfo.emergency_phone})` : '-'}
+              </span>
+            </div>
+          </div>
+
+          {/* Payment Plan & Installments Box */}
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-bold text-white">
+                  แผนการชำระเงิน: {regInfo.payment_plan === 'installment' ? '📦 ขอแบ่งจ่าย 2 งวด' : '💳 ชำระเต็มจำนวน (1 รอบ)'}
+                </span>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                (regInfo.payment_plan === 'installment' && regInfo.installment_1_status === 'paid' && regInfo.installment_2_status === 'paid') || regInfo.payment_status === 'paid'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : (regInfo.payment_plan === 'installment' && regInfo.installment_1_status === 'paid')
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+              }`}>
+                {(regInfo.payment_plan === 'installment' && regInfo.installment_1_status === 'paid' && regInfo.installment_2_status === 'paid') || regInfo.payment_status === 'paid'
+                  ? '✓ ชำระครบถ้วน 100%'
+                  : (regInfo.payment_plan === 'installment' && regInfo.installment_1_status === 'paid')
+                  ? 'ชำระงวด 1 แล้ว (ค้างงวด 2)'
+                  : 'ค้างชำระ'}
+              </span>
+            </div>
+
+            {regInfo.payment_plan === 'installment' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Round 1 */}
+                <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-indigo-300">งวดที่ 1 (รอบแรก)</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      regInfo.installment_1_status === 'paid'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-amber-500/20 text-amber-300'
+                    }`}>
+                      {regInfo.installment_1_status === 'paid' ? '✓ ชำระแล้ว' : 'รอชำระ'}
+                    </span>
+                  </div>
+                  <div className="text-sm font-mono font-bold text-white">
+                    ยอดเงิน: {regInfo.installment_1_amount || 400} บาท
+                  </div>
+                  {regInfo.installment_1_slip_url && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage(regInfo.installment_1_slip_url)}
+                      className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>ดูรูปสลิปงวดที่ 1</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Round 2 */}
+                <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-amber-300">งวดที่ 2 (รอบปิดยอด)</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      regInfo.installment_2_status === 'paid' && regInfo.installment_2_slip_url
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-rose-500/20 text-rose-300'
+                    }`}>
+                      {regInfo.installment_2_status === 'paid' && regInfo.installment_2_slip_url ? '✓ ชำระแล้ว' : 'ยังไม่ส่งสลิป (ค้างชำระ)'}
+                    </span>
+                  </div>
+                  <div className="text-sm font-mono font-bold text-white">
+                    ยอดเงิน: {regInfo.installment_2_amount || 250} บาท
+                  </div>
+                  {regInfo.installment_2_slip_url ? (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage(regInfo.installment_2_slip_url)}
+                      className="px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>ดูรูปสลิปงวดที่ 2</span>
+                    </button>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 italic">กำหนดชำระช่วงวันที่ 1-5 พฤศจิกายน 2569</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-slate-400">ยอดชำระเต็มจำนวน</div>
+                  <div className="text-sm font-mono font-bold text-white mt-0.5">
+                    {regInfo.payment_amount !== undefined ? regInfo.payment_amount : 650} บาท
+                  </div>
+                </div>
+                {regInfo.payment_slip_url && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImage(regInfo.payment_slip_url)}
+                    className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>ดูรูปสลิปโอนเงิน</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -397,6 +651,31 @@ export default function UserProfileView({
               👉 กรอกใบสมัครเข้าร่วมโครงการ JRE 2027
             </button>
           )}
+        </div>
+      )}
+
+      {/* Slip Image Full-Screen Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-lg w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h4 className="text-xs font-bold text-slate-200 mb-3 flex items-center gap-1.5">
+              <Eye className="w-4 h-4 text-purple-400" />
+              <span>ภาพหลักฐานการชำระเงิน / สลิปโอนเงิน</span>
+            </h4>
+            <div className="max-h-[75vh] overflow-auto rounded-2xl bg-black flex items-center justify-center p-2 border border-slate-800">
+              <img src={previewImage} alt="Slip Preview" className="max-h-[70vh] w-auto object-contain rounded-xl" />
+            </div>
+          </div>
         </div>
       )}
 

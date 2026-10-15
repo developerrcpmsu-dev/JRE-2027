@@ -399,7 +399,9 @@ export const DataService = {
           .order('created_at', { ascending: false });
         const response = admin
           ? await supabase.from('registrations').select('*').order('created_at', { ascending: false })
-          : await buildScopedQuery(userId ? 'user_id' : 'user_email', userId || cleanEmail);
+          : (userId && cleanEmail)
+            ? await supabase.from('registrations').select('*').or(`user_id.eq.${userId},user_email.eq.${cleanEmail}`).order('created_at', { ascending: false })
+            : await buildScopedQuery(userId ? 'user_id' : 'user_email', userId || cleanEmail);
         let { data, error } = response;
 
         // Some legacy rows are keyed by email only. Retry with the scoped
@@ -433,8 +435,26 @@ export const DataService = {
 
   async getRegistrationByUserId(userId, email = null) {
     if (!userId && !email) return null;
-    const regs = await this.getRegistrations({ userId, email });
     const cleanEmail = email ? email.trim().toLowerCase() : null;
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase.from('registrations').select('*');
+        if (userId && cleanEmail) {
+          query = query.or(`user_id.eq.${userId},user_email.eq.${cleanEmail}`);
+        } else if (userId) {
+          query = query.eq('user_id', userId);
+        } else if (cleanEmail) {
+          query = query.eq('user_email', cleanEmail);
+        }
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return unpackRegistration(data[0]);
+        }
+      } catch (e) {
+        console.warn('getRegistrationByUserId Supabase query failed:', e);
+      }
+    }
+    const regs = await this.getRegistrations({ userId, email });
     return regs.find(r => 
       (userId && (r.user_id === userId || r.id === userId)) ||
       (cleanEmail && r.user_email && r.user_email.trim().toLowerCase() === cleanEmail)

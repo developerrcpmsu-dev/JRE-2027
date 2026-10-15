@@ -814,6 +814,34 @@ export default function AdminDashboardView({
   const [deletingUserAccount, setDeletingUserAccount] = useState(null); // delete user
   const [isDeletingUserAccount, setIsDeletingUserAccount] = useState(false);
 
+  // Full User Details Modal State
+  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
+  const [selectedUserDetailReg, setSelectedUserDetailReg] = useState(null);
+  const [isLoadingUserDetailReg, setIsLoadingUserDetailReg] = useState(false);
+
+  React.useEffect(() => {
+    if (!selectedUserDetail) {
+      setSelectedUserDetailReg(null);
+      return;
+    }
+    const details = resolveUserExtraDetails(selectedUserDetail, registrations);
+    if (details.reg) {
+      setSelectedUserDetailReg(details.reg);
+    } else {
+      setIsLoadingUserDetailReg(true);
+      DataService.getRegistrationByUserId(selectedUserDetail.id, selectedUserDetail.email)
+        .then(r => {
+          setSelectedUserDetailReg(r || null);
+        })
+        .catch(err => {
+          console.warn('Failed to load user reg:', err);
+        })
+        .finally(() => {
+          setIsLoadingUserDetailReg(false);
+        });
+    }
+  }, [selectedUserDetail, registrations]);
+
   const loadUserAccounts = async () => {
     setIsLoadingUsers(true);
     try {
@@ -8636,6 +8664,19 @@ export default function AdminDashboardView({
                                   </>
                                 )}
                               </div>
+
+                              {/* Prominent View Full Details Modal Button (No Horizontal Scroll Needed) */}
+                              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedUserDetail(acc)}
+                                  className="px-2.5 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-md shadow-purple-950/40 transition-all active:scale-95 cursor-pointer border border-purple-400/40"
+                                  title="เปิดดูข้อมูลเพิ่มเติมแบบละเอียดครบทุกมิติ (ไม่ต้องเลื่อนซ้ายขวา)"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ดูข้อมูลเพิ่มเติมแบบละเอียด</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -8777,6 +8818,15 @@ export default function AdminDashboardView({
 
                         <td className="py-3.5 px-4">
                           <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUserDetail(acc)}
+                              className="p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white rounded-lg transition-colors cursor-pointer border border-purple-500/40"
+                              title="ดูข้อมูลเพิ่มเติมแบบละเอียดครบทุกมิติ"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+
                             {acc.id && (
                               <a
                                 href={`/users/${acc.id}`}
@@ -8836,6 +8886,533 @@ export default function AdminDashboardView({
             </table>
           </div>
         </div>
+      )}
+
+      {/* FULL USER DETAILS & REGISTRATION MODAL (POPUP DIALOG - NO HORIZONTAL SCROLL REQUIRED) */}
+      {selectedUserDetail && (
+        <ModalPortal isOpen={Boolean(selectedUserDetail)} onClose={() => setSelectedUserDetail(null)}>
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+            onClick={() => setSelectedUserDetail(null)}
+          >
+            <div 
+              className="bg-slate-900 border border-slate-700 max-w-3xl w-full rounded-3xl p-5 sm:p-7 shadow-2xl relative space-y-6 max-h-[92vh] overflow-y-auto text-left"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setSelectedUserDetail(null)}
+                className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full transition-colors cursor-pointer"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {(() => {
+                const acc = selectedUserDetail;
+                const details = resolveUserExtraDetails(acc, registrations);
+                const reg = selectedUserDetailReg || details.reg;
+                const displayPhone = details.formattedPhone || acc.phone || (reg && reg.phone) || '';
+                const displayStudentId = details.studentId || acc.student_id || (reg && reg.student_id) || '';
+                const displayAffiliation = details.affiliation || acc.affiliation || (reg && reg.institution) || '';
+                const profileUrl = typeof window !== 'undefined' ? `${window.location.origin}/users/${acc.id}` : `/users/${acc.id}`;
+                const hasPassword = acc.provider === 'email' || acc.provider === 'both';
+                
+                // Matched orders
+                const userOrders = merchandiseOrders.filter(o => 
+                  (acc.email && o.user_email && o.user_email.toLowerCase().trim() === acc.email.toLowerCase().trim()) ||
+                  (acc.id && (o.user_id === acc.id || o.id === acc.id))
+                );
+
+                return (
+                  <div className="space-y-6">
+                    {/* Header */}
+                    <div className="border-b border-slate-800 pb-5">
+                      <div className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-2">
+                        <ShieldCheck className="w-4 h-4 text-purple-400" />
+                        <span>ข้อมูลผู้ใช้งานแบบละเอียด · JRE 2027 Admin Console</span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <img
+                          src={acc.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(acc.email || 'user')}`}
+                          alt="Avatar"
+                          className="w-16 h-16 rounded-2xl object-cover border-2 border-purple-500/40 shadow-lg shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-xl sm:text-2xl font-black text-white">
+                              {acc.name || 'ไม่ระบุชื่อ'}
+                            </h3>
+                            {reg?.nickname && (
+                              <span className="text-sm font-bold text-orange-300 bg-orange-950/60 border border-orange-500/30 px-2.5 py-0.5 rounded-lg">
+                                ({reg.nickname})
+                              </span>
+                            )}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              acc.role === 'admin' 
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                                : 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                            }`}>
+                              {acc.role || 'user'}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                            <span className="font-mono text-xs text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded-md font-bold">
+                              UID: {acc.id || '-'}
+                            </span>
+                            {details.callsign && (
+                              <span className="text-xs text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">
+                                {details.callsign}
+                              </span>
+                            )}
+                            {displayStudentId && (
+                              <span className="font-mono text-xs text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+                                <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>{displayStudentId}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Action Buttons Toolbar */}
+                      <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-800/80">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(acc.id);
+                            triggerToast(`คัดลอก UID: ${acc.id} สำเร็จ!`, 'success');
+                          }}
+                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-slate-400" />
+                          <span>คัดลอก UID</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(profileUrl);
+                            triggerToast(`คัดลอก URL หน้าโปรไฟล์:\n${profileUrl}`, 'success');
+                          }}
+                          className="px-2.5 py-1.5 bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>คัดลอก URL โปรไฟล์</span>
+                        </button>
+
+                        <a
+                          href={`/users/${acc.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-purple-400" />
+                          <span>เปิดดูหน้าโปรไฟล์สาธารณะ</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = acc;
+                            setSelectedUserDetail(null);
+                            setEditingUserAccount(target);
+                            setEditUserName(target.name || '');
+                            setEditUserEmail(target.email || '');
+                            setEditUserPhone(target.phone || details.phone || '');
+                            setEditUserStudentId(target.student_id || details.studentId || '');
+                            setEditUserAffiliation(target.affiliation || details.affiliation || '');
+                            setEditUserRole(target.role || 'user');
+                            setEditUserVerified(Boolean(target.email_verified || target.verified || target.provider === 'google' || target.provider === 'both' || (typeof target.id === 'string' && target.id.startsWith('google_'))));
+                          }}
+                          className="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                          <span>แก้ไขข้อมูลผู้ใช้</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = acc;
+                            setSelectedUserDetail(null);
+                            setResetPassUser(target);
+                            setAdminNewPassword('');
+                          }}
+                          className="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Key className="w-3.5 h-3.5 text-amber-400" />
+                          <span>รีเซ็ตรหัสผ่าน</span>
+                        </button>
+
+                        {reg && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedUserDetail(null);
+                              handleTabChange('applicants');
+                              setSearchQuery(acc.email || acc.name || '');
+                            }}
+                            className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Users className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>ไปยังตารางผู้สมัคร</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Section 1: Contact & Affiliation Details */}
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                      <div className="flex items-center gap-2 text-white font-bold text-sm">
+                        <Phone className="w-4 h-4 text-emerald-400" />
+                        <span>ข้อมูลติดต่อ & ข้อมูลสถานศึกษา/สังกัด</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="p-3 bg-slate-900 border border-slate-800/80 rounded-xl space-y-1">
+                          <span className="text-slate-400 font-semibold">อีเมลติดต่อ:</span>
+                          <div className="font-mono text-white font-medium break-all flex items-center justify-between gap-2">
+                            <span>{acc.email}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(acc.email);
+                                triggerToast(`คัดลอกอีเมล ${acc.email} สำเร็จ!`, 'success');
+                              }}
+                              className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded cursor-pointer"
+                              title="คัดลอกอีเมล"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-900 border border-slate-800/80 rounded-xl space-y-1">
+                          <span className="text-slate-400 font-semibold">เบอร์โทรศัพท์:</span>
+                          <div className="font-mono text-white font-medium flex items-center justify-between gap-2">
+                            {displayPhone ? (
+                              <>
+                                <a href={`tel:${displayPhone.replace(/\D/g, '')}`} className="text-emerald-400 hover:underline font-bold">
+                                  {displayPhone}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const raw = displayPhone.replace(/\D/g, '');
+                                    navigator.clipboard.writeText(raw);
+                                    triggerToast(`คัดลอกเบอร์โทร ${raw} สำเร็จ!`, 'success');
+                                  }}
+                                  className="p-1 hover:bg-slate-800 text-slate-400 hover:text-emerald-300 rounded cursor-pointer"
+                                  title="คัดลอกเบอร์โทรศัพท์"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-900 border border-slate-800/80 rounded-xl space-y-1">
+                          <span className="text-slate-400 font-semibold">รหัสนิสิต (Student ID):</span>
+                          <div className="font-mono text-white font-medium flex items-center justify-between gap-2">
+                            {displayStudentId ? (
+                              <>
+                                <span className="text-emerald-300 font-bold">{displayStudentId}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(displayStudentId);
+                                    triggerToast(`คัดลอกรหัสนิสิต ${displayStudentId} สำเร็จ!`, 'success');
+                                  }}
+                                  className="p-1 hover:bg-slate-800 text-slate-400 hover:text-emerald-300 rounded cursor-pointer"
+                                  title="คัดลอกรหัสนิสิต"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-900 border border-slate-800/80 rounded-xl space-y-1">
+                          <span className="text-slate-400 font-semibold">สังกัด / คณะ / หน่วยงาน:</span>
+                          <div className="text-white font-medium">
+                            {displayAffiliation || '-'}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-900 border border-slate-800/80 rounded-xl space-y-1">
+                          <span className="text-slate-400 font-semibold">วันที่สร้างบัญชี (Registered On):</span>
+                          <div className="text-slate-200">
+                            {acc.created_at ? new Date(acc.created_at).toLocaleString('th-TH') : '-'}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-900 border border-slate-800/80 rounded-xl space-y-1">
+                          <span className="text-slate-400 font-semibold">เข้าสู่ระบบล่าสุด (Last Active):</span>
+                          <div className="text-slate-200">
+                            {acc.last_login_at ? new Date(acc.last_login_at).toLocaleString('th-TH') : '-'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Registration & Payment Status */}
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-white font-bold text-sm">
+                          <CreditCard className="w-4 h-4 text-purple-400" />
+                          <span>สถานะการสมัครเข้าร่วมโครงการ JRE 2027 & การชำระเงิน</span>
+                        </div>
+                        {reg && (
+                          <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[11px] font-bold">
+                            ✓ สมัครโครงการแล้ว
+                          </span>
+                        )}
+                      </div>
+
+                      {isLoadingUserDetailReg ? (
+                        <div className="py-6 text-center space-y-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-purple-400 mx-auto" />
+                          <p className="text-xs text-slate-400">กำลังตรวจสอบข้อมูลใบสมัครในฐานข้อมูล...</p>
+                        </div>
+                      ) : reg ? (
+                        <div className="space-y-4">
+                          {/* Trainee Details Bar */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
+                              <span className="text-slate-400 text-[10px] block">กลุ่มที่จัดไว้</span>
+                              <span className="font-bold text-white text-sm">{reg.assigned_group || 'ยังไม่จัดกลุ่ม'}</span>
+                            </div>
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
+                              <span className="text-slate-400 text-[10px] block">ห้องพัก</span>
+                              <span className="font-bold text-white text-sm">{reg.assigned_room || 'ยังไม่จัดห้อง'}</span>
+                            </div>
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
+                              <span className="text-slate-400 text-[10px] block">ไซส์เสื้อ</span>
+                              <span className="font-bold text-purple-300 text-sm">{reg.shirt_size || '-'}</span>
+                            </div>
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
+                              <span className="text-slate-400 text-[10px] block">กรุ๊ปเลือด</span>
+                              <span className="font-bold text-rose-300 text-sm">{reg.blood_group || '-'}</span>
+                            </div>
+                          </div>
+
+                          {/* Emergency & Health Info */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
+                              <span className="text-slate-400 text-[10px] block font-semibold">ผู้ติดต่อฉุกเฉิน:</span>
+                              <span className="font-medium text-white">{reg.emergency_contact || '-'}</span>
+                              {reg.emergency_phone && (
+                                <span className="font-mono text-emerald-400 block mt-0.5">{reg.emergency_phone}</span>
+                              )}
+                            </div>
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
+                              <span className="text-slate-400 text-[10px] block font-semibold">โรคประจำตัว / ข้อจำกัดอาหาร:</span>
+                              <span className="text-slate-300">
+                                {reg.congenital_disease || reg.medical_conditions || 'ไม่มีโรคประจำตัว'} 
+                                {reg.allergic_food ? ` · แพ้อาหาร: ${reg.allergic_food}` : ''}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Payment Plan & Installments */}
+                          <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-950 border border-purple-500/30 rounded-2xl space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                              <div>
+                                <span className="text-xs text-slate-400">แผนการชำระเงินที่เลือก:</span>
+                                <div className="text-sm font-black text-white">
+                                  {reg.payment_plan === 'installment' ? '⚡ แผนแบ่งจ่าย 2 งวด' : '💎 ชำระครบเต็มจำนวน (Full Payment)'}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-xs text-slate-400">สถานะรวม:</span>
+                                <div>
+                                  {reg.payment_status === 'paid' || reg.payment_status === 'verified' ? (
+                                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                                      ชำระครบแล้ว
+                                    </span>
+                                  ) : reg.payment_status === 'partial_paid' ? (
+                                    <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-bold">
+                                      ชำระงวดที่ 1 แล้ว (ค้างงวดที่ 2)
+                                    </span>
+                                  ) : reg.payment_status === 'pending_review' ? (
+                                    <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
+                                      รอตรวจสลิป
+                                    </span>
+                                  ) : (
+                                    <span className="px-2.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-full text-xs font-bold">
+                                      ยังไม่ชำระ
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Round 1 and Round 2 Details */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                              {/* Round 1 */}
+                              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white">งวดที่ 1 (มัดจำเสื้อ)</span>
+                                  <span className="text-xs font-black text-purple-300">400 บ.</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400">สถานะ:</span>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                      ? 'bg-emerald-500/20 text-emerald-300'
+                                      : reg.installment_1_status === 'pending_review'
+                                      ? 'bg-amber-500/20 text-amber-300'
+                                      : 'bg-rose-500/20 text-rose-300'
+                                  }`}>
+                                    {reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                      ? 'ชำระแล้ว'
+                                      : reg.installment_1_status === 'pending_review'
+                                      ? 'รอตรวจสอบ'
+                                      : 'ค้างชำระ'}
+                                  </span>
+                                </div>
+                                {(reg.installment_1_slip_url || reg.payment_slip_url) && (
+                                  <div className="pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewSlipUrl(reg.installment_1_slip_url || reg.payment_slip_url)}
+                                      className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                      <span>ดูสลิปงวดที่ 1</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Round 2 */}
+                              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white">งวดที่ 2 (ส่วนที่เหลือ)</span>
+                                  <span className="text-xs font-black text-purple-300">
+                                    {displayStudentId ? '250 บ. (มมส)' : '450 บ. (บุคคลภายนอก)'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400">สถานะ:</span>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    reg.installment_2_status === 'paid' || (reg.payment_plan !== 'installment' && reg.payment_status === 'paid')
+                                      ? 'bg-emerald-500/20 text-emerald-300'
+                                      : reg.installment_2_status === 'pending_review'
+                                      ? 'bg-amber-500/20 text-amber-300'
+                                      : 'bg-slate-800 text-slate-400'
+                                  }`}>
+                                    {reg.installment_2_status === 'paid' || (reg.payment_plan !== 'installment' && reg.payment_status === 'paid')
+                                      ? 'ชำระแล้ว'
+                                      : reg.installment_2_status === 'pending_review'
+                                      ? 'รอตรวจสอบ'
+                                      : 'ค้างชำระ'}
+                                  </span>
+                                </div>
+                                {reg.installment_2_slip_url && (
+                                  <div className="pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewSlipUrl(reg.installment_2_slip_url)}
+                                      className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                      <span>ดูสลิปงวดที่ 2</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-2">
+                          <p className="text-xs text-slate-400 font-medium">
+                            ผู้ใช้งานรายนี้ยังไม่ได้ส่งแบบฟอร์มใบสมัครเข้าร่วมโครงการ JRE 2027 (มีเฉพาะบัญชีผู้ใช้ในระบบ)
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            สามารถติดต่อผู้ใช้ผ่านเบอร์โทรหรืออีเมลเพื่อเชิญชวนให้ส่งใบสมัครเข้าร่วมโครงการได้
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 3: Merchandise Orders (If any) */}
+                    {userOrders.length > 0 && (
+                      <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
+                        <div className="flex items-center gap-2 text-white font-bold text-sm">
+                          <Shirt className="w-4 h-4 text-emerald-400" />
+                          <span>คำสั่งซื้อเสื้อ/กางเกงที่เกี่ยวข้อง ({userOrders.length} รายการ)</span>
+                        </div>
+                        <div className="space-y-2">
+                          {userOrders.map((ord, idx) => (
+                            <div key={ord.id || idx} className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <div>
+                                <span className="font-bold text-white block">
+                                  คำสั่งซื้อ #{ord.id ? String(ord.id).slice(0, 8) : idx + 1}
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  ยอดรวม: <span className="text-emerald-400 font-bold">{ord.total_price || ord.total || 0} บาท</span> • {ord.items?.length || 1} ชิ้น
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  ord.payment_status === 'verified' || ord.status === 'verified'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'bg-amber-500/20 text-amber-300'
+                                }`}>
+                                  {ord.payment_status === 'verified' || ord.status === 'verified' ? 'ชำระแล้ว' : 'รอตรวจสอบ'}
+                                </span>
+                                {ord.payment_slip_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewSlipUrl(ord.payment_slip_url)}
+                                    className="p-1 hover:bg-slate-800 text-purple-400 rounded cursor-pointer"
+                                    title="ดูสลิปคำสั่งซื้อเสื้อ"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section 4: Security Metadata Card */}
+                    <div className="p-3.5 bg-slate-950 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div>
+                          <div className="font-bold text-slate-300">ความปลอดภัยของข้อมูลบัญชี (OWASP & PDPA Compliant)</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {hasPassword 
+                              ? '🔒 บัญชีมีรหัสผ่านป้องกันด้วย Salted SHA-256 Hash ซึ่งจะไม่ถูกแสดงหรือส่งออกไปยังฝั่งผู้ใช้'
+                              : '🌐 ยืนยันตัวตนผ่าน Google OAuth Token (Managed by Google Identity)'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-[10px] font-bold text-slate-400 shrink-0">
+                        {acc.provider || 'google'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* EDIT USER ACCOUNT MODAL */}
