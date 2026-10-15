@@ -90,6 +90,7 @@ import {
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
 import CateringHealthModal from '../components/CateringHealthModal';
+import CateringHealthView from './CateringHealthView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -140,6 +141,7 @@ export default function AdminDashboardView({
     if (tab === 'speakers' || tab === 'speaker' || tab === 'president' || tab === 'presidents' || tab === 'advisor' || tab === 'advisors') return 'speakers';
     if (tab === 'team' || tab === 'staff') return 'team';
     if (tab === 'scanner' || tab === 'qr') return 'merchandise';
+    if (tab === 'catering' || tab === 'health' || tab === 'catering-health' || tab === 'food' || tab === 'welfare') return 'catering';
     return tab || 'applicants';
   };
 
@@ -178,6 +180,7 @@ export default function AdminDashboardView({
   const getUrlSub = (t) => {
     if (t === 'payment_settings') return 'payment';
     if (t === 'merchandise') return 'shirts';
+    if (t === 'catering') return 'catering';
     return t;
   };
 
@@ -2745,9 +2748,13 @@ export default function AdminDashboardView({
 
             <button
               type="button"
-              onClick={() => setShowCateringModal(true)}
-              className="px-3.5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md border border-amber-400/30 transition-all cursor-pointer active:scale-95"
-              title="เปิดศูนย์ข้อมูลจัดเตรียมอาหาร & สุขภาวะ สำหรับฝ่ายจัดเลี้ยงและสวัสดิการ"
+              onClick={() => handleTabChange('catering')}
+              className={`px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md border transition-all cursor-pointer active:scale-95 ${
+                activeTab === 'catering'
+                  ? 'bg-amber-500 text-slate-950 font-black border-amber-300 ring-2 ring-amber-400/40 shadow-amber-500/30'
+                  : 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold border-amber-400/30'
+              }`}
+              title="เปิดศูนย์ข้อมูลจัดเตรียมอาหาร & สุขภาวะ สำหรับฝ่ายจัดเลี้ยงและสวัสดิการ (URL: /admin/catering)"
             >
               <UtensilsCrossed className="w-4 h-4 text-amber-200" />
               <span>เตรียมอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount})</span>
@@ -3046,8 +3053,9 @@ export default function AdminDashboardView({
 
             <button
               type="button"
-              onClick={() => setShowCateringModal(true)}
+              onClick={() => handleTabChange('catering')}
               className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 self-start sm:self-auto cursor-pointer active:scale-95 shrink-0"
+              title="เปิดศูนย์ข้อมูลจัดเตรียมอาหาร & สุขภาวะ (URL: /admin/catering)"
             >
               <UtensilsCrossed className="w-3.5 h-3.5" />
               <span>เปิดศูนย์จัดเตรียมอาหาร & สุขภาวะ</span>
@@ -3084,6 +3092,7 @@ export default function AdminDashboardView({
               className="w-full px-4 py-3 bg-slate-900 border-2 border-purple-500/60 rounded-2xl text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 shadow-xl shadow-purple-950/40 cursor-pointer"
             >
               <option value="applicants">📋 จัดการผู้สมัคร & ตรวจสอบสลิป ({registrations.length} คน)</option>
+              <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
@@ -3109,6 +3118,18 @@ export default function AdminDashboardView({
           >
             <Users className="w-4 h-4 shrink-0" />
             <span>จัดการผู้สมัคร ({registrations.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('catering')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'catering'
+                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 ring-2 ring-amber-400/40 font-black'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <UtensilsCrossed className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>อาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount})</span>
           </button>
 
           <button
@@ -9456,6 +9477,15 @@ export default function AdminDashboardView({
             </table>
           </div>
         </div>
+      )}
+
+      {/* TAB: CATERING & HEALTH HUB (DEDICATED FULL-PAGE VIEW WITH INDEPENDENT URL /admin/catering) */}
+      {activeTab === 'catering' && (
+        <CateringHealthView
+          registrations={registrations}
+          onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
+          onRefresh={onRefreshRegistrations}
+        />
       )}
 
       {/* FULL USER DETAILS & REGISTRATION MODAL (POPUP DIALOG - NO HORIZONTAL SCROLL REQUIRED) */}

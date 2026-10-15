@@ -56,6 +56,9 @@ export default function App() {
     } else if (newTab === 'presentation' || newTab === 'research' || newTab === 'ai-security') {
       main = 'security';
       sub = 'presentation';
+    } else if (newTab === 'catering' || newTab === 'health' || newTab === 'catering-health' || newTab === 'welfare') {
+      main = 'admin';
+      sub = 'catering';
     } else if (newTab === 'security' || newTab === 'security-audit' || newTab === 'audit') {
       main = 'security';
       sub = newSubRoute || 'audit';

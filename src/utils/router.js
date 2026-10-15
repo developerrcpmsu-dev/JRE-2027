@@ -80,6 +80,11 @@ export function parseCurrentRoute() {
     return { mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' };
   }
 
+  // Standalone shortcuts for Catering & Health Hub
+  if (first === 'catering' || first === 'catering-health' || first === 'health' || first === 'welfare') {
+    return { mainTab: 'admin', subRoute: 'catering', canonicalPath: '/admin/catering' };
+  }
+
   // Standalone shortcuts for announcements
   if (first === 'pr') {
     const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
@@ -157,6 +162,12 @@ export function parseCurrentRoute() {
       'users': 'users',
       'accounts': 'users',
 
+      'catering': 'catering',
+      'health': 'catering',
+      'catering-health': 'catering',
+      'food': 'catering',
+      'welfare': 'catering',
+
       'scanner': 'scanner',
       'qr': 'scanner'
     };
@@ -173,6 +184,7 @@ export function parseCurrentRoute() {
     else if (targetSub === 'advisors') canonicalPath = '/admin/advisors';
     else if (targetSub === 'team') canonicalPath = '/admin/team';
     else if (targetSub === 'users') canonicalPath = '/admin/users';
+    else if (targetSub === 'catering') canonicalPath = '/admin/catering';
     else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
     else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
     else canonicalPath = '/admin';
@@ -258,6 +270,7 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'advisors' || subRoute === 'advisor') return '/admin/advisors';
       if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
+      if (subRoute === 'catering' || subRoute === 'health' || subRoute === 'catering-health' || subRoute === 'food' || subRoute === 'welfare') return '/admin/catering';
       if (subRoute === 'scanner' || subRoute === 'qr') return '/admin/scanner';
       if (subRoute === 'applicants' || subRoute === 'registrations') return '/admin/applicants';
       if (subRoute && subRoute !== 'applicants') return `/admin/${subRoute}`;
