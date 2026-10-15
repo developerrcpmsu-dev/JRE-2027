@@ -145,6 +145,11 @@ export function parseCurrentRoute() {
       'posts': 'announcements',
 
       'speakers': 'speakers',
+      'speaker': 'speakers',
+      'president': 'president',
+      'presidents': 'president',
+      'advisors': 'advisors',
+      'advisor': 'advisors',
 
       'team': 'team',
       'staff': 'team',
@@ -164,6 +169,8 @@ export function parseCurrentRoute() {
     else if (targetSub === 'forms') canonicalPath = '/admin/forms';
     else if (targetSub === 'announcements') canonicalPath = '/admin/announcements';
     else if (targetSub === 'speakers') canonicalPath = '/admin/speakers';
+    else if (targetSub === 'president') canonicalPath = '/admin/president';
+    else if (targetSub === 'advisors') canonicalPath = '/admin/advisors';
     else if (targetSub === 'team') canonicalPath = '/admin/team';
     else if (targetSub === 'users') canonicalPath = '/admin/users';
     else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
@@ -247,6 +254,8 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'forms' || subRoute === 'tests' || subRoute === 'evaluations') return '/admin/forms';
       if (subRoute === 'announcements' || subRoute === 'news' || subRoute === 'posts') return '/admin/announcements';
       if (subRoute === 'speakers') return '/admin/speakers';
+      if (subRoute === 'president') return '/admin/president';
+      if (subRoute === 'advisors' || subRoute === 'advisor') return '/admin/advisors';
       if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
       if (subRoute === 'scanner' || subRoute === 'qr') return '/admin/scanner';

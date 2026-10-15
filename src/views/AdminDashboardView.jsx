@@ -66,7 +66,8 @@ import {
   User,
   Mail,
   Printer,
-  LogOut
+  LogOut,
+  Crown
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -76,7 +77,9 @@ import {
   DEFAULT_SPEAKERS,
   DEFAULT_TEAM_MEMBERS,
   isMsuInstitution,
-  getRegistrationFeeDetails
+  getRegistrationFeeDetails,
+  getSpeakerCategory,
+  SPEAKER_CATEGORIES
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
@@ -127,7 +130,7 @@ export default function AdminDashboardView({
     if (tab === 'users' || tab === 'accounts') return 'users';
     if (tab === 'forms' || tab === 'tests' || tab === 'evaluations') return 'forms';
     if (tab === 'announcements' || tab === 'news' || tab === 'posts') return 'announcements';
-    if (tab === 'speakers') return 'speakers';
+    if (tab === 'speakers' || tab === 'speaker' || tab === 'president' || tab === 'presidents' || tab === 'advisor' || tab === 'advisors') return 'speakers';
     if (tab === 'team' || tab === 'staff') return 'team';
     if (tab === 'scanner' || tab === 'qr') return 'merchandise';
     return tab || 'applicants';
@@ -140,6 +143,13 @@ export default function AdminDashboardView({
       const resolved = resolveInitialTab(initialTab);
       if (resolved !== activeTab) {
         setActiveTab(resolved);
+      }
+      if (initialTab === 'president' || initialTab === 'presidents') {
+        setSpeakerCategoryFilter('president');
+      } else if (initialTab === 'advisor' || initialTab === 'advisors') {
+        setSpeakerCategoryFilter('advisor');
+      } else if (initialTab === 'speakers' || initialTab === 'speaker') {
+        // default to 'all' or keep
       }
       if (initialTab === 'scanner' || initialTab === 'qr') {
         setShowUniversalScanner(true);
@@ -1022,13 +1032,15 @@ export default function AdminDashboardView({
     triggerToast(`ส่งออกรายชื่อผู้ใช้เป็น Excel สำเร็จ: ${fileName}`);
   };
 
-  // Speakers Management State
+  // Speakers, Advisors & Presidents Management State
   const [localSpeakers, setLocalSpeakers] = useState(() => {
     return (speakers && speakers.length > 0) ? speakers : DEFAULT_SPEAKERS;
   });
+  const [speakerCategoryFilter, setSpeakerCategoryFilter] = useState('all'); // 'all' | 'president' | 'advisor' | 'speaker'
   const [isSavingSpeakers, setIsSavingSpeakers] = useState(false);
   const [showSpeakerModal, setShowSpeakerModal] = useState(false);
   const [editingSpeaker, setEditingSpeaker] = useState(null);
+  const [speakerFormCategory, setSpeakerFormCategory] = useState('speaker');
   const [speakerFormNum, setSpeakerFormNum] = useState(1);
   const [speakerFormName, setSpeakerFormName] = useState('');
   const [speakerFormTitle, setSpeakerFormTitle] = useState('');
@@ -1036,6 +1048,25 @@ export default function AdminDashboardView({
   const [speakerFormTopic, setSpeakerFormTopic] = useState('');
   const [speakerFormPhoto, setSpeakerFormPhoto] = useState('');
   const [isUploadingSpeakerPhoto, setIsUploadingSpeakerPhoto] = useState(false);
+
+  // Derived category statistics for speakers, advisors & presidents
+  const speakerStats = React.useMemo(() => {
+    let presidents = 0;
+    let advisors = 0;
+    let speakersCount = 0;
+    (localSpeakers || []).forEach(s => {
+      const cat = getSpeakerCategory(s);
+      if (cat === 'president') presidents++;
+      else if (cat === 'advisor') advisors++;
+      else speakersCount++;
+    });
+    return {
+      total: (localSpeakers || []).length,
+      presidents,
+      advisors,
+      speakersCount
+    };
+  }, [localSpeakers]);
 
   React.useEffect(() => {
     if (speakers && speakers.length > 0) {
@@ -1099,44 +1130,95 @@ export default function AdminDashboardView({
     setShowTeamModal(false);
   };
 
-  // --- Speakers Handlers ---
-  const handleMoveSpeakerUp = async (index) => {
+  // --- Speakers & Dignitaries Handlers ---
+  const handleMoveSpeakerUp = async (spkId) => {
+    const currentList = speakerCategoryFilter === 'all'
+      ? localSpeakers
+      : localSpeakers.filter(s => getSpeakerCategory(s) === speakerCategoryFilter);
+    const index = currentList.findIndex(s => s.id === spkId);
     if (index <= 0) return;
-    const updated = [...localSpeakers];
-    const temp = updated[index];
-    updated[index] = updated[index - 1];
-    updated[index - 1] = temp;
-    const renumbered = updated.map((s, idx) => ({ ...s, num: idx + 1 }));
-    setLocalSpeakers(renumbered);
+
+    const prevItem = currentList[index - 1];
+    const currItem = currentList[index];
+
+    const prevNum = prevItem.num || index;
+    const currNum = currItem.num || (index + 1);
+
+    const updated = localSpeakers.map(s => {
+      if (s.id === currItem.id) return { ...s, num: prevNum };
+      if (s.id === prevItem.id) return { ...s, num: currNum };
+      return s;
+    });
+
+    updated.sort((a, b) => (Number(a.num) || 0) - (Number(b.num) || 0));
+    setLocalSpeakers(updated);
     try {
-      if (onSaveSpeakers) await onSaveSpeakers(renumbered);
-      triggerToast('จัดลำดับวิทยากรเลื่อนขึ้นเรียบร้อย');
+      if (onSaveSpeakers) await onSaveSpeakers(updated);
+      triggerToast('จัดลำดับเลื่อนขึ้นเรียบร้อย');
     } catch (e) {
       console.error(e);
       triggerToast('เกิดข้อผิดพลาดในการบันทึกลำดับ');
     }
   };
 
-  const handleMoveSpeakerDown = async (index) => {
-    if (index >= localSpeakers.length - 1) return;
-    const updated = [...localSpeakers];
-    const temp = updated[index];
-    updated[index] = updated[index + 1];
-    updated[index + 1] = temp;
-    const renumbered = updated.map((s, idx) => ({ ...s, num: idx + 1 }));
-    setLocalSpeakers(renumbered);
+  const handleMoveSpeakerDown = async (spkId) => {
+    const currentList = speakerCategoryFilter === 'all'
+      ? localSpeakers
+      : localSpeakers.filter(s => getSpeakerCategory(s) === speakerCategoryFilter);
+    const index = currentList.findIndex(s => s.id === spkId);
+    if (index < 0 || index >= currentList.length - 1) return;
+
+    const nextItem = currentList[index + 1];
+    const currItem = currentList[index];
+
+    const nextNum = nextItem.num || (index + 2);
+    const currNum = currItem.num || (index + 1);
+
+    const updated = localSpeakers.map(s => {
+      if (s.id === currItem.id) return { ...s, num: nextNum };
+      if (s.id === nextItem.id) return { ...s, num: currNum };
+      return s;
+    });
+
+    updated.sort((a, b) => (Number(a.num) || 0) - (Number(b.num) || 0));
+    setLocalSpeakers(updated);
     try {
-      if (onSaveSpeakers) await onSaveSpeakers(renumbered);
-      triggerToast('จัดลำดับวิทยากรเลื่อนลงเรียบร้อย');
+      if (onSaveSpeakers) await onSaveSpeakers(updated);
+      triggerToast('จัดลำดับเลื่อนลงเรียบร้อย');
     } catch (e) {
       console.error(e);
       triggerToast('เกิดข้อผิดพลาดในการบันทึกลำดับ');
     }
   };
 
-  const handleOpenAddSpeaker = () => {
+  const handleChangeSpeakerCategory = async (spkId, newCategory) => {
+    const target = localSpeakers.find(s => s.id === spkId);
+    if (!target) return;
+    const catItems = localSpeakers.filter(s => s.id !== spkId && getSpeakerCategory(s) === newCategory);
+    const nextNum = catItems.length + 1;
+    const updated = localSpeakers.map(s => {
+      if (s.id === spkId) {
+        return { ...s, category: newCategory, num: nextNum };
+      }
+      return s;
+    });
+    setLocalSpeakers(updated);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(updated);
+      const catLabel = newCategory === 'president' ? 'ประธานในพิธี' : newCategory === 'advisor' ? 'ที่ปรึกษาโครงการ' : 'วิทยากรประจำโครงการ';
+      triggerToast(`เปลี่ยนบทบาทเป็น "${catLabel}" เรียบร้อย`);
+    } catch (e) {
+      console.error(e);
+      triggerToast('เกิดข้อผิดพลาดในการเปลี่ยนบทบาท');
+    }
+  };
+
+  const handleOpenAddSpeaker = (categoryHint = null) => {
+    const chosenCat = categoryHint || (speakerCategoryFilter !== 'all' ? speakerCategoryFilter : 'speaker');
     setEditingSpeaker(null);
-    setSpeakerFormNum(localSpeakers.length + 1);
+    const countInCat = localSpeakers.filter(s => getSpeakerCategory(s) === chosenCat).length;
+    setSpeakerFormNum(countInCat + 1);
+    setSpeakerFormCategory(chosenCat);
     setSpeakerFormName('');
     setSpeakerFormTitle('');
     setSpeakerFormOrg('');
@@ -1148,6 +1230,7 @@ export default function AdminDashboardView({
   const handleOpenEditSpeaker = (spk) => {
     setEditingSpeaker(spk);
     setSpeakerFormNum(spk.num || 1);
+    setSpeakerFormCategory(getSpeakerCategory(spk));
     setSpeakerFormName(spk.name || '');
     setSpeakerFormTitle(spk.title || '');
     setSpeakerFormOrg(spk.org || '');
@@ -1164,7 +1247,7 @@ export default function AdminDashboardView({
       const result = await DataService.uploadFile(file, 'speakers');
       if (result?.url) {
         setSpeakerFormPhoto(result.url);
-        triggerToast('อัปโหลดรูปภาพวิทยากรสำเร็จ');
+        triggerToast('อัปโหลดรูปภาพสำเร็จ');
       }
     } catch (err) {
       console.error(err);
@@ -1178,13 +1261,14 @@ export default function AdminDashboardView({
   const handleSaveSpeakerModal = async (e) => {
     if (e) e.preventDefault();
     if (!speakerFormName.trim()) {
-      triggerToast('กรุณากรอกชื่อ-สกุลของวิทยากร');
+      triggerToast('กรุณากรอกชื่อ-สกุล');
       return;
     }
     const defaultPhoto = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(speakerFormName.trim())}`;
     const payload = {
       id: editingSpeaker?.id || 'spk-' + Date.now(),
-      num: Number(speakerFormNum) || (editingSpeaker?.num || localSpeakers.length + 1),
+      num: Number(speakerFormNum) || (editingSpeaker?.num || 1),
+      category: speakerFormCategory || 'speaker',
       name: speakerFormName.trim(),
       title: speakerFormTitle.trim(),
       org: speakerFormOrg.trim(),
@@ -1203,7 +1287,7 @@ export default function AdminDashboardView({
     setShowSpeakerModal(false);
     try {
       if (onSaveSpeakers) await onSaveSpeakers(updated);
-      triggerToast(editingSpeaker ? 'แก้ไขข้อมูลวิทยากรเรียบร้อย' : 'เพิ่มวิทยากรใหม่เรียบร้อย');
+      triggerToast(editingSpeaker ? 'แก้ไขข้อมูลเรียบร้อย' : 'เพิ่มข้อมูลใหม่เรียบร้อย');
     } catch (err) {
       console.error(err);
       triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
@@ -1213,8 +1297,8 @@ export default function AdminDashboardView({
   const handleDeleteSpeaker = async (id) => {
     const spkToDelete = localSpeakers.find(s => s.id === id);
     const ok = await askConfirm({
-      title: 'ยืนยันการลบวิทยากร',
-      message: `คุณต้องการลบข้อมูลวิทยากร "${spkToDelete?.name || ''}" ออกจากระบบใช่หรือไม่?`,
+      title: 'ยืนยันการลบข้อมูล',
+      message: `คุณต้องการลบข้อมูล "${spkToDelete?.name || ''}" ออกจากระบบใช่หรือไม่?`,
       confirmText: 'ยืนยันลบ',
       cancelText: 'ยกเลิก',
       variant: 'danger'
@@ -1224,7 +1308,7 @@ export default function AdminDashboardView({
     setLocalSpeakers(filtered);
     try {
       if (onSaveSpeakers) await onSaveSpeakers(filtered);
-      triggerToast('ลบข้อมูลวิทยากรเรียบร้อยแล้ว');
+      triggerToast('ลบข้อมูลเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
       triggerToast('เกิดข้อผิดพลาดในการลบข้อมูล');
@@ -1235,12 +1319,31 @@ export default function AdminDashboardView({
     setIsSavingSpeakers(true);
     try {
       if (onSaveSpeakers) await onSaveSpeakers(localSpeakers);
-      triggerToast('บันทึกข้อมูลวิทยากรทั้งหมดลงฐานข้อมูลเรียบร้อยแล้ว');
+      triggerToast('บันทึกข้อมูลประธาน ที่ปรึกษา และวิทยากรทั้งหมดเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
-      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลวิทยากร');
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
       setIsSavingSpeakers(false);
+    }
+  };
+
+  const handleLoadOfficialDignitaries = async () => {
+    const ok = await askConfirm({
+      title: 'โหลดรายชื่อทางการ JRE 2027',
+      message: 'ต้องการโหลดรายชื่อประธานในพิธี คณะที่ปรึกษา และวิทยากรทางการตามกำหนดการจริงของโครงการ JRE 2027 ใช่หรือไม่? (จะแทนที่รายการปัจจุบันด้วยรายชื่อทางการ 9 ท่าน)',
+      confirmText: 'ยืนยันโหลดข้อมูลทางการ',
+      cancelText: 'ยกเลิก',
+      variant: 'warning'
+    });
+    if (!ok) return;
+    setLocalSpeakers(DEFAULT_SPEAKERS);
+    try {
+      if (onSaveSpeakers) await onSaveSpeakers(DEFAULT_SPEAKERS);
+      triggerToast('โหลดรายชื่อประธาน ที่ปรึกษา และวิทยากรทางการเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     }
   };
 
@@ -2868,8 +2971,22 @@ export default function AdminDashboardView({
           </label>
           <div className="relative">
             <select
-              value={activeTab}
-              onChange={(e) => handleTabChange(e.target.value)}
+              value={activeTab === 'speakers' ? `speakers_${speakerCategoryFilter}` : activeTab}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'speakers_president') {
+                  handleTabChange('speakers');
+                  setSpeakerCategoryFilter('president');
+                } else if (val === 'speakers_advisor') {
+                  handleTabChange('speakers');
+                  setSpeakerCategoryFilter('advisor');
+                } else if (val === 'speakers_speaker' || val === 'speakers_all') {
+                  handleTabChange('speakers');
+                  setSpeakerCategoryFilter('speaker');
+                } else {
+                  handleTabChange(val);
+                }
+              }}
               className="w-full px-4 py-3 bg-slate-900 border-2 border-purple-500/60 rounded-2xl text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 shadow-xl shadow-purple-950/40 cursor-pointer"
             >
               <option value="applicants">📋 จัดการผู้สมัคร & ตรวจสอบสลิป ({registrations.length} คน)</option>
@@ -2877,7 +2994,9 @@ export default function AdminDashboardView({
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
               <option value="announcements">📢 ระบบประกาศ & สื่อประชาสัมพันธ์ ({announcements.length})</option>
-              <option value="speakers">🎖️ วิทยากรประจำโครงการ ({localSpeakers.length} ท่าน)</option>
+              <option value="speakers_president">👑 ประธานในพิธี ({speakerStats.presidents} ท่าน)</option>
+              <option value="speakers_advisor">👔 คณะที่ปรึกษาโครงการ ({speakerStats.advisors} ท่าน)</option>
+              <option value="speakers_speaker">🎖️ วิทยากรประจำโครงการ ({speakerStats.speakersCount} ท่าน)</option>
               <option value="team">👥 คณะดำเนินงาน & ทีมงาน ({localTeam.length} คน)</option>
               <option value="users">👤 จัดการบัญชีผู้ใช้ ({userAccounts.length} บัญชี)</option>
             </select>
@@ -2946,16 +3065,43 @@ export default function AdminDashboardView({
             <span>ระบบประกาศ ({announcements.length})</span>
           </button>
 
+          {/* Separated Pill for President */}
           <button
-            onClick={() => handleTabChange('speakers')}
+            onClick={() => { handleTabChange('speakers'); setSpeakerCategoryFilter('president'); }}
             className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
-              activeTab === 'speakers'
-                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+              activeTab === 'speakers' && speakerCategoryFilter === 'president'
+                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 ring-2 ring-amber-400/40 font-black'
                 : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
             }`}
           >
-            <Award className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>วิทยากร ({localSpeakers.length})</span>
+            <Crown className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>ประธานในพิธี ({speakerStats.presidents})</span>
+          </button>
+
+          {/* Separated Pill for Advisors */}
+          <button
+            onClick={() => { handleTabChange('speakers'); setSpeakerCategoryFilter('advisor'); }}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'speakers' && speakerCategoryFilter === 'advisor'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>ที่ปรึกษา ({speakerStats.advisors})</span>
+          </button>
+
+          {/* Separated Pill for Instructors */}
+          <button
+            onClick={() => { handleTabChange('speakers'); setSpeakerCategoryFilter(speakerCategoryFilter === 'president' || speakerCategoryFilter === 'advisor' ? 'speaker' : speakerCategoryFilter); }}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'speakers' && (speakerCategoryFilter === 'speaker' || speakerCategoryFilter === 'all')
+                ? 'bg-emergency-600 text-white shadow-lg shadow-emergency-600/30 ring-2 ring-emergency-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+          >
+            <Award className="w-4 h-4 text-orange-400 shrink-0" />
+            <span>วิทยากร ({speakerStats.speakersCount})</span>
           </button>
 
           <button
@@ -8140,31 +8286,75 @@ export default function AdminDashboardView({
         </div>
       )}
 
-      {/* TAB 6: SPEAKERS MANAGEMENT */}
+      {/* TAB 6: SPEAKERS, ADVISORS & PRESIDENTS MANAGEMENT */}
       {activeTab === 'speakers' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
             <div>
               <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
-                <Award className="w-4 h-4" />
-                Keynote Instructors & Doctors
+                {speakerCategoryFilter === 'president' ? (
+                  <Crown className="w-4 h-4 text-amber-400" />
+                ) : speakerCategoryFilter === 'advisor' ? (
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <Award className="w-4 h-4 text-orange-400" />
+                )}
+                <span>
+                  {speakerCategoryFilter === 'president' 
+                    ? 'Ceremony President & Guest of Honor' 
+                    : speakerCategoryFilter === 'advisor' 
+                    ? 'Project Advisors & Mentors' 
+                    : speakerCategoryFilter === 'speaker'
+                    ? 'Keynote Instructors & Trainers'
+                    : 'JRE 2027 Dignitaries & Instructors'}
+                </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white">
-                ข้อมูลวิทยากรประจำโครงการ ({localSpeakers.length} ท่าน)
+                {speakerCategoryFilter === 'president' 
+                  ? `👑 ข้อมูลประธานในพิธี (${speakerStats.presidents} ท่าน)`
+                  : speakerCategoryFilter === 'advisor' 
+                  ? `👔 ข้อมูลคณะที่ปรึกษาโครงการ (${speakerStats.advisors} ท่าน)`
+                  : speakerCategoryFilter === 'speaker'
+                  ? `🎖️ ข้อมูลวิทยากรประจำโครงการ (${speakerStats.speakersCount} ท่าน)`
+                  : `ประธาน, ที่ปรึกษา และวิทยากรประจำโครงการ (${localSpeakers.length} ท่าน)`}
               </h2>
               <p className="text-slate-400 text-xs mt-1">
-                แก้ไข เพิ่ม ลบ จัดลำดับ (เลื่อนขึ้น/เลื่อนลง) และอัปโหลดรูปภาพวิทยากรสำหรับการแสดงผลบนหน้าหลัก
+                จัดการแยกหมวดหมู่เพื่อความถูกต้องตามระเบียบพิธีการและการแสดงผลบนเว็บไซต์ (เพิ่ม ลบ แก้ไข ย้ายบทบาท และจัดลำดับ)
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                onClick={handleOpenAddSpeaker}
-                className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
+                onClick={handleLoadOfficialDignitaries}
+                title="โหลดรายชื่อประธาน ที่ปรึกษา และวิทยากรตามกำหนดการจริง JRE 2027"
+                className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md"
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>โหลดรายชื่อทางการ JRE 2027</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenAddSpeaker(speakerCategoryFilter !== 'all' ? speakerCategoryFilter : 'speaker')}
+                className={`px-4 py-2.5 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer ${
+                  speakerCategoryFilter === 'president'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-500/20'
+                    : speakerCategoryFilter === 'advisor'
+                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white shadow-indigo-500/20'
+                    : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/20'
+                }`}
               >
                 <Plus className="w-4 h-4" />
-                <span>เพิ่มวิทยากรใหม่</span>
+                <span>
+                  {speakerCategoryFilter === 'president'
+                    ? 'เพิ่มประธานในพิธี'
+                    : speakerCategoryFilter === 'advisor'
+                    ? 'เพิ่มที่ปรึกษาโครงการ'
+                    : speakerCategoryFilter === 'speaker'
+                    ? 'เพิ่มวิทยากรประจำโครงการ'
+                    : 'เพิ่มบุคคลใหม่'}
+                </span>
               </button>
 
               <button
@@ -8179,114 +8369,271 @@ export default function AdminDashboardView({
             </div>
           </div>
 
+          {/* Subtabs / Category Filter Pills */}
+          <div className="flex flex-wrap items-center gap-2 p-2 bg-slate-950/80 rounded-2xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setSpeakerCategoryFilter('all')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                speakerCategoryFilter === 'all'
+                  ? 'bg-slate-800 text-white shadow-md border border-slate-700'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <span>🌟 แสดงทั้งหมด ({localSpeakers.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSpeakerCategoryFilter('president')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                speakerCategoryFilter === 'president'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black shadow-amber-500/20'
+                  : 'text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10'
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span>👑 ประธานในพิธี ({speakerStats.presidents})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSpeakerCategoryFilter('advisor')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                speakerCategoryFilter === 'advisor'
+                  ? 'bg-indigo-600 text-white shadow-md font-black shadow-indigo-600/20'
+                  : 'text-indigo-400/90 hover:text-indigo-300 hover:bg-indigo-500/10'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>👔 ที่ปรึกษาโครงการ ({speakerStats.advisors})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSpeakerCategoryFilter('speaker')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                speakerCategoryFilter === 'speaker'
+                  ? 'bg-emergency-600 text-white shadow-md font-black shadow-emergency-600/20'
+                  : 'text-emergency-400/90 hover:text-emergency-300 hover:bg-emergency-500/10'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>🎖️ วิทยากรประจำโครงการ ({speakerStats.speakersCount})</span>
+            </button>
+          </div>
+
           <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-xs text-amber-300">
             <span className="text-base">💡</span>
             <span>
-              <strong>คำแนะนำ:</strong> สามารถกดปุ่ม <span className="underline font-bold">⬆️ เลื่อนขึ้น</span> หรือ <span className="underline font-bold">⬇️ เลื่อนลง</span> บนการ์ดวิทยากรเพื่อสลับลำดับการแสดงผลในหน้าแรกได้อย่างอิสระ
+              <strong>คำแนะนำ:</strong> สามารถกดปุ่ม <span className="underline font-bold">⬆️ เลื่อนขึ้น</span> / <span className="underline font-bold">⬇️ เลื่อนลง</span> เพื่อสลับลำดับ หรือใช้ดรอปดาวน์ <span className="underline font-bold">"บทบาท"</span> บนการ์ดเพื่อย้ายหมวดหมู่ระหว่างประธาน, ที่ปรึกษา และวิทยากรได้ทันที
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {localSpeakers.map((spk, idx) => {
-              const displayNum = spk.num || idx + 1;
+          {/* Render Cards Grid */}
+          {(() => {
+            const filteredList = speakerCategoryFilter === 'all'
+              ? localSpeakers
+              : localSpeakers.filter(s => getSpeakerCategory(s) === speakerCategoryFilter);
+
+            if (filteredList.length === 0) {
               return (
-                <div
-                  key={spk.id || idx}
-                  className="bg-slate-950 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 flex flex-col justify-between transition-all group relative"
-                >
-                  <div>
-                    {/* Header: Number & Reorder buttons */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-xl bg-emergency-600 text-white text-xs font-black flex items-center justify-center shadow">
-                          {displayNum}
-                        </span>
-                        <span className="text-xs font-bold text-amber-400">
-                          วิทยากรลำดับที่ {displayNum}
-                        </span>
-                      </div>
-
-                      {/* Reorder Buttons */}
-                      <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveSpeakerUp(idx)}
-                          disabled={idx === 0}
-                          title="เลื่อนขึ้น"
-                          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
-                        >
-                          <ArrowUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveSpeakerDown(idx)}
-                          disabled={idx === localSpeakers.length - 1}
-                          title="เลื่อนลง"
-                          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
-                        >
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Photo & Basic Info */}
-                    <div className="flex items-start gap-3.5 mb-3.5">
-                      <div className="relative shrink-0">
-                        <img
-                          src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`}
-                          alt={spk.name}
-                          className="w-16 h-16 rounded-xl object-cover border border-slate-700 bg-slate-900"
-                          onError={(e) => {
-                            e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
-                          }}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-white text-sm leading-tight group-hover:text-amber-300 transition-colors">
-                          {spk.name}
-                        </h4>
-                        <p className="text-[11px] text-slate-300 font-medium mt-1 line-clamp-2">
-                          {spk.title}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="space-y-1.5 text-xs pt-3 border-t border-slate-900">
-                      <div>
-                        <span className="text-[10px] text-slate-500 block">สังกัด / หน่วยงาน:</span>
-                        <span className="text-slate-300 font-medium text-[11px]">{spk.org || '-'}</span>
-                      </div>
-                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 mt-2">
-                        <span className="text-[10px] text-amber-400 font-bold block mb-0.5">หัวข้อฝึกอบรม:</span>
-                        <span className="text-slate-300 text-[11px] line-clamp-2">{spk.topic || '-'}</span>
-                      </div>
-                    </div>
+                <div className="text-center py-12 px-4 bg-slate-950/60 rounded-3xl border border-slate-800/80 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 text-slate-500 flex items-center justify-center mx-auto">
+                    {speakerCategoryFilter === 'president' ? (
+                      <Crown className="w-6 h-6 text-amber-500/50" />
+                    ) : speakerCategoryFilter === 'advisor' ? (
+                      <ShieldCheck className="w-6 h-6 text-indigo-500/50" />
+                    ) : (
+                      <Award className="w-6 h-6 text-orange-500/50" />
+                    )}
                   </div>
-
-                  {/* Actions: Edit & Delete */}
-                  <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-slate-900">
+                  <h3 className="text-base font-bold text-white">
+                    ยังไม่มีรายชื่อในหมวดหมู่ {speakerCategoryFilter === 'president' ? 'ประธานในพิธี' : speakerCategoryFilter === 'advisor' ? 'คณะที่ปรึกษา' : 'วิทยากร'}
+                  </h3>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    คลิกปุ่มด้านล่างเพื่อเพิ่มรายชื่อบุคคลในหมวดนี้ หรือโหลดรายชื่อทางการของโครงการ JRE 2027
+                  </p>
+                  <div className="pt-2 flex justify-center gap-3">
                     <button
                       type="button"
-                      onClick={() => handleOpenEditSpeaker(spk)}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      onClick={() => handleOpenAddSpeaker(speakerCategoryFilter !== 'all' ? speakerCategoryFilter : 'speaker')}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                     >
-                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                      <span>แก้ไข</span>
+                      + เพิ่มรายชื่อในหมวดนี้
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDeleteSpeaker(spk.id)}
-                      className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      onClick={handleLoadOfficialDignitaries}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>ลบ</span>
+                      ✨ โหลดรายชื่อทางการ
                     </button>
                   </div>
                 </div>
               );
-            })}
-          </div>
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredList.map((spk, idx) => {
+                  const cat = getSpeakerCategory(spk);
+                  const displayNum = spk.num || idx + 1;
+                  const isPresident = cat === 'president';
+                  const isAdvisor = cat === 'advisor';
+
+                  return (
+                    <div
+                      key={spk.id || idx}
+                      className={`bg-slate-950 border rounded-2xl p-5 flex flex-col justify-between transition-all group relative ${
+                        isPresident 
+                          ? 'border-amber-500/40 hover:border-amber-400/70 hover:shadow-lg hover:shadow-amber-500/10'
+                          : isAdvisor
+                          ? 'border-indigo-500/40 hover:border-indigo-400/70 hover:shadow-lg hover:shadow-indigo-500/10'
+                          : 'border-slate-800 hover:border-emergency-500/40 hover:shadow-lg hover:shadow-emergency-500/10'
+                      }`}
+                    >
+                      <div>
+                        {/* Header: Badge & Reorder */}
+                        <div className="flex items-center justify-between gap-2 mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center shadow ${
+                              isPresident
+                                ? 'bg-amber-500 text-slate-950'
+                                : isAdvisor
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-emergency-600 text-white'
+                            }`}>
+                              {isPresident ? '👑' : displayNum}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
+                              isPresident
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : isAdvisor
+                                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                                : 'bg-emergency-500/20 text-emergency-300 border-emergency-500/40'
+                            }`}>
+                              {isPresident ? 'ประธานในพิธี' : isAdvisor ? 'ที่ปรึกษาโครงการ' : `วิทยากรลำดับที่ ${displayNum}`}
+                            </span>
+                          </div>
+
+                          {/* Reorder Buttons */}
+                          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveSpeakerUp(spk.id)}
+                              disabled={idx === 0}
+                              title="เลื่อนขึ้น"
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveSpeakerDown(spk.id)}
+                              disabled={idx === filteredList.length - 1}
+                              title="เลื่อนลง"
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Quick Role Switcher */}
+                        <div className="flex items-center justify-between gap-2 p-1.5 bg-slate-900/90 rounded-xl border border-slate-800 mb-3.5">
+                          <span className="text-[10px] text-slate-400 font-bold pl-1.5">บทบาท:</span>
+                          <select
+                            value={cat}
+                            onChange={(e) => handleChangeSpeakerCategory(spk.id, e.target.value)}
+                            className="bg-slate-950 border border-slate-700 text-[11px] text-white rounded-lg px-2 py-1 font-bold focus:outline-none focus:border-amber-400 cursor-pointer"
+                          >
+                            <option value="president">👑 ประธานในพิธี</option>
+                            <option value="advisor">👔 ที่ปรึกษาโครงการ</option>
+                            <option value="speaker">🎖️ วิทยากรประจำโครงการ</option>
+                          </select>
+                        </div>
+
+                        {/* Photo & Basic Info */}
+                        <div className="flex items-start gap-3.5 mb-3.5">
+                          <div className="relative shrink-0">
+                            <img
+                              src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`}
+                              alt={spk.name}
+                              className={`w-16 h-16 rounded-xl object-cover border bg-slate-900 ${
+                                isPresident
+                                  ? 'border-amber-500/50'
+                                  : isAdvisor
+                                  ? 'border-indigo-500/50'
+                                  : 'border-slate-700'
+                              }`}
+                              onError={(e) => {
+                                e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-white text-sm leading-tight group-hover:text-amber-300 transition-colors">
+                              {spk.name}
+                            </h4>
+                            <p className="text-[11px] text-slate-300 font-medium mt-1 line-clamp-2">
+                              {spk.title}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-1.5 text-xs pt-3 border-t border-slate-900">
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">สังกัด / หน่วยงาน:</span>
+                            <span className="text-slate-300 font-medium text-[11px]">{spk.org || '-'}</span>
+                          </div>
+                          <div className={`p-2.5 rounded-xl border mt-2 ${
+                            isPresident
+                              ? 'bg-amber-500/10 border-amber-500/20'
+                              : isAdvisor
+                              ? 'bg-indigo-500/10 border-indigo-500/20'
+                              : 'bg-slate-900/80 border-slate-800/80'
+                          }`}>
+                            <span className={`text-[10px] font-bold block mb-0.5 ${
+                              isPresident
+                                ? 'text-amber-400'
+                                : isAdvisor
+                                ? 'text-indigo-400'
+                                : 'text-orange-400'
+                            }`}>
+                              {isPresident ? 'บทบาทในพิธีการ:' : isAdvisor ? 'บทบาท / ด้านที่ปรึกษา:' : 'หัวข้อฝึกอบรม:'}
+                            </span>
+                            <span className="text-slate-300 text-[11px] line-clamp-2">{spk.topic || '-'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions: Edit & Delete */}
+                      <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-slate-900">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditSpeaker(spk)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                          <span>แก้ไข</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSpeaker(spk.id)}
+                          className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ลบ</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -9741,20 +10088,96 @@ export default function AdminDashboardView({
             </button>
 
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                <Award className="w-5 h-5" />
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                speakerFormCategory === 'president'
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : speakerFormCategory === 'advisor'
+                  ? 'bg-indigo-500/20 text-indigo-400'
+                  : 'bg-emergency-500/20 text-emergency-400'
+              }`}>
+                {speakerFormCategory === 'president' ? (
+                  <Crown className="w-5 h-5 text-amber-400" />
+                ) : speakerFormCategory === 'advisor' ? (
+                  <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                ) : (
+                  <Award className="w-5 h-5 text-orange-400" />
+                )}
               </div>
               <div>
                 <h3 className="text-lg font-black text-white">
-                  {editingSpeaker ? 'แก้ไขข้อมูลวิทยากรประจำโครงการ' : 'เพิ่มวิทยากรประจำโครงการใหม่'}
+                  {editingSpeaker 
+                    ? `แก้ไขข้อมูล: ${speakerFormCategory === 'president' ? '👑 ประธานในพิธี' : speakerFormCategory === 'advisor' ? '👔 ที่ปรึกษาโครงการ' : '🎖️ วิทยากรประจำโครงการ'}`
+                    : `เพิ่มข้อมูลใหม่: ${speakerFormCategory === 'president' ? '👑 ประธานในพิธี' : speakerFormCategory === 'advisor' ? '👔 ที่ปรึกษาโครงการ' : '🎖️ วิทยากรประจำโครงการ'}`}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  ระบุรายละเอียดของวิทยากร ข้อมูลรูปถ่าย และหัวข้อบรรยาย
+                  ระบุรายละเอียดของบุคคล หมวดหมู่บทบาท ข้อมูลรูปถ่าย และหัวข้อภารกิจ
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleSaveSpeakerModal} className="space-y-4">
+              {/* Category / Role Selector */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1.5">
+                  ประเภทบทบาท / หมวดหมู่ <span className="text-rose-400">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSpeakerFormCategory('president')}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                      speakerFormCategory === 'president'
+                        ? 'bg-amber-500/20 border-amber-400 text-white ring-2 ring-amber-400/40'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-amber-300 mb-1">
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <span>👑 ประธานในพิธี</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      ประธานเปิด/ปิด มอบวุฒิบัตร
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSpeakerFormCategory('advisor')}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                      speakerFormCategory === 'advisor'
+                        ? 'bg-indigo-500/20 border-indigo-400 text-white ring-2 ring-indigo-400/40'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-indigo-300 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                      <span>👔 ที่ปรึกษาโครงการ</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      อาจารย์ที่ปรึกษา/ผู้ทรงคุณวุฒิ
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSpeakerFormCategory('speaker')}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                      speakerFormCategory === 'speaker'
+                        ? 'bg-emergency-500/20 border-emergency-400 text-white ring-2 ring-emergency-400/40'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-orange-300 mb-1">
+                      <Award className="w-4 h-4 text-orange-400" />
+                      <span>🎖️ วิทยากร</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      บรรยายทฤษฎี/ฝึกปฏิบัติ
+                    </p>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-1">
                   <label className="block text-[11px] font-bold text-slate-300 mb-1">
@@ -9777,7 +10200,7 @@ export default function AdminDashboardView({
                     type="text"
                     value={speakerFormName}
                     onChange={e => setSpeakerFormName(e.target.value)}
-                    placeholder="เช่น รศ.ดร. นพดล เชี่ยวชาญ"
+                    placeholder="เช่น รองศาสตราจารย์ ดร.นิตยา วรรณกิตร์"
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
                     required
                   />
@@ -9792,7 +10215,7 @@ export default function AdminDashboardView({
                   type="text"
                   value={speakerFormTitle}
                   onChange={e => setSpeakerFormTitle(e.target.value)}
-                  placeholder="เช่น แพทย์เฉพาะทางเวชศาสตร์ฉุกเฉิน (Emergency Medicine)"
+                  placeholder="เช่น รองอธิการบดีฝ่ายพัฒนานิสิตและภาพลักษณ์องค์กร"
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -9805,20 +10228,30 @@ export default function AdminDashboardView({
                   type="text"
                   value={speakerFormOrg}
                   onChange={e => setSpeakerFormOrg(e.target.value)}
-                  placeholder="เช่น โรงพยาบาลศูนย์ และอาจารย์แพทย์ / สพฉ."
+                  placeholder="เช่น มหาวิทยาลัยมหาสารคาม (มมส) / โรงพยาบาลศูนย์"
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  หัวข้อฝึกอบรม / บรรยาย
+                  {speakerFormCategory === 'president'
+                    ? 'บทบาทหน้าที่ในพิธีการ (Ceremony Role)'
+                    : speakerFormCategory === 'advisor'
+                    ? 'บทบาทและด้านที่ให้คำปรึกษา (Advisory Role)'
+                    : 'หัวข้อฝึกอบรม / บรรยาย (Lecture & Training Topic)'}
                 </label>
                 <textarea
                   rows="2"
                   value={speakerFormTopic}
                   onChange={e => setSpeakerFormTopic(e.target.value)}
-                  placeholder="เช่น ระบบการแพทย์ฉุกเฉินและการคัดแยกผู้บาดเจ็บหมู่ (Triage)"
+                  placeholder={
+                    speakerFormCategory === 'president'
+                      ? 'เช่น ประธานในพิธีเปิดโครงการ JRE 2027 และพิธีมอบเกียรติบัตรวุฒิบัตรปิดการฝึกอบรม'
+                      : speakerFormCategory === 'advisor'
+                      ? 'เช่น ที่ปรึกษาด้านการฝึกอบรมและประสานงานภาคีเครือข่ายนักศึกษาทั่วประเทศ'
+                      : 'เช่น อบรมความรู้การกู้ภัยเบื้องต้นและความปลอดภัยในการปฏิบัติงาน'
+                  }
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 resize-none"
                 />
               </div>
@@ -9826,7 +10259,7 @@ export default function AdminDashboardView({
               {/* Photo Upload & Preview */}
               <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
                 <label className="block text-[11px] font-bold text-slate-300">
-                  รูปถ่ายวิทยากร (Photo)
+                  รูปถ่าย (Photo)
                 </label>
                 
                 <div className="flex items-center gap-4">
@@ -9889,10 +10322,18 @@ export default function AdminDashboardView({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/30 transition-all active:scale-95 cursor-pointer"
+                  className={`px-5 py-2 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer ${
+                    speakerFormCategory === 'president'
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-500/30'
+                      : speakerFormCategory === 'advisor'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-500/30'
+                      : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/30'
+                  }`}
                 >
                   <Save className="w-4 h-4" />
-                  <span>บันทึกข้อมูลวิทยากร</span>
+                  <span>
+                    บันทึกข้อมูล{speakerFormCategory === 'president' ? 'ประธานในพิธี' : speakerFormCategory === 'advisor' ? 'ที่ปรึกษา' : 'วิทยากร'}
+                  </span>
                 </button>
               </div>
             </form>

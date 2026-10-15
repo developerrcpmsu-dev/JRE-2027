@@ -13,12 +13,15 @@ import {
   FileCheck2,
   HeartHandshake,
   Shirt,
-  Play
+  Play,
+  Crown,
+  ShieldCheck
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
 import RegistrationCountdown from '../components/RegistrationCountdown';
 import { getRegistrationScheduleStatus } from '../utils/registrationSchedule';
+import { DEFAULT_SPEAKERS, getSpeakerCategory } from '../data/defaultData';
 
 export default function HomeView({ 
   teamMembers, 
@@ -55,9 +58,27 @@ export default function HomeView({
     }));
   }, [teamMembers]);
 
-  // Sort speakers by num
-  const sortedSpeakers = React.useMemo(() => {
-    return [...(speakers || [])].sort((a, b) => (Number(a.num) || 0) - (Number(b.num) || 0));
+  // Categorize dignitaries & speakers dynamically (Presidents, Advisors, Keynote Instructors)
+  const categorizedDignitaries = React.useMemo(() => {
+    const list = (speakers && speakers.length > 0) ? speakers : DEFAULT_SPEAKERS;
+    const presidents = [];
+    const advisors = [];
+    const instructors = [];
+
+    list.forEach((spk) => {
+      const cat = getSpeakerCategory(spk);
+      if (cat === 'president') presidents.push(spk);
+      else if (cat === 'advisor') advisors.push(spk);
+      else instructors.push(spk);
+    });
+
+    const sortFn = (a, b) => (Number(a.num) || 0) - (Number(b.num) || 0);
+    return {
+      presidents: presidents.sort(sortFn),
+      advisors: advisors.sort(sortFn),
+      instructors: instructors.sort(sortFn),
+      totalCount: list.length
+    };
   }, [speakers]);
 
   return (
@@ -408,72 +429,251 @@ export default function HomeView({
         })}
       </section>
 
-      {/* Speakers Section: Dynamically rendered & ordered */}
-      <section className="space-y-8 pt-4">
+      {/* Dignitaries & Instructors Section: Clearly separated into President, Advisors & Keynote Instructors */}
+      <section className="space-y-12 pt-4">
         <div className="border-b border-slate-800 pb-5">
-          <div className="flex items-center gap-2 text-emergency-400 text-xs font-bold uppercase tracking-wider mb-2">
+          <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
             <Award className="w-4 h-4" />
-            Distinguished Instructors & Keynote Speakers
+            Distinguished President, Advisors & Keynote Instructors
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white">
-            ข้อมูลวิทยากรประจำโครงการ ({sortedSpeakers.length} ท่าน)
+            ประธานในพิธี, คณะที่ปรึกษา และวิทยากรประจำโครงการ
           </h2>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            ผู้เชี่ยวชาญด้านเวชศาสตร์ฉุกเฉิน การกู้ภัยทางน้ำ การใช้เชือกกู้ภัยในที่สูง และการตัดถ่างยานพาหนะ
+            เกียรติยศแห่งการฝึกซ้อมร่วม Joint Response Exercise (JRE 2027) ณ มหาวิทยาลัยมหาสารคาม
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedSpeakers.map((spk, idx) => {
-            const displayNum = spk.num || idx + 1;
-            return (
-              <div 
-                key={spk.id || idx}
-                className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group"
-              >
+        {/* 1. ประธานในพิธี (Ceremony President & Guest of Honor) */}
+        {categorizedDignitaries.presidents.length > 0 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border border-amber-500/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/10">
+                  <Crown className="w-5 h-5 text-amber-400" />
+                </div>
                 <div>
-                  <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
-                    <div className="relative shrink-0">
-                      <img 
-                        src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
-                        alt={spk.name}
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg bg-slate-950 shrink-0" 
-                        onError={(e) => {
-                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
-                        }}
-                      />
-                      <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
-                        {displayNum}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20 inline-block">
-                        วิทยากรท่านที่ {displayNum}
-                      </span>
-                      <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words">
-                        {spk.name}
-                      </h3>
-                      <p className="text-xs text-slate-300 font-medium mt-1 break-words">
-                        {spk.title}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
-                    <div className="text-xs">
-                      <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
-                      <span className="text-slate-200 font-medium break-words">{spk.org}</span>
-                    </div>
-                    <div className="text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                      <span className="text-amber-400 font-semibold block text-[11px] mb-0.5">หัวข้อฝึกอบรม:</span>
-                      <span className="text-slate-300 break-words">{spk.topic}</span>
-                    </div>
-                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                    ประธานในพิธี (Ceremony President & Guest of Honor)
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {categorizedDignitaries.presidents.length} ท่าน
+                    </span>
+                  </h3>
+                  <p className="text-xs text-amber-200/80 mt-0.5">
+                    ประธานในพิธีเปิดโครงการ JRE 2027 และพิธีมอบเกียรติบัตรวุฒิบัตรปิดการฝึกอบรม
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categorizedDignitaries.presidents.map((spk, idx) => {
+                return (
+                  <div 
+                    key={spk.id || idx}
+                    className="bg-slate-900/90 border border-amber-500/30 hover:border-amber-400/70 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-amber-500/10 flex flex-col justify-between group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                    <div>
+                      <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
+                        <div className="relative shrink-0">
+                          <img 
+                            src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
+                            alt={spk.name}
+                            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-amber-400/60 group-hover:border-amber-300 transition-colors shadow-lg bg-slate-950 shrink-0" 
+                            onError={(e) => {
+                              e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
+                            }}
+                          />
+                          <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-amber-500 text-slate-950 rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
+                            👑
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/30 inline-flex items-center gap-1">
+                            <Crown className="w-3 h-3 text-amber-400" />
+                            ประธานในพิธี
+                          </span>
+                          <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words group-hover:text-amber-200 transition-colors">
+                            {spk.name}
+                          </h3>
+                          <p className="text-xs text-slate-300 font-medium mt-1 break-words">
+                            {spk.title}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
+                        <div className="text-xs">
+                          <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
+                          <span className="text-slate-200 font-medium break-words">{spk.org || '-'}</span>
+                        </div>
+                        <div className="text-xs bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                          <span className="text-amber-400 font-semibold block text-[11px] mb-0.5">บทบาทในพิธี:</span>
+                          <span className="text-slate-200 break-words">{spk.topic || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 2. คณะที่ปรึกษาโครงการ (Project Advisors & Mentors) */}
+        {categorizedDignitaries.advisors.length > 0 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-indigo-500/15 via-indigo-500/5 to-transparent border border-indigo-500/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/10">
+                  <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                    คณะที่ปรึกษาโครงการ (Project Advisors & Mentors)
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                      {categorizedDignitaries.advisors.length} ท่าน
+                    </span>
+                  </h3>
+                  <p className="text-xs text-indigo-200/80 mt-0.5">
+                    อาจารย์ที่ปรึกษาชมรม และผู้ทรงคุณวุฒิด้านงานป้องกันและบรรเทาสาธารณภัยภาคีเครือข่าย
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categorizedDignitaries.advisors.map((spk, idx) => {
+                const displayNum = spk.num || idx + 1;
+                return (
+                  <div 
+                    key={spk.id || idx}
+                    className="bg-slate-900/90 border border-indigo-500/30 hover:border-indigo-400/70 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-500/10 flex flex-col justify-between group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                    <div>
+                      <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
+                        <div className="relative shrink-0">
+                          <img 
+                            src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
+                            alt={spk.name}
+                            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-indigo-400/60 group-hover:border-indigo-300 transition-colors shadow-lg bg-slate-950 shrink-0" 
+                            onError={(e) => {
+                              e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
+                            }}
+                          />
+                          <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
+                            {displayNum}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-500/30 inline-flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                            ที่ปรึกษาโครงการ
+                          </span>
+                          <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words group-hover:text-indigo-200 transition-colors">
+                            {spk.name}
+                          </h3>
+                          <p className="text-xs text-slate-300 font-medium mt-1 break-words">
+                            {spk.title}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
+                        <div className="text-xs">
+                          <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
+                          <span className="text-slate-200 font-medium break-words">{spk.org || '-'}</span>
+                        </div>
+                        <div className="text-xs bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20">
+                          <span className="text-indigo-400 font-semibold block text-[11px] mb-0.5">บทบาทและคำปรึกษา:</span>
+                          <span className="text-slate-200 break-words">{spk.topic || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 3. คณะวิทยากรประจำโครงการ (Keynote Instructors & Trainers) */}
+        {categorizedDignitaries.instructors.length > 0 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-emergency-500/15 via-emergency-500/5 to-transparent border border-emergency-500/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emergency-500/20 border border-emergency-500/40 text-emergency-300 flex items-center justify-center shrink-0 shadow-lg shadow-emergency-500/10">
+                  <Award className="w-5 h-5 text-emergency-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                    คณะวิทยากรประจำโครงการ (Keynote Instructors & Trainers)
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emergency-500/20 text-emergency-300 border border-emergency-500/40">
+                      {categorizedDignitaries.instructors.length} ท่าน
+                    </span>
+                  </h3>
+                  <p className="text-xs text-emergency-200/80 mt-0.5">
+                    ผู้เชี่ยวชาญด้านเวชศาสตร์ฉุกเฉิน ระบบ ICS การกู้ภัยทางสูง การดับเพลิง และอุปกรณ์ SCBA
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categorizedDignitaries.instructors.map((spk, idx) => {
+                const displayNum = spk.num || idx + 1;
+                return (
+                  <div 
+                    key={spk.id || idx}
+                    className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group relative overflow-hidden"
+                  >
+                    <div>
+                      <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
+                        <div className="relative shrink-0">
+                          <img 
+                            src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
+                            alt={spk.name}
+                            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg bg-slate-950 shrink-0" 
+                            onError={(e) => {
+                              e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
+                            }}
+                          />
+                          <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
+                            {displayNum}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20 inline-block">
+                            วิทยากรท่านที่ {displayNum}
+                          </span>
+                          <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words">
+                            {spk.name}
+                          </h3>
+                          <p className="text-xs text-slate-300 font-medium mt-1 break-words">
+                            {spk.title}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-4 pt-3 border-t border-slate-800/80">
+                        <div className="text-xs">
+                          <span className="text-slate-400 block text-[11px]">สังกัด / หน่วยงาน:</span>
+                          <span className="text-slate-200 font-medium break-words">{spk.org || '-'}</span>
+                        </div>
+                        <div className="text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                          <span className="text-amber-400 font-semibold block text-[11px] mb-0.5">หัวข้อฝึกอบรม:</span>
+                          <span className="text-slate-300 break-words">{spk.topic || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
     </div>

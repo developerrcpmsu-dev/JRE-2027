@@ -63,60 +63,156 @@ export const DEFAULT_TEAM_MEMBERS = [
   }
 ];
 
+export const SPEAKER_CATEGORIES = [
+  {
+    id: 'president',
+    label: 'ประธานในพิธี',
+    fullLabel: 'ประธานในพิธี (Ceremony President & Guest of Honor)',
+    description: 'ประธานในพิธีเปิดโครงการ JRE 2027 และพิธีมอบเกียรติบัตรวุฒิบัตรปิดการฝึกอบรม',
+    badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    headerColor: 'text-amber-400',
+    dotColor: 'bg-amber-400'
+  },
+  {
+    id: 'advisor',
+    label: 'ที่ปรึกษาโครงการ',
+    fullLabel: 'คณะที่ปรึกษาโครงการ (Project Advisors & Mentors)',
+    description: 'อาจารย์ที่ปรึกษาชมรม และผู้ทรงคุณวุฒิภาคีเครือข่ายนักศึกษา',
+    badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    headerColor: 'text-indigo-400',
+    dotColor: 'bg-indigo-400'
+  },
+  {
+    id: 'speaker',
+    label: 'วิทยากรประจำโครงการ',
+    fullLabel: 'วิทยากรประจำโครงการ (Keynote Instructors & Trainers)',
+    description: 'อาจารย์ผู้บรรยายภาคทฤษฎี และครูฝึกสอนประจำฐานการฝึกปฏิบัติ',
+    badgeClass: 'bg-emergency-500/20 text-emergency-300 border-emergency-500/40',
+    headerColor: 'text-emergency-400',
+    dotColor: 'bg-emergency-400'
+  }
+];
+
+export const getSpeakerCategory = (spk) => {
+  if (spk?.category) return spk.category;
+  const str = `${spk?.name || ''} ${spk?.title || ''} ${spk?.topic || ''} ${spk?.role || ''}`.toLowerCase();
+  if (
+    str.includes('ประธาน') || 
+    str.includes('อธิการบดี') || 
+    str.includes('นิตยา') || 
+    str.includes('เปิดโครงการ') || 
+    str.includes('พิธีเปิด') || 
+    str.includes('พิธีปิด')
+  ) {
+    return 'president';
+  }
+  if (
+    str.includes('ที่ปรึกษา') || 
+    str.includes('กฤษฎา') || 
+    str.includes('พนัส') || 
+    str.includes('ประเสริฐ') || 
+    str.includes('advisor')
+  ) {
+    return 'advisor';
+  }
+  return 'speaker';
+};
+
 export const DEFAULT_SPEAKERS = [
+  // 1. ประธานในพิธี (Ceremony President & Guest of Honor)
   {
-    id: 'spk-1',
+    id: 'spk-pres-1',
     num: 1,
-    name: 'รศ.ดร. นพดล เชี่ยวชาญ',
-    title: 'แพทย์เฉพาะทางเวชศาสตร์ฉุกเฉิน (Emergency Medicine)',
-    org: 'โรงพยาบาลศูนย์และอาจารย์แพทย์',
-    topic: 'ระบบการแพทย์ฉุกเฉินและการคัดแยกผู้บาดเจ็บหมู่ (Triage)',
-    photo: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'
+    category: 'president',
+    name: 'รองศาสตราจารย์ ดร.นิตยา วรรณกิตร์',
+    title: 'รองอธิการบดีฝ่ายพัฒนานิสิตและภาพลักษณ์องค์กร',
+    org: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    topic: 'ประธานในพิธีเปิดโครงการ JRE 2027 และพิธีมอบเกียรติบัตรวุฒิบัตรปิดการฝึกอบรม',
+    photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80'
   },
+
+  // 2. คณะที่ปรึกษาโครงการ (Project Advisors & Mentors)
   {
-    id: 'spk-2',
-    num: 2,
-    name: 'อ. สุรพล รวดเร็ว',
-    title: 'ผู้เชี่ยวชาญการกู้ภัยทางน้ำและประดาน้ำสากล',
-    org: 'สถาบันการแพทย์ฉุกเฉินแห่งชาติ (สพฉ.)',
-    topic: 'เทคนิคการช่วยเหลือทางน้ำและการดำน้ำค้นหาใต้น้ำ',
-    photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=400&q=80'
-  },
-  {
-    id: 'spk-3',
-    num: 3,
-    name: 'ว่าที่ ร.ต. สมเกียรติ ปลอดภัย',
-    title: 'ครูฝึกสอนการใช้ระบบเชือกกู้ภัยในที่สูง (Rope Rescue)',
-    org: 'ศูนย์ฝึกบรรเทาสาธารณภัยภาคตะวันออกเฉียงเหนือ',
-    topic: 'Rope Rescue System & การลำเลียงทางดิ่ง',
+    id: 'spk-adv-1',
+    num: 1,
+    category: 'advisor',
+    name: 'ว่าที่ร้อยตรีกฤษฎา ศักดิ์คำดวง',
+    title: 'อาจารย์ที่ปรึกษาชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม',
+    org: 'กองกิจการนิสิต มหาวิทยาลัยมหาสารคาม',
+    topic: 'ที่ปรึกษาด้านการฝึกอบรมและประสานงานภาคีเครือข่ายนักศึกษาทั่วประเทศ',
     photo: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80'
   },
   {
-    id: 'spk-4',
-    num: 4,
-    name: 'นาง สาวิตรี ดีเยี่ยม',
-    title: 'พยาบาลวิชาชีพชำนาญการพิเศษ กู้ชีพชั้นสูง (ACLS)',
-    org: 'ศูนย์อุบัติเหตุและวิกฤตบำบัด',
-    topic: 'การช่วยฟื้นคืนชีพขั้นสูงและการใช้เครื่อง AED ในที่เกิดเหตุ',
+    id: 'spk-adv-2',
+    num: 2,
+    category: 'advisor',
+    name: 'นายพนัส ปรีวาสนา',
+    title: 'ที่ปรึกษาชมรมกู้ภัยราชพฤกษ์ / หัวหน้างานกิจกรรมนิสิต',
+    org: 'กองกิจการนิสิต มหาวิทยาลัยมหาสารคาม',
+    topic: 'ที่ปรึกษาฝ่ายอำนวยการโครงการและการบริหารจัดการเครือข่ายสถาบัน',
+    photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'
+  },
+  {
+    id: 'spk-adv-3',
+    num: 3,
+    category: 'advisor',
+    name: 'นายประเสริฐ ชุ่มอภัย',
+    title: 'ผู้เชี่ยวชาญงานป้องกันและบรรเทาสาธารณภัย',
+    org: 'ที่ปรึกษาพิเศษโครงการ Joint Response Exercise (JRE)',
+    topic: 'ที่ปรึกษาด้านยุทธวิธีการตอบโต้เหตุฉุกเฉินและมาตรฐานความปลอดภัยสากล',
+    photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80'
+  },
+
+  // 3. วิทยากรประจำโครงการ (Keynote Instructors & Trainers)
+  {
+    id: 'spk-ins-1',
+    num: 1,
+    category: 'speaker',
+    name: 'อ.ดร.กัลยา หาญพิชาญชัย',
+    title: 'รองคณบดีฝ่ายพัฒนานิสิตและโครงสร้างพื้นฐาน อาจารย์ประจำหลักสูตรอาชีวอนามัยและความปลอดภัย',
+    org: 'คณะสาธารณสุขศาสตร์ มหาวิทยาลัยมหาสารคาม',
+    topic: 'อบรมความรู้การกู้ภัยเบื้องต้นและความปลอดภัยในการปฏิบัติงาน',
     photo: 'https://images.unsplash.com/photo-1594824813583-b26a63666d96?auto=format&fit=crop&w=400&q=80'
   },
   {
-    id: 'spk-5',
-    num: 5,
-    name: 'นาย สมบูรณ์ พูนสุข',
-    title: 'ผู้เชี่ยวชาญการตัดถ่างและกู้ภัยอุบัติเหตุทางถนน (Extrication)',
-    org: 'มูลนิธิกู้ภัยสว่างและวิทยากรป้องกันภัยฝ่ายพลเรือน',
-    topic: 'Vehicle Extrication การตัดถ่างซากยานพาหนะอย่างปลอดภัย',
-    photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80'
+    id: 'spk-ins-2',
+    num: 2,
+    category: 'speaker',
+    name: 'นายเสนีย์ ดรศรีโยเพชร',
+    title: 'นักวิชาการ ตำแหน่งงานป้องกันและบรรเทาสาธารณภัย',
+    org: 'องค์การบริหารส่วนตำบลหัวขวาง อำเภอโกสุมพิสัย จังหวัดมหาสารคาม',
+    topic: 'อบรมความรู้ระบบบัญชาการและจัดการสถานการณ์ Incident Command System (ICS)',
+    photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80'
   },
   {
-    id: 'spk-6',
-    num: 6,
-    name: 'พ.ต.ท. คุ้มครอง ประชา',
-    title: 'ผู้บัญชาการค้นหาและกู้ภัยในเขตเมือง (USAR Specialist)',
-    org: 'กองบัญชาการตำรวจตระเวนชายแดน',
-    topic: 'ระบบบัญชาการในภาวะวิกฤต (Incident Command System - ICS)',
-    photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80'
+    id: 'spk-ins-3',
+    num: 3,
+    category: 'speaker',
+    name: 'นายแสวง สิทธิบุ่น',
+    title: 'หัวหน้างานป้องกันและบรรเทาสาธารณภัย',
+    org: 'กองอาคารสถานที่ มหาวิทยาลัยมหาสารคาม',
+    topic: 'สาธิตและฝึกปฏิบัติฐาน (การติดตั้งและสวมใส่อุปกรณ์บุคคล SCBA & ค้นหาในอาคารควันทัศนวิสัยต่ำ)',
+    photo: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'
+  },
+  {
+    id: 'spk-ins-4',
+    num: 4,
+    category: 'speaker',
+    name: 'นายวาทิต จบศรี',
+    title: 'พนักงานป้องกันและบรรเทาสาธารณภัย',
+    org: 'กองอาคารสถานที่ มหาวิทยาลัยมหาสารคาม',
+    topic: 'สาธิตและฝึกปฏิบัติฐาน (อุปกรณ์ดับเพลิงและเครื่องมือรถดับเพลิง & ดับเพลิงเบื้องต้นจากไฟแต่ละประเภท)',
+    photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=400&q=80'
+  },
+  {
+    id: 'spk-ins-5',
+    num: 5,
+    category: 'speaker',
+    name: 'นายนพรัตน์ ศรีสมภาร',
+    title: 'พนักงานป้องกันและบรรเทาสาธารณภัย',
+    org: 'กองอาคารสถานที่ มหาวิทยาลัยมหาสารคาม',
+    topic: 'สาธิตและฝึกปฏิบัติฐาน (กู้ภัยทางสูงและระบบเชือก การโรยตัวและอพยพผู้บาดเจ็บจากอาคารสูง)',
+    photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80'
   }
 ];
 
