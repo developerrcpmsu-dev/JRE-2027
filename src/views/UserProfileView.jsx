@@ -285,12 +285,12 @@ export default function UserProfileView({
               ) : (userAccount.email_verified || userAccount.verified) ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>✓ ยืนยันอีเมลแล้ว (OTP)</span>
+                  <span>✓ ลงทะเบียนด้วยรหัสผ่านแล้ว</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>รอ OTP ยืนยัน</span>
+                  <span>รอยืนยันบัญชี</span>
                 </span>
               )}
             </div>
@@ -429,7 +429,7 @@ export default function UserProfileView({
 
           <div className="p-3 bg-emerald-950/25 border border-emerald-500/30 rounded-xl">
             <p className="text-emerald-200 font-bold">Credential metadata ถูกจำกัดการแสดงผล</p>
-            <p className="text-slate-400 mt-1 leading-relaxed">หน้าโปรไฟล์ไม่ render และไม่เปิดให้คัดลอก password hash, salt หรือ OTP ของบัญชี งานย้ายการตรวจรหัสผ่านไป Supabase Auth/server-side KDF ยังต้องทำใน migration ถัดไป</p>
+            <p className="text-slate-400 mt-1 leading-relaxed">หน้าโปรไฟล์ไม่ render และไม่เปิดให้คัดลอก password hash, salt หรือ secret token ของบัญชี ข้อมูลความปลอดภัยถูกควบคุมตามมาตรฐาน</p>
           </div>
         </div>
       </div>

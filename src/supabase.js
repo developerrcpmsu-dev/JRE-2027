@@ -1664,7 +1664,7 @@ export const DataService = {
         email_verified: true
       };
     }
-    throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
+    throw new Error('รหัสยืนยันไม่ถูกต้อง');
   },
 
   // 5. Resend Verification Code
@@ -1689,7 +1689,7 @@ export const DataService = {
 
     const cleanCode = (code || '').trim();
     if (!account.verification_code || !cleanCode || account.verification_code !== cleanCode) {
-      throw new Error('รหัสยืนยัน OTP ไม่ถูกต้อง');
+      throw new Error('รหัสยืนยันไม่ถูกต้อง');
     }
 
     const pwdCheck = validatePassword(newPassword);

@@ -935,8 +935,8 @@ export default function AdminDashboardView({
       if (u.provider === 'google' || (typeof u.id === 'string' && u.id.startsWith('google_')) || email.endsWith('@gmail.com')) {
         return 'ยืนยันด้วย Google OAuth แล้ว';
       }
-      if (u.email_verified || u.verified) return 'ยืนยันผ่าน OTP แล้ว';
-      return 'รอ OTP ยืนยัน';
+      if (u.email_verified || u.verified) return 'ลงทะเบียนด้วยรหัสผ่านแล้ว';
+      return 'รอยืนยันบัญชี';
     };
 
     const dataRows = userAccounts.map((u, idx) => [
@@ -8133,7 +8133,7 @@ export default function AdminDashboardView({
                 จัดการบัญชีผู้ใช้งานระบบ ({userAccounts.length} บัญชี)
               </h2>
               <p className="text-slate-400 text-xs mt-1">
-                ตรวจสอบรายชื่อผู้ใช้งาน, บทบาท และช่องทางยืนยันตัวตน โดยไม่แสดงหรือส่งออก password hash, salt หรือ OTP
+                ตรวจสอบรายชื่อผู้ใช้งาน, บทบาท และช่องทางยืนยันตัวตน โดยไม่แสดงหรือส่งออก password hash หรือ salt
               </p>
             </div>
 
@@ -8196,13 +8196,13 @@ export default function AdminDashboardView({
 
             <div className="p-4 bg-slate-950 border border-purple-900/40 rounded-2xl">
               <div className="flex items-center justify-between text-purple-400 mb-2">
-                <span className="text-xs font-bold">อีเมลที่ยืนยันแล้ว</span>
+                <span className="text-xs font-bold">บัญชีพร้อมใช้งาน / ยืนยันแล้ว</span>
                 <CheckCircle2 className="w-4 h-4 text-purple-400" />
               </div>
               <div className="text-2xl font-black text-purple-300">
                 {userAccounts.filter(u => Boolean(u.email_verified || u.verified || u.provider === 'google' || u.provider === 'both' || (typeof u.id === 'string' && u.id.startsWith('google_')))).length}
               </div>
-              <p className="text-[11px] text-purple-400/80 mt-1">✓ Google OAuth & OTP Verification</p>
+              <p className="text-[11px] text-purple-400/80 mt-1">✓ Google OAuth & บัญชีรหัสผ่านพร้อมใช้งาน</p>
             </div>
           </div>
 
@@ -8338,12 +8338,12 @@ export default function AdminDashboardView({
                             ) : (acc.email_verified || acc.verified) ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
                                 <CheckCircle className="w-3 h-3 text-emerald-400" />
-                                <span>✓ ยืนยันอีเมลแล้ว (OTP)</span>
+                                <span>✓ ลงทะเบียนด้วยรหัสผ่านแล้ว</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
                                 <Clock className="w-3 h-3 text-amber-400" />
-                                <span>รอ OTP ยืนยัน</span>
+                                <span>รอยืนยันบัญชี</span>
                               </span>
                             )}
                           </div>
@@ -8537,7 +8537,7 @@ export default function AdminDashboardView({
                   className="w-4 h-4 rounded text-emerald-500 bg-slate-900 border-slate-700"
                 />
                 <span className="text-slate-300 font-semibold text-xs">
-                  ยืนยันอีเมลแล้ว (Email Verified)
+                  สถานะบัญชีพร้อมใช้งาน (Account Active / Verified)
                 </span>
               </label>
 

@@ -327,7 +327,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         onClose();
       }, 800);
     } catch (err) {
-      setErrorMsg(err.message || 'รหัส OTP ไม่ถูกต้อง');
+      setErrorMsg(err.message || 'รหัสยืนยันไม่ถูกต้อง');
     } finally {
       setIsLoading(false);
     }
@@ -845,6 +845,27 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             ======================================================== */}
         {activeTab === 'forgot_password' && (
           <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5 relative z-10">
+            <div className="p-3 bg-amber-950/40 border border-amber-600/30 rounded-xl text-amber-200 text-xs space-y-2">
+              <p className="font-semibold flex items-center gap-1.5 text-amber-300">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>ข้อแนะนำกรณีลืมรหัสผ่าน</span>
+              </p>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                ระบบ JRE 2027 ไม่ได้เปิดใช้งานบริการส่งอีเมล (No SMTP) จึงไม่มีการส่ง OTP ทางอีเมล หากลืมรหัสผ่าน ท่านสามารถ:
+              </p>
+              <button
+                type="button"
+                onClick={handleOpenAccountChooser}
+                className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg border border-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5 text-amber-400" />
+                <span>เข้าสู่ระบบด้วย Google ทันที (ไม่ต้องใช้รหัสผ่าน)</span>
+              </button>
+              <p className="text-[10px] text-slate-400 text-center">
+                หรือแจ้งผู้ดูแลระบบโครงการ เพื่อขอรหัสรีเซ็ตรหัสผ่านใหม่
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-blue-400" />
@@ -862,14 +883,14 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                <Send className="w-3.5 h-3.5 text-amber-400" />
-                รหัสยืนยัน OTP จากระบบ
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                รหัสรีเซ็ตจากผู้ดูแลระบบ (Admin Reset Code)
               </label>
               <input
                 type="text"
                 value={otpCode}
                 onChange={e => setOtpCode(e.target.value)}
-                placeholder="กรอกรหัส OTP ที่ได้รับ"
+                placeholder="กรอกรหัสยืนยันจากผู้ดูแลระบบ"
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-rescue-500 font-mono text-center font-bold"
               />
             </div>
