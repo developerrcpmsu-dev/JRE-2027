@@ -156,6 +156,7 @@ export default function AdminDashboardView({
   const [isEditingForms, setIsEditingForms] = useState(false);
   const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   const getUrlSub = (t) => {
     if (t === 'payment_settings') return 'payment';
@@ -861,6 +862,9 @@ export default function AdminDashboardView({
   React.useEffect(() => {
     if (!propUserAccounts || propUserAccounts.length === 0) {
       loadUserAccounts();
+    }
+    if (typeof onRefreshRegistrations === 'function') {
+      onRefreshRegistrations();
     }
   }, []);
 
@@ -2613,6 +2617,25 @@ export default function AdminDashboardView({
             >
               <Download className="w-4 h-4 text-slate-400" />
               <span>ดาวน์โหลด CSV</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setIsRefreshingData(true);
+                try {
+                  if (typeof onRefreshRegistrations === 'function') await onRefreshRegistrations();
+                  if (typeof onRefreshUserAccounts === 'function') await onRefreshUserAccounts();
+                } finally {
+                  setTimeout(() => setIsRefreshingData(false), 500);
+                }
+              }}
+              disabled={isRefreshingData}
+              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="รีเฟรชดึงข้อมูลผู้สมัครและบัญชีล่าสุดทันที"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isRefreshingData ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingData ? 'กำลังโหลด...' : 'รีเฟรชข้อมูล'}</span>
             </button>
 
             {onAdminLogout && (

@@ -96,25 +96,137 @@ export default function App() {
     forceUnlockAll();
   }, [route.mainTab, route.subRoute]);
 
-  const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_auth_user');
+        return raw ? JSON.parse(raw) : null;
+      }
+    } catch (e) {}
+    return null;
+  });
+
+  const [isAdmin, setIsAdmin] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const token = sessionStorage.getItem('jre2027_admin_token');
+        const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
+        return Boolean(token && expires && Date.now() < expires);
+      }
+    } catch (e) {}
+    return false;
+  });
 
   // Modals
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [userNotificationsOpen, setUserNotificationsOpen] = useState(false);
 
-  // Data
-  const [registrations, setRegistrations] = useState([]);
+  // Data (Instant cache hydration to eliminate delay / (0) flash)
+  const [registrations, setRegistrations] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined') {
+        const token = sessionStorage.getItem('jre2027_admin_token');
+        const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
+        const hasAdmin = Boolean(token && expires && Date.now() < expires);
+        const raw = localStorage.getItem('jre2027_registrations');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (hasAdmin) return parsed;
+          const rawUser = localStorage.getItem('jre2027_auth_user');
+          const usr = rawUser ? JSON.parse(rawUser) : null;
+          if (usr) {
+            const uid = usr.id;
+            const uemail = usr.email?.toLowerCase().trim();
+            return parsed.filter(r => (uid && (r.user_id === uid || r.id === uid)) || (uemail && r.user_email?.toLowerCase().trim() === uemail));
+          }
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
   const [myRegistration, setMyRegistration] = useState(null);
-  const [announcements, setAnnouncements] = useState([]);
-  const [formsConfig, setFormsConfig] = useState(null);
-  const [paymentConfig, setPaymentConfig] = useState(null);
-  const [merchandiseConfig, setMerchandiseConfig] = useState(null);
-  const [merchandiseOrders, setMerchandiseOrders] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [speakers, setSpeakers] = useState([]);
-  const [userAccounts, setUserAccounts] = useState([]);
+  const [announcements, setAnnouncements] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_announcements');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [formsConfig, setFormsConfig] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_forms_config');
+        return raw ? JSON.parse(raw) : null;
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [paymentConfig, setPaymentConfig] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_payment_config');
+        return raw ? JSON.parse(raw) : null;
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [merchandiseConfig, setMerchandiseConfig] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_merchandise_config');
+        return raw ? JSON.parse(raw) : null;
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [merchandiseOrders, setMerchandiseOrders] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_merchandise_orders');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [teamMembers, setTeamMembers] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_team');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [speakers, setSpeakers] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('jre2027_speakers');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [userAccounts, setUserAccounts] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined') {
+        const token = sessionStorage.getItem('jre2027_admin_token');
+        const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
+        if (token && expires && Date.now() < expires) {
+          const raw = localStorage.getItem('jre2027_user_accounts');
+          const parsed = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
   const [loading, setLoading] = useState(true);
 
   // Helper to match registration robustly (by user_id or case-insensitive email)
@@ -132,8 +244,29 @@ export default function App() {
   useEffect(() => {
     async function loadData() {
       try {
+        const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
+        const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
+        const hasValidAdminSession = Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+
+        const storedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('jre2027_auth_user') : null;
+        let initialUser = null;
+        if (storedUser) {
+          try {
+            initialUser = JSON.parse(storedUser);
+          } catch (e) {}
+        }
+
+        if (hasValidAdminSession) {
+          setIsAdmin(true);
+        }
+        if (initialUser) {
+          setUser(initialUser);
+        }
+
         const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks, accs] = await Promise.all([
-          DataService.getRegistrations(),
+          hasValidAdminSession
+            ? DataService.getRegistrations({ admin: true })
+            : (initialUser ? DataService.getRegistrations({ userId: initialUser.id, email: initialUser.email }) : DataService.getRegistrations()),
           DataService.getAnnouncements(),
           DataService.getFormsConfig(),
           DataService.getPaymentConfig(),
@@ -143,15 +276,15 @@ export default function App() {
           DataService.getSpeakers(),
           DataService.getUserAccounts({ admin: true })
         ]);
-        setRegistrations(regs);
-        setAnnouncements(anns);
-        setFormsConfig(forms);
-        setPaymentConfig(payCfg);
-        setMerchandiseConfig(merchCfg);
-        setMerchandiseOrders(merchOrds);
-        setTeamMembers(team);
-        setSpeakers(spks);
-        setUserAccounts(accs || []);
+        if (Array.isArray(regs)) setRegistrations(regs);
+        if (Array.isArray(anns)) setAnnouncements(anns);
+        if (forms) setFormsConfig(forms);
+        if (payCfg) setPaymentConfig(payCfg);
+        if (merchCfg) setMerchandiseConfig(merchCfg);
+        if (Array.isArray(merchOrds)) setMerchandiseOrders(merchOrds);
+        if (Array.isArray(team)) setTeamMembers(team);
+        if (Array.isArray(spks)) setSpeakers(spks);
+        if (Array.isArray(accs)) setUserAccounts(accs || []);
 
         // Check for Google OAuth Direct Redirect Hash Callback (#access_token=... or #id_token=...)
         if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('id_token='))) {
@@ -212,10 +345,9 @@ export default function App() {
         localStorage.removeItem('jre2027_is_admin');
 
         // 2. Check stored regular user auth (Participant profile)
-        const storedUser = localStorage.getItem('jre2027_auth_user');
         if (storedUser) {
           try {
-            const parsed = JSON.parse(storedUser);
+            const parsed = initialUser || JSON.parse(storedUser);
             setUser(parsed);
             const found = matchRegistration(parsed, regs);
             if (found) {
@@ -231,10 +363,7 @@ export default function App() {
 
         // 3. Strict Admin Session Verification:
         // Admin access is strictly separated from Google login and REQUIRES active session tokens
-        const adminToken = sessionStorage.getItem('jre2027_admin_token');
-        const adminExpires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
-
-        if (adminToken && adminExpires && Date.now() < adminExpires) {
+        if (hasValidAdminSession) {
           setIsAdmin(true);
           // Verify token validity with server in background
           fetch('/api/admin-auth', {
@@ -322,7 +451,11 @@ export default function App() {
 
   const refreshRegistrations = async () => {
     try {
-      const updated = isAdmin
+      const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
+      const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
+      const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+
+      const updated = hasAdmin
         ? await DataService.getRegistrations({ admin: true })
         : (user ? await DataService.getRegistrations({ userId: user.id, email: user.email }) : await DataService.getRegistrations());
       if (Array.isArray(updated)) {
@@ -398,11 +531,17 @@ export default function App() {
 
   const refreshUserAccounts = async () => {
     try {
-      const updated = await DataService.getUserAccounts({ admin: true });
+      const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
+      const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
+      const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+
+      const updated = await DataService.getUserAccounts({ admin: hasAdmin });
       if (Array.isArray(updated)) {
         setUserAccounts(prev => isDifferent(prev, updated) ? updated : prev);
+        return updated;
       }
     } catch (e) {}
+    return [];
   };
 
   const refreshCoreData = async () => {
@@ -518,6 +657,14 @@ export default function App() {
       window.removeEventListener('focus', handleFocus);
     };
   }, [user?.id, isAdmin]);
+
+  // When admin session is active or when switching to admin tab, refresh registrations & user accounts immediately
+  useEffect(() => {
+    if (isAdmin || currentTab === 'admin') {
+      refreshRegistrations();
+      refreshUserAccounts();
+    }
+  }, [isAdmin, currentTab]);
 
   // Auth Handlers
   const handleGoogleLoginSuccess = async (userObj) => {
