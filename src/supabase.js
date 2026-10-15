@@ -1413,7 +1413,7 @@ export const DataService = {
         }
       }
     } else {
-      localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
+      localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
     }
 
     const scoped = (userId || cleanEmail)
@@ -1494,7 +1494,7 @@ export const DataService = {
       }
     }
 
-    localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
+    localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
     broadcastRealtimeChange('user_accounts', { action: 'sync_user', email: cleanEmail });
     return userObj;
   },
@@ -1862,7 +1862,7 @@ export const DataService = {
         console.warn('Supabase delete user account notice', e);
       }
     }
-    localStorage.setItem('jre2027_user_accounts', JSON.stringify(filtered));
+    localStorage.setItem('jre2027_user_accounts', JSON.stringify(filtered.map(projectAccountForClient)));
     broadcastRealtimeChange('user_accounts', { action: 'delete_user', userId });
 
     // Also remove registration if exists

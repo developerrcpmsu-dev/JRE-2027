@@ -57,7 +57,7 @@ export function resolveUserExtraDetails(acc = {}, registrations = []) {
   // 4. Default admin / developer affiliations & phone
   if (email === 'bestasic22@gmail.com') {
     if (!phone) phone = '098-329-6762';
-    if (!affiliation) affiliation = 'ผู้ดูแลระบบเว็บไซต์ · JRE DEV (BestCyniX)';
+    if (!affiliation) affiliation = 'ผู้ดูแลระบบเว็บไซต์ · JRE DEV';
   } else if (email === 'developer.rcpmsu@gmail.com') {
     if (!affiliation) affiliation = 'ทีมพัฒนาและเทคโนโลยีระบบ JRE DEV';
   } else if (email === '68011211206@msu.ac.th') {

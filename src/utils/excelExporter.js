@@ -75,7 +75,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
   }
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'JRE 2027 Admin Console • BestCyniX Dev';
+  workbook.creator = 'JRE 2027 Admin Console • JRE DEV';
   workbook.lastModifiedBy = 'JRE 2027 Admin';
   workbook.created = new Date();
   workbook.modified = new Date();
@@ -436,7 +436,7 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
   }
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'JRE 2027 Admin Console • BestCyniX Dev';
+  workbook.creator = 'JRE 2027 Admin Console • JRE DEV';
   workbook.lastModifiedBy = 'JRE 2027 Admin';
   workbook.created = new Date();
   workbook.modified = new Date();

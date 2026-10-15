@@ -103,7 +103,7 @@ export default function Footer({ onOpenAdminLogin }) {
 
               <div>
                 <span className="text-[11px] text-slate-400 block">ผู้ดูแลระบบเว็บไซต์:</span>
-                <span className="font-bold text-white">นายพงศ์ภรณ์ ทองศิริ · JRE DEV (BestCyniX)</span>
+                <span className="font-bold text-white">นายพงศ์ภรณ์ ทองศิริ · JRE DEV</span>
               </div>
 
               <p className="text-[11px] text-slate-400">
@@ -111,7 +111,7 @@ export default function Footer({ onOpenAdminLogin }) {
               </p>
 
               <div className="space-y-1.5 pt-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span>โทร:</span>
                   <a 
@@ -121,9 +121,12 @@ export default function Footer({ onOpenAdminLogin }) {
                   >
                     088-946-3459
                   </a>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-semibold shrink-0">
+                    กรณีระบบเร่งด่วน
+                  </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <a 
                     href="mailto:developer.rcpmsu@gmail.com" 
@@ -132,15 +135,8 @@ export default function Footer({ onOpenAdminLogin }) {
                   >
                     developer.rcpmsu@gmail.com
                   </a>
-                  <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-semibold shrink-0">
-                    กรณีระบบเร่งด่วน
-                  </span>
                 </div>
               </div>
-
-              <p className="text-[10px] text-slate-500 italic">
-                * กรณีทั่วไปให้ส่งรายงานผ่านหน้าแจ้งปัญหาเว็บก่อน
-              </p>
             </div>
           </div>
 
@@ -258,7 +254,7 @@ export default function Footer({ onOpenAdminLogin }) {
                 <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 shadow-lg">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                   <span className="text-rescue-400 font-black">
-                    Dev JRE-2027 นายพงศ์ภรณ์ ทองศิริ (BestCyniX)
+                    Dev JRE-2027 นายพงศ์ภรณ์ ทองศิริ (JRE DEV)
                   </span>
                   <span className="text-slate-500">•</span>
                   <span className="font-mono text-slate-300 font-semibold">68011211206</span>
