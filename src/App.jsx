@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Award } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -532,13 +532,24 @@ export default function App() {
     } catch (e) {}
   };
 
+  const realtimeDebounceTimers = useRef({});
+
   const refreshUserAccounts = async () => {
     try {
       const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
       const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
       const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
 
-      const updated = await DataService.getUserAccounts({ admin: hasAdmin });
+      // Only query accounts if admin or logged-in user to save bandwidth and prevent unneeded queries
+      if (!hasAdmin && !user) {
+        return [];
+      }
+
+      const updated = await DataService.getUserAccounts({ 
+        admin: hasAdmin,
+        userId: hasAdmin ? null : user?.id,
+        email: hasAdmin ? null : user?.email
+      });
       if (Array.isArray(updated)) {
         setUserAccounts(prev => isDifferent(prev, updated) ? updated : prev);
         return updated;
@@ -560,7 +571,11 @@ export default function App() {
   };
 
   const refreshAllData = async () => {
-    await Promise.allSettled([
+    const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
+    const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
+    const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+
+    const tasks = [
       refreshRegistrations(),
       refreshAnnouncements(),
       refreshMerchandiseOrders(),
@@ -568,38 +583,46 @@ export default function App() {
       refreshFormsConfig(),
       refreshMerchandiseConfig(),
       refreshTeam(),
-      refreshSpeakers(),
-      refreshUserAccounts()
-    ]);
+      refreshSpeakers()
+    ];
+    if (hasAdmin) {
+      tasks.push(refreshUserAccounts());
+    }
+    await Promise.allSettled(tasks);
   };
 
   const handleRealtimeChange = (detail) => {
-    const type = detail?.type;
-    if (!type || type === 'all') {
-      refreshAllData();
-      return;
+    const type = detail?.type || 'all';
+
+    // Debounce realtime refreshes by 800ms per entity type to prevent event storming and ping-pong loops
+    if (realtimeDebounceTimers.current[type]) {
+      clearTimeout(realtimeDebounceTimers.current[type]);
     }
-    if (type === 'registrations' || type === 'applicants') {
-      refreshRegistrations();
-    } else if (type === 'announcements') {
-      refreshAnnouncements();
-    } else if (type === 'merchandise_orders' || type === 'orders') {
-      refreshMerchandiseOrders();
-    } else if (type === 'payment_config' || type === 'payment') {
-      refreshPaymentConfig();
-    } else if (type === 'forms_config' || type === 'forms') {
-      refreshFormsConfig();
-    } else if (type === 'merchandise_config' || type === 'merchandise') {
-      refreshMerchandiseConfig();
-    } else if (type === 'team_members' || type === 'team') {
-      refreshTeam();
-    } else if (type === 'speakers_config' || type === 'speakers') {
-      refreshSpeakers();
-    } else if (type === 'user_accounts' || type === 'users') {
-      refreshUserAccounts();
-    } else {
-      refreshAllData();
-    }
+
+    realtimeDebounceTimers.current[type] = setTimeout(() => {
+      delete realtimeDebounceTimers.current[type];
+      if (type === 'registrations' || type === 'applicants') {
+        refreshRegistrations();
+      } else if (type === 'announcements') {
+        refreshAnnouncements();
+      } else if (type === 'merchandise_orders' || type === 'orders') {
+        refreshMerchandiseOrders();
+      } else if (type === 'payment_config' || type === 'payment') {
+        refreshPaymentConfig();
+      } else if (type === 'forms_config' || type === 'forms') {
+        refreshFormsConfig();
+      } else if (type === 'merchandise_config' || type === 'merchandise') {
+        refreshMerchandiseConfig();
+      } else if (type === 'team_members' || type === 'team') {
+        refreshTeam();
+      } else if (type === 'speakers_config' || type === 'speakers') {
+        refreshSpeakers();
+      } else if (type === 'user_accounts' || type === 'users') {
+        refreshUserAccounts();
+      } else {
+        refreshAllData();
+      }
+    }, 800);
   };
 
   // Realtime listeners & background heartbeat polling
@@ -658,6 +681,7 @@ export default function App() {
       clearInterval(bgTimer);
       window.removeEventListener('visibilitychange', handleVis);
       window.removeEventListener('focus', handleFocus);
+      Object.values(realtimeDebounceTimers.current).forEach(clearTimeout);
     };
   }, [user?.id, isAdmin]);
 

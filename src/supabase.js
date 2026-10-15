@@ -1382,39 +1382,10 @@ export const DataService = {
 
     const deduped = mergeAndDeduplicateAccounts(accounts);
 
-    // If duplicate emails were merged or unverified Google accounts were updated, persist back to Supabase and LocalStorage
-    const needsSync = deduped.length !== accounts.length || 
-                      accounts.some(a => !a.email_verified && (a.provider === 'google' || (typeof a.id === 'string' && a.id.startsWith('google_')) || a.verified));
-    if (needsSync) {
-      localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped));
-      if (isSupabaseConfigured && supabase) {
-        try {
-          await supabase
-            .from('project_settings')
-            .upsert({
-              key: 'user_accounts',
-              value: deduped,
-              updated_at: new Date().toISOString()
-            });
-
-          const rows = deduped.map(u => ({
-            id: u.id,
-            name: u.name,
-            email: (u.email || '').toLowerCase().trim(),
-            avatar: u.avatar || '',
-            role: u.role || 'applicant',
-            provider: u.provider || 'email',
-            created_at: u.created_at || new Date().toISOString(),
-            last_login_at: u.last_login_at || new Date().toISOString()
-          }));
-          await supabase.from('user_accounts').upsert(rows, { onConflict: 'email' });
-        } catch (e) {
-          console.warn('Supabase auto-deduplicate sync notice:', e);
-        }
-      }
-    } else {
+    // Save only to LocalStorage cache - DO NOT mutate remote database inside a GET query to prevent infinite realtime loops
+    try {
       localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
-    }
+    } catch (e) {}
 
     const scoped = (userId || cleanEmail)
       ? deduped.filter((account) => {
