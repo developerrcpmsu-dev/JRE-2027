@@ -1667,6 +1667,93 @@ export default function AdminDashboardView({
     }
   };
 
+  // Calculate comprehensive registration payment & allocation metrics
+  const regMetrics = (() => {
+    let fullPlanCount = 0;
+    let fullPlanPaidCount = 0;
+    let installmentPlanCount = 0;
+    let installmentBothPaidCount = 0;
+    let fullyPaidCount = 0;
+    let partialPaidCount = 0;
+    let pendingReviewCount = 0;
+    let unpaidTotalCount = 0;
+    let totalCollectedAmount = 0;
+    let totalOutstandingBalance = 0;
+
+    (registrations || []).forEach(reg => {
+      const isMsu = isMsuInstitution(reg.institution);
+      const totalFee = isMsu
+        ? (paymentConfig?.fee_total_msu || 650)
+        : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+      const round1Fee = isMsu
+        ? (paymentConfig?.installment_round1_amount_msu || 400)
+        : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
+      const round2Fee = isMsu
+        ? (paymentConfig?.installment_round2_amount_msu || 250)
+        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+
+      const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+
+      if (isInstallment) {
+        installmentPlanCount++;
+        const isR1Paid = reg.installment_1_status === 'paid';
+        const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
+        const hasPending = reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review';
+
+        if (isR1Paid && isR2Paid) {
+          installmentBothPaidCount++;
+          fullyPaidCount++;
+          totalCollectedAmount += totalFee;
+        } else if (hasPending) {
+          pendingReviewCount++;
+          if (isR1Paid) {
+            totalCollectedAmount += round1Fee;
+            totalOutstandingBalance += round2Fee;
+          } else {
+            totalOutstandingBalance += totalFee;
+          }
+        } else if (isR1Paid) {
+          // Paid round 1, round 2 unpaid
+          partialPaidCount++;
+          totalCollectedAmount += round1Fee;
+          totalOutstandingBalance += round2Fee;
+        } else {
+          // Neither round paid
+          unpaidTotalCount++;
+          totalOutstandingBalance += totalFee;
+        }
+      } else {
+        fullPlanCount++;
+        if (reg.payment_status === 'paid') {
+          fullPlanPaidCount++;
+          fullyPaidCount++;
+          totalCollectedAmount += (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee);
+        } else if (reg.payment_status === 'pending_review') {
+          pendingReviewCount++;
+          totalOutstandingBalance += totalFee;
+        } else {
+          unpaidTotalCount++;
+          totalOutstandingBalance += totalFee;
+        }
+      }
+    });
+
+    return {
+      total: (registrations || []).length,
+      fullPlanCount,
+      fullPlanPaidCount,
+      installmentPlanCount,
+      installmentBothPaidCount,
+      fullyPaidCount,
+      partialPaidCount,
+      pendingReviewCount,
+      unpaidTotalCount,
+      totalOutstandingCount: partialPaidCount + unpaidTotalCount,
+      totalCollectedAmount,
+      totalOutstandingBalance
+    };
+  })();
+
   // Filtered registrations
   const filteredRegs = registrations.filter(reg => {
     const textTarget = (
@@ -1691,10 +1778,28 @@ export default function AdminDashboardView({
     const matchBlood = bloodFilter === 'all' || reg.blood_group === bloodFilter;
     
     let matchFilter = true;
+    const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+    const isR1Paid = reg.installment_1_status === 'paid';
+    const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
+    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid');
+    const isPartialPaid = isInstallment && isR1Paid && !isR2Paid;
+    const hasPendingReview = isInstallment 
+      ? (reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review') 
+      : (reg.payment_status === 'pending_review');
+    const isUnpaid = isInstallment 
+      ? (!isR1Paid && !isR2Paid && !hasPendingReview) 
+      : (reg.payment_status === 'unpaid' || !reg.payment_status || reg.payment_status === 'rejected');
+    const hasOutstanding = isPartialPaid || isUnpaid;
+
     if (filterType === 'special_care') matchFilter = Boolean(reg.is_special_care);
-    else if (filterType === 'unpaid') matchFilter = reg.payment_status === 'unpaid' || !reg.payment_status;
-    else if (filterType === 'pending_review') matchFilter = reg.payment_status === 'pending_review';
-    else if (filterType === 'paid') matchFilter = reg.payment_status === 'paid';
+    else if (filterType === 'full_plan') matchFilter = !isInstallment;
+    else if (filterType === 'installment_plan') matchFilter = isInstallment;
+    else if (filterType === 'fully_paid') matchFilter = isBothPaid;
+    else if (filterType === 'paid') matchFilter = isBothPaid;
+    else if (filterType === 'partial_paid') matchFilter = isPartialPaid;
+    else if (filterType === 'pending_review') matchFilter = hasPendingReview;
+    else if (filterType === 'unpaid') matchFilter = hasOutstanding;
+    else if (filterType === 'unpaid_pure') matchFilter = isUnpaid;
     else if (filterType === 'no_group') matchFilter = !reg.group_assigned;
     else if (filterType === 'has_group') matchFilter = Boolean(reg.group_assigned);
     else if (filterType === 'no_room') matchFilter = !reg.room_assigned;
@@ -2495,41 +2600,210 @@ export default function AdminDashboardView({
           </div>
         </div>
 
-        {/* Quick Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-3.5 mt-6">
-          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-slate-800">
-            <span className="text-[11px] text-slate-400 font-medium">ผู้สมัครทั้งหมด</span>
-            <p className="text-xl sm:text-2xl font-black text-white mt-1">{registrations.length} คน</p>
+        {/* Quick Metrics - Complete Payment Plans & Financial Overview */}
+        <div className="mt-6 space-y-3">
+          {/* Section Title */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-black uppercase tracking-wider text-slate-300">
+                สรุปแผนการชำระเงิน & สถานะการเงินจริง (Real-time Financial Overview)
+              </span>
+            </div>
+            {(regMetrics.totalCollectedAmount > 0 || regMetrics.totalOutstandingBalance > 0) && (
+              <div className="flex items-center gap-2 text-[11px] font-mono">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                  รับเงินแล้ว: ฿{regMetrics.totalCollectedAmount.toLocaleString()}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 font-bold">
+                  ยอดค้างรับ: ฿{regMetrics.totalOutstandingBalance.toLocaleString()}
+                </span>
+              </div>
+            )}
           </div>
-          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-amber-900/40">
-            <span className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> รอตรวจสลิป
-            </span>
-            <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">
-              {registrations.filter(r => r.payment_status === 'pending_review').length} คน
-            </p>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+            {/* 1. ผู้สมัครทั้งหมด */}
+            <button
+              type="button"
+              onClick={() => setFilterType('all')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'all'
+                  ? 'bg-slate-900 border-purple-500 ring-2 ring-purple-500/30'
+                  : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-400 font-bold">ผู้สมัครทั้งหมด</span>
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-white mt-1">{regMetrics.total} <span className="text-xs font-normal text-slate-400">คน</span></p>
+              <div className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">ทุกแผนการสมัคร</div>
+            </button>
+
+            {/* 2. แผนจ่ายครบ (1 รอบ) */}
+            <button
+              type="button"
+              onClick={() => setFilterType('full_plan')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'full_plan'
+                  ? 'bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/30'
+                  : 'bg-slate-950/70 border-blue-900/40 hover:border-blue-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-blue-400 font-bold">แผนจ่ายครบ</span>
+                <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-blue-400 mt-1">{regMetrics.fullPlanCount} <span className="text-xs font-normal text-blue-300">คน</span></p>
+              <div className="text-[10px] text-slate-400 mt-0.5">ชำระครบ {regMetrics.fullPlanPaidCount} คน</div>
+            </button>
+
+            {/* 3. แผนแบ่งจ่าย 2 งวด */}
+            <button
+              type="button"
+              onClick={() => setFilterType('installment_plan')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'installment_plan'
+                  ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
+                  : 'bg-slate-950/70 border-indigo-900/40 hover:border-indigo-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-indigo-400 font-bold">แผนแบ่งจ่าย 2 งวด</span>
+                <PackageCheck className="w-3.5 h-3.5 text-indigo-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">{regMetrics.installmentPlanCount} <span className="text-xs font-normal text-indigo-300">คน</span></p>
+              <div className="text-[10px] text-slate-400 mt-0.5">งวด 1 แล้ว {regMetrics.partialPaidCount} · ครบ {regMetrics.installmentBothPaidCount}</div>
+            </button>
+
+            {/* 4. ชำระเงินครบแล้ว (100%) */}
+            <button
+              type="button"
+              onClick={() => setFilterType('fully_paid')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'fully_paid'
+                  ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/30'
+                  : 'bg-slate-950/70 border-emerald-900/40 hover:border-emerald-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-emerald-400 font-bold">ชำระเงินครบแล้ว</span>
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">{regMetrics.fullyPaidCount} <span className="text-xs font-normal text-emerald-300">คน</span></p>
+              <div className="text-[10px] text-slate-400 mt-0.5">ครบถ้วน 100%</div>
+            </button>
+
+            {/* 5. ชำระงวด 1 แล้ว (ค้างงวด 2) */}
+            <button
+              type="button"
+              onClick={() => setFilterType('partial_paid')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'partial_paid'
+                  ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
+                  : 'bg-slate-950/70 border-amber-900/40 hover:border-amber-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-amber-400 font-bold">ชำระงวด 1 (ค้างงวด 2)</span>
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">{regMetrics.partialPaidCount} <span className="text-xs font-normal text-amber-300">คน</span></p>
+              <div className="text-[10px] text-amber-400/80 mt-0.5">รอชำระงวดที่ 2</div>
+            </button>
+
+            {/* 6. ค้างชำระ / มียอดค้าง */}
+            <button
+              type="button"
+              onClick={() => setFilterType('unpaid')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'unpaid'
+                  ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/30'
+                  : 'bg-slate-950/70 border-rose-900/40 hover:border-rose-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-rose-400 font-bold">ค้างชำระ</span>
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-rose-400 mt-1">{regMetrics.totalOutstandingCount} <span className="text-xs font-normal text-rose-300">คน</span></p>
+              <div className="text-[10px] text-rose-400/80 mt-0.5">
+                {regMetrics.partialPaidCount > 0 ? `ค้างงวด 2: ${regMetrics.partialPaidCount} คน` : 'ยังไม่ชำระ'}
+              </div>
+            </button>
           </div>
-          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-emerald-900/40">
-            <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
-              <CheckCircle className="w-3.5 h-3.5" /> ชำระเงินแล้ว
-            </span>
-            <p className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
-              {registrations.filter(r => r.payment_status === 'paid').length} คน
-            </p>
-          </div>
-          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-rose-900/40">
-            <span className="text-[11px] text-rose-400 font-bold flex items-center gap-1">
-              ⭐ ดูแลเป็นพิเศษ
-            </span>
-            <p className="text-xl sm:text-2xl font-black text-rose-400 mt-1">
-              {registrations.filter(r => r.is_special_care).length} คน
-            </p>
-          </div>
-          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-2xl border border-slate-800 col-span-2 sm:col-span-1">
-            <span className="text-[11px] text-slate-400 font-medium">จัดกลุ่มแล้ว</span>
-            <p className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">
-              {registrations.filter(r => r.group_assigned).length} คน
-            </p>
+
+          {/* Sub Row: ดูแลพิเศษ, จัดกลุ่ม, จัดห้องนอน, รอตรวจสลิป */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => setFilterType('pending_review')}
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                filterType === 'pending_review'
+                  ? 'bg-yellow-950/40 border-yellow-500 ring-2 ring-yellow-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-yellow-700/60'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-yellow-400" />
+                <span className="text-xs font-bold text-slate-300">รอตรวจสลิป:</span>
+              </div>
+              <span className="text-sm font-black text-yellow-400">{regMetrics.pendingReviewCount} คน</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterType('special_care')}
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                filterType === 'special_care'
+                  ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-rose-700/60'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Star className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-xs font-bold text-slate-300">ดูแลเป็นพิเศษ:</span>
+              </div>
+              <span className="text-sm font-black text-rose-400">{registrations.filter(r => r.is_special_care).length} คน</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterType('has_group')}
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                filterType === 'has_group'
+                  ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-indigo-700/60'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-xs font-bold text-slate-300">จัดกลุ่มฝึกแล้ว:</span>
+              </div>
+              <span className="text-sm font-black text-indigo-400">
+                {registrations.filter(r => r.group_assigned).length}/{registrations.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterType('has_room')}
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                filterType === 'has_room'
+                  ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-amber-700/60'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Building className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-bold text-slate-300">จัดห้องนอนแล้ว:</span>
+              </div>
+              <span className="text-sm font-black text-amber-400">
+                {registrations.filter(r => r.room_assigned).length}/{registrations.length}
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -2713,13 +2987,18 @@ export default function AdminDashboardView({
                 onChange={e => setFilterType(e.target.value)}
                 className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
               >
-                <option value="all">สถานะทั้งหมด</option>
-                <option value="pending_review">🟡 รอตรวจสลิป ({registrations.filter(r => r.payment_status === 'pending_review').length})</option>
-                <option value="unpaid">🔴 ค้างชำระ ({registrations.filter(r => r.payment_status === 'unpaid' || !r.payment_status).length})</option>
-                <option value="paid">🟢 ชำระแล้ว ({registrations.filter(r => r.payment_status === 'paid').length})</option>
-                <option value="special_care">⭐ ดูแลเป็นพิเศษ ({registrations.filter(r => r.is_special_care).length})</option>
-                <option value="no_group">ยังไม่จัดกลุ่ม ({registrations.filter(r => !r.group_assigned).length})</option>
-                <option value="has_group">จัดกลุ่มแล้ว ({registrations.filter(r => r.group_assigned).length})</option>
+                <option value="all">สถานะทั้งหมด ({regMetrics.total} คน)</option>
+                <option value="full_plan">💳 แผนจ่ายครบ ({regMetrics.fullPlanCount} คน)</option>
+                <option value="installment_plan">📦 แผนแบ่งจ่าย 2 งวด ({regMetrics.installmentPlanCount} คน)</option>
+                <option value="fully_paid">🟢 ชำระครบถ้วนแล้ว ({regMetrics.fullyPaidCount} คน)</option>
+                <option value="partial_paid">🟡 ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน)</option>
+                <option value="unpaid">🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน)</option>
+                <option value="pending_review">⏳ รอตรวจสลิป ({regMetrics.pendingReviewCount} คน)</option>
+                <option value="special_care">⭐ ดูแลเป็นพิเศษ ({registrations.filter(r => r.is_special_care).length} คน)</option>
+                <option value="no_group">ยังไม่จัดกลุ่ม ({registrations.filter(r => !r.group_assigned).length} คน)</option>
+                <option value="has_group">จัดกลุ่มแล้ว ({registrations.filter(r => r.group_assigned).length} คน)</option>
+                <option value="no_room">ยังไม่จัดห้องนอน ({registrations.filter(r => !r.room_assigned).length} คน)</option>
+                <option value="has_room">จัดห้องนอนแล้ว ({registrations.filter(r => r.room_assigned).length} คน)</option>
               </select>
 
               <select
