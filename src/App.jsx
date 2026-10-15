@@ -75,9 +75,24 @@ export default function App() {
       window.history.replaceState({ mainTab: 'home', subRoute: null }, '', '/');
     }
 
+    // Do NOT wipe or normalize URL if Google OAuth tokens or callback parameters are present
+    const hasOAuthParams = typeof window !== 'undefined' && (
+      (window.location.hash && (
+        window.location.hash.includes('access_token=') || 
+        window.location.hash.includes('id_token=') || 
+        window.location.hash.includes('error=')
+      )) ||
+      (window.location.search && (
+        window.location.search.includes('access_token=') || 
+        window.location.search.includes('id_token=') || 
+        window.location.search.includes('code=') ||
+        window.location.search.includes('error=')
+      ))
+    );
+
     // If user arrived with legacy ?tab= or hash, normalize immediately to clean path
     const initial = parseCurrentRoute();
-    if (window.location.search.includes('tab=') || window.location.hash) {
+    if (!hasOAuthParams && (window.location.search.includes('tab=') || window.location.hash)) {
       syncUrlToRoute(initial.mainTab, initial.subRoute, true);
     }
 
@@ -262,14 +277,89 @@ export default function App() {
         if (hasValidAdminSession) {
           setIsAdmin(true);
         }
-        if (initialUser) {
-          setUser(initialUser);
+
+        // =====================================================================
+        // STEP 1: Process Google OAuth Direct Redirect Callback (#access_token=... or #id_token=... or ?access_token=...)
+        // Must run FIRST so the newly authenticated identity is established before any data fetching
+        // =====================================================================
+        let authenticatedUser = initialUser;
+
+        if (typeof window !== 'undefined') {
+          const rawHash = window.location.hash ? window.location.hash.substring(1) : '';
+          const rawSearch = window.location.search ? window.location.search.substring(1) : '';
+          const hashParams = new URLSearchParams(rawHash);
+          const searchParams = new URLSearchParams(rawSearch);
+
+          const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+          const idToken = hashParams.get('id_token') || searchParams.get('id_token');
+          const oauthState = hashParams.get('state') || searchParams.get('state');
+
+          if (accessToken || idToken) {
+            try {
+              let cleanEmail = null;
+              let cleanName = null;
+              let avatar = null;
+
+              if (idToken) {
+                const payload = decodeJwtResponse(idToken);
+                if (payload?.email) {
+                  cleanEmail = payload.email.trim().toLowerCase();
+                  cleanName = payload.name || cleanEmail.split('@')[0];
+                  avatar = payload.picture || (`https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`);
+                }
+              }
+
+              if (!cleanEmail && accessToken) {
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                const profile = await res.json();
+                if (profile?.email) {
+                  cleanEmail = profile.email.trim().toLowerCase();
+                  cleanName = profile.name || cleanEmail.split('@')[0];
+                  avatar = profile.picture || (`https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`);
+                }
+              }
+
+              if (cleanEmail) {
+                const userObj = await DataService.loginWithGoogleProfile({
+                  name: cleanName,
+                  email: cleanEmail,
+                  avatar: avatar
+                });
+                authenticatedUser = userObj;
+                localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
+                setUser(userObj);
+
+                // Restore saved route if any
+                const sessionReturn = sessionStorage.getItem('jre2027_auth_return_url');
+                sessionStorage.removeItem('jre2027_auth_return_url');
+                const targetReturn = sessionReturn || (oauthState ? decodeURIComponent(oauthState) : null);
+
+                if (targetReturn && targetReturn !== '/' && targetReturn.startsWith('/')) {
+                  window.history.replaceState(null, '', targetReturn);
+                  setRoute(parseCurrentRoute());
+                } else {
+                  window.history.replaceState(null, '', window.location.pathname);
+                }
+              }
+            } catch (oauthErr) {
+              console.warn('OAuth redirect hash parse error:', oauthErr);
+            }
+          }
         }
 
+        if (authenticatedUser) {
+          setUser(authenticatedUser);
+        }
+
+        // =====================================================================
+        // STEP 2: Load Central Data (Scoped to Authenticated User)
+        // =====================================================================
         const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks, accs] = await Promise.all([
           hasValidAdminSession
             ? DataService.getRegistrations({ admin: true })
-            : (initialUser ? DataService.getRegistrations({ userId: initialUser.id, email: initialUser.email }) : DataService.getRegistrations()),
+            : (authenticatedUser ? DataService.getRegistrations({ userId: authenticatedUser.id, email: authenticatedUser.email }) : DataService.getRegistrations()),
           DataService.getAnnouncements(),
           DataService.getFormsConfig(),
           DataService.getPaymentConfig(),
@@ -279,6 +369,7 @@ export default function App() {
           DataService.getSpeakers(),
           DataService.getUserAccounts({ admin: true })
         ]);
+
         if (Array.isArray(regs)) setRegistrations(regs);
         if (Array.isArray(anns)) setAnnouncements(anns);
         if (forms) setFormsConfig(forms);
@@ -289,78 +380,25 @@ export default function App() {
         if (Array.isArray(spks)) setSpeakers(spks);
         if (Array.isArray(accs)) setUserAccounts(accs || []);
 
-        // Check for Google OAuth Direct Redirect Hash Callback (#access_token=... or #id_token=...)
-        if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('id_token='))) {
-          try {
-            const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const accessToken = params.get('access_token');
-            const idToken = params.get('id_token');
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-
-            let cleanEmail = null;
-            let cleanName = null;
-            let avatar = null;
-
-            if (idToken) {
-              const payload = decodeJwtResponse(idToken);
-              if (payload?.email) {
-                cleanEmail = payload.email.trim().toLowerCase();
-                cleanName = payload.name || cleanEmail.split('@')[0];
-                avatar = payload.picture || ("https://api.dicebear.com/7.x/bottts/svg?seed=" + encodeURIComponent(cleanEmail));
-              }
-            }
-
-            if (!cleanEmail && accessToken) {
-              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: "Bearer " + accessToken }
-              });
-              const profile = await res.json();
-              if (profile?.email) {
-                cleanEmail = profile.email.trim().toLowerCase();
-                cleanName = profile.name || cleanEmail.split('@')[0];
-                avatar = profile.picture || ("https://api.dicebear.com/7.x/bottts/svg?seed=" + encodeURIComponent(cleanEmail));
-              }
-            }
-
-            if (cleanEmail) {
-              const userObj = await DataService.loginWithGoogleProfile({
-                name: cleanName,
-                email: cleanEmail,
-                avatar: avatar
-              });
-              localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
-              setUser(userObj);
-              const found = matchRegistration(userObj, regs);
-              if (found) {
-                setMyRegistration(found);
-              } else {
-                const ownRegistration = await DataService.getRegistrationByUserId(userObj.id, userObj.email);
-                if (ownRegistration) setMyRegistration(ownRegistration);
-              }
-            }
-          } catch (oauthErr) {
-            console.warn('OAuth redirect hash parse error:', oauthErr);
-          }
-        }
-
-        // 1. Wipe any legacy insecure admin flags stored in localStorage
+        // =====================================================================
+        // STEP 3: Match & Link User Registration
+        // =====================================================================
         localStorage.removeItem('jre2027_is_admin');
 
-        // 2. Check stored regular user auth (Participant profile)
-        if (storedUser) {
-          try {
-            const parsed = initialUser || JSON.parse(storedUser);
-            setUser(parsed);
-            const found = matchRegistration(parsed, regs);
-            if (found) {
-              setMyRegistration(found);
-            } else {
-              const ownRegistration = await DataService.getRegistrationByUserId(parsed.id, parsed.email);
-              if (ownRegistration) setMyRegistration(ownRegistration);
+        const activeUserToMatch = authenticatedUser;
+        if (activeUserToMatch) {
+          const found = matchRegistration(activeUserToMatch, regs);
+          if (found) {
+            setMyRegistration(found);
+          } else {
+            const ownRegistration = await DataService.getRegistrationByUserId(activeUserToMatch.id, activeUserToMatch.email);
+            if (ownRegistration) {
+              setMyRegistration(ownRegistration);
+              setRegistrations(prev => {
+                const exists = prev.some(r => r.id === ownRegistration.id);
+                return exists ? prev : [ownRegistration, ...prev];
+              });
             }
-          } catch (e) {
-            localStorage.removeItem('jre2027_auth_user');
           }
         }
 

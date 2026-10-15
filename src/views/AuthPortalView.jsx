@@ -15,7 +15,8 @@ import {
   initGoogleIdentityServices, 
   renderGoogleButton, 
   getGoogleTokenClient, 
-  decodeJwtResponse 
+  decodeJwtResponse,
+  getDirectGoogleAuthUrl
 } from '../utils/googleAuth';
 
 export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
@@ -146,17 +147,33 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
     setIsLoading(true);
     setErrorMsg(null);
 
+    // Save return url so after OAuth redirect the user is restored properly
+    if (typeof window !== 'undefined') {
+      const returnPath = window.location.pathname + window.location.search;
+      sessionStorage.setItem('jre2027_auth_return_url', returnPath);
+    }
+
+    const fallbackDirect = () => {
+      if (typeof window !== 'undefined') {
+        window.location.href = getDirectGoogleAuthUrl(GOOGLE_CLIENT_ID);
+      }
+    };
+
     if (tokenClient) {
       try {
         tokenClient.requestAccessToken({ prompt: 'select_account' });
+        setTimeout(() => {
+          setIsLoading((prev) => (prev ? false : prev));
+        }, 4000);
         return;
       } catch (e) {
-        console.warn('tokenClient.requestAccessToken error:', e);
+        console.warn('tokenClient.requestAccessToken error, fallback direct:', e);
+        fallbackDirect();
+        return;
       }
     }
 
-    setErrorMsg('ระบบ Google กำลังเชื่อมต่อ กรุณากดปุ่ม "ลงชื่อเข้าใช้ด้วย Google" ด้านบน');
-    setIsLoading(false);
+    fallbackDirect();
   };
 
   const currentBE = new Date().getFullYear() + 543;
@@ -244,6 +261,20 @@ export default function AuthPortalView({ onLoginSuccess, onOpenAdminLogin }) {
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>ดึงชื่อ อีเมล และรูปโปรไฟล์จาก Google อัตโนมัติ 100%</span>
+            </div>
+
+            <div className="text-center w-full pt-1">
+              <a
+                href={getDirectGoogleAuthUrl(GOOGLE_CLIENT_ID)}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('jre2027_auth_return_url', window.location.pathname + window.location.search);
+                  }
+                }}
+                className="text-[11px] text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <span>ติดปัญหาป๊อปอัปไม่เด้ง? คลิกที่นี่เพื่อเปิดหน้าต่าง Google แบบตรง</span>
+              </a>
             </div>
           </div>
 
