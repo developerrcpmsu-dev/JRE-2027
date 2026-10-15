@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { isMsuInstitution } from '../data/defaultData';
+import { isMsuInstitution, getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy } from '../data/defaultData';
 import { DataService, ensureHostedUrl } from '../supabase';
 
 const THAI_HONORIFIC_TITLES = [
@@ -291,8 +291,8 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       phone: r.phone || '-',
       emergency_name: r.emergency_name || '-',
       emergency_phone: r.emergency_phone || '-',
-      medical_history: (r.medical_history && r.medical_history.trim() !== '') ? r.medical_history.trim() : 'ไม่มี',
-      food_allergy: (r.food_allergy && r.food_allergy.trim() !== '') ? r.food_allergy.trim() : 'ไม่มี',
+      medical_history: getApplicantMedical(r) || 'ไม่มี',
+      food_allergy: getApplicantAllergy(r) || 'ไม่มี',
       previous_training: (r.previous_training && r.previous_training.trim() !== '') ? r.previous_training.trim() : 'ไม่มี',
       payment_status_desc: paymentStatusDesc,
       paid_round1_date: paidRound1Date,
@@ -395,7 +395,38 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       addedRow.height = 24;
     }
 
-    // Zebra striping for data rows
+    // Highlight dietary and medical restriction cells for catering and welfare teams
+    const foodCell = addedRow.getCell('food_allergy');
+    if (hasFoodOrDrugAllergy(r)) {
+      foodCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEF3C7' } // soft amber-100
+      };
+      foodCell.font = { name: 'Sarabun', size: 10, bold: true, color: { argb: 'FF92400E' } }; // amber-800
+    }
+
+    const medCell = addedRow.getCell('medical_history');
+    if (hasMedicalCondition(r)) {
+      medCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFE4E6' } // soft rose-100
+      };
+      medCell.font = { name: 'Sarabun', size: 10, bold: true, color: { argb: 'FF9F1239' } }; // rose-800
+    }
+
+    const specialCell = addedRow.getCell('special_care');
+    if (r.is_special_care) {
+      specialCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E8FF' } // soft purple-100
+      };
+      specialCell.font = { name: 'Sarabun', size: 10, bold: true, color: { argb: 'FF6B21A8' } };
+    }
+
+    // Zebra striping for other data cells
     if (i % 2 === 1) {
       addedRow.eachCell((cell) => {
         if (!cell.fill) {

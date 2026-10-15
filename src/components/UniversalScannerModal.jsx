@@ -34,6 +34,7 @@ import IDCardPreview from './IDCardPreview';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode } from '../utils/idCard';
+import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy } from '../data/defaultData';
 
 /**
  * Web Audio API synthesizer for crisp scan confirmation chime
@@ -1089,30 +1090,41 @@ export default function UniversalScannerModal({
                         </div>
                       </div>
 
-                      {/* Medical alert banner if has health conditions */}
-                      {(matchResult.participant.chronic_disease ||
-                        matchResult.participant.drug_allergy ||
-                        matchResult.participant.food_allergy ||
-                        matchResult.participant.special_care_note) && (
-                        <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-2.5 text-xs text-rose-200 space-y-1">
-                          <div className="flex items-center gap-1.5 font-bold text-rose-400">
-                            <HeartPulse className="h-4 w-4" />
-                            <span>ข้อมูลสุขภาพและการดูแลพิเศษ (Medical & Special Alert)</span>
+                      {/* Medical & Food Allergy Alert Banner */}
+                      {(() => {
+                        const p = matchResult.participant;
+                        const med = getApplicantMedical(p);
+                        const allergy = getApplicantAllergy(p);
+                        const hasMed = hasMedicalCondition(p);
+                        const hasAllergy = hasFoodOrDrugAllergy(p);
+                        const hasSpecial = Boolean(p.is_special_care || p.special_care_note || p.special_notes);
+                        
+                        if (!hasMed && !hasAllergy && !hasSpecial) return null;
+
+                        return (
+                          <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-2.5 text-xs text-rose-200 space-y-1.5 shadow-sm">
+                            <div className="flex items-center gap-1.5 font-bold text-rose-400">
+                              <HeartPulse className="h-4 w-4 text-rose-400" />
+                              <span>ข้อมูลสุขภาพและการดูแลพิเศษ (Medical & Food Allergy Alert)</span>
+                            </div>
+                            {hasMed && (
+                              <p className="text-[11px] font-medium text-rose-200 bg-rose-900/30 px-2 py-1 rounded-md border border-rose-800/40">
+                                🩺 โรคประจำตัว / ข้อจำกัดทางกาย: <span className="font-bold text-white">{med}</span>
+                              </p>
+                            )}
+                            {hasAllergy && (
+                              <p className="text-[11px] font-medium text-amber-200 bg-amber-900/30 px-2 py-1 rounded-md border border-amber-800/40">
+                                🍽️ แพ้อาหาร / แพ้ยา / ข้อจำกัดอาหาร: <span className="font-bold text-amber-300">{allergy}</span>
+                              </p>
+                            )}
+                            {hasSpecial && (
+                              <p className="text-[11px] font-medium text-purple-200 bg-purple-900/30 px-2 py-1 rounded-md border border-purple-800/40">
+                                ⚠️ ดูแลเป็นพิเศษ: <span className="font-bold text-white">{p.special_care_note || p.special_notes || 'ต้องได้รับการดูแลพิเศษ'}</span>
+                              </p>
+                            )}
                           </div>
-                          {matchResult.participant.chronic_disease && (
-                            <p className="text-[11px]">🏥 โรคประจำตัว: {matchResult.participant.chronic_disease}</p>
-                          )}
-                          {matchResult.participant.drug_allergy && (
-                            <p className="text-[11px]">💊 แพ้ยา: {matchResult.participant.drug_allergy}</p>
-                          )}
-                          {matchResult.participant.food_allergy && (
-                            <p className="text-[11px]">🍽️ แพ้อาหาร: {matchResult.participant.food_allergy}</p>
-                          )}
-                          {matchResult.participant.special_care_note && (
-                            <p className="text-[11px]">⚠️ ข้อควรระวัง: {matchResult.participant.special_care_note}</p>
-                          )}
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
 
                     {/* 1-CLICK ACTION 1: TRAINING SHIRT PICKUP (เช็คชื่อรับเสื้อฝึกโครงการ) */}

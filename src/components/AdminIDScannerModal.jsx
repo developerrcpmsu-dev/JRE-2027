@@ -23,6 +23,7 @@ import ModalPortal from './ModalPortal';
 import IDCardPreview from './IDCardPreview';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData } from '../utils/idCard';
+import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy } from '../data/defaultData';
 
 function DetailItem({ label, value, className = '' }) {
   return (
@@ -343,8 +344,26 @@ export default function AdminIDScannerModal({
                         {selectedRegistration.is_special_care && <span className="ml-auto rounded-full bg-rose-500/20 px-2 py-1 text-[9px] font-black text-rose-300">⭐ SPECIAL CARE</span>}
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <DetailItem label="โรคประจำตัว / ข้อจำกัด" value={selectedRegistration.medical_history || 'ไม่มีข้อมูล'} />
-                        <DetailItem label="แพ้อาหาร / แพ้ยา" value={selectedRegistration.food_allergy || 'ไม่มีข้อมูล'} />
+                        <DetailItem 
+                          label="โรคประจำตัว / ข้อจำกัดทางกาย" 
+                          value={
+                            hasMedicalCondition(selectedRegistration) ? (
+                              <span className="font-bold text-rose-300">🩺 {getApplicantMedical(selectedRegistration)}</span>
+                            ) : (
+                              getApplicantMedical(selectedRegistration) || 'ไม่มี'
+                            )
+                          } 
+                        />
+                        <DetailItem 
+                          label="แพ้อาหาร / แพ้ยา / ข้อจำกัดอาหาร" 
+                          value={
+                            hasFoodOrDrugAllergy(selectedRegistration) ? (
+                              <span className="font-bold text-amber-300">🍽️ {getApplicantAllergy(selectedRegistration)}</span>
+                            ) : (
+                              getApplicantAllergy(selectedRegistration) || 'ไม่มี'
+                            )
+                          } 
+                        />
                         <DetailItem label="ประวัติการฝึกอบรม" value={selectedRegistration.previous_training || 'ไม่มีข้อมูล'} className="sm:col-span-2" />
                         <DetailItem label="หมายเหตุที่เกี่ยวข้องกับการดูแล" value={selectedRegistration.special_notes || 'ไม่มีหมายเหตุ'} className="sm:col-span-2" />
                       </div>

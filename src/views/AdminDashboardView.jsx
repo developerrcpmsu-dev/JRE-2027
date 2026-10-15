@@ -79,10 +79,17 @@ import {
   isMsuInstitution,
   getRegistrationFeeDetails,
   getSpeakerCategory,
-  SPEAKER_CATEGORIES
+  SPEAKER_CATEGORIES,
+  getApplicantMedical,
+  getApplicantAllergy,
+  hasHealthCondition,
+  hasMedicalCondition,
+  hasFoodOrDrugAllergy,
+  getCateringCategory
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
+import CateringHealthModal from '../components/CateringHealthModal';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -584,6 +591,7 @@ export default function AdminDashboardView({
   const [modalMedical, setModalMedical] = useState('');
   const [modalAllergy, setModalAllergy] = useState('');
   const [modalTraining, setModalTraining] = useState('');
+  const [showCateringModal, setShowCateringModal] = useState(false);
   
   // Payment Modal Fields
   const [modalPaymentPlan, setModalPaymentPlan] = useState('full');
@@ -1517,8 +1525,8 @@ export default function AdminDashboardView({
     setModalNotes(reg.special_notes || '');
     setModalPhone(reg.phone || '');
     setModalInstitution(reg.institution || '');
-    setModalMedical(reg.medical_history || '');
-    setModalAllergy(reg.food_allergy || '');
+    setModalMedical(getApplicantMedical(reg));
+    setModalAllergy(getApplicantAllergy(reg));
     setModalTraining(reg.previous_training || '');
     const isMsu = isMsuInstitution(reg.institution);
     const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
@@ -1571,8 +1579,8 @@ export default function AdminDashboardView({
         setModalNotes(profileModalReg.special_notes || '');
         setModalPhone(profileModalReg.phone || '');
         setModalInstitution(profileModalReg.institution || '');
-        setModalMedical(profileModalReg.medical_history || '');
-        setModalAllergy(profileModalReg.food_allergy || '');
+        setModalMedical(getApplicantMedical(profileModalReg));
+        setModalAllergy(getApplicantAllergy(profileModalReg));
         setModalTraining(profileModalReg.previous_training || '');
         
         const isMsu = isMsuInstitution(profileModalReg.institution);
@@ -1873,8 +1881,13 @@ export default function AdminDashboardView({
       }
     });
 
+    const all = registrations || [];
+    const allergyCount = all.filter(r => hasFoodOrDrugAllergy(r)).length;
+    const medicalCount = all.filter(r => hasMedicalCondition(r)).length;
+    const specialCareCount = all.filter(r => Boolean(r.is_special_care)).length;
+
     return {
-      total: (registrations || []).length,
+      total: all.length,
       fullPlanCount,
       fullPlanPaidCount,
       installmentPlanCount,
@@ -1885,12 +1898,17 @@ export default function AdminDashboardView({
       unpaidTotalCount,
       totalOutstandingCount: partialPaidCount + unpaidTotalCount,
       totalCollectedAmount,
-      totalOutstandingBalance
+      totalOutstandingBalance,
+      allergyCount,
+      medicalCount,
+      specialCareCount
     };
   })();
 
   // Filtered registrations
   const filteredRegs = registrations.filter(reg => {
+    const medText = getApplicantMedical(reg);
+    const allergyText = getApplicantAllergy(reg);
     const textTarget = (
       (reg.first_name || '') + ' ' + 
       (reg.last_name || '') + ' ' + 
@@ -1906,7 +1924,8 @@ export default function AdminDashboardView({
       (reg.group_assigned || '') + ' ' +
       (reg.room_assigned || '') + ' ' +
       (reg.special_notes || '') + ' ' +
-      (reg.medical_history || '')
+      medText + ' ' +
+      allergyText
     ).toLowerCase();
 
     const matchSearch = textTarget.includes(searchTerm.toLowerCase());
@@ -1927,6 +1946,8 @@ export default function AdminDashboardView({
     const hasOutstanding = isPartialPaid || isUnpaid;
 
     if (filterType === 'special_care') matchFilter = Boolean(reg.is_special_care);
+    else if (filterType === 'has_allergy') matchFilter = hasFoodOrDrugAllergy(reg);
+    else if (filterType === 'has_medical') matchFilter = hasMedicalCondition(reg);
     else if (filterType === 'full_plan') matchFilter = !isInstallment;
     else if (filterType === 'installment_plan') matchFilter = isInstallment;
     else if (filterType === 'fully_paid') matchFilter = isBothPaid;
@@ -2138,8 +2159,8 @@ export default function AdminDashboardView({
         `"${r.phone || '-'}"`,
         `"${(r.emergency_name || '-').replace(/"/g, '""')}"`,
         `"${r.emergency_phone || '-'}"`,
-        `"${(r.medical_history && r.medical_history.trim() !== '' ? r.medical_history.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
-        `"${(r.food_allergy && r.food_allergy.trim() !== '' ? r.food_allergy.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
+        `"${(getApplicantMedical(r) || 'ไม่มี').replace(/"/g, '""')}"`,
+        `"${(getApplicantAllergy(r) || 'ไม่มี').replace(/"/g, '""')}"`,
         `"${(r.previous_training && r.previous_training.trim() !== '' ? r.previous_training.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
         `"${paymentStatusDesc}"`,
         `"${paidRound1Date}"`,
@@ -2724,6 +2745,16 @@ export default function AdminDashboardView({
 
             <button
               type="button"
+              onClick={() => setShowCateringModal(true)}
+              className="px-3.5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md border border-amber-400/30 transition-all cursor-pointer active:scale-95"
+              title="เปิดศูนย์ข้อมูลจัดเตรียมอาหาร & สุขภาวะ สำหรับฝ่ายจัดเลี้ยงและสวัสดิการ"
+            >
+              <UtensilsCrossed className="w-4 h-4 text-amber-200" />
+              <span>เตรียมอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount})</span>
+            </button>
+
+            <button
+              type="button"
               onClick={async () => {
                 setIsRefreshingData(true);
                 try {
@@ -2889,54 +2920,86 @@ export default function AdminDashboardView({
             </button>
           </div>
 
-          {/* Sub Row: ดูแลพิเศษ, จัดกลุ่ม, จัดห้องนอน, รอตรวจสลิป */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 pt-1">
+          {/* Sub Row: รอตรวจสลิป, แพ้อาหาร/ยา, มีโรคประจำตัว, ดูแลพิเศษ, จัดกลุ่ม, จัดห้องนอน */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 pt-1">
             <button
               type="button"
               onClick={() => setFilterType('pending_review')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                 filterType === 'pending_review'
                   ? 'bg-yellow-950/40 border-yellow-500 ring-2 ring-yellow-500/30'
                   : 'bg-slate-950/50 border-slate-800 hover:border-yellow-700/60'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-yellow-400" />
-                <span className="text-xs font-bold text-slate-300">รอตรวจสลิป:</span>
+              <div className="flex items-center gap-1.5 truncate">
+                <Clock className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-300 truncate">รอตรวจสลิป:</span>
               </div>
-              <span className="text-sm font-black text-yellow-400">{regMetrics.pendingReviewCount} คน</span>
+              <span className="text-xs font-black text-yellow-400 ml-1">{regMetrics.pendingReviewCount} คน</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterType('has_allergy')}
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                filterType === 'has_allergy'
+                  ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-amber-700/60'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-300 truncate">แพ้อาหาร/ยา:</span>
+              </div>
+              <span className="text-xs font-black text-amber-400 ml-1">{regMetrics.allergyCount} คน</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterType('has_medical')}
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                filterType === 'has_medical'
+                  ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-rose-700/60'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <Stethoscope className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-300 truncate">มีโรคประจำตัว:</span>
+              </div>
+              <span className="text-xs font-black text-rose-400 ml-1">{regMetrics.medicalCount} คน</span>
             </button>
 
             <button
               type="button"
               onClick={() => setFilterType('special_care')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                 filterType === 'special_care'
-                  ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/30'
-                  : 'bg-slate-950/50 border-slate-800 hover:border-rose-700/60'
+                  ? 'bg-purple-950/40 border-purple-500 ring-2 ring-purple-500/30'
+                  : 'bg-slate-950/50 border-slate-800 hover:border-purple-700/60'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Star className="w-3.5 h-3.5 text-rose-400" />
-                <span className="text-xs font-bold text-slate-300">ดูแลเป็นพิเศษ:</span>
+              <div className="flex items-center gap-1.5 truncate">
+                <Star className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-300 truncate">ดูแลพิเศษ:</span>
               </div>
-              <span className="text-sm font-black text-rose-400">{registrations.filter(r => r.is_special_care).length} คน</span>
+              <span className="text-xs font-black text-purple-400 ml-1">{regMetrics.specialCareCount} คน</span>
             </button>
 
             <button
               type="button"
               onClick={() => setFilterType('has_group')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                 filterType === 'has_group'
                   ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
                   : 'bg-slate-950/50 border-slate-800 hover:border-indigo-700/60'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Users className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-xs font-bold text-slate-300">จัดกลุ่มฝึกแล้ว:</span>
+              <div className="flex items-center gap-1.5 truncate">
+                <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-300 truncate">จัดกลุ่มแล้ว:</span>
               </div>
-              <span className="text-sm font-black text-indigo-400">
+              <span className="text-xs font-black text-indigo-400 ml-1">
                 {registrations.filter(r => r.group_assigned).length}/{registrations.length}
               </span>
             </button>
@@ -2944,19 +3007,50 @@ export default function AdminDashboardView({
             <button
               type="button"
               onClick={() => setFilterType('has_room')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                 filterType === 'has_room'
                   ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
                   : 'bg-slate-950/50 border-slate-800 hover:border-amber-700/60'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Building className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-xs font-bold text-slate-300">จัดห้องนอนแล้ว:</span>
+              <div className="flex items-center gap-1.5 truncate">
+                <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-300 truncate">จัดห้องแล้ว:</span>
               </div>
-              <span className="text-sm font-black text-amber-400">
+              <span className="text-xs font-black text-amber-400 ml-1">
                 {registrations.filter(r => r.room_assigned).length}/{registrations.length}
               </span>
+            </button>
+          </div>
+
+          {/* Dedicated Catering & Dietary Notice Banner */}
+          <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-slate-900 to-rose-950/40 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-inner">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                <UtensilsCrossed className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-white text-xs sm:text-sm">
+                    🍽️ สรุปเตรียมอาหาร & สุขภาวะ (Catering & Health Hub)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                    พบข้อจำกัด {regMetrics.allergyCount + regMetrics.medicalCount} รายการ
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  สำหรับฝ่ายจัดเลี้ยง/สวัสดิการ และฝ่ายพยาบาล ตรวจสอบและคัดลอกรายชื่อส่งกลุ่ม LINE งานฝึกได้ทันที
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCateringModal(true)}
+              className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 self-start sm:self-auto cursor-pointer active:scale-95 shrink-0"
+            >
+              <UtensilsCrossed className="w-3.5 h-3.5" />
+              <span>เปิดศูนย์จัดเตรียมอาหาร & สุขภาวะ</span>
             </button>
           </div>
         </div>
@@ -3191,7 +3285,9 @@ export default function AdminDashboardView({
                 <option value="partial_paid">🟡 ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน)</option>
                 <option value="unpaid">🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน)</option>
                 <option value="pending_review">⏳ รอตรวจสลิป ({regMetrics.pendingReviewCount} คน)</option>
-                <option value="special_care">⭐ ดูแลเป็นพิเศษ ({registrations.filter(r => r.is_special_care).length} คน)</option>
+                <option value="has_allergy">🍽️ แพ้อาหาร / ยา ({regMetrics.allergyCount} คน)</option>
+                <option value="has_medical">🩺 มีโรคประจำตัว ({regMetrics.medicalCount} คน)</option>
+                <option value="special_care">⭐ ดูแลเป็นพิเศษ ({regMetrics.specialCareCount} คน)</option>
                 <option value="no_group">ยังไม่จัดกลุ่ม ({registrations.filter(r => !r.group_assigned).length} คน)</option>
                 <option value="has_group">จัดกลุ่มแล้ว ({registrations.filter(r => r.group_assigned).length} คน)</option>
                 <option value="no_room">ยังไม่จัดห้องนอน ({registrations.filter(r => !r.room_assigned).length} คน)</option>
@@ -3220,7 +3316,7 @@ export default function AdminDashboardView({
                   <th className="py-4 px-4">ผู้สมัคร & สังกัด</th>
                   <th className="py-4 px-3">สถานะชำระเงิน / สลิป</th>
                   <th className="py-4 px-3">เอกสารแนบ</th>
-                  <th className="py-4 px-3">สุขภาพ / หมายเหตุ</th>
+                  <th className="py-4 px-3 min-w-[210px]">สุขภาพ / อาหาร / หมายเหตุ</th>
                   <th className="py-4 px-4 bg-indigo-950/40 text-indigo-300">
                     กลุ่มฝึก (Group)
                   </th>
@@ -3302,6 +3398,24 @@ export default function AdminDashboardView({
                                 {reg.is_special_care && (
                                   <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[10px] font-black animate-pulse flex items-center gap-1">
                                     ⭐ ดูแลพิเศษ
+                                  </span>
+                                )}
+                                {hasFoodOrDrugAllergy(reg) && (
+                                  <span 
+                                    onClick={(e) => { e.stopPropagation(); handleOpenProfileModal(reg, 'info'); }}
+                                    className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[10px] font-bold cursor-pointer hover:bg-amber-500/30 flex items-center gap-1"
+                                    title={`แพ้อาหาร/ยา: ${getApplicantAllergy(reg)}`}
+                                  >
+                                    🍽️ {getApplicantAllergy(reg)}
+                                  </span>
+                                )}
+                                {hasMedicalCondition(reg) && (
+                                  <span 
+                                    onClick={(e) => { e.stopPropagation(); handleOpenProfileModal(reg, 'info'); }}
+                                    className="px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded text-[10px] font-bold cursor-pointer hover:bg-rose-500/30 flex items-center gap-1"
+                                    title={`โรคประจำตัว: ${getApplicantMedical(reg)}`}
+                                  >
+                                    🩺 {getApplicantMedical(reg)}
                                   </span>
                                 )}
                               </div>
@@ -3406,19 +3520,67 @@ export default function AdminDashboardView({
                           )}
                         </td>
 
-                        {/* Health & Special Notes */}
-                        <td className="py-4 px-3 max-w-[170px]">
-                          {reg.is_special_care && reg.special_notes ? (
-                            <div className="text-rose-300 text-[11px] font-medium line-clamp-2 bg-rose-950/30 p-1.5 rounded-lg border border-rose-900/40">
-                              ⚠️ {reg.special_notes}
-                            </div>
-                          ) : reg.medical_history && reg.medical_history !== 'ไม่มี' ? (
-                            <div className="text-amber-300 text-[11px] truncate">
-                              🩺 {reg.medical_history}
-                            </div>
-                          ) : (
-                            <span className="text-slate-500 text-[11px]">ปกติ</span>
-                          )}
+                        {/* Health, Dietary & Special Notes */}
+                        <td className="py-4 px-3 min-w-[210px] max-w-[280px]">
+                          {(() => {
+                            const medText = getApplicantMedical(reg);
+                            const allergyText = getApplicantAllergy(reg);
+                            const hasMed = hasMedicalCondition(reg);
+                            const hasAllergy = hasFoodOrDrugAllergy(reg);
+                            const hasSpecial = Boolean(reg.is_special_care || (reg.special_notes && reg.special_notes.trim() !== ''));
+
+                            if (!hasMed && !hasAllergy && !hasSpecial) {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-slate-500 text-[11px]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/50"></span>
+                                  ปกติ (ไม่มีข้อจำกัด)
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <div className="space-y-1.5 text-xs">
+                                {hasAllergy && (
+                                  <div 
+                                    onClick={() => handleOpenProfileModal(reg, 'info')}
+                                    className="flex items-start gap-1.5 bg-amber-950/40 border border-amber-500/40 text-amber-200 text-[11px] px-2 py-1 rounded-lg font-medium cursor-pointer hover:bg-amber-950/60 transition-colors shadow-sm"
+                                    title={`ประวัติแพ้อาหาร / ยา / มังสวิรัติ: ${allergyText}`}
+                                  >
+                                    <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                    <div className="leading-tight">
+                                      <span className="font-bold text-amber-300">แพ้อาหาร/ยา:</span> {allergyText}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {hasMed && (
+                                  <div 
+                                    onClick={() => handleOpenProfileModal(reg, 'info')}
+                                    className="flex items-start gap-1.5 bg-rose-950/40 border border-rose-500/40 text-rose-200 text-[11px] px-2 py-1 rounded-lg font-medium cursor-pointer hover:bg-rose-950/60 transition-colors shadow-sm"
+                                    title={`โรคประจำตัว / ข้อจำกัดทางกาย: ${medText}`}
+                                  >
+                                    <Stethoscope className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                                    <div className="leading-tight">
+                                      <span className="font-bold text-rose-300">โรคประจำตัว:</span> {medText}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {hasSpecial && (
+                                  <div 
+                                    onClick={() => handleOpenProfileModal(reg, 'info')}
+                                    className="flex items-start gap-1.5 bg-purple-950/40 border border-purple-500/40 text-purple-200 text-[11px] px-2 py-1 rounded-lg font-medium cursor-pointer hover:bg-purple-950/60 transition-colors shadow-sm"
+                                    title={`ดูแลพิเศษ: ${reg.special_notes || 'จำเป็นต้องได้รับการดูแลพิเศษ'}`}
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                                    <div className="leading-tight">
+                                      <span className="font-bold text-purple-300">ดูแลพิเศษ:</span> {reg.special_notes || 'ต้องดูแลพิเศษ'}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Group Allocation */}
@@ -3944,6 +4106,36 @@ export default function AdminDashboardView({
                         บันทึก
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Health & Dietary Notice Alert Box */}
+                {(hasFoodOrDrugAllergy(profileModalReg) || hasMedicalCondition(profileModalReg) || profileModalReg.is_special_care) && (
+                  <div className="p-4 bg-gradient-to-r from-amber-950/40 via-slate-900 to-rose-950/40 border border-amber-500/40 rounded-2xl space-y-2.5 text-xs shadow-md">
+                    <div className="flex items-center gap-2 font-bold text-amber-300">
+                      <UtensilsCrossed className="w-4 h-4 text-amber-400" />
+                      <span>ข้อควรระวังพิเศษสำหรับฝ่ายจัดเลี้ยงและพยาบาล (Dietary & Health Alerts)</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {hasFoodOrDrugAllergy(profileModalReg) && (
+                        <div className="bg-amber-950/50 border border-amber-500/40 p-2.5 rounded-xl">
+                          <span className="text-amber-400 font-bold block text-[11px] mb-0.5">🍽️ ประวัติแพ้อาหาร / ยา / มังสวิรัติ:</span>
+                          <span className="text-amber-100 font-semibold">{getApplicantAllergy(profileModalReg)}</span>
+                        </div>
+                      )}
+                      {hasMedicalCondition(profileModalReg) && (
+                        <div className="bg-rose-950/50 border border-rose-500/40 p-2.5 rounded-xl">
+                          <span className="text-rose-400 font-bold block text-[11px] mb-0.5">🩺 โรคประจำตัว / ข้อจำกัดทางกาย:</span>
+                          <span className="text-rose-100 font-semibold">{getApplicantMedical(profileModalReg)}</span>
+                        </div>
+                      )}
+                    </div>
+                    {profileModalReg.is_special_care && profileModalReg.special_notes && (
+                      <div className="bg-purple-950/50 border border-purple-500/40 p-2.5 rounded-xl">
+                        <span className="text-purple-300 font-bold block text-[11px] mb-0.5">⚠️ บันทึกการดูแลพิเศษ:</span>
+                        <span className="text-purple-100">{profileModalReg.special_notes}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -5286,6 +5478,14 @@ export default function AdminDashboardView({
         </div>
       </ModalPortal>
     )}
+
+      {/* Catering & Health Logistics Hub Modal */}
+      <CateringHealthModal
+        isOpen={showCateringModal}
+        onClose={() => setShowCateringModal(false)}
+        registrations={registrations}
+        onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
+      />
 
       {/* TAB: PAYMENT SETTINGS & INSTALLMENTS CONFIG */}
       {activeTab === 'payment_settings' && (
@@ -9585,12 +9785,20 @@ export default function AdminDashboardView({
                                 <span className="font-mono text-emerald-400 block mt-0.5">{reg.emergency_phone}</span>
                               )}
                             </div>
-                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
-                              <span className="text-slate-400 text-[10px] block font-semibold">โรคประจำตัว / ข้อจำกัดอาหาร:</span>
-                              <span className="text-slate-300">
-                                {reg.congenital_disease || reg.medical_conditions || 'ไม่มีโรคประจำตัว'} 
-                                {reg.allergic_food ? ` · แพ้อาหาร: ${reg.allergic_food}` : ''}
-                              </span>
+                            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl space-y-1">
+                              <span className="text-slate-400 text-[10px] block font-semibold">โรคประจำตัว & แพ้อาหาร/ยา:</span>
+                              <div className="text-xs space-y-0.5">
+                                {hasMedicalCondition(reg) ? (
+                                  <span className="text-rose-300 font-bold block">🩺 โรคประจำตัว: {getApplicantMedical(reg)}</span>
+                                ) : (
+                                  <span className="text-slate-400 block">🩺 ไม่มีโรคประจำตัว</span>
+                                )}
+                                {hasFoodOrDrugAllergy(reg) ? (
+                                  <span className="text-amber-300 font-bold block">🍽️ แพ้อาหาร/ยา: {getApplicantAllergy(reg)}</span>
+                                ) : (
+                                  <span className="text-slate-400 block">🍽️ ไม่มีประวัติแพ้อาหาร/ยา</span>
+                                )}
+                              </div>
                             </div>
                           </div>
 

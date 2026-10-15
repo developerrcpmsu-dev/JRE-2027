@@ -733,6 +733,103 @@ export const getRegistrationFeeDetails = (institution) => {
   };
 };
 
+export const cleanHealthText = (val) => {
+  if (!val || typeof val !== 'string') return '';
+  return val.trim();
+};
+
+export const getApplicantMedical = (reg) => {
+  if (!reg) return '';
+  return cleanHealthText(
+    reg.medical_history ||
+    reg.congenital_disease ||
+    reg.medical_conditions ||
+    reg.chronic_disease ||
+    ''
+  );
+};
+
+export const getApplicantAllergy = (reg) => {
+  if (!reg) return '';
+  return cleanHealthText(
+    reg.food_allergy ||
+    reg.allergic_food ||
+    reg.drug_allergy ||
+    ''
+  );
+};
+
+const NEGATIVE_HEALTH_TERMS = new Set([
+  '',
+  '-',
+  '--',
+  '---',
+  '.',
+  '..',
+  '/',
+  '//',
+  'none',
+  'no',
+  'n/a',
+  'na',
+  'nil',
+  'normal',
+  'ไม่มี',
+  'ไม่มีครับ',
+  'ไม่มีค่ะ',
+  'ไม่มีคับ',
+  'ไม่มีคะ',
+  'ไม่มีโรคประจำตัว',
+  'ไม่มีโรค',
+  'ไม่มีข้อจำกัดทางกาย',
+  'ไม่มีประวัติแพ้ยาหรืออาหาร',
+  'ไม่มีประวัติแพ้ยาและอาหาร',
+  'ไม่มีประวัติการแพ้',
+  'ไม่มีประวัติแพ้ยา',
+  'ไม่มีประวัติแพ้อาหาร',
+  'ไม่แพ้',
+  'ไม่แพ้ครับ',
+  'ไม่แพ้ค่ะ',
+  'ไม่แพ้อะไร',
+  'ไม่แพ้อาหาร',
+  'ไม่แพ้ยา',
+  'ปกติ',
+  'ปกติครับ',
+  'ปกติค่ะ',
+  'ร่างกายปกติ',
+  'สุขภาพปกติ'
+]);
+
+export const hasHealthCondition = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  const cleaned = text.trim().toLowerCase();
+  if (NEGATIVE_HEALTH_TERMS.has(cleaned)) return false;
+  const stripped = cleaned.replace(/[\s\-_./\\,;:]/g, '');
+  if (NEGATIVE_HEALTH_TERMS.has(stripped)) return false;
+  return cleaned.length > 0;
+};
+
+export const hasMedicalCondition = (reg) => {
+  return hasHealthCondition(getApplicantMedical(reg));
+};
+
+export const hasFoodOrDrugAllergy = (reg) => {
+  return hasHealthCondition(getApplicantAllergy(reg));
+};
+
+export const getCateringCategory = (text) => {
+  if (!text || typeof text !== 'string') return 'ทั่วไป';
+  const s = text.toLowerCase();
+  if (s.includes('มังสวิรัติ') || s.includes('เจ') || s.includes('vegan') || s.includes('vegetarian')) return 'มังสวิรัติ / เจ';
+  if (s.includes('อิสลาม') || s.includes('ฮาลาล') || s.includes('halal') || s.includes('มุสลิม')) return 'อาหารฮาลาล (อิสลาม)';
+  if (s.includes('กุ้ง') || s.includes('ปู') || s.includes('ทะเล') || s.includes('seafood') || s.includes('หอย') || s.includes('หมึก')) return 'แพ้อาหารทะเล / กุ้ง / ปู';
+  if (s.includes('ถั่ว') || s.includes('peanut') || s.includes('nut')) return 'แพ้ถั่วลิสง / ถั่วเปลือกแข็ง';
+  if (s.includes('ไข่') || s.includes('egg')) return 'แพ้ไข่';
+  if (s.includes('นม') || s.includes('milk') || s.includes('lactose')) return 'แพ้นมวัว / แลคโตส';
+  if (s.includes('ยา') || s.includes('penicillin') || s.includes('เพนนิซิลิน') || s.includes('พารา') || s.includes('nsaid')) return 'แพ้ยา';
+  return 'ข้อจำกัดอาหาร / อื่นๆ';
+};
+
 export const DEFAULT_MERCHANDISE_CONFIG = {
   google_form: {
     enabled: true,
