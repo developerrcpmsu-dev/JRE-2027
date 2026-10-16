@@ -6,6 +6,7 @@ import { ensureHostedUrl } from '../supabase';
 export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [copied, setCopied] = useState(false);
+  const [shareableUrl, setShareableUrl] = useState('');
   const [blobPdfUrl, setBlobPdfUrl] = useState('');
   const [pdfViewMode, setPdfViewMode] = useState('web');
 
