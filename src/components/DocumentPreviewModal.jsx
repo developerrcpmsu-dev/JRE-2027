@@ -6,7 +6,8 @@ import { ensureHostedUrl } from '../supabase';
 export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [shareableUrl, setShareableUrl] = useState('');
+  const [blobPdfUrl, setBlobPdfUrl] = useState('');
+  const [pdfViewMode, setPdfViewMode] = useState('web');
 
   const rawFileUrl = doc?.fileUrl || doc?.file_url;
   const fileName = doc?.fileName || doc?.file_name || 'document';
@@ -16,9 +17,31 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
     // Reset zoom when doc changes or modal opens
     setZoomLevel(1);
     setCopied(false);
+    setPdfViewMode('web');
+    let createdObjectUrl = null;
+
     if (rawFileUrl) {
-      if (rawFileUrl.startsWith('http://') || rawFileUrl.startsWith('https://')) {
-        setShareableUrl(rawFileUrl);
+      if (rawFileUrl.startsWith('data:application/pdf')) {
+        try {
+          const parts = rawFileUrl.split(',');
+          const byteString = atob(parts[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([ab], { type: 'application/pdf' });
+          createdObjectUrl = URL.createObjectURL(blob);
+          setBlobPdfUrl(createdObjectUrl);
+        } catch (e) {
+          setBlobPdfUrl('');
+        }
+      } else {
+        setBlobPdfUrl('');
+      }
+
+      if (rawFileUrl.startsWith('http://') || rawFileUrl.startsWith('https://') || rawFileUrl.startsWith('/')) {
+        setShareableUrl(rawFileUrl.startsWith('/') ? `${window.location.origin}${rawFileUrl}` : rawFileUrl);
       } else {
         ensureHostedUrl(rawFileUrl, fileName).then(url => {
           setShareableUrl(url || rawFileUrl);
@@ -26,15 +49,23 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
       }
     } else {
       setShareableUrl('');
+      setBlobPdfUrl('');
     }
+
+    return () => {
+      if (createdObjectUrl) {
+        URL.revokeObjectURL(createdObjectUrl);
+      }
+    };
   }, [isOpen, doc, rawFileUrl, fileName]);
 
   if (!isOpen || !doc || !rawFileUrl) return null;
 
-  const fileUrl = shareableUrl || rawFileUrl;
-  const isPdf = fileUrl.startsWith('data:application/pdf') || 
+  const fileUrl = blobPdfUrl || shareableUrl || rawFileUrl;
+  const isPdf = rawFileUrl.startsWith('data:application/pdf') || 
                 (fileName && fileName.toLowerCase().endsWith('.pdf')) ||
-                fileUrl.toLowerCase().includes('.pdf');
+                rawFileUrl.toLowerCase().includes('.pdf');
+  const isOfficialSchedulePdf = rawFileUrl.includes('schedule_jre2027.pdf');
 
   const handleCopyLink = async () => {
     try {
@@ -175,13 +206,79 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
         </div>
 
         {/* Content Viewer Area */}
-        <div className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center bg-slate-950/60 min-h-[350px]">
+        <div className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center justify-center bg-slate-950/60 min-h-[350px]">
           {isPdf ? (
-            <iframe
-              src={fileUrl}
-              title={fileName}
-              className="w-full h-[65vh] rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
-            />
+            isOfficialSchedulePdf ? (
+              <div className="w-full h-[68vh] flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl shrink-0">
+                  <span className="text-xs font-bold text-emerald-400">
+                    อ่านเอกสารบนหน้าเว็บได้ทันที (3 หน้าครบถ้วน ไม่ต้องดาวน์โหลด)
+                  </span>
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setPdfViewMode('web')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        pdfViewMode === 'web' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      โหมดอ่านบนเว็บ (3 หน้า)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPdfViewMode('pdf')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        pdfViewMode === 'pdf' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      PDF Viewer
+                    </button>
+                  </div>
+                </div>
+
+                {pdfViewMode === 'web' ? (
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                    {[1, 2, 3].map(pageNum => (
+                      <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-xl border border-slate-700 max-w-3xl mx-auto">
+                        <div className="bg-slate-900 px-4 py-1.5 text-[11px] font-bold text-slate-300 flex justify-between items-center border-b border-slate-800">
+                          <span>หน้าที่ {pageNum} / 3 — กำหนดการฝึก JRE 2027</span>
+                          <span className="text-emerald-400">เอกสารทางการ</span>
+                        </div>
+                        <img
+                          src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                          alt={`กำหนดการฝึก JRE 2027 หน้าที่ ${pageNum}`}
+                          className="w-full h-auto block select-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <object
+                    data={`${fileUrl}#view=FitH`}
+                    type="application/pdf"
+                    className="w-full flex-1 rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                  >
+                    <iframe
+                      src={`${fileUrl}#view=FitH`}
+                      title={fileName}
+                      className="w-full h-full rounded-2xl border border-slate-800 bg-slate-900"
+                    />
+                  </object>
+                )}
+              </div>
+            ) : (
+              <object
+                data={`${fileUrl}#view=FitH`}
+                type="application/pdf"
+                className="w-full h-[65vh] rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+              >
+                <iframe
+                  src={`${fileUrl}#view=FitH`}
+                  title={fileName}
+                  className="w-full h-[65vh] rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                />
+              </object>
+            )
           ) : (
             <div className="overflow-auto max-h-[70vh] flex items-center justify-center w-full">
               <img

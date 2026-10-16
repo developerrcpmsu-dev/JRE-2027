@@ -77,6 +77,35 @@ export default function AnnouncementsView({
 
   // PDF Preview Modal State
   const [previewPdf, setPreviewPdf] = useState(null);
+  const [pdfViewMode, setPdfViewMode] = useState('web');
+  const [showInlinePostPdf, setShowInlinePostPdf] = useState(true);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+
+  useEffect(() => {
+    setPdfViewMode('web');
+    let createdUrl = null;
+    if (previewPdf?.url && previewPdf.url.startsWith('data:application/pdf')) {
+      try {
+        const parts = previewPdf.url.split(',');
+        const byteString = atob(parts[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        const blob = new Blob([ab], { type: 'application/pdf' });
+        createdUrl = URL.createObjectURL(blob);
+        setPreviewBlobUrl(createdUrl);
+      } catch (e) {
+        setPreviewBlobUrl('');
+      }
+    } else {
+      setPreviewBlobUrl('');
+    }
+    return () => {
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [previewPdf]);
 
   // Sync active scope when initialScope changes from route navigation
   useEffect(() => {
@@ -558,48 +587,92 @@ export default function AnnouncementsView({
             </div>
           )}
 
-          {/* Attached PDF Document Card */}
+          {/* Attached PDF Document Card + Inline Web Reader */}
           {Boolean(currentPost.pdf_url) && (
-            <div className="mb-8 p-4 sm:p-5 bg-gradient-to-r from-red-950/40 via-slate-950 to-slate-950 border border-red-900/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-red-600/20 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0 shadow-lg">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-red-900/80 text-red-200 text-[10px] font-bold rounded-md uppercase tracking-wider">
-                      PDF DOCUMENT
-                    </span>
-                    <span className="text-xs sm:text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
-                      {currentPost.pdf_name || 'เอกสารแนบประกาศทางการ JRE 2027.pdf'}
-                    </span>
+            <div className="mb-8 space-y-4">
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-red-950/40 via-slate-950 to-slate-950 border border-red-900/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-red-600/20 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0 shadow-lg">
+                    <FileText className="w-6 h-6" />
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    เอกสารคำสั่ง / ตารางการฝึก / รายละเอียดทางการ
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-red-900/80 text-red-200 text-[10px] font-bold rounded-md uppercase tracking-wider">
+                        PDF DOCUMENT
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                        {currentPost.pdf_name || 'เอกสารแนบประกาศทางการ JRE 2027.pdf'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      สามารถอ่านเอกสารบนหน้าเว็บได้ทันทีด้านล่าง หรือกดเปิดเต็มจอโดยไม่ต้องดาวน์โหลด
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowInlinePostPdf(prev => !prev)}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-slate-700 cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4 text-emerald-400" />
+                    <span>{showInlinePostPdf ? 'ซ่อนเอกสารบนหน้าเว็บ' : 'แสดงเอกสารบนหน้าเว็บ'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPdf({ url: currentPost.pdf_url, name: currentPost.pdf_name })}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md cursor-pointer"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                    <span>เปิดอ่านเต็มจอ</span>
+                  </button>
+                  <a
+                    href={currentPost.pdf_url}
+                    download={currentPost.pdf_name || 'jre2027_announcement_doc.pdf'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>ดาวน์โหลด</span>
+                  </a>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setPreviewPdf({ url: currentPost.pdf_url, name: currentPost.pdf_name })}
-                  className="flex-1 sm:flex-none px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-slate-700 cursor-pointer"
-                >
-                  <Eye className="w-4 h-4 text-blue-400" />
-                  <span>เปิดดูเอกสาร</span>
-                </button>
-                <a
-                  href={currentPost.pdf_url}
-                  download={currentPost.pdf_name || 'jre2027_announcement_doc.pdf'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>ดาวน์โหลด</span>
-                </a>
-              </div>
+              {showInlinePostPdf && (
+                <div className="rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-2xl">
+                  {String(currentPost.pdf_url).includes('schedule_jre2027.pdf') ? (
+                    <div className="p-3 sm:p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                      {[1, 2, 3].map(pageNum => (
+                        <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-xl border border-slate-700 max-w-3xl mx-auto">
+                          <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
+                            <span>หน้าที่ {pageNum} / 3 — {currentPost.pdf_name || 'กำหนดการฝึก JRE 2027'}</span>
+                            <span className="text-emerald-400 text-[11px]">อ่านบนเว็บทันที</span>
+                          </div>
+                          <img
+                            src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                            alt={`เอกสารหน้าที่ ${pageNum}`}
+                            className="w-full h-auto block select-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <object
+                      data={`${currentPost.pdf_url}#view=FitH`}
+                      type="application/pdf"
+                      className="w-full h-[70vh] block"
+                    >
+                      <iframe
+                        src={`${currentPost.pdf_url}#view=FitH`}
+                        title={currentPost.pdf_name || 'เอกสารแนบ PDF'}
+                        className="w-full h-[70vh] border-none"
+                      />
+                    </object>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -802,7 +875,7 @@ export default function AnnouncementsView({
                 className="w-full max-w-5xl h-[90vh] bg-slate-900 border border-slate-700 rounded-3xl flex flex-col overflow-hidden shadow-2xl"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <FileText className="w-5 h-5 text-red-500" />
                     <h3 className="font-bold text-white text-sm truncate max-w-md">
@@ -810,8 +883,39 @@ export default function AnnouncementsView({
                     </h3>
                   </div>
                   <div className="flex items-center gap-2">
+                    {String(previewPdf.url).includes('schedule_jre2027.pdf') && (
+                      <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setPdfViewMode('web')}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            pdfViewMode === 'web' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          อ่านบนเว็บ (3 หน้า)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdfViewMode('pdf')}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            pdfViewMode === 'pdf' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          PDF Viewer
+                        </button>
+                      </div>
+                    )}
                     <a
-                      href={previewPdf.url}
+                      href={previewBlobUrl || previewPdf.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="hidden sm:inline">เปิดแท็บใหม่</span>
+                    </a>
+                    <a
+                      href={previewBlobUrl || previewPdf.url}
                       download={previewPdf.name || 'document.pdf'}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -830,12 +934,36 @@ export default function AnnouncementsView({
                   </div>
                 </div>
 
-                <div className="flex-1 w-full bg-slate-950">
-                  <iframe
-                    src={previewPdf.url}
-                    title="PDF Preview"
-                    className="w-full h-full border-none"
-                  />
+                <div className="flex-1 w-full bg-slate-950 overflow-y-auto">
+                  {String(previewPdf.url).includes('schedule_jre2027.pdf') && pdfViewMode === 'web' ? (
+                    <div className="p-4 sm:p-6 space-y-5">
+                      {[1, 2, 3].map(pageNum => (
+                        <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-2xl border border-slate-700 max-w-3xl mx-auto">
+                          <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
+                            <span>หน้าที่ {pageNum} / 3 — {previewPdf.name || 'กำหนดการฝึก JRE 2027'}</span>
+                            <span className="text-emerald-400">อ่านบนหน้าเว็บ</span>
+                          </div>
+                          <img
+                            src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                            alt={`เอกสารหน้าที่ ${pageNum}`}
+                            className="w-full h-auto block select-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <object
+                      data={`${previewBlobUrl || previewPdf.url}#view=FitH`}
+                      type="application/pdf"
+                      className="w-full h-full block"
+                    >
+                      <iframe
+                        src={`${previewBlobUrl || previewPdf.url}#view=FitH`}
+                        title="PDF Preview"
+                        className="w-full h-full border-none"
+                      />
+                    </object>
+                  )}
                 </div>
               </div>
             </div>
@@ -1326,7 +1454,7 @@ export default function AnnouncementsView({
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <FileText className="w-5 h-5 text-red-500" />
                   <h3 className="font-bold text-white text-sm truncate max-w-md">
@@ -1334,8 +1462,39 @@ export default function AnnouncementsView({
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
+                  {String(previewPdf.url).includes('schedule_jre2027.pdf') && (
+                    <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setPdfViewMode('web')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          pdfViewMode === 'web' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        อ่านบนเว็บ (3 หน้า)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdfViewMode('pdf')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          pdfViewMode === 'pdf' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        PDF Viewer
+                      </button>
+                    </div>
+                  )}
                   <a
-                    href={previewPdf.url}
+                    href={previewBlobUrl || previewPdf.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden sm:inline">เปิดแท็บใหม่</span>
+                  </a>
+                  <a
+                    href={previewBlobUrl || previewPdf.url}
                     download={previewPdf.name || 'document.pdf'}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -1354,13 +1513,37 @@ export default function AnnouncementsView({
                 </div>
               </div>
 
-              {/* PDF Viewer Iframe */}
-              <div className="flex-1 w-full bg-slate-950">
-                <iframe
-                  src={previewPdf.url}
-                  title="PDF Preview"
-                  className="w-full h-full border-none"
-                />
+              {/* PDF Viewer Body */}
+              <div className="flex-1 w-full bg-slate-950 overflow-y-auto">
+                {String(previewPdf.url).includes('schedule_jre2027.pdf') && pdfViewMode === 'web' ? (
+                  <div className="p-4 sm:p-6 space-y-5">
+                    {[1, 2, 3].map(pageNum => (
+                      <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-2xl border border-slate-700 max-w-3xl mx-auto">
+                        <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
+                          <span>หน้าที่ {pageNum} / 3 — {previewPdf.name || 'กำหนดการฝึก JRE 2027'}</span>
+                          <span className="text-emerald-400">อ่านบนหน้าเว็บ</span>
+                        </div>
+                        <img
+                          src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                          alt={`เอกสารหน้าที่ ${pageNum}`}
+                          className="w-full h-auto block select-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <object
+                    data={`${previewBlobUrl || previewPdf.url}#view=FitH`}
+                    type="application/pdf"
+                    className="w-full h-full block"
+                  >
+                    <iframe
+                      src={`${previewBlobUrl || previewPdf.url}#view=FitH`}
+                      title="PDF Preview"
+                      className="w-full h-full border-none"
+                    />
+                  </object>
+                )}
               </div>
             </div>
           </div>
