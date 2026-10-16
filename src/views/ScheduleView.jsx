@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -20,6 +20,9 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  RotateCw,
+  Printer,
+  PanelLeft,
   Maximize2,
   X,
   Layers,
@@ -58,7 +61,40 @@ export default function ScheduleView() {
   const [pageLayout, setPageLayout] = useState('all'); // 'all' | 'single'
   const [currentPage, setCurrentPage] = useState(1);
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [pdfRotation, setPdfRotation] = useState(0);
+  const [showPdfSidebar, setShowPdfSidebar] = useState(true);
   const [isFullscreenModalOpen, setIsFullscreenModalOpen] = useState(false);
+
+  const pdfPageRefs = useRef({});
+  const pdfScrollContainerRef = useRef(null);
+
+  const scrollToPdfPage = (pageNum) => {
+    const clamped = Math.max(1, Math.min(3, pageNum));
+    setCurrentPage(clamped);
+    const targetEl = pdfPageRefs.current[clamped];
+    if (targetEl && pdfScrollContainerRef.current) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handlePdfScroll = (e) => {
+    const container = e.currentTarget;
+    const scrollMid = container.scrollTop + container.clientHeight / 3;
+    for (let p = 3; p >= 1; p--) {
+      const el = pdfPageRefs.current[p];
+      if (el && el.offsetTop - container.offsetTop <= scrollMid) {
+        if (currentPage !== p) setCurrentPage(p);
+        break;
+      }
+    }
+  };
+
+  const handlePrintPdf = () => {
+    const printWin = window.open('/documents/schedule_jre2027.pdf?v=2027_print', '_blank');
+    if (printWin) {
+      printWin.focus();
+    }
+  };
 
   const visiblePages = pageLayout === 'all'
     ? SCHEDULE_DOC_PAGES
@@ -330,18 +366,207 @@ export default function ScheduleView() {
                 ))}
               </div>
             ) : (
-              <div className="w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-inner">
-                <object
-                  data="/documents/schedule_jre2027.pdf#toolbar=1&navpanes=0&view=FitH"
-                  type="application/pdf"
-                  className="w-full h-[680px] sm:h-[820px]"
-                >
-                  <iframe
-                    src="/documents/schedule_jre2027.pdf#toolbar=1"
-                    className="w-full h-[680px] sm:h-[820px] border-0"
-                    title="JRE 2027 Schedule Official PDF"
-                  />
-                </object>
+              <div className="w-full rounded-2xl overflow-hidden border border-slate-700 shadow-2xl flex flex-col h-[700px] sm:h-[840px] bg-[#525659]">
+                {/* Authentic Chrome/Acrobat Style PDF Viewer Top Toolbar */}
+                <div className="bg-[#323639] text-slate-100 px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-black/40 shadow-md shrink-0 z-10">
+                  {/* Left: Sidebar Toggle + File Name */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfSidebar(prev => !prev)}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        showPdfSidebar ? 'bg-white/15 text-white' : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                      }`}
+                      title="เปิด/ปิด แถบตัวอย่างหน้ากระดาษ (Thumbnails)"
+                    >
+                      <PanelLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs sm:text-sm font-medium text-slate-100 truncate max-w-[160px] sm:max-w-[260px]">
+                      schedule_jre2027.pdf
+                    </span>
+                  </div>
+
+                  {/* Center: Page Stepper + Zoom + Rotate */}
+                  <div className="flex items-center gap-1.5 sm:gap-3 bg-[#202124]/60 px-2.5 py-1 rounded-lg border border-white/10">
+                    {/* Page Navigation */}
+                    <div className="flex items-center gap-1 text-xs">
+                      <button
+                        type="button"
+                        disabled={currentPage <= 1}
+                        onClick={() => scrollToPdfPage(currentPage - 1)}
+                        className="p-1 hover:bg-white/10 rounded disabled:opacity-35 cursor-pointer"
+                        title="หน้าก่อนหน้า"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <div className="flex items-center gap-1 font-mono text-xs">
+                        <span className="bg-[#171717] px-2 py-0.5 rounded border border-white/15 text-white font-bold">
+                          {currentPage}
+                        </span>
+                        <span className="text-slate-400">/</span>
+                        <span className="text-slate-200">3</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={currentPage >= 3}
+                        onClick={() => scrollToPdfPage(currentPage + 1)}
+                        className="p-1 hover:bg-white/10 rounded disabled:opacity-35 cursor-pointer"
+                        title="หน้าถัดไป"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="h-4 w-px bg-white/15" />
+
+                    {/* Zoom Controls */}
+                    <div className="flex items-center gap-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setZoomPercent(z => Math.max(50, z - 25))}
+                        className="p-1 hover:bg-white/10 rounded cursor-pointer"
+                        title="ซูมออก"
+                      >
+                        <ZoomOut className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="bg-[#171717] px-2 py-0.5 rounded border border-white/15 font-mono text-[11px] min-w-[48px] text-center">
+                        {zoomPercent}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setZoomPercent(z => Math.min(200, z + 25))}
+                        className="p-1 hover:bg-white/10 rounded cursor-pointer"
+                        title="ซูมเข้า"
+                      >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                      </button>
+                      {zoomPercent !== 100 && (
+                        <button
+                          type="button"
+                          onClick={() => setZoomPercent(100)}
+                          className="p-1 text-amber-400 hover:bg-white/10 rounded cursor-pointer"
+                          title="รีเซ็ตขนาด 100%"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="hidden sm:block h-4 w-px bg-white/15" />
+
+                    {/* Rotate Page */}
+                    <button
+                      type="button"
+                      onClick={() => setPdfRotation(r => (r + 90) % 360)}
+                      className="hidden sm:flex items-center gap-1 p-1 hover:bg-white/10 rounded text-xs text-slate-200 cursor-pointer"
+                      title="หมุนหน้ากระดาษ 90°"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Right: Print, Download, Fullscreen */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handlePrintPdf}
+                      className="p-1.5 hover:bg-white/10 rounded-lg text-slate-200 hover:text-white transition-colors cursor-pointer"
+                      title="พิมพ์เอกสาร PDF"
+                    >
+                      <Printer className="w-4 h-4" />
+                    </button>
+                    <a
+                      href="/documents/schedule_jre2027.pdf?v=2027"
+                      download="กำหนดการ_JRE2027.pdf"
+                      className="p-1.5 hover:bg-white/10 rounded-lg text-slate-200 hover:text-white transition-colors cursor-pointer"
+                      title="ดาวน์โหลดไฟล์ PDF"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setIsFullscreenModalOpen(true)}
+                      className="p-1.5 hover:bg-white/10 rounded-lg text-slate-200 hover:text-white transition-colors cursor-pointer"
+                      title="ขยายเต็มหน้าจอ"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Main PDF Workspace: Left Thumbnail Drawer + Center Document Canvas */}
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Left Thumbnail Sidebar */}
+                  {showPdfSidebar && (
+                    <div className="hidden sm:flex w-44 bg-[#282b2e] border-r border-black/40 flex-col items-center py-4 px-3 gap-4 overflow-y-auto shrink-0 select-none">
+                      {SCHEDULE_DOC_PAGES.map((docPage) => {
+                        const isActive = currentPage === docPage.page;
+                        return (
+                          <button
+                            key={docPage.page}
+                            type="button"
+                            onClick={() => scrollToPdfPage(docPage.page)}
+                            className="group flex flex-col items-center gap-1.5 w-full cursor-pointer"
+                          >
+                            <div
+                              className={`w-28 bg-white rounded overflow-hidden transition-all shadow-md ${
+                                isActive
+                                  ? 'ring-4 ring-[#8ab4f8] scale-[1.03]'
+                                  : 'opacity-75 group-hover:opacity-100 ring-1 ring-white/20'
+                              }`}
+                            >
+                              <img
+                                src={docPage.src}
+                                alt={`Thumbnail Page ${docPage.page}`}
+                                className="w-full h-auto block"
+                              />
+                            </div>
+                            <span
+                              className={`text-[11px] font-mono ${
+                                isActive ? 'text-[#8ab4f8] font-bold' : 'text-slate-300'
+                              }`}
+                            >
+                              {docPage.page}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Center Scrollable PDF Pages Viewport (#525659 Chrome PDF backdrop) */}
+                  <div
+                    ref={pdfScrollContainerRef}
+                    onScroll={handlePdfScroll}
+                    className="flex-1 overflow-y-auto overflow-x-auto p-3 sm:p-6 space-y-5 bg-[#525659]"
+                  >
+                    {SCHEDULE_DOC_PAGES.map((docPage) => (
+                      <div
+                        key={docPage.page}
+                        ref={(el) => { pdfPageRefs.current[docPage.page] = el; }}
+                        className="mx-auto flex flex-col items-center transition-all"
+                        style={{
+                          width: zoomPercent === 100 ? '100%' : `${zoomPercent}%`,
+                          maxWidth: zoomPercent <= 100 ? '794px' : 'none'
+                        }}
+                      >
+                        <div
+                          className="w-full bg-white shadow-[0_4px_24px_rgba(0,0,0,0.55)] overflow-hidden transition-transform duration-200"
+                          style={{
+                            transform: pdfRotation ? `rotate(${pdfRotation}deg)` : 'none'
+                          }}
+                        >
+                          <img
+                            src={docPage.src}
+                            alt={docPage.label}
+                            onClick={() => setIsFullscreenModalOpen(true)}
+                            className="w-full h-auto block select-none cursor-zoom-in"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>

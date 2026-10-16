@@ -935,22 +935,56 @@ export default function AnnouncementsView({
                 </div>
 
                 <div className="flex-1 w-full bg-slate-950 overflow-y-auto">
-                  {String(previewPdf.url).includes('schedule_jre2027.pdf') && pdfViewMode === 'web' ? (
-                    <div className="p-4 sm:p-6 space-y-5">
-                      {[1, 2, 3].map(pageNum => (
-                        <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-2xl border border-slate-700 max-w-3xl mx-auto">
-                          <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
-                            <span>หน้าที่ {pageNum} / 3 — {previewPdf.name || 'กำหนดการฝึก JRE 2027'}</span>
-                            <span className="text-emerald-400">อ่านบนหน้าเว็บ</span>
+                  {String(previewPdf.url).includes('schedule_jre2027.pdf') ? (
+                    pdfViewMode === 'web' ? (
+                      <div className="p-4 sm:p-6 space-y-5">
+                        {[1, 2, 3].map(pageNum => (
+                          <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-2xl border border-slate-700 max-w-3xl mx-auto">
+                            <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
+                              <span>หน้าที่ {pageNum} / 3 — {previewPdf.name || 'กำหนดการฝึก JRE 2027'}</span>
+                              <span className="text-emerald-400">อ่านบนหน้าเว็บ</span>
+                            </div>
+                            <img
+                              src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                              alt={`เอกสารหน้าที่ ${pageNum}`}
+                              className="w-full h-auto block select-none"
+                            />
                           </div>
-                          <img
-                            src={`/documents/schedule/schedule_page_${pageNum}.png`}
-                            alt={`เอกสารหน้าที่ ${pageNum}`}
-                            className="w-full h-auto block select-none"
-                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col bg-[#525659]">
+                        <div className="bg-[#323639] text-slate-100 px-4 py-2 flex items-center justify-between text-xs border-b border-black/40 shrink-0">
+                          <span className="font-mono">schedule_jre2027.pdf</span>
+                          <span className="font-mono bg-[#171717] px-2.5 py-0.5 rounded border border-white/15">
+                            1 - 3 / 3 หน้า
+                          </span>
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex-1 flex overflow-hidden">
+                          <div className="hidden sm:flex w-40 bg-[#282b2e] border-r border-black/40 flex-col items-center py-4 px-2 gap-4 overflow-y-auto shrink-0">
+                            {[1, 2, 3].map(p => (
+                              <a key={p} href={`#ann-pdf-p1-${p}`} className="flex flex-col items-center gap-1 w-full">
+                                <div className="w-24 bg-white rounded overflow-hidden ring-1 ring-white/20 hover:ring-2 hover:ring-[#8ab4f8]">
+                                  <img src={`/documents/schedule/schedule_page_${p}.png`} alt={`Page ${p}`} className="w-full h-auto block" />
+                                </div>
+                                <span className="text-[11px] font-mono text-slate-300">{p}</span>
+                              </a>
+                            ))}
+                          </div>
+                          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-[#525659]">
+                            {[1, 2, 3].map(pageNum => (
+                              <div key={pageNum} id={`ann-pdf-p1-${pageNum}`} className="max-w-3xl mx-auto bg-white shadow-[0_4px_24px_rgba(0,0,0,0.55)] overflow-hidden">
+                                <img
+                                  src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                                  alt={`เอกสารหน้าที่ ${pageNum}`}
+                                  className="w-full h-auto block select-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )
                   ) : (
                     <object
                       data={`${previewBlobUrl || previewPdf.url}#view=FitH`}
@@ -1515,22 +1549,56 @@ export default function AnnouncementsView({
 
               {/* PDF Viewer Body */}
               <div className="flex-1 w-full bg-slate-950 overflow-y-auto">
-                {String(previewPdf.url).includes('schedule_jre2027.pdf') && pdfViewMode === 'web' ? (
-                  <div className="p-4 sm:p-6 space-y-5">
-                    {[1, 2, 3].map(pageNum => (
-                      <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-2xl border border-slate-700 max-w-3xl mx-auto">
-                        <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
-                          <span>หน้าที่ {pageNum} / 3 — {previewPdf.name || 'กำหนดการฝึก JRE 2027'}</span>
-                          <span className="text-emerald-400">อ่านบนหน้าเว็บ</span>
+                {String(previewPdf.url).includes('schedule_jre2027.pdf') ? (
+                  pdfViewMode === 'web' ? (
+                    <div className="p-4 sm:p-6 space-y-5">
+                      {[1, 2, 3].map(pageNum => (
+                        <div key={pageNum} className="bg-white rounded-xl overflow-hidden shadow-2xl border border-slate-700 max-w-3xl mx-auto">
+                          <div className="bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 flex justify-between items-center border-b border-slate-800">
+                            <span>หน้าที่ {pageNum} / 3 — {previewPdf.name || 'กำหนดการฝึก JRE 2027'}</span>
+                            <span className="text-emerald-400">อ่านบนหน้าเว็บ</span>
+                          </div>
+                          <img
+                            src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                            alt={`เอกสารหน้าที่ ${pageNum}`}
+                            className="w-full h-auto block select-none"
+                          />
                         </div>
-                        <img
-                          src={`/documents/schedule/schedule_page_${pageNum}.png`}
-                          alt={`เอกสารหน้าที่ ${pageNum}`}
-                          className="w-full h-auto block select-none"
-                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex flex-col bg-[#525659]">
+                      <div className="bg-[#323639] text-slate-100 px-4 py-2 flex items-center justify-between text-xs border-b border-black/40 shrink-0">
+                        <span className="font-mono">schedule_jre2027.pdf</span>
+                        <span className="font-mono bg-[#171717] px-2.5 py-0.5 rounded border border-white/15">
+                          1 - 3 / 3 หน้า
+                        </span>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex-1 flex overflow-hidden">
+                        <div className="hidden sm:flex w-40 bg-[#282b2e] border-r border-black/40 flex-col items-center py-4 px-2 gap-4 overflow-y-auto shrink-0">
+                          {[1, 2, 3].map(p => (
+                            <a key={p} href={`#ann-pdf-p2-${p}`} className="flex flex-col items-center gap-1 w-full">
+                              <div className="w-24 bg-white rounded overflow-hidden ring-1 ring-white/20 hover:ring-2 hover:ring-[#8ab4f8]">
+                                <img src={`/documents/schedule/schedule_page_${p}.png`} alt={`Page ${p}`} className="w-full h-auto block" />
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-300">{p}</span>
+                            </a>
+                          ))}
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-[#525659]">
+                          {[1, 2, 3].map(pageNum => (
+                            <div key={pageNum} id={`ann-pdf-p2-${pageNum}`} className="max-w-3xl mx-auto bg-white shadow-[0_4px_24px_rgba(0,0,0,0.55)] overflow-hidden">
+                              <img
+                                src={`/documents/schedule/schedule_page_${pageNum}.png`}
+                                alt={`เอกสารหน้าที่ ${pageNum}`}
+                                className="w-full h-auto block select-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   <object
                     data={`${previewBlobUrl || previewPdf.url}#view=FitH`}
