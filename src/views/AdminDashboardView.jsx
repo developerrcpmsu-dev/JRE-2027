@@ -144,7 +144,7 @@ export default function AdminDashboardView({
 }) {
   const resolveInitialTab = (tab) => {
     if (tab === 'payment' || tab === 'payment_settings' || tab === 'finance') return 'payment_settings';
-    if (tab === 'shirts' || tab === 'shirt' || tab === 'merchandise' || tab === 'merch' || tab === 'orders') return 'merchandise';
+    if (tab === 'shirts' || tab === 'shirt' || tab === 'merchandise' || tab === 'merch' || tab === 'orders' || tab === 'shirt-roster' || tab === 'shirt-print' || tab === 'roster') return 'merchandise';
     if (tab === 'users' || tab === 'accounts') return 'users';
     if (tab === 'forms' || tab === 'tests' || tab === 'evaluations') return 'forms';
     if (tab === 'announcements' || tab === 'news' || tab === 'posts') return 'announcements';
@@ -172,6 +172,9 @@ export default function AdminDashboardView({
       }
       if (initialTab === 'scanner' || initialTab === 'qr') {
         setShowUniversalScanner(true);
+      }
+      if (initialTab === 'shirt-roster' || initialTab === 'shirt-print' || initialTab === 'roster') {
+        setShowShirtPrintModal(true);
       }
     }
   }, [initialTab]);
@@ -293,7 +296,24 @@ export default function AdminDashboardView({
   const [showUniversalScanner, setShowUniversalScanner] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showIDCardScanner, setShowIDCardScanner] = useState(false);
-  const [showShirtPrintModal, setShowShirtPrintModal] = useState(false);
+  const [showShirtPrintModal, setShowShirtPrintModal] = useState(() => (
+    initialTab === 'shirt-roster' || initialTab === 'shirt-print' || initialTab === 'roster'
+  ));
+
+  const handleOpenShirtPrintModal = () => {
+    setShowShirtPrintModal(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/admin/shirt-roster') {
+      window.history.pushState({ mainTab: 'admin', subRoute: 'shirt-roster' }, '', '/admin/shirt-roster');
+    }
+  };
+
+  const handleCloseShirtPrintModal = () => {
+    setShowShirtPrintModal(false);
+    if (typeof window !== 'undefined' && window.location.pathname.includes('shirt-roster')) {
+      const fallbackPath = activeTab === 'merchandise' ? '/admin/shirts' : '/admin/applicants';
+      window.history.pushState({ mainTab: 'admin', subRoute: activeTab === 'merchandise' ? 'shirts' : 'applicants' }, '', fallbackPath);
+    }
+  };
   const [merchSearchQuery, setMerchSearchQuery] = useState('');
   const [merchStatusFilter, setMerchStatusFilter] = useState('all');
   const [merchSourceFilter, setMerchSourceFilter] = useState('all'); // 'all', 'registration', 'merchandise'
@@ -433,7 +453,7 @@ export default function AdminDashboardView({
         order_number: orderNumber,
         first_name: firstName,
         last_name: lastName,
-        customer_name: r.full_name_affiliation || `${firstName} ${lastName}`.trim() || r.user_email || 'ผู้สมัคร JRE 2027',
+        customer_name: `${firstName} ${lastName}`.trim() || r.full_name_affiliation || r.user_email || 'ผู้สมัคร JRE 2027',
         nickname: r.nickname || '-',
         callsign: r.callsign || '-',
         institution: r.institution || '-',
@@ -4387,11 +4407,11 @@ export default function AdminDashboardView({
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowShirtPrintModal(true)}
+                  onClick={handleOpenShirtPrintModal}
                   className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>พิมพ์ใบสรุปยอดเสื้อแยกมหาลัย</span>
+                  <span>พิมพ์ใบเซ็นชื่อรับเสื้อแยกสถาบัน (/admin/shirt-roster)</span>
                 </button>
                 {(uniFilter !== 'all' || genderFilter !== 'all' || roleFilter !== 'all' || filterType !== 'all') && (
                   <button
@@ -9392,12 +9412,12 @@ export default function AdminDashboardView({
 
               <button
                 type="button"
-                onClick={() => setShowShirtPrintModal(true)}
+                onClick={handleOpenShirtPrintModal}
                 className="px-4 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/40 border border-blue-400/40 transition-all active:scale-95 cursor-pointer"
-                title="พิมพ์รายงานสรุปยอดสั่งเสื้อฝึก และส่งออกเป็นเอกสาร PDF A4"
+                title="เปิดหน้าเอกสารใบเซ็นชื่อรับเสื้อแยกสถาบัน (/admin/shirt-roster) และส่งออกเป็น PDF A4"
               >
                 <Printer className="w-4 h-4 text-white" />
-                <span>พิมพ์รายงาน PDF / พริ้นท์หน้านี้</span>
+                <span>พิมพ์ใบเซ็นชื่อรับเสื้อ / PDF (/admin/shirt-roster)</span>
               </button>
 
               <button
@@ -13959,7 +13979,7 @@ export default function AdminDashboardView({
       {showShirtPrintModal && (
         <ShirtOrderPrintModal
           isOpen={showShirtPrintModal}
-          onClose={() => setShowShirtPrintModal(false)}
+          onClose={handleCloseShirtPrintModal}
           sizeStats={sizeStats}
           universitySummary={universitySummary}
           sizeMeasurements={SIZE_MEASUREMENTS}

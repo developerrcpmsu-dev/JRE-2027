@@ -9,7 +9,9 @@ import {
   Check,
   Building,
   QrCode,
-  Camera
+  Camera,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import ModalPortal from './ModalPortal';
@@ -36,18 +38,52 @@ export default function ShirtOrderPrintModal({
 }) {
   const [printScope, setPrintScope] = useState('filtered'); // 'all' or 'filtered'
   const [groupByInstitution, setGroupByInstitution] = useState(true);
+  const [includeRoomCol, setIncludeRoomCol] = useState(true);
   const [includeSummaryTable, setIncludeSummaryTable] = useState(true);
   const [includeUniversityTable, setIncludeUniversityTable] = useState(true);
   const [includeQrCol, setIncludeQrCol] = useState(true);
   const [includeSignatureCol, setIncludeSignatureCol] = useState(true);
   const [includeFinancialSummary, setIncludeFinancialSummary] = useState(true);
   const [qrMap, setQrMap] = useState({});
+  const [copiedUrl, setCopiedUrl] = useState(false);
+
+  // Add body class so @media print hides #root completely and avoids blank leading pages
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return;
+    document.body.classList.add('shirt-print-modal-active');
+    return () => {
+      document.body.classList.remove('shirt-print-modal-active');
+    };
+  }, [isOpen]);
 
   const targetItems = useMemo(() => {
     return printScope === 'all' ? allItems : filteredItems;
   }, [printScope, allItems, filteredItems]);
 
   const isFilteredScope = printScope === 'filtered';
+
+  // Sort helper: Male ('ชาย') first -> Female ('หญิง') -> Unspecified, then Participant -> Staff, then Room -> Name
+  const sortItemsMaleToFemale = (list) => {
+    const rankGender = (g) => (g === 'ชาย' ? 1 : g === 'หญิง' ? 2 : 3);
+    return [...list].sort((a, b) => {
+      const gA = a.gender || resolveGender(a.rawRegistration || a);
+      const gB = b.gender || resolveGender(b.rawRegistration || b);
+      if (rankGender(gA) !== rankGender(gB)) {
+        return rankGender(gA) - rankGender(gB);
+      }
+      const sA = Boolean(a.is_staff !== undefined ? a.is_staff : isStaffRegistration(a.rawRegistration || a));
+      const sB = Boolean(b.is_staff !== undefined ? b.is_staff : isStaffRegistration(b.rawRegistration || b));
+      if (sA !== sB) return sA ? 1 : -1;
+      const rA = (a.room_assigned && a.room_assigned !== '-') ? a.room_assigned : (a.rawRegistration?.room_assigned && a.rawRegistration?.room_assigned !== '-' ? a.rawRegistration.room_assigned : '');
+      const rB = (b.room_assigned && b.room_assigned !== '-') ? b.room_assigned : (b.rawRegistration?.room_assigned && b.rawRegistration?.room_assigned !== '-' ? b.rawRegistration.room_assigned : '');
+      if (rA !== rB) {
+        if (rA && !rB) return -1;
+        if (!rA && rB) return 1;
+        return String(rA).localeCompare(String(rB), 'th', { numeric: true });
+      }
+      return String(a.customer_name || '').localeCompare(String(b.customer_name || ''), 'th');
+    });
+  };
 
   // Generate per-person QR codes for scanning shirt handover
   useEffect(() => {
@@ -134,14 +170,31 @@ export default function ShirtOrderPrintModal({
 
     return sortedTags.map((tag, groupIdx) => ({
       ...groupsByTag[tag],
+      items: sortItemsMaleToFemale(groupsByTag[tag].items),
       institutionIndex: groupIdx + 1
     }));
+  }, [targetItems]);
+
+  const sortedFlatItems = useMemo(() => {
+    return sortItemsMaleToFemale(targetItems);
   }, [targetItems]);
 
   if (!isOpen) return null;
 
   const handleTriggerPrint = () => {
     window.print();
+  };
+
+  const dedicatedUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/admin/shirt-roster`
+    : '/admin/shirt-roster';
+
+  const handleCopyDedicatedUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(dedicatedUrl);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2500);
+    } catch (e) {}
   };
 
   const currentDateStr = new Date().toLocaleDateString('th-TH', {
@@ -162,33 +215,37 @@ export default function ShirtOrderPrintModal({
   const targetPendingCount = targetItems.length - targetReceivedCount;
 
   const renderRosterTable = (itemsList, showUniCol = false) => {
-    const totalCols = 9 + (showUniCol ? 1 : 0) + (includeQrCol ? 1 : 0) + (includeSignatureCol ? 1 : 0);
+    const totalCols = 8 + (showUniCol ? 1 : 0) + (includeRoomCol ? 1 : 0) + (includeQrCol ? 1 : 0) + (includeSignatureCol ? 1 : 0);
 
     return (
-      <table className="w-full border-collapse border border-slate-400 text-[10px]">
+      <table className="w-full border-collapse border border-slate-400 text-[10px] table-auto">
         <thead>
           <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-400">
             <th className="border border-slate-300 py-1.5 px-1 text-center w-8">ลำดับ</th>
             {showUniCol && (
-              <th className="border border-slate-300 py-1.5 px-1.5 text-left w-20">สถาบัน</th>
+              <th className="border border-slate-300 py-1.5 px-1.5 text-left w-16">สถาบัน</th>
             )}
             <th className="border border-slate-300 py-1.5 px-2 text-left">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-            <th className="border border-slate-300 py-1.5 px-1 text-center w-10">เพศ</th>
-            <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">ประเภท</th>
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-11">เพศ</th>
+            {includeRoomCol && (
+              <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20 bg-amber-50/70">
+                ห้องพัก / กลุ่มฝึก
+              </th>
+            )}
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-16">ประเภท</th>
             <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20">เบอร์โทรศัพท์</th>
             <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">ไซส์เสื้อ</th>
-            <th className="border border-slate-300 py-1.5 px-1 text-center w-8">จน.</th>
-            <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">การชำระ</th>
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-16">การชำระ</th>
             {includeQrCol && (
               <th className="border border-slate-300 py-1.5 px-1 text-center w-20 bg-indigo-50/60">
                 QR สแกนรับเสื้อ
               </th>
             )}
-            <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20">
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-20">
               สถานะรับเสื้อ
             </th>
             {includeSignatureCol && (
-              <th className="border border-slate-300 py-1.5 px-2 text-center w-32 bg-slate-50">
+              <th className="border border-slate-300 py-1.5 px-2 text-center w-28 bg-slate-50">
                 ลายมือชื่อผู้รับเสื้อ
               </th>
             )}
@@ -209,6 +266,12 @@ export default function ShirtOrderPrintModal({
               const genderLabel = item.gender || resolveGender(item.rawRegistration || item);
               const isStaff = item.is_staff !== undefined ? item.is_staff : isStaffRegistration(item.rawRegistration || item);
               const customNote = item.custom_shirt_note || item.rawRegistration?.custom_shirt_note || '';
+              const rawRoom = (item.room_assigned && item.room_assigned !== '-')
+                ? item.room_assigned
+                : (item.rawRegistration?.room_assigned && item.rawRegistration?.room_assigned !== '-' ? item.rawRegistration.room_assigned : '');
+              const rawGroup = (item.group_assigned && item.group_assigned !== '-')
+                ? item.group_assigned
+                : (item.rawRegistration?.group_assigned && item.rawRegistration?.group_assigned !== '-' ? item.rawRegistration.group_assigned : '');
               const itemKey = item.id || item.order_number || item.user_id || idx;
               const qrEntry = qrMap[itemKey];
               const qrCodeText = item.order_number || `JRE27-SHIRT-${String(item.user_id || item.id || '').slice(0, 8).toUpperCase()}`;
@@ -218,7 +281,7 @@ export default function ShirtOrderPrintModal({
                   key={itemKey}
                   className={`hover:bg-slate-50 print-avoid-break ${isReceived ? 'bg-emerald-50/30' : ''}`}
                 >
-                  {/* 1, 2, 3, 4... sequential index */}
+                  {/* Sequential index */}
                   <td className="border border-slate-300 py-1.5 px-1 text-center font-mono font-black text-slate-900">
                     {idx + 1}
                   </td>
@@ -230,7 +293,7 @@ export default function ShirtOrderPrintModal({
                   )}
 
                   {/* Full Name & Nickname & Callsign */}
-                  <td className="border border-slate-300 py-1.5 px-2 text-slate-900">
+                  <td className="border border-slate-300 py-1.5 px-2 text-slate-900 break-words max-w-[180px]">
                     <div className="font-bold leading-snug">
                       {item.customer_name || '-'}
                       {item.nickname && item.nickname !== '-' && (
@@ -244,15 +307,45 @@ export default function ShirtOrderPrintModal({
                     )}
                   </td>
 
-                  {/* Gender */}
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-semibold text-slate-800">
-                    {genderLabel || '-'}
+                  {/* Gender (Sorted Male -> Female) */}
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold">
+                    {genderLabel === 'ชาย' ? (
+                      <span className="text-sky-800">ชาย</span>
+                    ) : genderLabel === 'หญิง' ? (
+                      <span className="text-pink-800">หญิง</span>
+                    ) : (
+                      <span className="text-slate-600">{genderLabel || '-'}</span>
+                    )}
                   </td>
+
+                  {/* Room & Group Assigned */}
+                  {includeRoomCol && (
+                    <td className="border border-slate-300 py-1.5 px-1.5 text-center bg-amber-50/30">
+                      {rawRoom ? (
+                        <span className="font-black font-mono text-[10.5px] text-slate-950 block leading-tight">
+                          {rawRoom}
+                        </span>
+                      ) : uniShort === 'มมส' ? (
+                        <span className="text-[9px] text-slate-500 block leading-tight">
+                          มมส (ไม่พักหอ)
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-slate-400 block leading-tight">
+                          รอจัดห้อง
+                        </span>
+                      )}
+                      {rawGroup && (
+                        <span className="text-[8.5px] text-indigo-800 font-bold block leading-tight mt-0.5">
+                          กลุ่ม: {rawGroup}
+                        </span>
+                      )}
+                    </td>
+                  )}
 
                   {/* Role / Type */}
                   <td className="border border-slate-300 py-1.5 px-1 text-center text-[9px] font-bold">
                     {isStaff ? (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300">
+                      <span className="px-1 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300 inline-block">
                         Staff (280฿)
                       </span>
                     ) : (
@@ -263,24 +356,25 @@ export default function ShirtOrderPrintModal({
                   </td>
 
                   {/* Phone */}
-                  <td className="border border-slate-300 py-1.5 px-1.5 text-center font-mono text-slate-800">
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-slate-800">
                     {item.phone || '-'}
                   </td>
 
-                  {/* Shirt Size + Custom Note */}
+                  {/* Shirt Size + Custom Note + Quantity */}
                   <td className="border border-slate-300 py-1.5 px-1.5 text-center bg-slate-50">
                     {(() => {
                       const rawSz = String(item.size || item.normalized_size || '').trim();
+                      const qtySuffix = (item.quantity && item.quantity > 1) ? ` (x${item.quantity})` : '';
                       const isOther = !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(rawSz.toUpperCase());
                       if (isOther) {
                         if (customNote) {
                           return (
                             <>
                               <span className="font-black font-mono text-[10.5px] text-slate-950 block">
-                                {customNote}
+                                {customNote}{qtySuffix}
                               </span>
                               <span className="text-[8px] text-slate-600 block leading-tight">
-                                (ไซส์พิเศษที่ระบุ)
+                                (ไซส์ที่ระบุ)
                               </span>
                             </>
                           );
@@ -288,20 +382,20 @@ export default function ShirtOrderPrintModal({
                         if (rawSz && rawSz !== 'อื่นๆ' && rawSz.toUpperCase() !== 'OTHER') {
                           return (
                             <span className="font-black font-mono text-[10.5px] text-slate-950 block">
-                              {rawSz}
+                              {rawSz}{qtySuffix}
                             </span>
                           );
                         }
                         return (
                           <span className="font-black font-mono text-[10px] text-rose-700 block">
-                            อื่นๆ (รอระบุ)
+                            อื่นๆ (รอระบุ){qtySuffix}
                           </span>
                         );
                       }
                       return (
                         <>
                           <span className="font-black font-mono text-xs text-slate-950 block">
-                            {rawSz.toUpperCase()}
+                            {rawSz.toUpperCase()}{qtySuffix}
                           </span>
                           {customNote && (
                             <span className="text-[8.5px] text-slate-600 font-semibold block leading-tight mt-0.5">
@@ -311,11 +405,6 @@ export default function ShirtOrderPrintModal({
                         </>
                       );
                     })()}
-                  </td>
-
-                  {/* Quantity */}
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono font-bold text-slate-900">
-                    {item.quantity || 1}
                   </td>
 
                   {/* Payment Status */}
@@ -423,19 +512,43 @@ export default function ShirtOrderPrintModal({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2 flex-wrap">
-                <span>พิมพ์ใบเซ็นชื่อรับเสื้อแยกตามสถาบัน (1, 2, 3...) & ระบบสแกน QR รายคน</span>
+                <span>พิมพ์ใบเซ็นชื่อรับเสื้อแยกตามสถาบัน & ระบบสแกน QR รายคน</span>
                 <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">
                   A4 Print / Save as PDF
                 </span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold border border-amber-500/30">
+                  URL: /admin/shirt-roster
+                </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                เรียงลำดับ 1, 2, 3, 4... แยกตามสถาบัน พร้อม QR Code ประจำตัวแต่ละคนให้ Admin สแกนติ๊กรับเสื้อและมีช่องเซ็นชื่อครบถ้วน
+                เรียงรายชื่อแยกตามสถาบัน (ชาย ➔ หญิง) พร้อมข้อมูลห้องพัก, QR Code สแกนรับเสื้อ และช่องลงลายมือชื่อครบถ้วน
               </p>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={handleCopyDedicatedUrl}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-amber-500/30 transition-all cursor-pointer"
+              title="คัดลอกลิงก์ URL หน้าเอกสารใบเซ็นชื่อรับเสื้อแยกออกมาโดยเฉพาะ (/admin/shirt-roster)"
+            >
+              {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedUrl ? '✓ คัดลอก URL แล้ว' : '🔗 คัดลอก URL เอกสาร'}</span>
+            </button>
+
+            <a
+              href="/admin/shirt-roster"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-sky-500/30 transition-all cursor-pointer"
+              title="เปิดหน้าเอกสารนี้แยกออกมาในแท็บใหม่ (/admin/shirt-roster)"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>เปิดหน้าแยก (แท็บใหม่)</span>
+            </a>
+
             {onOpenScanner && (
               <button
                 type="button"
@@ -511,10 +624,20 @@ export default function ShirtOrderPrintModal({
                 onChange={e => setGroupByInstitution(e.target.checked)}
                 className="rounded border-slate-700 text-amber-500 focus:ring-0 cursor-pointer"
               />
-              <span>เรียงแยกตามสถาบัน (1, 2, 3... รายสถาบัน)</span>
+              <span>เรียงแยกตามสถาบัน (ชาย ➔ หญิง)</span>
             </label>
 
             {/* Toggles */}
+            <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
+              <input
+                type="checkbox"
+                checked={includeRoomCol}
+                onChange={e => setIncludeRoomCol(e.target.checked)}
+                className="rounded border-slate-700 text-purple-600 focus:ring-0 cursor-pointer"
+              />
+              <span>แสดงห้องพัก</span>
+            </label>
+
             <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
               <input
                 type="checkbox"
@@ -810,11 +933,11 @@ export default function ShirtOrderPrintModal({
               </div>
             )}
 
-            {/* SECTION 2: PARTICIPANTS ORDER, QR SCAN & SIGNATURE ROSTER GROUPED BY INSTITUTION (1, 2, 3...) */}
+            {/* SECTION 2: PARTICIPANTS ORDER, QR SCAN & SIGNATURE ROSTER GROUPED BY INSTITUTION */}
             <div className="space-y-5">
               <div className="flex items-center justify-between border-b-2 border-slate-800 pb-1.5">
                 <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
-                  บัญชีรายชื่อผู้รับเสื้อฝึกและการลงลายมือชื่อรับเสื้อ ({groupByInstitution ? 'แยกตามสถาบัน ลำดับ 1, 2, 3...' : 'เรียงรวมต่อเนื่อง'}) — รวม {targetItems.length} คน
+                  บัญชีรายชื่อผู้รับเสื้อฝึกและการลงลายมือชื่อรับเสื้อ ({groupByInstitution ? 'แยกตามสถาบัน • เรียงชาย ➔ หญิง' : 'เรียงรวมทั้งหมด • ชาย ➔ หญิง'}) — รวม {targetItems.length} คน
                 </h3>
                 <span className="text-[10px] text-slate-600 font-semibold">
                   {isFilteredScope ? `ตัวกรอง: ${currentFilterLabel}` : 'แสดงผู้สั่งเสื้อทั้งหมด'}
@@ -863,30 +986,38 @@ export default function ShirtOrderPrintModal({
                   ))
                 )
               ) : (
-                renderRosterTable(targetItems, true)
+                renderRosterTable(sortedFlatItems, true)
               )}
             </div>
 
             {/* DOCUMENT FOOTER & OFFICIAL SIGN-OFF */}
             <div className="pt-6 border-t border-slate-300 print-avoid-break">
               <div className="grid grid-cols-2 gap-8 text-center text-xs">
-                <div className="space-y-10">
+                <div className="space-y-8 overflow-hidden px-2">
                   <p className="font-semibold text-slate-700">ผู้จัดพิมพ์และสรุปรายงานข้อมูล</p>
-                  <div>
-                    <p className="text-slate-400 font-mono">...........................................................................</p>
-                    <p className="font-bold text-slate-900 mt-1">( ........................................................................... )</p>
-                    <p className="text-[11px] text-slate-600 mt-0.5">ฝ่ายธุรการและพัสดุ JRE 2027</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">วันที่ ........ / ........ / .............</p>
+                  <div className="space-y-1.5">
+                    <div className="w-48 max-w-[80%] mx-auto border-b border-dotted border-slate-500 h-4" />
+                    <div className="flex items-center justify-center gap-1 font-bold text-slate-900">
+                      <span>(</span>
+                      <span className="inline-block w-44 max-w-[75%] border-b border-dotted border-slate-500 h-3.5" />
+                      <span>)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 pt-0.5">ฝ่ายธุรการและพัสดุ JRE 2027</p>
+                    <p className="text-[10px] text-slate-500">วันที่ ........ / ........ / .............</p>
                   </div>
                 </div>
 
-                <div className="space-y-10">
+                <div className="space-y-8 overflow-hidden px-2">
                   <p className="font-semibold text-slate-700">ผู้ตรวจสอบและรับรองยอดส่งมอบ</p>
-                  <div>
-                    <p className="text-slate-400 font-mono">...........................................................................</p>
-                    <p className="font-bold text-slate-900 mt-1">( ........................................................................... )</p>
-                    <p className="text-[11px] text-slate-600 mt-0.5">หัวหน้าฝ่ายอำนวยการ / ประธานโครงการ</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">วันที่ ........ / ........ / .............</p>
+                  <div className="space-y-1.5">
+                    <div className="w-48 max-w-[80%] mx-auto border-b border-dotted border-slate-500 h-4" />
+                    <div className="flex items-center justify-center gap-1 font-bold text-slate-900">
+                      <span>(</span>
+                      <span className="inline-block w-44 max-w-[75%] border-b border-dotted border-slate-500 h-3.5" />
+                      <span>)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 pt-0.5">หัวหน้าฝ่ายอำนวยการ / ประธานโครงการ</p>
+                    <p className="text-[10px] text-slate-500">วันที่ ........ / ........ / .............</p>
                   </div>
                 </div>
               </div>

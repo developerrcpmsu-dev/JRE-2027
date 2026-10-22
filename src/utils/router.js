@@ -85,6 +85,11 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'catering', canonicalPath: '/admin/catering' };
   }
 
+  // Standalone shortcut for Shirt Roster & Signature Print Document
+  if (first === 'shirt-roster' || first === 'shirt-print' || first === 'print-shirts') {
+    return { mainTab: 'admin', subRoute: 'shirt-roster', canonicalPath: '/admin/shirt-roster' };
+  }
+
   // Standalone shortcuts for announcements
   if (first === 'pr') {
     const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
@@ -136,6 +141,11 @@ export function parseCurrentRoute() {
       'merch': 'shirts',
       'orders': 'shirts',
 
+      'shirt-roster': 'shirt-roster',
+      'shirt-print': 'shirt-roster',
+      'print-shirts': 'shirt-roster',
+      'roster': 'shirt-roster',
+
       'payment': 'payment',
       'payments': 'payment',
       'payment_settings': 'payment',
@@ -176,6 +186,7 @@ export function parseCurrentRoute() {
     
     let canonicalPath = '/admin';
     if (targetSub === 'shirts') canonicalPath = '/admin/shirts';
+    else if (targetSub === 'shirt-roster') canonicalPath = '/admin/shirt-roster';
     else if (targetSub === 'payment') canonicalPath = '/admin/payment';
     else if (targetSub === 'forms') canonicalPath = '/admin/forms';
     else if (targetSub === 'announcements') canonicalPath = '/admin/announcements';
@@ -262,6 +273,7 @@ export function getPathForRoute(mainTab, subRoute) {
       return '/merchandise';
     case 'admin':
       if (subRoute === 'payment' || subRoute === 'payment_settings' || subRoute === 'finance') return '/admin/payment';
+      if (subRoute === 'shirt-roster' || subRoute === 'shirt-print' || subRoute === 'print-shirts' || subRoute === 'roster') return '/admin/shirt-roster';
       if (subRoute === 'shirts' || subRoute === 'merchandise' || subRoute === 'shirt' || subRoute === 'merch') return '/admin/shirts';
       if (subRoute === 'forms' || subRoute === 'tests' || subRoute === 'evaluations') return '/admin/forms';
       if (subRoute === 'announcements' || subRoute === 'news' || subRoute === 'posts') return '/admin/announcements';

@@ -89,6 +89,22 @@ body.modal-scroll-locked {
   }
 
   /* Make modal portal and printable report container visible and unclipped for multi-page print */
+  body.shirt-print-modal-active > *:not(.modal-portal-wrapper) {
+    display: none !important;
+  }
+
+  body.shirt-print-modal-active > .modal-portal-wrapper {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    visibility: visible !important;
+  }
+
   .modal-portal-wrapper,
   .modal-portal-wrapper * {
     visibility: visible !important;
@@ -97,6 +113,7 @@ body.modal-scroll-locked {
   .modal-portal-wrapper,
   .print-scroll-wrapper,
   .print-modal-root {
+    display: block !important;
     position: static !important;
     overflow: visible !important;
     height: auto !important;
