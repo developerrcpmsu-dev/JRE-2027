@@ -150,6 +150,7 @@ export default function MerchandiseView({
       total_amount: fee.totalFee,
       is_msu: isMsu,
       shirt_size: myRegistration.shirt_size || 'L',
+      custom_shirt_note: myRegistration.custom_shirt_note || '',
       callsign: myRegistration.callsign || '-',
       nickname: myRegistration.nickname || '-',
       institution: myRegistration.institution || '-',
@@ -558,7 +559,7 @@ export default function MerchandiseView({
                       ✓ มีรายการสั่งเสื้อในใบสมัครแล้ว
                     </span>
                     <span className="text-xs text-white font-black">
-                      ไซส์ {myRegistration.shirt_size || 'L'}
+                      ไซส์ {myRegistration.shirt_size || 'L'}{myRegistration.custom_shirt_note ? ` (${myRegistration.custom_shirt_note})` : ''}
                     </span>
                   </div>
                   <p className="text-xs text-slate-300 mt-0.5">
@@ -724,7 +725,7 @@ export default function MerchandiseView({
                       <div>
                         <span className="text-[10px] text-slate-400 block font-medium">ขนาดไซส์เสื้อ:</span>
                         <strong className="text-base text-amber-300 font-black tracking-wide">
-                          ไซส์ {applicantShirtOrder.shirt_size}
+                          ไซส์ {applicantShirtOrder.shirt_size}{applicantShirtOrder.custom_shirt_note ? ` (${applicantShirtOrder.custom_shirt_note})` : ''}
                         </strong>
                       </div>
                     </div>
@@ -1347,7 +1348,7 @@ function ProductCardShowcase({
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="text-xs text-white">
-                  ท่านสั่งจอง: <strong className="text-amber-300 font-bold">ไซส์ {myRegistration?.shirt_size || 'L'}</strong> ในใบสมัครแล้ว
+                  ท่านสั่งจอง: <strong className="text-amber-300 font-bold">ไซส์ {myRegistration?.shirt_size || 'L'}{myRegistration?.custom_shirt_note ? ` (${myRegistration.custom_shirt_note})` : ''}</strong> ในใบสมัครแล้ว
                 </span>
               </div>
               <span className="text-[10px] text-emerald-400 font-bold">รวมในค่าสมัครแล้ว</span>

@@ -1749,27 +1749,20 @@ export default function AdminDashboardView({
     }
   };
 
-  // --- Handlers for Applicants ---
+  // --- Handlers for Applicants (Inline table edit ONLY edits Group & Room; Shirt Size is edited in Profile Modal or Shirt Management tab to prevent accidental wrong-person edits) ---
   const handleStartEditAllocation = (reg) => {
     setEditingUserId(reg.user_id);
     setAllocGroup(reg.group_assigned || '');
     setAllocRoom(reg.room_assigned || '');
-    const normSz = normalizeSize(reg.shirt_size || 'L');
-    setAllocShirtSize(['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normSz) ? normSz : 'อื่นๆ');
-    setAllocCustomShirtNote(reg.custom_shirt_note || (!['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].includes(normSz) ? reg.shirt_size : '') || '');
   };
 
   const handleSaveAllocation = async (userId) => {
-    const finalSize = allocShirtSize === 'อื่นๆ' ? 'อื่นๆ' : (allocShirtSize.trim() || 'L');
-    const finalCustomNote = (allocCustomShirtNote || '').trim();
     await onUpdateAllocation(userId, {
       group_assigned: allocGroup.trim(),
-      room_assigned: allocRoom.trim(),
-      shirt_size: finalSize,
-      custom_shirt_note: finalCustomNote
+      room_assigned: allocRoom.trim()
     });
     setEditingUserId(null);
-    triggerToast(`บันทึกการจัดสรรกลุ่ม ห้องพัก และไซส์เสื้อ (${finalSize}${finalCustomNote ? ` • ${finalCustomNote}` : ''}) เรียบร้อย`);
+    triggerToast('บันทึกการจัดสรรกลุ่มและห้องพักเรียบร้อย');
   };
 
   // Direct handler for Admin to specify/update a person's shirt size (locked behind edit/save UI)
@@ -4764,12 +4757,12 @@ export default function AdminDashboardView({
                                       ? 'bg-rose-500/25 text-rose-200 border-rose-400/70 ring-1 ring-rose-400/40 animate-pulse'
                                       : 'bg-purple-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400'
                                   }`}
-                                  title="ล็อกป้องกันการกดเปลี่ยนโดยไม่ตั้งใจ — คลิกเพื่อดูรายละเอียด หรือกดปุ่ม ✏️ แก้ไข แล้วกดบันทึก"
+                                  title="🔒 ป้องกันการเผลอกดเปลี่ยนไซส์ที่หน้าแรก — คลิกเพื่อเปิดหน้าดูประวัติของบุคคลนี้หากต้องการแก้ไขไซส์เสื้อ"
                                 >
                                   <span>
                                     👕 ไซส์ {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size))
                                       ? normalizeSize(reg.shirt_size)
-                                      : `อื่นๆ${reg.custom_shirt_note ? ` (${reg.custom_shirt_note})` : (reg.shirt_size && reg.shirt_size !== 'อื่นๆ' ? ` (${reg.shirt_size})` : ' (รอระบุไซส์จริง)')}`}
+                                      : `อื่นๆ${reg.custom_shirt_note ? ` (${reg.custom_shirt_note})` : (reg.shirt_size && reg.shirt_size !== 'อื่นๆ' ? ` (${reg.shirt_size})` : ' (คลิกระบุไซส์จริง)')}`}
                                   </span>
                                 </span>
                                 {reg.custom_shirt_note && ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) && (
@@ -5058,23 +5051,17 @@ export default function AdminDashboardView({
                                 placeholder="เช่น หอนอน 1 ห้อง 204"
                                 className="w-40 px-2.5 py-1.5 bg-slate-950 border border-amber-500 rounded-lg text-xs text-white focus:outline-none block"
                               />
-                              <select
-                                value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(allocShirtSize)) ? normalizeSize(allocShirtSize) : 'อื่นๆ'}
-                                onChange={e => setAllocShirtSize(e.target.value)}
-                                className="w-40 px-2 py-1 bg-slate-950 border border-purple-500 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none block"
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingUserId(null);
+                                  handleOpenProfileModal(reg, 'info');
+                                }}
+                                className="w-40 px-2 py-1 bg-slate-900 hover:bg-purple-950/60 border border-purple-500/40 rounded-lg text-[10px] text-purple-300 font-semibold text-left cursor-pointer transition-colors block"
+                                title="ป้องกันการกดเปลี่ยนไซส์ผิดคนในตารางหน้าแรก — คลิกเพื่อไปแก้ไขไซส์เสื้อในหน้าประวัติของคนนี้"
                               >
-                                {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
-                                  <option key={sz} value={sz}>👕 ไซส์ {sz}</option>
-                                ))}
-                                <option value="อื่นๆ">👕 อื่นๆ (ไซส์สั่งตัดพิเศษ)</option>
-                              </select>
-                              <input
-                                type="text"
-                                value={allocCustomShirtNote}
-                                onChange={e => setAllocCustomShirtNote(e.target.value)}
-                                placeholder="ระบุไซส์พิเศษ เช่น 6XL อก 52"
-                                className="w-40 px-2 py-1 bg-slate-950 border border-rose-500/60 rounded-lg text-[10px] text-amber-200 focus:outline-none block"
-                              />
+                                🔒 เปลี่ยนไซส์เสื้อที่ &ldquo;ดูประวัติ&rdquo;
+                              </button>
                             </div>
                           ) : (
                             <span className={reg.room_assigned ? 'font-bold text-amber-300' : 'text-slate-500 italic'}>
@@ -5853,18 +5840,51 @@ export default function AdminDashboardView({
                       </div>
 
                       {/* Locked-by-default Per-Person Shirt Size & Custom Size Note Selector */}
-                      <div className="sm:col-span-8 space-y-2">
-                        <div className="flex items-center justify-between flex-wrap gap-1">
-                          <label className="block text-[11px] font-bold text-amber-300">
-                            👕 ไซส์เสื้อฝึกปฏิบัติการ {isEditingProfileModal ? '(เลือกไซส์แล้วกดปุ่ม "บันทึกข้อมูลและหมายเหตุ" ด้านล่าง)' : '(🔒 ล็อกป้องกันกดโดน — กดปลดล็อกด้านล่างเพื่อแก้ไข)'}:
-                          </label>
-                          <span className="text-[10px] text-slate-400">
-                            ปัจจุบัน: <strong className="text-white font-mono">{modalShirtSize || profileModalReg.shirt_size || '-'}</strong>
-                            {(modalCustomShirtNote || profileModalReg.custom_shirt_note) && (
-                              <span className="text-amber-300 ml-1">({modalCustomShirtNote || profileModalReg.custom_shirt_note})</span>
-                            )}
-                          </span>
+                      <div className="sm:col-span-8 space-y-2.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div>
+                            <label className="block text-[11px] font-bold text-amber-300">
+                              👕 ไซส์เสื้อฝึกปฏิบัติการ {isEditingProfileModal ? '(โหมดแก้ไข — เลือกไซส์/พิมพ์ระบุไซส์อื่นๆ แล้วกดบันทึก)' : '(🔒 ล็อกป้องกันกดโดนโดยไม่ตั้งใจ)'}:
+                            </label>
+                            <span className="text-[10px] text-slate-400">
+                              ปัจจุบัน: <strong className="text-white font-mono">{modalShirtSize || profileModalReg.shirt_size || '-'}</strong>
+                              {(modalCustomShirtNote || profileModalReg.custom_shirt_note) && (
+                                <span className="text-amber-300 ml-1 font-bold">({modalCustomShirtNote || profileModalReg.custom_shirt_note})</span>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Direct Inline Unlock / Save / Cancel Controls for Shirt Size */}
+                          {!isEditingProfileModal ? (
+                            <button
+                              type="button"
+                              onClick={() => setIsEditingProfileModal(true)}
+                              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 text-[11px] font-black flex items-center gap-1.5 cursor-pointer shadow-sm transition-all active:scale-95"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>ปลดล็อกเพื่อเปลี่ยนไซส์ / ระบุไซส์อื่นๆ</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={handleCancelProfileModal}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-bold border border-slate-700 cursor-pointer"
+                              >
+                                ✕ ยกเลิก
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={isSavingProfile}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-black flex items-center gap-1 shadow cursor-pointer disabled:opacity-50"
+                              >
+                                {isSavingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                <span>บันทึกไซส์เสื้อ</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
+
                         <div className="flex flex-wrap gap-1.5">
                           {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map((sz) => {
                             const normModalSz = normalizeSize(modalShirtSize);
@@ -5889,7 +5909,7 @@ export default function AdminDashboardView({
                                       : 'bg-amber-500 text-slate-950 border-amber-300 shadow-md'
                                     : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-amber-400 hover:text-white'
                                 }`}
-                                title={!isEditingProfileModal ? 'กรุณากดปุ่ม "ปลดล็อกเพื่อแก้ไขข้อมูล" ด้านล่างก่อนเปลี่ยนไซส์' : `เลือกไซส์ ${sz}`}
+                                title={!isEditingProfileModal ? 'กรุณากดปุ่ม "ปลดล็อกเพื่อเปลี่ยนไซส์ / ระบุไซส์อื่นๆ" ด้านขวาบนก่อนเปลี่ยนไซส์' : `เลือกไซส์ ${sz}`}
                               >
                                 {sz}
                               </button>
@@ -5898,46 +5918,82 @@ export default function AdminDashboardView({
                         </div>
 
                         {/* Custom Shirt Note / Special Size Specification */}
-                        <div className="p-2.5 rounded-xl bg-slate-950/80 border border-rose-500/30 space-y-1.5">
-                          <div className="flex items-center justify-between flex-wrap gap-1">
+                        <div className={`p-3 rounded-xl border space-y-2 transition-all ${
+                          !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(modalShirtSize))
+                            ? 'bg-rose-950/30 border-rose-500/60 shadow-md'
+                            : 'bg-slate-950/80 border-rose-500/30'
+                        }`}>
+                          <div className="flex items-center justify-between flex-wrap gap-1.5">
                             <span className="text-[11px] font-bold text-rose-300">
-                              📝 รายละเอียดไซส์พิเศษ (กรณีเลือก &ldquo;อื่นๆ&rdquo; หรือผู้สมัครระบุไซส์ที่ต้องการมา):
+                              📝 ระบุขนาดไซส์เสื้อกรณีเลือก &ldquo;อื่นๆ&rdquo; (หรือขนาดสั่งตัดพิเศษที่ต้องการ):
                             </span>
-                            {profileModalReg.custom_shirt_note && (
+                            {profileModalReg.custom_shirt_note ? (
                               <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[10px] font-bold">
-                                ผู้สมัครแจ้งไว้: {profileModalReg.custom_shirt_note}
+                                ผู้สมัคร/ระบบบันทึกไว้: {profileModalReg.custom_shirt_note}
                               </span>
-                            )}
+                            ) : !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(modalShirtSize)) ? (
+                              <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-500/40 text-[10px] font-bold animate-pulse">
+                                ⚠️ ยังไม่ได้ระบุขนาดไซส์จริงสำหรับหมวด &ldquo;อื่นๆ&rdquo;
+                              </span>
+                            ) : null}
                           </div>
-                          {isEditingProfileModal && (
-                            <div className="flex flex-wrap gap-1 pt-0.5">
-                              {['6XL (รอบอก 52 นิ้ว)', '7XL (รอบอก 54 นิ้ว)', '8XL (รอบอก 56 นิ้ว)', '3XS (รอบอก 32 นิ้ว)'].map(preset => (
+
+                          {isEditingProfileModal ? (
+                            <>
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                {['6XL (รอบอก 52 นิ้ว)', '7XL (รอบอก 54 นิ้ว)', '8XL (รอบอก 56 นิ้ว)', '9XL (รอบอก 58 นิ้ว)', '10XL (รอบอก 60 นิ้ว)', '3XS (รอบอก 32 นิ้ว)'].map(preset => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => {
+                                      setModalShirtSize('อื่นๆ');
+                                      setModalCustomShirtNote(preset);
+                                    }}
+                                    className={`px-2 py-0.5 rounded border text-[10px] font-mono cursor-pointer transition-all ${
+                                      modalCustomShirtNote === preset
+                                        ? 'bg-rose-600 text-white border-rose-400 font-bold'
+                                        : 'bg-slate-900 hover:bg-rose-900/40 text-slate-300 hover:text-rose-200 border-slate-700'
+                                    }`}
+                                  >
+                                    + {preset}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                  type="text"
+                                  value={modalCustomShirtNote}
+                                  onChange={(e) => setModalCustomShirtNote(e.target.value)}
+                                  placeholder="พิมพ์ระบุไซส์ที่ต้องการ เช่น 6XL (รอบอก 52 นิ้ว) หรือขนาดรอบอกจริง..."
+                                  className="flex-1 px-3 py-1.5 rounded-lg text-xs text-white bg-slate-900 border border-rose-500/60 focus:ring-2 focus:ring-rose-500 outline-none"
+                                />
                                 <button
-                                  key={preset}
-                                  type="button"
-                                  onClick={() => {
-                                    setModalShirtSize('อื่นๆ');
-                                    setModalCustomShirtNote(preset);
-                                  }}
-                                  className="px-2 py-0.5 rounded bg-slate-900 hover:bg-rose-900/40 text-slate-300 hover:text-rose-200 border border-slate-700 text-[10px] font-mono cursor-pointer"
+                                  type="submit"
+                                  disabled={isSavingProfile}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow disabled:opacity-50"
                                 >
-                                  + {preset}
+                                  {isSavingProfile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                  <span>บันทึกไซส์ที่ระบุ</span>
                                 </button>
-                              ))}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
+                              <span className="text-xs text-slate-300 font-mono">
+                                {modalCustomShirtNote || profileModalReg.custom_shirt_note
+                                  ? `ขนาดที่ระบุไว้: ${modalCustomShirtNote || profileModalReg.custom_shirt_note}`
+                                  : 'ยังไม่มีรายละเอียดไซส์พิเศษที่ระบุไว้ (กดปุ่มด้านขวาเพื่อปลดล็อกและพิมพ์ระบุไซส์)'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingProfileModal(true)}
+                                className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 text-[11px] font-bold flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-auto"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>คลิกเพื่อระบุไซส์อื่นๆ / แก้ไขไซส์</span>
+                              </button>
                             </div>
                           )}
-                          <input
-                            type="text"
-                            disabled={!isEditingProfileModal}
-                            value={modalCustomShirtNote}
-                            onChange={(e) => setModalCustomShirtNote(e.target.value)}
-                            placeholder="ระบุไซส์พิเศษ เช่น 6XL (รอบอก 52 นิ้ว) หรือบันทึกผลที่คุยตกลงกับผู้สมัคร..."
-                            className={`w-full px-3 py-1.5 rounded-lg text-xs text-white outline-none transition-all ${
-                              !isEditingProfileModal
-                                ? 'bg-slate-900/60 border border-slate-800 cursor-not-allowed opacity-80'
-                                : 'bg-slate-900 border border-rose-500/50 focus:ring-1 focus:ring-rose-500'
-                            }`}
-                          />
                         </div>
                       </div>
                     </div>
@@ -12613,7 +12669,14 @@ export default function AdminDashboardView({
                             </div>
                             <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
                               <span className="text-slate-400 text-[10px] block">ไซส์เสื้อ</span>
-                              <span className="font-bold text-purple-300 text-sm">{reg.shirt_size || '-'}</span>
+                              <span className="font-bold text-purple-300 text-sm">
+                                {reg.shirt_size || '-'}
+                                {reg.custom_shirt_note && (
+                                  <span className="text-amber-300 text-xs font-semibold block mt-0.5">
+                                    ({reg.custom_shirt_note})
+                                  </span>
+                                )}
+                              </span>
                             </div>
                             <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
                               <span className="text-slate-400 text-[10px] block">กรุ๊ปเลือด</span>
@@ -12647,13 +12710,17 @@ export default function AdminDashboardView({
                             </div>
                           </div>
 
-                          {/* Payment Plan & Installments */}
+                          {/* Payment Plan & Unified Slip Status */}
                           <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-950 border border-purple-500/30 rounded-2xl space-y-3">
                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
                               <div>
                                 <span className="text-xs text-slate-400">แผนการชำระเงินที่เลือก:</span>
                                 <div className="text-sm font-black text-white">
-                                  {reg.payment_plan === 'installment' ? '⚡ แผนแบ่งจ่าย 2 งวด' : '💎 ชำระครบเต็มจำนวน (Full Payment)'}
+                                  {reg.is_staff
+                                    ? '🛠️ คณะทำงาน / Staff (เฉพาะค่าเสื้อ 280 บ. • ไม่แบ่ง 2 งวด)'
+                                    : reg.payment_plan === 'installment'
+                                    ? '⚡ แผนแบ่งจ่าย 2 งวด'
+                                    : '💎 ชำระครบเต็มจำนวน 1 รอบ (Full Payment)'}
                                 </div>
                               </div>
                               <div>
@@ -12663,7 +12730,7 @@ export default function AdminDashboardView({
                                     <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
                                       ชำระครบแล้ว
                                     </span>
-                                  ) : reg.payment_status === 'partial_paid' ? (
+                                  ) : !reg.is_staff && reg.payment_status === 'partial_paid' ? (
                                     <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-bold">
                                       ชำระงวดที่ 1 แล้ว (ค้างงวดที่ 2)
                                     </span>
@@ -12680,82 +12747,122 @@ export default function AdminDashboardView({
                               </div>
                             </div>
 
-                            {/* Round 1 and Round 2 Details */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                              {/* Round 1 */}
+                            {reg.is_staff || reg.payment_plan !== 'installment' ? (
                               <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white">งวดที่ 1 (มัดจำเสื้อ)</span>
-                                  <span className="text-xs font-black text-purple-300">400 บ.</span>
+                                  <span className="text-xs font-bold text-white">
+                                    {reg.is_staff ? 'ยอดชำระเฉพาะค่าเสื้อ Staff' : 'ยอดชำระเต็มจำนวน (1 รอบ)'}
+                                  </span>
+                                  <span className="text-xs font-black text-purple-300">
+                                    {reg.is_staff ? '280 บ.' : `${reg.payment_amount || (displayStudentId ? 650 : 850)} บ.`}
+                                  </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-slate-400">สถานะ:</span>
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                    reg.payment_status === 'paid' || reg.payment_status === 'verified'
                                       ? 'bg-emerald-500/20 text-emerald-300'
-                                      : reg.installment_1_status === 'pending_review'
+                                      : reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review'
                                       ? 'bg-amber-500/20 text-amber-300'
                                       : 'bg-rose-500/20 text-rose-300'
                                   }`}>
-                                    {reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                    {reg.payment_status === 'paid' || reg.payment_status === 'verified'
                                       ? 'ชำระแล้ว'
-                                      : reg.installment_1_status === 'pending_review'
+                                      : reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review'
                                       ? 'รอตรวจสอบ'
                                       : 'ค้างชำระ'}
                                   </span>
                                 </div>
-                                {(reg.installment_1_slip_url || reg.payment_slip_url) && (
+                                {(reg.payment_slip_url || reg.installment_1_slip_url) && (
                                   <div className="pt-1">
                                     <button
                                       type="button"
-                                      onClick={() => setPreviewSlipUrl(reg.installment_1_slip_url || reg.payment_slip_url)}
+                                      onClick={() => setPreviewSlipUrl(reg.payment_slip_url || reg.installment_1_slip_url)}
                                       className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                                     >
                                       <Eye className="w-3.5 h-3.5 text-purple-400" />
-                                      <span>ดูสลิปงวดที่ 1</span>
+                                      <span>ดูหลักฐานสลิปโอนเงิน</span>
                                     </button>
                                   </div>
                                 )}
                               </div>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                {/* Round 1 */}
+                                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-white">งวดที่ 1 (มัดจำเสื้อ)</span>
+                                    <span className="text-xs font-black text-purple-300">400 บ.</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-slate-400">สถานะ:</span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                        ? 'bg-emerald-500/20 text-emerald-300'
+                                        : reg.installment_1_status === 'pending_review'
+                                        ? 'bg-amber-500/20 text-amber-300'
+                                        : 'bg-rose-500/20 text-rose-300'
+                                    }`}>
+                                      {reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                        ? 'ชำระแล้ว'
+                                        : reg.installment_1_status === 'pending_review'
+                                        ? 'รอตรวจสอบ'
+                                        : 'ค้างชำระ'}
+                                    </span>
+                                  </div>
+                                  {(reg.installment_1_slip_url || reg.payment_slip_url) && (
+                                    <div className="pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewSlipUrl(reg.installment_1_slip_url || reg.payment_slip_url)}
+                                        className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                        <span>ดูสลิปงวดที่ 1</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
 
-                              {/* Round 2 */}
-                              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white">งวดที่ 2 (ส่วนที่เหลือ)</span>
-                                  <span className="text-xs font-black text-purple-300">
-                                    {displayStudentId ? '250 บ. (มมส)' : '450 บ. (บุคคลภายนอก)'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-400">สถานะ:</span>
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    reg.installment_2_status === 'paid' || (reg.payment_plan !== 'installment' && reg.payment_status === 'paid')
-                                      ? 'bg-emerald-500/20 text-emerald-300'
-                                      : reg.installment_2_status === 'pending_review'
-                                      ? 'bg-amber-500/20 text-amber-300'
-                                      : 'bg-slate-800 text-slate-400'
-                                  }`}>
-                                    {reg.installment_2_status === 'paid' || (reg.payment_plan !== 'installment' && reg.payment_status === 'paid')
-                                      ? 'ชำระแล้ว'
-                                      : reg.installment_2_status === 'pending_review'
-                                      ? 'รอตรวจสอบ'
-                                      : 'ค้างชำระ'}
-                                  </span>
-                                </div>
-                                {reg.installment_2_slip_url && (
-                                  <div className="pt-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => setPreviewSlipUrl(reg.installment_2_slip_url)}
-                                      className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                                    >
-                                      <Eye className="w-3.5 h-3.5 text-purple-400" />
-                                      <span>ดูสลิปงวดที่ 2</span>
-                                    </button>
+                                {/* Round 2 */}
+                                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-white">งวดที่ 2 (ส่วนที่เหลือ)</span>
+                                    <span className="text-xs font-black text-purple-300">
+                                      {displayStudentId ? '250 บ. (มมส)' : '450 บ. (บุคคลภายนอก)'}
+                                    </span>
                                   </div>
-                                )}
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-slate-400">สถานะ:</span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      reg.installment_2_status === 'paid'
+                                        ? 'bg-emerald-500/20 text-emerald-300'
+                                        : reg.installment_2_status === 'pending_review'
+                                        ? 'bg-amber-500/20 text-amber-300'
+                                        : 'bg-slate-800 text-slate-400'
+                                    }`}>
+                                      {reg.installment_2_status === 'paid'
+                                        ? 'ชำระแล้ว'
+                                        : reg.installment_2_status === 'pending_review'
+                                        ? 'รอตรวจสอบ'
+                                        : 'ค้างชำระ'}
+                                    </span>
+                                  </div>
+                                  {reg.installment_2_slip_url && (
+                                    <div className="pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewSlipUrl(reg.installment_2_slip_url)}
+                                        className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                        <span>ดูสลิปงวดที่ 2</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       ) : (
