@@ -269,14 +269,48 @@ export default function ShirtOrderPrintModal({
 
                   {/* Shirt Size + Custom Note */}
                   <td className="border border-slate-300 py-1.5 px-1.5 text-center bg-slate-50">
-                    <span className="font-black font-mono text-xs text-slate-950 block">
-                      {item.size || item.normalized_size || '-'}
-                    </span>
-                    {customNote && (
-                      <span className="text-[8.5px] text-rose-700 font-bold block leading-tight mt-0.5">
-                        ({customNote})
-                      </span>
-                    )}
+                    {(() => {
+                      const rawSz = String(item.size || item.normalized_size || '').trim();
+                      const isOther = !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(rawSz.toUpperCase());
+                      if (isOther) {
+                        if (customNote) {
+                          return (
+                            <>
+                              <span className="font-black font-mono text-[10.5px] text-slate-950 block">
+                                {customNote}
+                              </span>
+                              <span className="text-[8px] text-slate-600 block leading-tight">
+                                (ไซส์พิเศษที่ระบุ)
+                              </span>
+                            </>
+                          );
+                        }
+                        if (rawSz && rawSz !== 'อื่นๆ' && rawSz.toUpperCase() !== 'OTHER') {
+                          return (
+                            <span className="font-black font-mono text-[10.5px] text-slate-950 block">
+                              {rawSz}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="font-black font-mono text-[10px] text-rose-700 block">
+                            อื่นๆ (รอระบุ)
+                          </span>
+                        );
+                      }
+                      return (
+                        <>
+                          <span className="font-black font-mono text-xs text-slate-950 block">
+                            {rawSz.toUpperCase()}
+                          </span>
+                          {customNote && (
+                            <span className="text-[8.5px] text-slate-600 font-semibold block leading-tight mt-0.5">
+                              ({customNote})
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
 
                   {/* Quantity */}
@@ -638,7 +672,13 @@ export default function ShirtOrderPrintModal({
                             {s}
                           </td>
                           <td className="border border-slate-300 py-1 px-2 text-center text-slate-600">
-                            {measurement}
+                            {s === 'อื่นๆ' && count > 0
+                              ? (sizeStats.otherSpecifiedLabels?.length > 0 && (sizeStats.otherUnspecifiedCount || 0) === 0
+                                  ? `ระบุแล้ว: ${sizeStats.otherSpecifiedLabels.join(', ')}`
+                                  : (sizeStats.otherSpecifiedLabels?.length || 0) === 0 && (sizeStats.otherUnspecifiedCount || 0) > 0
+                                  ? `รอระบุ (${sizeStats.otherUnspecifiedCount} คน)`
+                                  : `ระบุ: ${sizeStats.otherSpecifiedLabels.join(', ')} / รอระบุ ${sizeStats.otherUnspecifiedCount}`)
+                              : measurement}
                           </td>
                           <td className="border border-slate-300 py-1 px-2 text-center font-black font-mono">
                             {count}
@@ -712,11 +752,28 @@ export default function ShirtOrderPrintModal({
                         <td className="border border-slate-300 py-1 px-1 text-center font-mono">{u.female || '-'}</td>
                         <td className="border border-slate-300 py-1 px-1 text-center font-mono">{u.staff || '-'}</td>
                         <td className="border border-slate-300 py-1 px-1.5 text-center font-black font-mono bg-slate-50">{u.totalShirts}</td>
-                        {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
-                          <td key={sz} className="border border-slate-300 py-1 px-1 text-center font-mono">
-                            {u.shirtCounts[sz] > 0 ? <strong>{u.shirtCounts[sz]}</strong> : '-'}
-                          </td>
-                        ))}
+                        {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => {
+                          const cnt = u.shirtCounts[sz] || 0;
+                          if (sz === 'อื่นๆ' && cnt > 0) {
+                            const hasSpec = u.otherSpecifiedLabels && u.otherSpecifiedLabels.length > 0;
+                            const hasUnspec = (u.otherUnspecifiedCount || 0) > 0;
+                            const otherTxt = hasSpec && !hasUnspec
+                              ? `${cnt} (${u.otherSpecifiedLabels.join(', ')})`
+                              : !hasSpec && hasUnspec
+                              ? `${cnt} (รอระบุ)`
+                              : `${cnt} (${u.otherSpecifiedLabels.join(', ')}/รอระบุ ${u.otherUnspecifiedCount})`;
+                            return (
+                              <td key={sz} className="border border-slate-300 py-1 px-1 text-center font-mono text-[9px]">
+                                <strong>{otherTxt}</strong>
+                              </td>
+                            );
+                          }
+                          return (
+                            <td key={sz} className="border border-slate-300 py-1 px-1 text-center font-mono">
+                              {cnt > 0 ? <strong>{cnt}</strong> : '-'}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                     <tr className="bg-slate-200 font-black text-slate-950 border-t-2 border-slate-600">
@@ -725,11 +782,28 @@ export default function ShirtOrderPrintModal({
                       <td className="border border-slate-400 py-1 px-1 text-center font-mono">{universitySummary.totals.female}</td>
                       <td className="border border-slate-400 py-1 px-1 text-center font-mono">{universitySummary.totals.staff}</td>
                       <td className="border border-slate-400 py-1 px-1.5 text-center font-mono">{universitySummary.totals.totalShirts}</td>
-                      {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
-                        <td key={sz} className="border border-slate-400 py-1 px-1 text-center font-mono">
-                          {universitySummary.totals.shirtCounts[sz] || 0}
-                        </td>
-                      ))}
+                      {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => {
+                        const totCnt = universitySummary.totals.shirtCounts[sz] || 0;
+                        if (sz === 'อื่นๆ' && totCnt > 0) {
+                          const totSpec = universitySummary.totals.otherSpecifiedLabels || [];
+                          const totUnspec = universitySummary.totals.otherUnspecifiedCount || 0;
+                          const totOtherTxt = totSpec.length > 0 && totUnspec === 0
+                            ? `${totCnt} (${totSpec.join(', ')})`
+                            : totSpec.length === 0 && totUnspec > 0
+                            ? `${totCnt} (รอระบุ)`
+                            : `${totCnt} (${totSpec.join(', ')}/รอระบุ ${totUnspec})`;
+                          return (
+                            <td key={sz} className="border border-slate-400 py-1 px-1 text-center font-mono text-[9px]">
+                              {totOtherTxt}
+                            </td>
+                          );
+                        }
+                        return (
+                          <td key={sz} className="border border-slate-400 py-1 px-1 text-center font-mono">
+                            {totCnt}
+                          </td>
+                        );
+                      })}
                     </tr>
                   </tbody>
                 </table>

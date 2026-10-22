@@ -311,20 +311,80 @@ export default function AdminDashboardView({
   const [isUploadingProductImg, setIsUploadingProductImg] = useState(false);
   const [previewProductImageModal, setPreviewProductImageModal] = useState(null);
 
-  // Normalize shirt size helper
-  const normalizeSize = (rawSize) => {
-    if (!rawSize) return 'L';
-    const clean = String(rawSize).trim().toUpperCase();
+  const STANDARD_SHIRT_SIZES = ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+
+  // Extract a standard size (SS..5XL) from text without falsely matching 6XL..10XL as XL
+  const extractStandardSizeFromText = (text) => {
+    if (!text) return null;
+    const clean = String(text).trim().toUpperCase();
     if (clean === 'XXL' || clean === '2XL') return '2XL';
     if (clean === '3XL' || clean === 'XXXL') return '3XL';
     if (clean === '4XL' || clean === 'XXXXL') return '4XL';
     if (clean === '5XL') return '5XL';
     if (clean === 'SS' || clean === 'XS') return 'SS';
-    if (clean === 'S') return 'S';
-    if (clean === 'M') return 'M';
-    if (clean === 'L') return 'L';
-    if (clean === 'XL') return 'XL';
+    if (STANDARD_SHIRT_SIZES.includes(clean)) return clean;
+    if (/(?:[6-9]|10)\s*XL|[2-9]\s*XS/i.test(clean)) return null;
+    const match = clean.match(/(?:^|[\s(,:])(5XL|4XL|XXXXL|3XL|XXXL|2XL|XXL|XL|SS|XS|S|M|L)(?=$|[\s),.:])/i);
+    if (!match) return null;
+    const token = match[1].toUpperCase();
+    if (token === 'XXL') return '2XL';
+    if (token === 'XXXL') return '3XL';
+    if (token === 'XXXXL') return '4XL';
+    if (token === 'XS') return 'SS';
+    return STANDARD_SHIRT_SIZES.includes(token) ? token : null;
+  };
+
+  // Normalize shirt size helper (also resolves standard size if specified inside customNote)
+  const normalizeSize = (rawSize, customNote = '') => {
+    const fromRaw = extractStandardSizeFromText(rawSize);
+    if (fromRaw) return fromRaw;
+    const fromNote = extractStandardSizeFromText(customNote);
+    if (fromNote) return fromNote;
+    if (!rawSize) return 'L';
+    const clean = String(rawSize).trim().toUpperCase();
     return clean || 'L';
+  };
+
+  // Resolve full display & categorization info for a person's shirt size
+  const resolveShirtSizeDetail = (rawSize, customNote = '') => {
+    const cleanRaw = String(rawSize || 'L').trim();
+    const cleanNote = String(customNote || '').trim();
+    const matchedStd = normalizeSize(cleanRaw, cleanNote);
+    const isStandard = STANDARD_SHIRT_SIZES.includes(matchedStd);
+
+    if (isStandard) {
+      return {
+        bucket: matchedStd,
+        isStandard: true,
+        isSpecified: true,
+        shortLabel: matchedStd,
+        fullLabel: cleanNote && extractStandardSizeFromText(cleanNote) !== matchedStd ? `${matchedStd} (${cleanNote})` : matchedStd,
+        badgeText: cleanNote && extractStandardSizeFromText(cleanNote) !== matchedStd ? `👕 ไซส์ ${matchedStd} (${cleanNote})` : `👕 ไซส์ ${matchedStd}`
+      };
+    }
+
+    const specText = cleanNote || (cleanRaw !== 'อื่นๆ' ? cleanRaw : '');
+    if (specText) {
+      const shortMatch = specText.match(/^(\d+\s*XL|\d*\s*XS)/i);
+      const shortTag = shortMatch ? shortMatch[1].toUpperCase().replace(/\s+/g, '') : (specText.length > 14 ? specText.slice(0, 14) + '…' : specText);
+      return {
+        bucket: 'อื่นๆ',
+        isStandard: false,
+        isSpecified: true,
+        shortLabel: shortTag,
+        fullLabel: specText,
+        badgeText: `👕 ไซส์ ${specText}`
+      };
+    }
+
+    return {
+      bucket: 'อื่นๆ',
+      isStandard: false,
+      isSpecified: false,
+      shortLabel: 'อื่นๆ (รอระบุ)',
+      fullLabel: 'อื่นๆ (รอระบุ)',
+      badgeText: '👕 อื่นๆ (รอระบุ)'
+    };
   };
 
   const SIZE_MEASUREMENTS = {
@@ -354,7 +414,8 @@ export default function AdminDashboardView({
         : (r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && isR2Paid));
       const isReceived = r.shirt_pickup_status === 'received' || r.shirt_received === true;
       const rawSize = (r.shirt_size || 'L').trim();
-      const normSize = normalizeSize(rawSize);
+      const sizeDetail = resolveShirtSizeDetail(rawSize, r.custom_shirt_note);
+      const normSize = sizeDetail.bucket;
       const orderNumber = `JRE27-SHIRT-${(r.id || r.user_id || 'REG').slice(0, 6).toUpperCase()}`;
       const expectedTotal = isStaff ? STAFF_SHIRT_FEE : (r.payment_amount || (uniInfo.isMsu ? 650 : 850));
 
@@ -382,6 +443,7 @@ export default function AdminDashboardView({
         room_assigned: r.room_assigned || '-',
         size: rawSize,
         normalized_size: normSize,
+        size_detail: sizeDetail,
         custom_shirt_note: r.custom_shirt_note || '',
         quantity: 1,
         product_name: 'เสื้อฝึก JRE 2027 คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
@@ -460,6 +522,8 @@ export default function AdminDashboardView({
     const receivedCounts = {};
     const pendingCounts = {};
     const sizePeople = {};
+    const otherSpecifiedLabels = [];
+    let otherUnspecifiedCount = 0;
 
     STANDARD_SIZES.forEach(s => {
       counts[s] = 0;
@@ -484,6 +548,14 @@ export default function AdminDashboardView({
         pendingCounts[s] = (pendingCounts[s] || 0) + 1;
         totalPendingShirts += 1;
       }
+      if (s === 'อื่นๆ') {
+        const d = rec.size_detail || resolveShirtSizeDetail(rec.size, rec.custom_shirt_note);
+        if (d.isSpecified) {
+          otherSpecifiedLabels.push(d.shortLabel);
+        } else {
+          otherUnspecifiedCount += 1;
+        }
+      }
       sizePeople[s].push(rec);
     });
 
@@ -502,6 +574,14 @@ export default function AdminDashboardView({
           pendingCounts[s] = (pendingCounts[s] || 0) + qty;
           totalPendingShirts += qty;
         }
+        if (s === 'อื่นๆ') {
+          const d = resolveShirtSizeDetail(it.size, '');
+          if (d.isSpecified) {
+            otherSpecifiedLabels.push(d.shortLabel);
+          } else {
+            otherUnspecifiedCount += qty;
+          }
+        }
         sizePeople[s].push({
           ...rec,
           itemSize: it.size,
@@ -516,6 +596,8 @@ export default function AdminDashboardView({
       receivedCounts,
       pendingCounts,
       sizePeople,
+      otherSpecifiedLabels,
+      otherUnspecifiedCount,
       totalShirts,
       totalReceivedShirts,
       totalPendingShirts,
@@ -557,6 +639,9 @@ export default function AdminDashboardView({
           totalShirts: 0,
           shirtSizes: sizesObj,
           shirtCounts: sizesObj,
+          otherSpecifiedLabels: [],
+          otherUnspecifiedCount: 0,
+          otherDetails: [],
           expectedAmount: 0,
           collectedAmount: 0,
           outstandingAmount: 0,
@@ -580,13 +665,24 @@ export default function AdminDashboardView({
       const bucket = ensureUniBucket(uniInfo);
       const isStaff = isStaffRegistration(reg);
       const gender = resolveGender(reg);
-      const normSize = normalizeSize(reg.shirt_size || 'L');
-      const sizeKey = STANDARD_SIZES.includes(normSize) ? normSize : 'อื่นๆ';
+      const sizeDetail = resolveShirtSizeDetail(reg.shirt_size || 'L', reg.custom_shirt_note);
+      const sizeKey = STANDARD_SIZES.includes(sizeDetail.bucket) ? sizeDetail.bucket : 'อื่นๆ';
       const hasRoom = Boolean(reg.room_assigned && String(reg.room_assigned).trim() !== '');
 
       bucket.totalPeople += 1;
       bucket.totalShirts += 1;
       bucket.shirtSizes[sizeKey] = (bucket.shirtSizes[sizeKey] || 0) + 1;
+
+      if (sizeKey === 'อื่นๆ') {
+        const personName = reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim() || 'ผู้สมัคร';
+        if (sizeDetail.isSpecified) {
+          bucket.otherSpecifiedLabels.push(sizeDetail.shortLabel);
+          bucket.otherDetails.push(`${personName}: ${sizeDetail.fullLabel}`);
+        } else {
+          bucket.otherUnspecifiedCount += 1;
+          bucket.otherDetails.push(`${personName}: อื่นๆ (รอระบุไซส์จริง)`);
+        }
+      }
 
       if (gender === 'ชาย') {
         bucket.maleCount += 1;
@@ -676,12 +772,17 @@ export default function AdminDashboardView({
       ...list.filter(u => !officialTags.has(u.shortTag) && u.totalPeople > 0)
     ].filter(Boolean);
 
+    const allOtherSpecified = orderedList.flatMap(u => u.otherSpecifiedLabels || []);
+    const allOtherUnspecified = orderedList.reduce((acc, u) => acc + (u.otherUnspecifiedCount || 0), 0);
+
     const totals = {
       totalPeople: orderedList.reduce((acc, u) => acc + u.totalPeople, 0),
       male: orderedList.reduce((acc, u) => acc + u.maleCount, 0),
       female: orderedList.reduce((acc, u) => acc + u.femaleCount, 0),
       staff: orderedList.reduce((acc, u) => acc + u.staffCount, 0),
       totalShirts: orderedList.reduce((acc, u) => acc + u.totalShirts, 0),
+      otherSpecifiedLabels: allOtherSpecified,
+      otherUnspecifiedCount: allOtherUnspecified,
       shirtCounts: STANDARD_SIZES.reduce((acc, sz) => {
         acc[sz] = orderedList.reduce((sum, u) => sum + (u.shirtSizes[sz] || 0), 0);
         return acc;
@@ -1768,7 +1869,7 @@ export default function AdminDashboardView({
   // Direct handler for Admin to specify/update a person's shirt size (locked behind edit/save UI)
   const handleAssignPersonShirtSize = async (itemOrReg, newSizeRaw, customNoteRaw) => {
     const rawTrimmed = String(newSizeRaw || '').trim();
-    const cleanNewSize = rawTrimmed === 'อื่นๆ' ? 'อื่นๆ' : rawTrimmed.toUpperCase();
+    let cleanNewSize = rawTrimmed === 'อื่นๆ' ? 'อื่นๆ' : rawTrimmed.toUpperCase();
     if (!cleanNewSize) {
       triggerToast('กรุณาเลือกหรือระบุไซส์เสื้อที่ต้องการบันทึก', 'warning');
       return;
@@ -1777,6 +1878,15 @@ export default function AdminDashboardView({
     const cleanCustomNote = customNoteRaw !== undefined
       ? String(customNoteRaw || '').trim()
       : String(itemOrReg.custom_shirt_note || itemOrReg.rawRegistration?.custom_shirt_note || '').trim();
+
+    // If 'อื่นๆ' was selected and the specified text exactly matches a standard size (SS..5XL),
+    // automatically promote shirt_size to that standard size so it aligns with the standard size column.
+    if (cleanNewSize === 'อื่นๆ' && cleanCustomNote) {
+      const matchedStandard = extractStandardSizeFromText(cleanCustomNote);
+      if (matchedStandard) {
+        cleanNewSize = matchedStandard;
+      }
+    }
 
     const recordId = itemOrReg.id || itemOrReg.user_id;
     setUpdatingSizeId(recordId);
@@ -1987,13 +2097,20 @@ export default function AdminDashboardView({
         : (modalPaymentStatus === 'paid' ? 0 : (Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : defaultFee));
 
       const rawSz = String(modalShirtSize || 'L').trim();
-      const cleanModalSize = rawSz === 'อื่นๆ' ? 'อื่นๆ' : rawSz.toUpperCase();
+      const trimmedCustomNote = (modalCustomShirtNote || '').trim();
+      let cleanModalSize = rawSz === 'อื่นๆ' ? 'อื่นๆ' : rawSz.toUpperCase();
+      if (cleanModalSize === 'อื่นๆ' && trimmedCustomNote) {
+        const matchedStandard = extractStandardSizeFromText(trimmedCustomNote);
+        if (matchedStandard) {
+          cleanModalSize = matchedStandard;
+        }
+      }
 
       const updates = {
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
         shirt_size: cleanModalSize,
-        custom_shirt_note: (modalCustomShirtNote || '').trim(),
+        custom_shirt_note: trimmedCustomNote,
         is_special_care: modalSpecialCare,
         special_notes: modalNotes.trim(),
         phone: modalPhone.trim(),
@@ -4471,9 +4588,32 @@ export default function AdminDashboardView({
                           {u.totalShirts} <span className="text-[10px] font-normal">ตัว</span>
                         </td>
 
-                        {/* Shirt Sizes Breakdown SS..5XL */}
+                        {/* Shirt Sizes Breakdown SS..5XL + อื่นๆ (แสดงไซส์ที่ระบุ หรือ รอระบุ) */}
                         {universitySummary.STANDARD_SIZES.map(sz => {
                           const cnt = u.shirtSizes[sz] || 0;
+                          if (sz === 'อื่นๆ' && cnt > 0) {
+                            const hasSpecified = u.otherSpecifiedLabels && u.otherSpecifiedLabels.length > 0;
+                            const hasUnspecified = (u.otherUnspecifiedCount || 0) > 0;
+                            const otherText = hasSpecified && !hasUnspecified
+                              ? `${cnt} (${u.otherSpecifiedLabels.join(', ')})`
+                              : !hasSpecified && hasUnspecified
+                              ? `${cnt} (รอระบุ)`
+                              : `${cnt} (${u.otherSpecifiedLabels.join(', ')} / รอระบุ ${u.otherUnspecifiedCount})`;
+                            return (
+                              <td key={sz} className="py-2.5 px-1.5 text-center font-mono">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-black text-[10px] inline-block whitespace-nowrap ${
+                                    hasUnspecified
+                                      ? 'bg-rose-500/25 text-rose-200 border border-rose-400/60'
+                                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  }`}
+                                  title={u.otherDetails?.map(d => `${d.name}: ${d.isSpecified ? d.label : 'รอระบุ'}`).join(' | ')}
+                                >
+                                  {otherText}
+                                </span>
+                              </td>
+                            );
+                          }
                           return (
                             <td key={sz} className="py-2.5 px-1.5 text-center font-mono">
                               {cnt > 0 ? (
@@ -4516,6 +4656,24 @@ export default function AdminDashboardView({
                     <td className="py-3 px-2.5 text-center font-mono text-amber-300">{regMetrics.total} ตัว</td>
                     {universitySummary.STANDARD_SIZES.map(sz => {
                       const totalSz = universitySummary.list.reduce((acc, u) => acc + (u.shirtSizes[sz] || 0), 0);
+                      if (sz === 'อื่นๆ' && totalSz > 0) {
+                        const totSpec = universitySummary.totals.otherSpecifiedLabels || [];
+                        const totUnspec = universitySummary.totals.otherUnspecifiedCount || 0;
+                        const totOtherText = totSpec.length > 0 && totUnspec === 0
+                          ? `${totalSz} (${totSpec.join(', ')})`
+                          : totSpec.length === 0 && totUnspec > 0
+                          ? `${totalSz} (รอระบุ)`
+                          : `${totalSz} (${totSpec.join(', ')} / รอระบุ ${totUnspec})`;
+                        return (
+                          <td key={sz} className="py-3 px-1.5 text-center font-mono">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap ${
+                              totUnspec > 0 ? 'bg-rose-500/25 text-rose-200 border border-rose-400/50' : 'text-emerald-300'
+                            }`}>
+                              {totOtherText}
+                            </span>
+                          </td>
+                        );
+                      }
                       return (
                         <td key={sz} className="py-3 px-1.5 text-center font-mono text-amber-300">
                           {totalSz > 0 ? totalSz : '-'}
@@ -4747,36 +4905,27 @@ export default function AdminDashboardView({
                                     📡 {reg.callsign}
                                   </span>
                                 )}
-                                <span
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenProfileModal(reg, 'info');
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all inline-flex items-center gap-1 ${
-                                    !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size))
-                                      ? 'bg-rose-500/25 text-rose-200 border-rose-400/70 ring-1 ring-rose-400/40 animate-pulse'
-                                      : 'bg-purple-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400'
-                                  }`}
-                                  title="🔒 ป้องกันการเผลอกดเปลี่ยนไซส์ที่หน้าแรก — คลิกเพื่อเปิดหน้าดูประวัติของบุคคลนี้หากต้องการแก้ไขไซส์เสื้อ"
-                                >
-                                  <span>
-                                    👕 ไซส์ {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size))
-                                      ? normalizeSize(reg.shirt_size)
-                                      : `อื่นๆ${reg.custom_shirt_note ? ` (${reg.custom_shirt_note})` : (reg.shirt_size && reg.shirt_size !== 'อื่นๆ' ? ` (${reg.shirt_size})` : ' (คลิกระบุไซส์จริง)')}`}
-                                  </span>
-                                </span>
-                                {reg.custom_shirt_note && ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) && (
-                                  <span
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenProfileModal(reg, 'info');
-                                    }}
-                                    className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[10px] font-semibold cursor-pointer"
-                                    title={`หมายเหตุไซส์เสื้อที่แจ้งไว้: ${reg.custom_shirt_note}`}
-                                  >
-                                    📝 {reg.custom_shirt_note}
-                                  </span>
-                                )}
+                                {(() => {
+                                  const szDetail = resolveShirtSizeDetail(reg.shirt_size, reg.custom_shirt_note);
+                                  return (
+                                    <span
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenProfileModal(reg, 'info');
+                                      }}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all inline-flex items-center gap-1 ${
+                                        !szDetail.isSpecified
+                                          ? 'bg-rose-500/25 text-rose-200 border-rose-400/70 ring-1 ring-rose-400/40 animate-pulse'
+                                          : !szDetail.isStandard
+                                          ? 'bg-amber-500/25 text-amber-200 border-amber-400/60 hover:border-amber-300'
+                                          : 'bg-purple-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400'
+                                      }`}
+                                      title="🔒 ป้องกันการเผลอกดเปลี่ยนไซส์ที่หน้าแรก — คลิกเพื่อเปิดหน้าดูประวัติของบุคคลนี้หากต้องการแก้ไขไซส์เสื้อ"
+                                    >
+                                      <span>{szDetail.badgeText}</span>
+                                    </span>
+                                  );
+                                })()}
                                 {isStaff ? (
                                   <span className="px-2 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/50 rounded-full text-[10px] font-black">
                                     🛠️ Staff (ค่าเสื้อ 280 บ.)
@@ -9446,6 +9595,33 @@ export default function AdminDashboardView({
                         </td>
                         {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => {
                           const c = u.shirtCounts[sz] || 0;
+                          if (sz === 'อื่นๆ' && c > 0) {
+                            const hasSpecified = u.otherSpecifiedLabels && u.otherSpecifiedLabels.length > 0;
+                            const hasUnspecified = (u.otherUnspecifiedCount || 0) > 0;
+                            const otherText = hasSpecified && !hasUnspecified
+                              ? `${c} (${u.otherSpecifiedLabels.join(', ')})`
+                              : !hasSpecified && hasUnspecified
+                              ? `${c} (รอระบุ)`
+                              : `${c} (${u.otherSpecifiedLabels.join(', ')} / รอระบุ ${u.otherUnspecifiedCount})`;
+                            return (
+                              <td
+                                key={sz}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMerchUniFilter(u.key);
+                                  setMerchSizeFilter(sz);
+                                }}
+                                className={`py-2.5 px-2 text-center font-mono font-black whitespace-nowrap ${
+                                  hasUnspecified
+                                    ? 'text-rose-200 bg-rose-950/40 hover:bg-rose-900/50'
+                                    : 'text-emerald-300 bg-emerald-950/30 hover:bg-emerald-900/40'
+                                }`}
+                                title={u.otherDetails?.map(d => `${d.name}: ${d.isSpecified ? d.label : 'รอระบุ'}`).join(' | ')}
+                              >
+                                {otherText}
+                              </td>
+                            );
+                          }
                           return (
                             <td
                               key={sz}
@@ -9456,9 +9632,7 @@ export default function AdminDashboardView({
                               }}
                               className={`py-2.5 px-2 text-center font-mono ${
                                 c > 0
-                                  ? sz === 'อื่นๆ'
-                                    ? 'font-black text-rose-300 bg-rose-950/30 hover:bg-rose-900/50'
-                                    : 'font-black text-white bg-slate-900/90 hover:bg-amber-500/20'
+                                  ? 'font-black text-white bg-slate-900/90 hover:bg-amber-500/20'
                                   : 'text-slate-600'
                               }`}
                               title={`คลิกดู ${u.shortTag} ไซส์ ${sz}`}
@@ -9478,11 +9652,28 @@ export default function AdminDashboardView({
                     <td className="py-2.5 px-2 text-center font-mono text-pink-300">{universitySummary.totals.female}</td>
                     <td className="py-2.5 px-2 text-center font-mono text-purple-300">{universitySummary.totals.staff}</td>
                     <td className="py-2.5 px-2.5 text-center font-mono text-amber-300 border-x border-slate-800">{universitySummary.totals.totalShirts} ตัว</td>
-                    {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
-                      <td key={sz} className={`py-2.5 px-2 text-center font-mono ${sz === 'อื่นๆ' ? 'text-rose-300' : 'text-amber-300'}`}>
-                        {universitySummary.totals.shirtCounts[sz] || 0}
-                      </td>
-                    ))}
+                    {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => {
+                      const totalC = universitySummary.totals.shirtCounts[sz] || 0;
+                      if (sz === 'อื่นๆ' && totalC > 0) {
+                        const totSpec = universitySummary.totals.otherSpecifiedLabels || [];
+                        const totUnspec = universitySummary.totals.otherUnspecifiedCount || 0;
+                        const totOtherText = totSpec.length > 0 && totUnspec === 0
+                          ? `${totalC} (${totSpec.join(', ')})`
+                          : totSpec.length === 0 && totUnspec > 0
+                          ? `${totalC} (รอระบุ)`
+                          : `${totalC} (${totSpec.join(', ')} / รอระบุ ${totUnspec})`;
+                        return (
+                          <td key={sz} className={`py-2.5 px-2 text-center font-mono whitespace-nowrap ${totUnspec > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                            {totOtherText}
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={sz} className={`py-2.5 px-2 text-center font-mono ${sz === 'อื่นๆ' ? 'text-rose-300' : 'text-amber-300'}`}>
+                          {totalC}
+                        </td>
+                      );
+                    })}
                   </tr>
                 </tfoot>
               </table>
@@ -9491,22 +9682,32 @@ export default function AdminDashboardView({
             {/* PER-PERSON CUSTOM SIZE ("อื่นๆ") MANAGEMENT PANEL */}
             {(() => {
               const customSizeItems = sizeStats.allShirtItems.filter(
-                it => !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(it.size))
+                it => !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(it.size, it.custom_shirt_note))
               );
+              const unspecItemsCount = customSizeItems.filter(it => !resolveShirtSizeDetail(it.size, it.custom_shirt_note).isSpecified).length;
+              const specItemsCount = customSizeItems.length - unspecItemsCount;
               return (
                 <div className={`p-4 rounded-2xl border space-y-3 ${
-                  customSizeItems.length > 0
+                  unspecItemsCount > 0
                     ? 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-amber-950/30 border-rose-500/50 shadow-lg'
+                    : customSizeItems.length > 0
+                    ? 'bg-gradient-to-r from-emerald-950/30 via-slate-900 to-amber-950/20 border-emerald-500/40 shadow-lg'
                     : 'bg-slate-900/60 border-slate-800'
                 }`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-start sm:items-center gap-2.5">
                       <span className={`px-2.5 py-1 rounded-xl text-xs font-black font-mono shrink-0 ${
-                        customSizeItems.length > 0
+                        unspecItemsCount > 0
                           ? 'bg-rose-500 text-white animate-pulse'
+                          : customSizeItems.length > 0
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                       }`}>
-                        {customSizeItems.length > 0 ? `⚠️ รอระบุไซส์จริง ${customSizeItems.length} คน` : '✓ ระบุไซส์ครบทุกคนแล้ว'}
+                        {unspecItemsCount > 0
+                          ? `⚠️ รอระบุไซส์จริง ${unspecItemsCount} คน${specItemsCount > 0 ? ` (ระบุแล้ว ${specItemsCount} คน)` : ''}`
+                          : customSizeItems.length > 0
+                          ? `✓ ระบุไซส์พิเศษครบแล้ว ${specItemsCount} คน (${sizeStats.otherSpecifiedLabels?.join(', ')})`
+                          : '✓ ระบุไซส์ครบทุกคนแล้ว'}
                       </span>
                       <div>
                         <h4 className="text-xs sm:text-sm font-black text-white">
@@ -9709,11 +9910,21 @@ export default function AdminDashboardView({
                           <span className="text-xs font-bold text-white">
                             ไซส์ {sizeKey}
                           </span>
-                          {measurement && (
+                          {sizeKey === 'อื่นๆ' && count > 0 ? (
+                            <span className={`text-[11px] ml-2 font-mono font-bold ${
+                              (sizeStats.otherUnspecifiedCount || 0) > 0 ? 'text-rose-300' : 'text-emerald-300'
+                            }`}>
+                              {sizeStats.otherSpecifiedLabels?.length > 0 && (sizeStats.otherUnspecifiedCount || 0) === 0
+                                ? `(${sizeStats.otherSpecifiedLabels.join(', ')})`
+                                : (sizeStats.otherSpecifiedLabels?.length || 0) === 0 && (sizeStats.otherUnspecifiedCount || 0) > 0
+                                ? `(รอระบุไซส์จริง ${sizeStats.otherUnspecifiedCount} คน)`
+                                : `(${sizeStats.otherSpecifiedLabels.join(', ')} / รอระบุ ${sizeStats.otherUnspecifiedCount} คน)`}
+                            </span>
+                          ) : measurement ? (
                             <span className="text-[11px] text-slate-400 ml-2 font-mono">
                               ({measurement})
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
 
@@ -10096,13 +10307,20 @@ export default function AdminDashboardView({
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] text-slate-400 font-bold uppercase">ไซส์เสื้อ:</span>
                             <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                              <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-sm border ${
-                                !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(item.size))
-                                  ? 'bg-rose-500/25 text-rose-200 border-rose-400/60 animate-pulse'
-                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                              }`}>
-                                👕 ไซส์ {item.size}
-                              </span>
+                              {(() => {
+                                const itemSizeDetail = item.size_detail || resolveShirtSizeDetail(item.size, item.custom_shirt_note);
+                                return (
+                                  <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-sm border ${
+                                    !itemSizeDetail.isSpecified
+                                      ? 'bg-rose-500/25 text-rose-200 border-rose-400/60 animate-pulse'
+                                      : !itemSizeDetail.isStandard
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  }`}>
+                                    {itemSizeDetail.badgeText}
+                                  </span>
+                                );
+                              })()}
                               <span className="px-2 py-0.5 rounded bg-slate-800 text-white font-mono font-bold text-xs">
                                 x{item.quantity} ตัว
                               </span>
@@ -10111,7 +10329,7 @@ export default function AdminDashboardView({
 
                           {item.custom_shirt_note && (
                             <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-200 font-semibold">
-                              📝 ไซส์พิเศษที่ระบุ: <strong className="text-white">{item.custom_shirt_note}</strong>
+                              📝 ไซส์ที่ระบุไว้: <strong className="text-white">{item.custom_shirt_note}</strong>
                             </div>
                           )}
 
