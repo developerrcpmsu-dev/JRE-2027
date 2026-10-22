@@ -34,7 +34,7 @@ import IDCardPreview from './IDCardPreview';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode } from '../utils/idCard';
-import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy } from '../data/defaultData';
+import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, resolvePersonFullNameWithTitle } from '../data/defaultData';
 
 /**
  * Web Audio API synthesizer for crisp scan confirmation chime
@@ -960,7 +960,7 @@ export default function UniversalScannerModal({
                           </span>
                           <div>
                             <p className="text-xs font-bold text-white">
-                              {isParticipant ? (item.full_name_affiliation || `${item.first_name || ''} ${item.last_name || ''}`) : item.order_number}
+                              {isParticipant ? resolvePersonFullNameWithTitle(item).fullName : item.order_number}
                             </p>
                             <p className="text-[10px] text-slate-400">
                               {isParticipant ? `นามเรียกขาน: ${item.callsign || '-'} • เบอร์: ${item.phone || '-'}` : `ผู้รับ: ${item.customer_name || '-'} • ยอด ${item.total_amount || 0} บ.`}
@@ -1471,7 +1471,7 @@ export default function UniversalScannerModal({
                             <User className="h-4 w-4 text-orange-400" />
                             <div className="text-xs">
                               <p className="font-bold text-white">
-                                ผู้สั่งซื้อท่านนี้คือผู้เข้ารับการฝึกอบรม: {matchResult.linkedParticipant.first_name_th || matchResult.linkedParticipant.first_name}
+                                ผู้สั่งซื้อท่านนี้คือผู้เข้ารับการฝึกอบรม: {resolvePersonFullNameWithTitle(matchResult.linkedParticipant).fullName}
                               </p>
                               <p className="text-[10px] text-orange-300/80">
                                 นามเรียกขาน: {matchResult.linkedParticipant.callsign || '-'} • หน่วย: {matchResult.linkedParticipant.unit || '-'}

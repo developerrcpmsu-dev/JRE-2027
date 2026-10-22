@@ -20,7 +20,8 @@ import {
   OFFICIAL_NETWORK_INSTITUTIONS,
   resolveUniversityInfo,
   resolveGender,
-  isStaffRegistration
+  isStaffRegistration,
+  resolvePersonFullNameWithTitle
 } from '../data/defaultData';
 
 export default function ShirtOrderPrintModal({
@@ -36,6 +37,7 @@ export default function ShirtOrderPrintModal({
   onOpenScanner = null,
   onTogglePickupStatus = null
 }) {
+  const [pageOrientation, setPageOrientation] = useState('landscape'); // 'landscape' (default for 12-col table) or 'portrait'
   const [printScope, setPrintScope] = useState('filtered'); // 'all' or 'filtered'
   const [groupByInstitution, setGroupByInstitution] = useState(true);
   const [includeRoomCol, setIncludeRoomCol] = useState(true);
@@ -81,7 +83,9 @@ export default function ShirtOrderPrintModal({
         if (!rA && rB) return 1;
         return String(rA).localeCompare(String(rB), 'th', { numeric: true });
       }
-      return String(a.customer_name || '').localeCompare(String(b.customer_name || ''), 'th');
+      const nameA = resolvePersonFullNameWithTitle(a).fullName;
+      const nameB = resolvePersonFullNameWithTitle(b).fullName;
+      return nameA.localeCompare(nameB, 'th');
     });
   };
 
@@ -221,31 +225,31 @@ export default function ShirtOrderPrintModal({
       <table className="w-full border-collapse border border-slate-400 text-[10px] table-auto">
         <thead>
           <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-400">
-            <th className="border border-slate-300 py-1.5 px-1 text-center w-8">ลำดับ</th>
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-7">ลำดับ</th>
             {showUniCol && (
-              <th className="border border-slate-300 py-1.5 px-1.5 text-left w-16">สถาบัน</th>
+              <th className="border border-slate-300 py-1.5 px-1.5 text-left w-14">สถาบัน</th>
             )}
-            <th className="border border-slate-300 py-1.5 px-2 text-left">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-            <th className="border border-slate-300 py-1.5 px-1 text-center w-11">เพศ</th>
+            <th className="border border-slate-300 py-1.5 px-2 text-left min-w-[175px]">คำนำหน้า ชื่อ - นามสกุล (ชื่อเล่น)</th>
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-10">เพศ</th>
             {includeRoomCol && (
               <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20 bg-amber-50/70">
                 ห้องพัก / กลุ่มฝึก
               </th>
             )}
             <th className="border border-slate-300 py-1.5 px-1 text-center w-16">ประเภท</th>
-            <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20">เบอร์โทรศัพท์</th>
+            <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20 font-mono">เบอร์โทรศัพท์</th>
             <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">ไซส์เสื้อ</th>
             <th className="border border-slate-300 py-1.5 px-1 text-center w-16">การชำระ</th>
             {includeQrCol && (
-              <th className="border border-slate-300 py-1.5 px-1 text-center w-20 bg-indigo-50/60">
+              <th className="border border-slate-300 py-1.5 px-1 text-center w-16 bg-indigo-50/60">
                 QR สแกนรับเสื้อ
               </th>
             )}
-            <th className="border border-slate-300 py-1.5 px-1 text-center w-20">
+            <th className="border border-slate-300 py-1.5 px-1 text-center w-18">
               สถานะรับเสื้อ
             </th>
             {includeSignatureCol && (
-              <th className="border border-slate-300 py-1.5 px-2 text-center w-28 bg-slate-50">
+              <th className="border border-slate-300 py-1.5 px-2 text-center w-24 bg-slate-50">
                 ลายมือชื่อผู้รับเสื้อ
               </th>
             )}
@@ -260,6 +264,7 @@ export default function ShirtOrderPrintModal({
             </tr>
           ) : (
             itemsList.map((item, idx) => {
+              const nameData = resolvePersonFullNameWithTitle(item);
               const isReceived = item.pickup_status === 'received';
               const isPaid = item.payment_status === 'paid_verified';
               const uniShort = item.uni_short || resolveUniversityInfo(item.rawRegistration || item).shortTag;
@@ -292,19 +297,23 @@ export default function ShirtOrderPrintModal({
                     </td>
                   )}
 
-                  {/* Full Name & Nickname & Callsign */}
-                  <td className="border border-slate-300 py-1.5 px-2 text-slate-900 break-words max-w-[180px]">
-                    <div className="font-bold leading-snug">
-                      {item.customer_name || '-'}
+                  {/* Full Name & Nickname & Callsign - Clean single-line name with title */}
+                  <td className="border border-slate-300 py-1.5 px-2 text-slate-900 min-w-[175px]">
+                    <div className="font-bold text-xs sm:text-[11px] text-slate-950 whitespace-nowrap leading-tight">
+                      {nameData.fullName}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                       {item.nickname && item.nickname !== '-' && (
-                        <span className="text-slate-600 font-semibold ml-1">({item.nickname})</span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 text-[8.5px] font-semibold border border-slate-200">
+                          ({item.nickname})
+                        </span>
+                      )}
+                      {item.callsign && item.callsign !== '-' && (
+                        <span className="text-[8.5px] text-slate-500 font-mono">
+                          รหัส: {item.callsign}
+                        </span>
                       )}
                     </div>
-                    {item.callsign && item.callsign !== '-' && (
-                      <div className="text-[9px] text-slate-500 font-mono">
-                        นามเรียกขาน: {item.callsign}
-                      </div>
-                    )}
                   </td>
 
                   {/* Gender (Sorted Male -> Female) */}
@@ -323,10 +332,10 @@ export default function ShirtOrderPrintModal({
                     <td className="border border-slate-300 py-1.5 px-1.5 text-center bg-amber-50/30">
                       {rawRoom ? (
                         <span className="font-black font-mono text-[10.5px] text-slate-950 block leading-tight">
-                          {rawRoom}
+                          {rawRoom.startsWith('ห้อง') ? rawRoom : `ห้อง ${rawRoom}`}
                         </span>
                       ) : uniShort === 'มมส' ? (
-                        <span className="text-[9px] text-slate-500 block leading-tight">
+                        <span className="text-[9px] text-slate-500 block leading-tight font-medium">
                           มมส (ไม่พักหอ)
                         </span>
                       ) : (
@@ -503,6 +512,12 @@ export default function ShirtOrderPrintModal({
   return (
     <ModalPortal isOpen={isOpen} onClose={onClose}>
       <div className="print-modal-root fixed inset-0 z-[9999] flex flex-col bg-slate-950/95 backdrop-blur-md overflow-hidden">
+        <style>{`
+          @page {
+            size: ${pageOrientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};
+            margin: 6mm 6mm 6mm 6mm;
+          }
+        `}</style>
         
         {/* Top Control Toolbar (Hidden in print) */}
         <header className="no-print bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xl shrink-0">
@@ -616,6 +631,34 @@ export default function ShirtOrderPrintModal({
               </button>
             </div>
 
+            {/* Orientation Toggle */}
+            <div className="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800" title="เลือกรูปแบบการจัดพิมพ์ A4">
+              <button
+                type="button"
+                onClick={() => setPageOrientation('landscape')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  pageOrientation === 'landscape' 
+                    ? 'bg-indigo-600 text-white shadow' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="พิมพ์แนวนอน (A4 Landscape) — แนะนำสำหรับตารางรายชื่อ 12 คอลัมน์ ตัวหนังสือชัดเจน ไม่บีบ"
+              >
+                📄 แนวนอน (แนะนำ)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageOrientation('portrait')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  pageOrientation === 'portrait' 
+                    ? 'bg-indigo-600 text-white shadow' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="พิมพ์แนวตั้ง (A4 Portrait)"
+              >
+                📄 แนวตั้ง
+              </button>
+            </div>
+
             {/* Grouping Mode Toggle */}
             <label className="flex items-center gap-1.5 cursor-pointer text-amber-300 hover:text-amber-200 font-bold select-none">
               <input
@@ -690,7 +733,7 @@ export default function ShirtOrderPrintModal({
           {/* Printable Document Container */}
           <div 
             id="printable-shirt-report"
-            className="w-full max-w-[210mm] mx-auto h-fit bg-white text-slate-900 p-6 sm:p-10 rounded-xl shadow-2xl space-y-6 print:p-0 print:m-0 print:shadow-none print:w-full print:max-w-none text-xs"
+            className={`w-full ${pageOrientation === 'landscape' ? 'max-w-[297mm]' : 'max-w-[210mm]'} mx-auto h-fit bg-white text-slate-900 p-6 sm:p-10 rounded-xl shadow-2xl space-y-6 print:p-0 print:m-0 print:shadow-none print:w-full print:max-w-none text-xs`}
             style={{ fontFamily: "'Sarabun', 'Noto Sans Thai', 'TH Sarabun New', Tahoma, sans-serif" }}
           >
             

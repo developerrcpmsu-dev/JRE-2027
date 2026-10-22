@@ -1,4 +1,4 @@
-import { OFFICIAL_NETWORK_INSTITUTIONS } from '../data/defaultData';
+import { OFFICIAL_NETWORK_INSTITUTIONS, resolvePersonFullNameWithTitle } from '../data/defaultData';
 
 export const ID_CARD_PAYLOAD_TYPE = 'JRE27_ID_CARD';
 
@@ -160,10 +160,11 @@ export function parseIdCardPayload(rawValue) {
 export function getRegistrationCardData(registration) {
   const r = registration || {};
   const legacyName = parseLegacyFullName(r.full_name_affiliation);
-  const titleTh = clean(r.title_th === 'อื่นๆ' ? r.title_other_th : r.title_th) || legacyName.titleTh || '';
+  const resolved = resolvePersonFullNameWithTitle(r);
+  const titleTh = clean(r.title_th === 'อื่นๆ' ? r.title_other_th : r.title_th) || resolved.title || legacyName.titleTh || '';
   const titleEn = clean(r.title_en === 'อื่นๆ' ? r.title_other_en : r.title_en) || legacyName.titleEn || '';
-  const firstNameTh = clean(r.first_name_th || r.first_name || legacyName.firstNameTh);
-  const lastNameTh = clean(r.last_name_th || r.last_name || legacyName.lastNameTh);
+  const firstNameTh = resolved.firstName || clean(r.first_name_th || r.first_name || legacyName.firstNameTh);
+  const lastNameTh = resolved.lastName || clean(r.last_name_th || r.last_name || legacyName.lastNameTh);
   const firstNameEn = clean(r.first_name_en || legacyName.firstNameEn);
   const lastNameEn = clean(r.last_name_en || legacyName.lastNameEn);
   const organization = splitOrganizationFields(r);

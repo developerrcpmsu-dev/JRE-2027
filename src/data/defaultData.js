@@ -794,6 +794,172 @@ export const resolveGender = (reg) => {
   return 'ไม่ระบุ';
 };
 
+export const THAI_HONORIFIC_PREFIXES = [
+  'ว่าที่ร้อยตรีหญิง',
+  'ว่าที่ร้อยตรี',
+  'ว่าที่ ร.ต.หญิง',
+  'ว่าที่ ร.ต.',
+  'นางสาว',
+  'นาย',
+  'นาง',
+  'เด็กชาย',
+  'เด็กหญิง',
+  'ด.ช.',
+  'ด.ญ.',
+  'นพ.',
+  'พญ.',
+  'ทพ.',
+  'ภก.',
+  'ส.ต.ต.',
+  'ส.ต.ท.',
+  'ส.ต.อ.',
+  'ร.ต.ต.',
+  'ร.ต.ท.',
+  'ร.ต.อ.',
+  'พ.ต.ต.',
+  'พ.ต.ท.',
+  'พ.ต.อ.',
+  'พล.ต.ต.',
+  'Mr.',
+  'Ms.',
+  'Mrs.',
+  'Miss',
+  'Dr.'
+];
+
+const TITLE_PREFIX_REGEX = /^(?:ว่าที่ร้อยตรีหญิง|ว่าที่ร้อยตรี|ว่าที่\s*ร\.ต\.หญิง|ว่าที่\s*ร\.ต\.|นางสาว|นาย|นาง|เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นพ\.|พญ\.|ทพ\.|ภก\.|ส\.ต\.ต\.|ส\.ต\.ท\.|ส\.ต\.อ\.|ร\.ต\.ต\.|ร\.ต\.ท\.|ร\.ต\.อ\.|พ\.ต\.ต\.|พ\.ต\.ท\.|พ\.ต\.อ\.|พล\.ต\.ต\.|Mr\.?|Ms\.?|Mrs\.?|Miss|Dr\.?)\s*/i;
+
+/**
+ * Resolves person's title, first name, last name, and full name with guaranteed prefix
+ * and strictly PREVENTS any duplicate prefix (e.g. "นาย นาย...", "นางสาว นางสาว...").
+ */
+export function resolvePersonFullNameWithTitle(person) {
+  if (!person) {
+    return {
+      title: '',
+      firstName: '',
+      lastName: '',
+      fullName: '-'
+    };
+  }
+
+  // 1. Gather raw fields
+  let rawFirstName = (
+    person.first_name_th ||
+    person.first_name ||
+    person.rawRegistration?.first_name_th ||
+    person.rawRegistration?.first_name ||
+    ''
+  ).trim();
+
+  let rawLastName = (
+    person.last_name_th ||
+    person.last_name ||
+    person.rawRegistration?.last_name_th ||
+    person.rawRegistration?.last_name ||
+    ''
+  ).trim();
+
+  // If first and last name are both empty, try customer_name or full_name_affiliation
+  if (!rawFirstName && !rawLastName) {
+    const rawAlt = (
+      person.customer_name ||
+      person.full_name_affiliation ||
+      person.rawRegistration?.full_name_affiliation ||
+      ''
+    ).trim();
+    if (rawAlt) {
+      const cleanAlt = rawAlt.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+      const parts = cleanAlt.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        rawFirstName = parts[0];
+        rawLastName = parts.slice(1).join(' ');
+      } else if (parts.length === 1) {
+        rawFirstName = parts[0];
+      }
+    }
+  }
+
+  // 2. Extract leading title from rawFirstName and eliminate ANY duplicate consecutive titles
+  // e.g. "นาย นายปฏิภาณ" or "นาย ปฏิภาณ"
+  let detectedTitle = '';
+  let cleanFirst = rawFirstName;
+
+  while (cleanFirst) {
+    const match = cleanFirst.match(TITLE_PREFIX_REGEX);
+    if (match) {
+      if (!detectedTitle) {
+        detectedTitle = match[0].trim();
+      }
+      cleanFirst = cleanFirst.slice(match[0].length).trim();
+    } else {
+      break;
+    }
+  }
+
+  // Also clean rawLastName if it accidentally starts with a title
+  let cleanLast = rawLastName;
+  while (cleanLast) {
+    const match = cleanLast.match(TITLE_PREFIX_REGEX);
+    if (match && cleanLast.length > match[0].length) {
+      cleanLast = cleanLast.slice(match[0].length).trim();
+    } else {
+      break;
+    }
+  }
+
+  // 3. If no title detected in first name, look at explicit title fields
+  let finalTitle = detectedTitle;
+  if (!finalTitle) {
+    const explicitTitle = (
+      person.title_th && person.title_th !== 'อื่นๆ' ? person.title_th :
+      person.title_other_th ? person.title_other_th :
+      person.title ? person.title :
+      person.rawRegistration?.title_th && person.rawRegistration?.title_th !== 'อื่นๆ' ? person.rawRegistration.title_th :
+      person.rawRegistration?.title_other_th ? person.rawRegistration.title_other_th :
+      person.rawRegistration?.title ? person.rawRegistration.title :
+      ''
+    ).trim();
+
+    if (explicitTitle) {
+      finalTitle = explicitTitle;
+    }
+  }
+
+  // 4. If still no title, infer from Gender (ชาย -> นาย, หญิง -> นางสาว)
+  if (!finalTitle) {
+    const gender = person.gender || resolveGender(person.rawRegistration || person);
+    if (gender === 'ชาย') {
+      finalTitle = 'นาย';
+    } else if (gender === 'หญิง') {
+      finalTitle = 'นางสาว';
+    } else {
+      finalTitle = 'นาย';
+    }
+  }
+
+  // 5. Clean finalTitle of any duplicate words (e.g. "นาย นาย" -> "นาย")
+  finalTitle = finalTitle.replace(/^(นาย|นางสาว|นาง)\s+(นาย|นางสาว|นาง)$/g, '$1').trim();
+
+  // 6. Format prefix:
+  // "นาย", "นาง", "นางสาว" are directly prefixed to the name without space (e.g. "นายกรวิฐ", "นางสาวชลธิชา")
+  // Titles like "ว่าที่ร้อยตรี", "ด.ช.", "Mr." have a space.
+  const NO_SPACE_TITLES = new Set(['นาย', 'นาง', 'นางสาว']);
+  const prefix = NO_SPACE_TITLES.has(finalTitle) ? finalTitle : `${finalTitle} `;
+
+  const formattedFirstName = cleanFirst || (person.first_name || '').trim();
+  const formattedLastName = cleanLast || (person.last_name || '').trim();
+
+  const fullName = `${prefix}${formattedFirstName} ${formattedLastName}`.trim();
+
+  return {
+    title: finalTitle,
+    firstName: formattedFirstName,
+    lastName: formattedLastName,
+    fullName
+  };
+}
+
 /**
  * แปลงชื่อไซส์เสื้อให้เป็นมาตรฐานเดียวกัน (SS, S, M, L, XL, 2XL, 3XL, 4XL, 5XL, อื่นๆ)
  */

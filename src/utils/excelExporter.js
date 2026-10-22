@@ -9,7 +9,8 @@ import {
   getApplicantMedical,
   getApplicantAllergy,
   hasMedicalCondition,
-  hasFoodOrDrugAllergy
+  hasFoodOrDrugAllergy,
+  resolvePersonFullNameWithTitle
 } from '../data/defaultData';
 import { DataService, ensureHostedUrl } from '../supabase';
 
@@ -24,30 +25,14 @@ const THAI_HONORIFIC_TITLES = [
  * Resolves first and last name from registration/order records
  */
 export function resolveFirstAndLastName(item) {
-  if (!item) return { firstName: '', lastName: '' };
-  let firstName = (item.first_name || item.first_name_th || item.rawRegistration?.first_name || item.rawRegistration?.first_name_th || '').trim();
-  let lastName = (item.last_name || item.last_name_th || item.rawRegistration?.last_name || item.rawRegistration?.last_name_th || '').trim();
-  if (firstName || lastName) return { firstName, lastName };
-
-  let raw = (item.customer_name || item.full_name_affiliation || item.rawRegistration?.full_name_affiliation || '').trim();
-  if (!raw) return { firstName: '', lastName: '' };
-
-  let clean = raw.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
-  for (const t of THAI_HONORIFIC_TITLES) {
-    if (clean.startsWith(t)) {
-      clean = clean.slice(t.length).trim();
-      break;
-    }
-  }
-  const parts = clean.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    firstName = parts[0];
-    lastName = parts.slice(1).join(' ');
-  } else if (parts.length === 1) {
-    firstName = parts[0];
-    lastName = '';
-  }
-  return { firstName, lastName };
+  if (!item) return { title: '', firstName: '', lastName: '', fullName: '-' };
+  const res = resolvePersonFullNameWithTitle(item);
+  return {
+    title: res.title,
+    firstName: res.firstName,
+    lastName: res.lastName,
+    fullName: res.fullName
+  };
 }
 
 /**
@@ -190,6 +175,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'มหาวิทยาลัย (ตัวย่อ)', key: 'uni_short', width: 18 },
     { header: 'เพศ (จัดห้องพัก)', key: 'gender', width: 15 },
     { header: 'ประเภทผู้สมัคร', key: 'role_label', width: 24 },
+    { header: 'คำนำหน้า', key: 'title', width: 12 },
     { header: 'ชื่อ', key: 'first_name', width: 18 },
     { header: 'สกุล', key: 'last_name', width: 18 },
     { header: 'หน่วยงาน / สถาบันเต็ม', key: 'institution', width: 28 },
@@ -276,7 +262,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       onProgress(i + 1, sortedRegs.length);
     }
 
-    const { firstName, lastName } = resolveFirstAndLastName(r);
+    const { title, firstName, lastName } = resolveFirstAndLastName(r);
     const isStaff = isStaffRegistration(r);
     const gender = resolveGender(r);
     const uniInfo = resolveUniversityInfo(r);
@@ -414,6 +400,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       uni_short: uniInfo.shortTag,
       gender: gender,
       role_label: isStaff ? 'Staff (ค่าเสื้อ 280 บ. ครั้งเดียว)' : 'ผู้เข้าอบรมปกติ',
+      title: title || '-',
       first_name: firstName || '-',
       last_name: lastName || '-',
       institution: r.institution || '-',
@@ -611,6 +598,7 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
     { header: 'มหาวิทยาลัย (ตัวย่อ)', key: 'uni_short', width: 18 },
     { header: 'เพศ (ชาย/หญิง)', key: 'gender', width: 14 },
     { header: 'ประเภทผู้รับ', key: 'role_label', width: 22 },
+    { header: 'คำนำหน้า', key: 'title', width: 12 },
     { header: 'ชื่อ', key: 'first_name', width: 18 },
     { header: 'สกุล', key: 'last_name', width: 18 },
     { header: 'เบอร์โทร', key: 'phone', width: 16 },
@@ -669,7 +657,7 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
       onProgress(i + 1, items.length);
     }
 
-    const { firstName, lastName } = resolveFirstAndLastName(it);
+    const { title, firstName, lastName } = resolveFirstAndLastName(it);
     const isReg = it.source === 'registration' || it.itemType === 'registration';
     const isReceived = it.pickup_status === 'received';
     const isPaid = it.payment_status === 'paid_verified' || it.payment_status === 'paid';
@@ -686,6 +674,7 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
       uni_short: it.uni_short || uniInfo.shortTag,
       gender: gender,
       role_label: isStaff ? 'Staff (ค่าเสื้อ 280 บ.)' : (isReg ? 'ผู้เข้าอบรมปกติ' : 'สั่งซื้อหน้าร้าน'),
+      title: title || '-',
       first_name: firstName || '-',
       last_name: lastName || '-',
       phone: it.customer_phone || it.phone || '-',

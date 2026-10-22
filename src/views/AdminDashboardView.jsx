@@ -95,7 +95,8 @@ import {
   getCateringCategory,
   ADMIN_MESSAGE_SENDERS,
   STANDARD_REQUESTABLE_DOCS,
-  resolveMessageSenderInfo
+  resolveMessageSenderInfo,
+  resolvePersonFullNameWithTitle
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
@@ -423,7 +424,7 @@ export default function AdminDashboardView({
   // Trainee registrations unified as official training shirt records
   const traineeShirtRecords = React.useMemo(() => {
     return (registrations || []).map((r) => {
-      const { firstName, lastName } = resolveFirstAndLastName(r);
+      const personNameData = resolvePersonFullNameWithTitle(r);
       const isStaff = isStaffRegistration(r);
       const gender = resolveGender(r);
       const uniInfo = resolveUniversityInfo(r);
@@ -451,9 +452,10 @@ export default function AdminDashboardView({
         uni_name: uniInfo.university,
         uni_club: uniInfo.club,
         order_number: orderNumber,
-        first_name: firstName,
-        last_name: lastName,
-        customer_name: `${firstName} ${lastName}`.trim() || r.full_name_affiliation || r.user_email || 'ผู้สมัคร JRE 2027',
+        title: personNameData.title,
+        first_name: personNameData.firstName,
+        last_name: personNameData.lastName,
+        customer_name: personNameData.fullName,
         nickname: r.nickname || '-',
         callsign: r.callsign || '-',
         institution: r.institution || '-',
@@ -486,7 +488,7 @@ export default function AdminDashboardView({
   // Merchandise store orders records
   const merchandiseStoreRecords = React.useMemo(() => {
     return (merchandiseOrders || []).map((ord) => {
-      const { firstName, lastName } = resolveFirstAndLastName(ord);
+      const personNameData = resolvePersonFullNameWithTitle(ord);
       const isVerified = ord.payment_status === 'paid_verified';
       const isReceived = ord.pickup_status === 'received';
       const totalQty = (ord.items || []).reduce((sum, it) => sum + (it.quantity || 1), 0);
@@ -504,9 +506,10 @@ export default function AdminDashboardView({
         uni_name: 'สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
         uni_club: '-',
         order_number: ord.order_number,
-        first_name: firstName,
-        last_name: lastName,
-        customer_name: ord.customer_name || 'ลูกค้าหน้าร้าน',
+        title: personNameData.title,
+        first_name: personNameData.firstName,
+        last_name: personNameData.lastName,
+        customer_name: personNameData.fullName !== '-' ? personNameData.fullName : (ord.customer_name || 'ลูกค้าหน้าร้าน'),
         nickname: '-',
         callsign: '-',
         institution: '-',
@@ -3046,7 +3049,10 @@ export default function AdminDashboardView({
     });
 
     const rows = await Promise.all(sortedRegistrations.map(async (r, idx) => {
-      const { firstName, lastName } = resolveFirstAndLastName(r);
+      const personNameData = resolvePersonFullNameWithTitle(r);
+      const firstName = personNameData.firstName;
+      const lastName = personNameData.lastName;
+      const title = personNameData.title;
       const isStaff = isStaffRegistration(r);
       const gender = resolveGender(r);
       const uniInfo = resolveUniversityInfo(r);
@@ -3190,7 +3196,7 @@ export default function AdminDashboardView({
         esc(normalizeSize(r.shirt_size || 'L')),
         esc(r.room_assigned || 'ยังไม่จัดสรร'),
         esc(r.group_assigned || 'ยังไม่จัดสรร'),
-        esc(r.title || '-'),
+        esc(title || '-'),
         esc(firstName),
         esc(lastName),
         esc(r.nickname || '-'),
@@ -3368,7 +3374,9 @@ export default function AdminDashboardView({
     });
 
     const rows = await Promise.all(sortedItems.map(async (it, idx) => {
-      const { firstName, lastName } = resolveFirstAndLastName(it);
+      const personNameData = resolvePersonFullNameWithTitle(it);
+      const firstName = personNameData.firstName;
+      const lastName = personNameData.lastName;
       const isReg = it.source === 'registration' || it.itemType === 'registration';
       const isReceived = it.pickup_status === 'received';
       const isPaid = it.payment_status === 'paid_verified' || it.payment_status === 'paid';
@@ -4895,7 +4903,7 @@ export default function AdminDashboardView({
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-1.5">
                                 <span className="font-bold text-white text-sm">
-                                  {reg.first_name} {reg.last_name}
+                                  {resolvePersonFullNameWithTitle(reg).fullName}
                                 </span>
                                 {reg.nickname && (
                                   <span className="text-amber-300 font-bold text-xs">
@@ -5373,7 +5381,7 @@ export default function AdminDashboardView({
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-xl sm:text-2xl font-black text-white">
-                    {profileModalReg.first_name} {profileModalReg.last_name}
+                    {resolvePersonFullNameWithTitle(profileModalReg).fullName}
                   </h3>
                   {profileModalReg.nickname && (
                     <span className="text-amber-300 font-bold text-xs bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
@@ -5511,22 +5519,14 @@ export default function AdminDashboardView({
                 </div>
 
                 {(() => {
-                  let thFullName = '';
+                  const thFullName = resolvePersonFullNameWithTitle(profileModalReg).fullName;
                   let enFullName = '';
 
-                  if (profileModalReg.full_name_affiliation) {
+                  if (profileModalReg.full_name_affiliation && profileModalReg.full_name_affiliation.includes('/')) {
                     const parts = profileModalReg.full_name_affiliation.split('/');
-                    if (parts.length >= 2) {
-                      thFullName = parts[0].trim();
-                      enFullName = parts.slice(1).join('/').trim();
-                    } else {
-                      thFullName = profileModalReg.full_name_affiliation.trim();
-                    }
+                    enFullName = parts.slice(1).join('/').trim();
                   }
 
-                  if (!thFullName) {
-                    thFullName = `${profileModalReg.title || ''}${profileModalReg.first_name || ''} ${profileModalReg.last_name || ''}`.trim();
-                  }
                   if (!enFullName && (profileModalReg.first_name_en || profileModalReg.last_name_en)) {
                     enFullName = `${profileModalReg.title_en ? profileModalReg.title_en + ' ' : ''}${profileModalReg.first_name_en || ''} ${profileModalReg.last_name_en || ''}`.trim();
                   }
@@ -10268,7 +10268,7 @@ export default function AdminDashboardView({
                         {/* Col 1: Person Info (5 cols) */}
                         <div className="md:col-span-5 space-y-1">
                           <h4 className="text-sm font-black text-white flex items-center gap-1.5 flex-wrap">
-                            <span>{item.customer_name}</span>
+                            <span>{resolvePersonFullNameWithTitle(item).fullName !== '-' ? resolvePersonFullNameWithTitle(item).fullName : item.customer_name}</span>
                             {item.nickname && item.nickname !== '-' && (
                               <span className="text-amber-300 text-xs font-bold">({item.nickname})</span>
                             )}
