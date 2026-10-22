@@ -478,6 +478,10 @@ export default function RegisterView({
   const [callsign, setCallsign] = useState('');
   const [unit, setUnit] = useState('');
   const [shirtSize, setShirtSize] = useState('L');
+  const [customShirtNote, setCustomShirtNote] = useState('');
+  const [isEditingDashboardShirtNote, setIsEditingDashboardShirtNote] = useState(false);
+  const [dashboardCustomShirtNote, setDashboardCustomShirtNote] = useState('');
+  const [isSavingDashboardShirtNote, setIsSavingDashboardShirtNote] = useState(false);
   const [idCardPhoto, setIdCardPhoto] = useState('');
   const [idCardFileName, setIdCardFileName] = useState('');
   const [formSlipRound1, setFormSlipRound1] = useState('');
@@ -775,6 +779,7 @@ export default function RegisterView({
           if (d.birthMonth) setBirthMonth(d.birthMonth);
           if (d.birthYearBE) setBirthYearBE(d.birthYearBE);
           if (d.shirtSize) setShirtSize(d.shirtSize);
+          if (d.customShirtNote) setCustomShirtNote(d.customShirtNote);
           if (d.emergencyName) setEmergencyName(d.emergencyName);
           if (d.emergencyPhone) setEmergencyPhone(d.emergencyPhone);
           if (d.emergencyRelation) setEmergencyRelation(d.emergencyRelation);
@@ -832,6 +837,7 @@ export default function RegisterView({
         birthMonth,
         birthYearBE,
         shirtSize,
+        customShirtNote,
         emergencyName,
         emergencyPhone,
         emergencyRelation,
@@ -879,6 +885,7 @@ export default function RegisterView({
     birthMonth,
     birthYearBE,
     shirtSize,
+    customShirtNote,
     emergencyName,
     emergencyPhone,
     emergencyRelation,
@@ -1228,6 +1235,8 @@ export default function RegisterView({
     );
     setUnit(reg.unit || reg.unit_name || selectedInstitution?.club || inferredUnit || '');
     setShirtSize(reg.shirt_size || 'L');
+    setCustomShirtNote(reg.custom_shirt_note || '');
+    setDashboardCustomShirtNote(reg.custom_shirt_note || '');
     setIdCardPhoto(reg.id_card_photo || reg.id_card_url || '');
     setBloodGroup(reg.blood_group || 'O');
     setPhone(reg.phone || '');
@@ -1425,6 +1434,19 @@ export default function RegisterView({
       }, 200);
       setStatusMessage({ type: 'error', text: 'กรุณาเลือกไซส์เสื้อฝึก JRE 2027 (บังคับเลือกเนื่องจากจัดทำแบบพรีออเดอร์)' });
       triggerToast('กรุณาเลือกขนาดไซส์เสื้อฝึก JRE 2027', 'error');
+      return;
+    }
+    if (String(shirtSize).startsWith('อื่นๆ') && !customShirtNote.trim()) {
+      setFieldErrors({ customShirtNote: 'กรุณาระบุไซส์หรือขนาดรอบอกที่ต้องการสั่งตัดพิเศษ เพื่อให้ Admin จัดเตรียมเสื้อได้ถูกต้อง' });
+      setTimeout(() => {
+        const el = document.getElementById('field-customShirtNote');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus?.();
+        }
+      }, 200);
+      setStatusMessage({ type: 'error', text: 'กรุณาระบุไซส์เสื้อหรือรอบอกที่ท่านต้องการสั่งตัดพิเศษในช่อง "ระบุไซส์ที่ต้องการ"' });
+      triggerToast('กรุณาระบุไซส์หรือรอบอกที่ต้องการสั่งตัดพิเศษ', 'error');
       return;
     }
     setFieldErrors({});
@@ -1690,6 +1712,7 @@ export default function RegisterView({
         is_staff: effectiveIsStaff,
         registration_type: effectiveIsStaff ? 'staff' : 'participant',
         shirt_size: shirtSize,
+        custom_shirt_note: customShirtNote.trim(),
         id_card_photo: idCardPhoto,
         id_card_url: idCardPhoto,
         dob: formattedDob,
@@ -4092,15 +4115,94 @@ export default function RegisterView({
               </div>
 
               {/* Shirt Size Card */}
-              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-purple-500/30">
-                <span className="text-purple-300 block mb-0.5 font-semibold flex items-center gap-1">
-                  <Shirt className="w-3.5 h-3.5 text-purple-400" />
-                  ไซส์เสื้อฝึก JRE 2027 (บังคับ):
-                </span>
-                <span className="font-black text-white text-base">
-                  ไซส์ {myRegistration.shirt_size || 'L'}
-                </span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-purple-300 font-semibold flex items-center gap-1">
+                    <Shirt className="w-3.5 h-3.5 text-purple-400" />
+                    ไซส์เสื้อฝึก JRE 2027:
+                  </span>
+                  {!isEditingDashboardShirtNote && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDashboardCustomShirtNote(myRegistration.custom_shirt_note || '');
+                        setIsEditingDashboardShirtNote(true);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      ✏️ ระบุ/แก้ไขไซส์พิเศษที่ต้องการ
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <span className="font-black text-white text-base">
+                    ไซส์ {myRegistration.shirt_size || 'L'}
+                  </span>
+                  {myRegistration.custom_shirt_note && !isEditingDashboardShirtNote && (
+                    <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-950/50 border border-amber-500/40 text-[11px] text-amber-200 font-semibold">
+                      📝 ไซส์/รอบอกที่ท่านระบุแจ้ง Admin: <span className="text-white font-bold">{myRegistration.custom_shirt_note}</span>
+                    </div>
+                  )}
+                  {String(myRegistration.shirt_size || '').startsWith('อื่นๆ') && !myRegistration.custom_shirt_note && !isEditingDashboardShirtNote && (
+                    <div className="mt-1 px-2.5 py-1 rounded-lg bg-rose-950/50 border border-rose-500/40 text-[11px] text-rose-200 font-semibold">
+                      ⚠️ ท่านเลือกไซส์ &ldquo;อื่นๆ&rdquo; กรุณากดปุ่ม <strong>&ldquo;✏️ ระบุ/แก้ไขไซส์พิเศษที่ต้องการ&rdquo;</strong> เพื่อแจ้งไซส์หรือรอบอกให้ Admin ทราบ
+                    </div>
+                  )}
+                </div>
+
+                {isEditingDashboardShirtNote && (
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    <label className="block text-[11px] font-bold text-amber-300">
+                      ระบุไซส์หรือขนาดรอบอกที่ต้องการแจ้ง Admin (เช่น 6XL รอบอก 54 นิ้ว):
+                    </label>
+                    <input
+                      type="text"
+                      value={dashboardCustomShirtNote}
+                      onChange={(e) => setDashboardCustomShirtNote(e.target.value)}
+                      placeholder="เช่น 6XL รอบอก 54 นิ้ว หรือ รอบอก 56 นิ้ว"
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-amber-500/50 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingDashboardShirtNote(false);
+                          setDashboardCustomShirtNote(myRegistration.custom_shirt_note || '');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingDashboardShirtNote}
+                        onClick={async () => {
+                          setIsSavingDashboardShirtNote(true);
+                          try {
+                            const targetId = myRegistration.user_id || myRegistration.id;
+                            if (onUpdateRegistration) {
+                              await onUpdateRegistration(targetId, {
+                                custom_shirt_note: dashboardCustomShirtNote.trim()
+                              });
+                            }
+                            setCustomShirtNote(dashboardCustomShirtNote.trim());
+                            setIsEditingDashboardShirtNote(false);
+                            triggerToast('บันทึกขนาดไซส์/รอบอกที่ต้องการแจ้ง Admin เรียบร้อยแล้ว');
+                          } catch (err) {
+                            triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลไซส์', 'error');
+                          } finally {
+                            setIsSavingDashboardShirtNote(false);
+                          }
+                        }}
+                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingDashboardShirtNote ? 'กำลังบันทึก...' : '💾 บันทึกแจ้ง Admin'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <span className="text-[10px] text-slate-400 block">
                   คอเต่าซิป แขนสั้น โทนสีเทา–ดำ (พรีออเดอร์)
                 </span>
               </div>
@@ -6674,38 +6776,106 @@ export default function RegisterView({
                 </div>
               </div>
 
-              {/* Selected Size Banner */}
+              {/* Selected Size Banner & Custom Size ("อื่นๆ") Specification Box */}
               {shirtSize && (() => {
                 const isCustom = shirtSize.startsWith('อื่นๆ');
                 const matchedOpt = SHIRT_SIZE_OPTIONS.find(o => o.value === shirtSize);
                 const sizeDetail = matchedOpt ? matchedOpt.label.replace(matchedOpt.value, '').replace(/[()]/g, '').trim() : '';
 
                 return (
-                  <div className="p-4 bg-orange-950/40 border border-orange-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center font-black text-base shrink-0">
-                        {isCustom ? (
-                          <Shirt className="w-5 h-5 text-orange-400" />
-                        ) : (
-                          shirtSize
+                  <div className="space-y-3">
+                    <div className="p-4 bg-orange-950/40 border border-orange-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center font-black text-base shrink-0">
+                          {isCustom ? (
+                            <Shirt className="w-5 h-5 text-orange-400" />
+                          ) : (
+                            shirtSize
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-slate-300 block">ไซส์เสื้อที่ท่านเลือกสำหรับสั่งผลิตพรีออเดอร์:</span>
+                          <strong className="text-white text-sm font-black">
+                            {isCustom ? (
+                              `ไซส์พิเศษ (อื่นๆ)${customShirtNote.trim() ? ` — ระบุ: "${customShirtNote.trim()}"` : ' • กรุณาระบุไซส์หรือรอบอกที่ต้องการด้านล่าง'}`
+                            ) : (
+                              `ไซส์ ${shirtSize} ${sizeDetail ? `(${sizeDetail})` : ''}`
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-orange-300 font-bold bg-orange-500/20 px-3 py-1.5 rounded-full border border-orange-500/30 whitespace-nowrap shrink-0 self-start sm:self-auto">
+                        {isStaff
+                          ? `💵 ค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บ. (จ่ายครั้งเดียว)`
+                          : paymentPlan === 'full' 
+                          ? '💵 ค่าเสื้อ 400 บ. (รวมในยอดเต็มจำนวนแล้ว)' 
+                          : '💵 ค่าเสื้อ 400 บ. (รวมในงวดที่ 1)'}
+                      </span>
+                    </div>
+
+                    {/* Custom Size Specification Input when user selects "อื่นๆ" */}
+                    {isCustom && (
+                      <div className={`p-4 rounded-2xl border space-y-3 transition-all ${
+                        fieldErrors.customShirtNote
+                          ? 'bg-rose-950/30 border-rose-500 ring-2 ring-rose-500/40'
+                          : 'bg-amber-950/30 border-amber-500/50'
+                      }`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <label htmlFor="field-customShirtNote" className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                            <span>📝 กรุณาระบุไซส์เสื้อหรือขนาดรอบอกที่ท่านต้องการสั่งตัดพิเศษ:</span>
+                            <span className="text-rose-400">*</span>
+                          </label>
+                          <span className="text-[11px] text-slate-400">
+                            ☎️ สอบถามเพิ่มเติม: 098-329-6762
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            '6XL (รอบอก 52 นิ้ว)',
+                            '7XL (รอบอก 54 นิ้ว)',
+                            '8XL (รอบอก 56 นิ้ว)',
+                            '9XL (รอบอก 58 นิ้ว)',
+                            '3XS / ไซส์เล็กพิเศษ (รอบอก 32 นิ้ว)'
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => {
+                                setCustomShirtNote(preset);
+                                clearFieldError('customShirtNote');
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                                customShirtNote === preset
+                                  ? 'bg-amber-500 text-slate-950 border-amber-300'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-amber-200 border-slate-700'
+                              }`}
+                            >
+                              + {preset}
+                            </button>
+                          ))}
+                        </div>
+
+                        <input
+                          id="field-customShirtNote"
+                          type="text"
+                          value={customShirtNote}
+                          onChange={(e) => {
+                            setCustomShirtNote(e.target.value);
+                            if (e.target.value.trim()) clearFieldError('customShirtNote');
+                          }}
+                          placeholder="พิมพ์ระบุไซส์หรือรอบอกที่ต้องการ เช่น 6XL รอบอก 54 นิ้ว ความยาว 32 นิ้ว..."
+                          className="w-full px-4 py-2.5 bg-slate-950 border border-amber-500/50 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+
+                        {fieldErrors.customShirtNote && (
+                          <p className="text-xs text-rose-400 font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{fieldErrors.customShirtNote}</span>
+                          </p>
                         )}
                       </div>
-                      <div>
-                        <span className="text-[11px] text-slate-300 block">ไซส์เสื้อที่ท่านเลือกสำหรับสั่งผลิตพรีออเดอร์:</span>
-                        <strong className="text-white text-sm font-black">
-                          {isCustom ? (
-                            'ไซส์พิเศษ (อื่นๆ) • ☎️ ติดต่อแจ้งรอบอก: 098-329-6762'
-                          ) : (
-                            `ไซส์ ${shirtSize} ${sizeDetail ? `(${sizeDetail})` : ''}`
-                          )}
-                        </strong>
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-orange-300 font-bold bg-orange-500/20 px-3 py-1.5 rounded-full border border-orange-500/30 whitespace-nowrap shrink-0 self-start sm:self-auto">
-                      {paymentPlan === 'full' 
-                        ? '💵 ค่าเสื้อ 400 บ. (รวมในยอดเต็มจำนวนแล้ว)' 
-                        : '💵 ค่าเสื้อ 400 บ. (รวมในงวดที่ 1)'}
-                    </span>
+                    )}
                   </div>
                 );
               })()}

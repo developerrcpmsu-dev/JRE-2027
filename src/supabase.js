@@ -158,10 +158,43 @@ const unpackRegistration = (row) => {
     unpacked.is_staff = true;
     unpacked.registration_type = 'staff';
     unpacked.payment_plan = 'full';
-    if (unpacked.payment_status === 'paid') {
+    if (!unpacked.payment_slip_url && unpacked.installment_1_slip_url) {
+      unpacked.payment_slip_url = unpacked.installment_1_slip_url;
+      unpacked.payment_slip_date = unpacked.installment_1_slip_date || unpacked.payment_slip_date;
+    }
+    if (!unpacked.slip_ocr_full && unpacked.slip_ocr_round1) {
+      unpacked.slip_ocr_full = { ...unpacked.slip_ocr_round1 };
+    }
+    if (unpacked.slip_ocr_full && Math.abs(Number(unpacked.slip_ocr_full.amount || 0) - STAFF_SHIRT_FEE) <= 1) {
+      unpacked.slip_ocr_full = {
+        ...unpacked.slip_ocr_full,
+        expectedAmount: STAFF_SHIRT_FEE,
+        isAmountMatch: true,
+        matchExpected: true,
+        isFullyVerified: !unpacked.slip_ocr_full.isDuplicate
+      };
+    }
+    if (unpacked.slip_ocr_round1 && Math.abs(Number(unpacked.slip_ocr_round1.amount || 0) - STAFF_SHIRT_FEE) <= 1) {
+      unpacked.slip_ocr_round1 = {
+        ...unpacked.slip_ocr_round1,
+        expectedAmount: STAFF_SHIRT_FEE,
+        isAmountMatch: true,
+        matchExpected: true,
+        isFullyVerified: !unpacked.slip_ocr_round1.isDuplicate
+      };
+    }
+    // Staff only pays once (280 THB): if Round 1 or Full was already approved, sync payment_status to 'paid'
+    if (unpacked.payment_status === 'paid' || unpacked.installment_1_status === 'paid') {
+      unpacked.payment_status = 'paid';
+      unpacked.installment_1_status = 'paid';
       unpacked.payment_amount = 0;
-    } else if (Number(unpacked.payment_amount) === 650 || Number(unpacked.payment_amount) === 850 || Number(unpacked.payment_amount) === 400) {
-      unpacked.payment_amount = STAFF_SHIRT_FEE;
+    } else {
+      if (unpacked.installment_1_status === 'pending_review' && unpacked.payment_status === 'unpaid') {
+        unpacked.payment_status = 'pending_review';
+      }
+      if (Number(unpacked.payment_amount) === 650 || Number(unpacked.payment_amount) === 850 || Number(unpacked.payment_amount) === 400 || !unpacked.payment_amount) {
+        unpacked.payment_amount = STAFF_SHIRT_FEE;
+      }
     }
   } else {
     unpacked.is_staff = Boolean(unpacked.is_staff);
@@ -220,6 +253,7 @@ const packRegistrationForSupabase = (fullData) => {
     affiliation: fullData.affiliation || '',
     admin_private_notes: fullData.admin_private_notes || '',
     shirt_size: fullData.shirt_size || '',
+    custom_shirt_note: fullData.custom_shirt_note || '',
     shirt_pickup_status: fullData.shirt_pickup_status || '',
     shirt_received: fullData.shirt_received || false,
     shirt_received_date: fullData.shirt_received_date || '',

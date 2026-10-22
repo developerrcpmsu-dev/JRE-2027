@@ -382,6 +382,7 @@ export default function AdminDashboardView({
         room_assigned: r.room_assigned || '-',
         size: rawSize,
         normalized_size: normSize,
+        custom_shirt_note: r.custom_shirt_note || '',
         quantity: 1,
         product_name: 'เสื้อฝึก JRE 2027 คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
         color: 'สีเทาตัดดำ (Official Tactical Gray-Black)',
@@ -805,8 +806,12 @@ export default function AdminDashboardView({
   const [allocGroup, setAllocGroup] = useState('');
   const [allocRoom, setAllocRoom] = useState('');
   const [allocShirtSize, setAllocShirtSize] = useState('L');
+  const [allocCustomShirtNote, setAllocCustomShirtNote] = useState('');
   const [customSizeDrafts, setCustomSizeDrafts] = useState({});
   const [updatingSizeId, setUpdatingSizeId] = useState(null);
+  const [editingMerchSizeItemId, setEditingMerchSizeItemId] = useState(null);
+  const [editingMerchSizeVal, setEditingMerchSizeVal] = useState('L');
+  const [editingMerchCustomNote, setEditingMerchCustomNote] = useState('');
 
   // Full Profile & Remarks Modal State
   const [profileModalReg, setProfileModalReg] = useState(null);
@@ -816,6 +821,7 @@ export default function AdminDashboardView({
   const [modalGroup, setModalGroup] = useState('');
   const [modalRoom, setModalRoom] = useState('');
   const [modalShirtSize, setModalShirtSize] = useState('L');
+  const [modalCustomShirtNote, setModalCustomShirtNote] = useState('');
   const [modalSpecialCare, setModalSpecialCare] = useState(false);
   const [modalNotes, setModalNotes] = useState('');
   const [modalPhone, setModalPhone] = useState('');
@@ -1748,26 +1754,36 @@ export default function AdminDashboardView({
     setEditingUserId(reg.user_id);
     setAllocGroup(reg.group_assigned || '');
     setAllocRoom(reg.room_assigned || '');
-    setAllocShirtSize(normalizeSize(reg.shirt_size || 'L'));
+    const normSz = normalizeSize(reg.shirt_size || 'L');
+    setAllocShirtSize(['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normSz) ? normSz : 'อื่นๆ');
+    setAllocCustomShirtNote(reg.custom_shirt_note || (!['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].includes(normSz) ? reg.shirt_size : '') || '');
   };
 
   const handleSaveAllocation = async (userId) => {
+    const finalSize = allocShirtSize === 'อื่นๆ' ? 'อื่นๆ' : (allocShirtSize.trim() || 'L');
+    const finalCustomNote = (allocCustomShirtNote || '').trim();
     await onUpdateAllocation(userId, {
       group_assigned: allocGroup.trim(),
       room_assigned: allocRoom.trim(),
-      shirt_size: allocShirtSize.trim() || 'L'
+      shirt_size: finalSize,
+      custom_shirt_note: finalCustomNote
     });
     setEditingUserId(null);
-    triggerToast(`บันทึกการจัดสรรกลุ่ม ห้องพัก และไซส์เสื้อ (${allocShirtSize}) เรียบร้อย`);
+    triggerToast(`บันทึกการจัดสรรกลุ่ม ห้องพัก และไซส์เสื้อ (${finalSize}${finalCustomNote ? ` • ${finalCustomNote}` : ''}) เรียบร้อย`);
   };
 
-  // Direct handler for Admin to specify/update a person's shirt size (especially when converting from 'อื่นๆ' after contacting them)
-  const handleAssignPersonShirtSize = async (itemOrReg, newSizeRaw) => {
-    const cleanNewSize = String(newSizeRaw || '').trim().toUpperCase();
+  // Direct handler for Admin to specify/update a person's shirt size (locked behind edit/save UI)
+  const handleAssignPersonShirtSize = async (itemOrReg, newSizeRaw, customNoteRaw) => {
+    const rawTrimmed = String(newSizeRaw || '').trim();
+    const cleanNewSize = rawTrimmed === 'อื่นๆ' ? 'อื่นๆ' : rawTrimmed.toUpperCase();
     if (!cleanNewSize) {
       triggerToast('กรุณาเลือกหรือระบุไซส์เสื้อที่ต้องการบันทึก', 'warning');
       return;
     }
+
+    const cleanCustomNote = customNoteRaw !== undefined
+      ? String(customNoteRaw || '').trim()
+      : String(itemOrReg.custom_shirt_note || itemOrReg.rawRegistration?.custom_shirt_note || '').trim();
 
     const recordId = itemOrReg.id || itemOrReg.user_id;
     setUpdatingSizeId(recordId);
@@ -1775,27 +1791,32 @@ export default function AdminDashboardView({
       const isMerchStoreOrder = itemOrReg.source === 'merchandise' && itemOrReg.rawOrder;
       if (isMerchStoreOrder) {
         const rawOrd = itemOrReg.rawOrder;
+        const sizeLabelForOrder = (cleanNewSize === 'อื่นๆ' && cleanCustomNote) ? `อื่นๆ (${cleanCustomNote})` : cleanNewSize;
         const updatedItems = Array.isArray(rawOrd.items) && rawOrd.items.length > 0
-          ? rawOrd.items.map((it, idx) => idx === 0 ? { ...it, size: cleanNewSize } : it)
-          : [{ product_name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027', size: cleanNewSize, quantity: 1 }];
+          ? rawOrd.items.map((it, idx) => idx === 0 ? { ...it, size: sizeLabelForOrder } : it)
+          : [{ product_name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027', size: sizeLabelForOrder, quantity: 1 }];
         await DataService.saveMerchandiseOrder({
           ...rawOrd,
           items: updatedItems
         });
         if (typeof onRefreshRegistrations === 'function') await onRefreshRegistrations();
-        triggerToast(`อัปเดตไซส์เสื้อออเดอร์ ${rawOrd.order_number} เป็นไซส์ "${cleanNewSize}" เรียบร้อยแล้ว`);
+        setEditingMerchSizeItemId(null);
+        triggerToast(`บันทึกไซส์เสื้อออเดอร์ ${rawOrd.order_number} เป็น "${sizeLabelForOrder}" เรียบร้อยแล้ว`);
       } else {
         const targetUserId = itemOrReg.rawRegistration?.user_id || itemOrReg.user_id || itemOrReg.reg_id || String(itemOrReg.id || '').replace('reg_shirt_', '');
         const personName = itemOrReg.customer_name || `${itemOrReg.first_name || ''} ${itemOrReg.last_name || ''}`.trim() || 'ผู้สมัคร';
         if (onUpdateAllocation && targetUserId) {
           await onUpdateAllocation(targetUserId, {
-            shirt_size: cleanNewSize
+            shirt_size: cleanNewSize,
+            custom_shirt_note: cleanCustomNote
           });
           if (profileModalReg && (profileModalReg.user_id === targetUserId || profileModalReg.id === targetUserId)) {
-            setProfileModalReg(prev => prev ? { ...prev, shirt_size: cleanNewSize } : prev);
+            setProfileModalReg(prev => prev ? { ...prev, shirt_size: cleanNewSize, custom_shirt_note: cleanCustomNote } : prev);
             setModalShirtSize(cleanNewSize);
+            setModalCustomShirtNote(cleanCustomNote);
           }
-          triggerToast(`อัปเดตไซส์เสื้อของคุณ ${personName} เป็นไซส์ "${cleanNewSize}" ในระบบเรียบร้อยแล้ว`);
+          setEditingMerchSizeItemId(null);
+          triggerToast(`บันทึกไซส์เสื้อของคุณ ${personName} เป็น "${cleanNewSize}${cleanCustomNote ? ` (${cleanCustomNote})` : ''}" ในระบบเรียบร้อยแล้ว`);
         }
       }
     } catch (err) {
@@ -1814,6 +1835,7 @@ export default function AdminDashboardView({
     setModalGroup(reg.group_assigned || '');
     setModalRoom(reg.room_assigned || '');
     setModalShirtSize(reg.shirt_size || 'L');
+    setModalCustomShirtNote(reg.custom_shirt_note || '');
     setModalSpecialCare(Boolean(reg.is_special_care));
     setModalNotes(reg.special_notes || '');
     setModalPhone(reg.phone || '');
@@ -1880,6 +1902,7 @@ export default function AdminDashboardView({
         setModalGroup(profileModalReg.group_assigned || '');
         setModalRoom(profileModalReg.room_assigned || '');
         setModalShirtSize(profileModalReg.shirt_size || 'L');
+        setModalCustomShirtNote(profileModalReg.custom_shirt_note || '');
         setModalSpecialCare(Boolean(profileModalReg.is_special_care));
         setModalNotes(profileModalReg.special_notes || '');
         setModalPhone(profileModalReg.phone || '');
@@ -1967,13 +1990,17 @@ export default function AdminDashboardView({
         ? STAFF_SHIRT_FEE
         : (isMsuInstitution(modalInstitution || profileModalReg.institution) ? 650 : 850);
       const effectiveAmount = modalIsStaff
-        ? (modalPaymentStatus === 'paid' ? STAFF_SHIRT_FEE : (Number(modalPaymentAmount) > 0 ? Number(modalPaymentAmount) : STAFF_SHIRT_FEE))
-        : (Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : defaultFee);
+        ? (modalPaymentStatus === 'paid' ? 0 : (Number(modalPaymentAmount) > 0 ? Number(modalPaymentAmount) : STAFF_SHIRT_FEE))
+        : (modalPaymentStatus === 'paid' ? 0 : (Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : defaultFee));
+
+      const rawSz = String(modalShirtSize || 'L').trim();
+      const cleanModalSize = rawSz === 'อื่นๆ' ? 'อื่นๆ' : rawSz.toUpperCase();
 
       const updates = {
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
-        shirt_size: (modalShirtSize || 'L').trim().toUpperCase(),
+        shirt_size: cleanModalSize,
+        custom_shirt_note: (modalCustomShirtNote || '').trim(),
         is_special_care: modalSpecialCare,
         special_notes: modalNotes.trim(),
         phone: modalPhone.trim(),
@@ -1990,6 +2017,10 @@ export default function AdminDashboardView({
         payment_bank_info: modalPaymentBank.trim(),
         payment_notes: modalPaymentNotes.trim()
       };
+
+      if (modalIsStaff && modalPaymentStatus === 'paid') {
+        updates.installment_1_status = 'paid';
+      }
 
       await onUpdateAllocation(profileModalReg.user_id, updates);
       
@@ -4723,32 +4754,36 @@ export default function AdminDashboardView({
                                     📡 {reg.callsign}
                                   </span>
                                 )}
-                                <select
-                                  value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) ? normalizeSize(reg.shirt_size) : 'อื่นๆ'}
-                                  onChange={(e) => {
+                                <span
+                                  onClick={(e) => {
                                     e.stopPropagation();
-                                    handleAssignPersonShirtSize(reg, e.target.value);
+                                    handleOpenProfileModal(reg, 'info');
                                   }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  disabled={updatingSizeId === (reg.user_id || reg.id)}
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none transition-all ${
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all inline-flex items-center gap-1 ${
                                     !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size))
                                       ? 'bg-rose-500/25 text-rose-200 border-rose-400/70 ring-1 ring-rose-400/40 animate-pulse'
                                       : 'bg-purple-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400'
                                   }`}
-                                  title="คลิกเพื่อระบุหรือเปลี่ยนไซส์เสื้อจริงรายคน (ขึ้นในระบบตามไซส์ทันที)"
+                                  title="ล็อกป้องกันการกดเปลี่ยนโดยไม่ตั้งใจ — คลิกเพื่อดูรายละเอียด หรือกดปุ่ม ✏️ แก้ไข แล้วกดบันทึก"
                                 >
-                                  {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
-                                    <option key={sz} value={sz} className="bg-slate-900 text-white">
-                                      👕 ไซส์ {sz}
-                                    </option>
-                                  ))}
-                                  <option value="อื่นๆ" className="bg-slate-900 text-amber-300">
-                                    👕 {!['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) && reg.shirt_size && reg.shirt_size !== 'อื่นๆ'
-                                      ? `อื่นๆ (${reg.shirt_size} - รอระบุไซส์)`
-                                      : 'อื่นๆ (รอติดต่อระบุไซส์จริง)'}
-                                  </option>
-                                </select>
+                                  <span>
+                                    👕 ไซส์ {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size))
+                                      ? normalizeSize(reg.shirt_size)
+                                      : `อื่นๆ${reg.custom_shirt_note ? ` (${reg.custom_shirt_note})` : (reg.shirt_size && reg.shirt_size !== 'อื่นๆ' ? ` (${reg.shirt_size})` : ' (รอระบุไซส์จริง)')}`}
+                                  </span>
+                                </span>
+                                {reg.custom_shirt_note && ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) && (
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenProfileModal(reg, 'info');
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[10px] font-semibold cursor-pointer"
+                                    title={`หมายเหตุไซส์เสื้อที่แจ้งไว้: ${reg.custom_shirt_note}`}
+                                  >
+                                    📝 {reg.custom_shirt_note}
+                                  </span>
+                                )}
                                 {isStaff ? (
                                   <span className="px-2 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/50 rounded-full text-[10px] font-black">
                                     🛠️ Staff (ค่าเสื้อ 280 บ.)
@@ -5021,17 +5056,25 @@ export default function AdminDashboardView({
                                 value={allocRoom}
                                 onChange={e => setAllocRoom(e.target.value)}
                                 placeholder="เช่น หอนอน 1 ห้อง 204"
-                                className="w-36 px-2.5 py-1.5 bg-slate-950 border border-amber-500 rounded-lg text-xs text-white focus:outline-none block"
+                                className="w-40 px-2.5 py-1.5 bg-slate-950 border border-amber-500 rounded-lg text-xs text-white focus:outline-none block"
                               />
                               <select
                                 value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(allocShirtSize)) ? normalizeSize(allocShirtSize) : 'อื่นๆ'}
                                 onChange={e => setAllocShirtSize(e.target.value)}
-                                className="w-36 px-2 py-1 bg-slate-950 border border-purple-500 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none block"
+                                className="w-40 px-2 py-1 bg-slate-950 border border-purple-500 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none block"
                               >
-                                {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                                {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
                                   <option key={sz} value={sz}>👕 ไซส์ {sz}</option>
                                 ))}
+                                <option value="อื่นๆ">👕 อื่นๆ (ไซส์สั่งตัดพิเศษ)</option>
                               </select>
+                              <input
+                                type="text"
+                                value={allocCustomShirtNote}
+                                onChange={e => setAllocCustomShirtNote(e.target.value)}
+                                placeholder="ระบุไซส์พิเศษ เช่น 6XL อก 52"
+                                className="w-40 px-2 py-1 bg-slate-950 border border-rose-500/60 rounded-lg text-[10px] text-amber-200 focus:outline-none block"
+                              />
                             </div>
                           ) : (
                             <span className={reg.room_assigned ? 'font-bold text-amber-300' : 'text-slate-500 italic'}>
@@ -5809,41 +5852,92 @@ export default function AdminDashboardView({
                         </select>
                       </div>
 
-                      {/* Direct Per-Person Shirt Size Selector */}
-                      <div className="sm:col-span-8 space-y-1.5">
-                        <div className="flex items-center justify-between">
+                      {/* Locked-by-default Per-Person Shirt Size & Custom Size Note Selector */}
+                      <div className="sm:col-span-8 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-1">
                           <label className="block text-[11px] font-bold text-amber-300">
-                            👕 ระบุไซส์เสื้อจริงรายคน (คลิกปุ่มไซส์เพื่ออัปเดตเข้าระบบตามไซส์ทันที):
+                            👕 ไซส์เสื้อฝึกปฏิบัติการ {isEditingProfileModal ? '(เลือกไซส์แล้วกดปุ่ม "บันทึกข้อมูลและหมายเหตุ" ด้านล่าง)' : '(🔒 ล็อกป้องกันกดโดน — กดปลดล็อกด้านล่างเพื่อแก้ไข)'}:
                           </label>
                           <span className="text-[10px] text-slate-400">
                             ปัจจุบัน: <strong className="text-white font-mono">{modalShirtSize || profileModalReg.shirt_size || '-'}</strong>
+                            {(modalCustomShirtNote || profileModalReg.custom_shirt_note) && (
+                              <span className="text-amber-300 ml-1">({modalCustomShirtNote || profileModalReg.custom_shirt_note})</span>
+                            )}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map((sz) => {
-                            const isSelectedSize = normalizeSize(modalShirtSize) === sz;
+                            const normModalSz = normalizeSize(modalShirtSize);
+                            const isSelectedSize = sz === 'อื่นๆ'
+                              ? !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normModalSz)
+                              : normModalSz === sz;
                             return (
                               <button
                                 key={sz}
                                 type="button"
-                                disabled={updatingSizeId === (profileModalReg.user_id || profileModalReg.id)}
-                                onClick={async () => {
+                                disabled={!isEditingProfileModal}
+                                onClick={() => {
+                                  if (!isEditingProfileModal) return;
                                   setModalShirtSize(sz);
-                                  await handleAssignPersonShirtSize(profileModalReg, sz);
                                 }}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-black border transition-all cursor-pointer ${
+                                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-black border transition-all ${
+                                  !isEditingProfileModal ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                                } ${
                                   isSelectedSize
                                     ? sz === 'อื่นๆ'
                                       ? 'bg-rose-600 text-white border-rose-400 shadow-md'
                                       : 'bg-amber-500 text-slate-950 border-amber-300 shadow-md'
                                     : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-amber-400 hover:text-white'
                                 }`}
-                                title={`คลิกเพื่อกำหนดไซส์ ${sz} ให้ ${profileModalReg.first_name} ทันที`}
+                                title={!isEditingProfileModal ? 'กรุณากดปุ่ม "ปลดล็อกเพื่อแก้ไขข้อมูล" ด้านล่างก่อนเปลี่ยนไซส์' : `เลือกไซส์ ${sz}`}
                               >
                                 {sz}
                               </button>
                             );
                           })}
+                        </div>
+
+                        {/* Custom Shirt Note / Special Size Specification */}
+                        <div className="p-2.5 rounded-xl bg-slate-950/80 border border-rose-500/30 space-y-1.5">
+                          <div className="flex items-center justify-between flex-wrap gap-1">
+                            <span className="text-[11px] font-bold text-rose-300">
+                              📝 รายละเอียดไซส์พิเศษ (กรณีเลือก &ldquo;อื่นๆ&rdquo; หรือผู้สมัครระบุไซส์ที่ต้องการมา):
+                            </span>
+                            {profileModalReg.custom_shirt_note && (
+                              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[10px] font-bold">
+                                ผู้สมัครแจ้งไว้: {profileModalReg.custom_shirt_note}
+                              </span>
+                            )}
+                          </div>
+                          {isEditingProfileModal && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {['6XL (รอบอก 52 นิ้ว)', '7XL (รอบอก 54 นิ้ว)', '8XL (รอบอก 56 นิ้ว)', '3XS (รอบอก 32 นิ้ว)'].map(preset => (
+                                <button
+                                  key={preset}
+                                  type="button"
+                                  onClick={() => {
+                                    setModalShirtSize('อื่นๆ');
+                                    setModalCustomShirtNote(preset);
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-slate-900 hover:bg-rose-900/40 text-slate-300 hover:text-rose-200 border border-slate-700 text-[10px] font-mono cursor-pointer"
+                                >
+                                  + {preset}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <input
+                            type="text"
+                            disabled={!isEditingProfileModal}
+                            value={modalCustomShirtNote}
+                            onChange={(e) => setModalCustomShirtNote(e.target.value)}
+                            placeholder="ระบุไซส์พิเศษ เช่น 6XL (รอบอก 52 นิ้ว) หรือบันทึกผลที่คุยตกลงกับผู้สมัคร..."
+                            className={`w-full px-3 py-1.5 rounded-lg text-xs text-white outline-none transition-all ${
+                              !isEditingProfileModal
+                                ? 'bg-slate-900/60 border border-slate-800 cursor-not-allowed opacity-80'
+                                : 'bg-slate-900 border border-rose-500/50 focus:ring-1 focus:ring-rose-500'
+                            }`}
+                          />
                         </div>
                       </div>
                     </div>
@@ -6148,368 +6242,664 @@ export default function AdminDashboardView({
                   </div>
                 </div>
 
-                {/* 2-Round Installments Review if participant opted for installments */}
-                {(profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url)) ? (
-                  <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-indigo-400" />
-                        <h4 className="font-bold text-white text-sm">หลักฐานการชำระแบบแบ่งจ่าย 2 งวด</h4>
-                      </div>
-                      <span className="text-[11px] font-bold px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded border border-indigo-500/30">
-                        แผนผ่อนชำระ 2 งวด
-                      </span>
-                    </div>
+                {/* Unified Slip Review: Either 2-Round Installments (for non-Staff installment plan) OR Single Full/Staff Payment (NEVER both!) */}
+                {(() => {
+                  const isModalStaff = Boolean(modalIsStaff || isStaffRegistration(profileModalReg));
+                  const isModalInstallment = !isModalStaff && (
+                    modalPaymentPlan
+                      ? modalPaymentPlan === 'installment'
+                      : (profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url))
+                  );
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* ROUND 1 */}
-                      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-indigo-300 text-xs">งวดที่ 1: {paymentConfig?.installment_round1_amount || 400} บาท</span>
-                          {profileModalReg.installment_1_status === 'paid' ? (
-                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
-                              ✓ อนุมัติแล้ว
-                            </span>
-                          ) : profileModalReg.installment_1_slip_url ? (
-                            <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
-                              ⏳ รอตรวจสอบ
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
-                              ยังไม่ส่งสลิป
-                            </span>
-                          )}
-                        </div>
+                  if (isModalInstallment) {
+                    const r1SlipUrl = profileModalReg.installment_1_slip_url || profileModalReg.payment_slip_url;
+                    const r1SlipDate = profileModalReg.installment_1_slip_date || profileModalReg.payment_slip_date;
+                    const r1Ocr = profileModalReg.slip_ocr_round1 || profileModalReg.slip_ocr_full;
 
-                        {profileModalReg.installment_1_slip_url ? (
-                          <div className="space-y-2">
-                            <div
-                              onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 1 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_1_slip_url, file_name: 'installment-1-slip.jpg' })}
-                              className="cursor-pointer group relative w-full h-44 rounded-xl overflow-hidden border border-slate-700 bg-slate-950"
-                            >
-                              <img
-                                src={profileModalReg.installment_1_slip_url}
-                                alt="สลิปงวด 1"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                              />
-                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
-                                <Eye className="w-4 h-4" /> คลิกเพื่อขยาย
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-                              <span>ส่งเมื่อ: {profileModalReg.installment_1_slip_date ? new Date(profileModalReg.installment_1_slip_date).toLocaleString('th-TH') : '-'}</span>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    const hosted = await ensureHostedUrl(profileModalReg.installment_1_slip_url, 'slip-round1.jpg');
-                                    await navigator.clipboard.writeText(hosted);
-                                    triggerToast('คัดลอกลิงก์สลิปงวด 1 แล้ว');
-                                  }}
-                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
-                                  title="คัดลอก URL ลิงก์สลิป"
-                                >
-                                  <Copy className="w-3 h-3 text-cyan-400" />
-                                  <span>ก๊อปลิ้งค์</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 1 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_1_slip_url, file_name: 'installment-1-slip.jpg' })}
-                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
-                                  title="เปิดดูสลิป"
-                                >
-                                  <ExternalLink className="w-3 h-3 text-cyan-400" />
-                                  <span>เปิดดู</span>
-                                </button>
-                              </div>
-                            </div>
-
-                            {profileModalReg.installment_1_notes && (
-                              <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
-                                หมายเหตุ: {profileModalReg.installment_1_notes}
-                              </p>
-                            )}
-
-                            {profileModalReg.slip_ocr_round1 && (
-                              <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
-                                profileModalReg.slip_ocr_round1.isFullyVerified 
-                                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
-                                  : profileModalReg.slip_ocr_round1.isDuplicate
-                                  ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
-                                  : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-                              }`}>
-                                <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                                  <span className="font-bold flex items-center gap-1">
-                                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                    ผลตรวจ OCR (งวด 1):
-                                  </span>
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                    profileModalReg.slip_ocr_round1.isFullyVerified 
-                                      ? 'bg-emerald-500/20 text-emerald-300' 
-                                      : profileModalReg.slip_ocr_round1.isDuplicate
-                                      ? 'bg-rose-500/20 text-rose-300'
-                                      : 'bg-amber-500/20 text-amber-300'
-                                  }`}>
-                                    {profileModalReg.slip_ocr_round1.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_round1.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-                                  <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_round1.amountFormatted || '-'}</span></div>
-                                  <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_round1.transferDateTimeStr || '-'}</span></div>
-                                  <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_round1.bankDetected || '-'}</span></div>
-                                  <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_round1.transRef || '-'}</span></div>
-                                </div>
-                              </div>
-                            )}
-
-                            {profileModalReg.installment_1_status === 'paid' ? (
-                              <div className="flex items-center gap-2 pt-1">
-                                <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>✓ อนุมัติงวด 1 แล้ว</span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const reason = await askPrompt({
-                                      title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
-                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
-                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                      variant: 'danger',
-                                      confirmText: 'ตกลง',
-                                      cancelText: 'ยกเลิก'
-                                    });
-                                    if (reason) {
-                                      const isMsu = isMsuInstitution(profileModalReg.institution);
-                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                      const updates = {
-                                        installment_1_status: 'unpaid',
-                                        installment_1_notes: reason,
-                                        payment_status: 'unpaid',
-                                        payment_amount: totalFee,
-                                        payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
-                                      };
-                                      setModalPaymentStatus('unpaid');
-                                      setModalPaymentAmount(totalFee);
-                                      setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
-                                      await onUpdateAllocation(profileModalReg.user_id, updates);
-                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                      triggerToast('ยกเลิกการอนุมัติสลิปงวด 1 และปรับให้ส่งใหม่แล้ว');
-                                    }
-                                  }}
-                                  className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
-                                  title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
-                                >
-                                  <XCircle className="w-3.5 h-3.5" />
-                                  <span>✕ ให้ส่งใหม่</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const isMsu = isMsuInstitution(profileModalReg.institution);
-                                    const round2Fee = isMsu 
-                                      ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                      : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                    const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
-                                    
-                                    const updates = {
-                                      installment_1_status: 'paid',
-                                      installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
-                                    };
-
-                                    if (isR2Paid) {
-                                      updates.payment_status = 'paid';
-                                      updates.payment_amount = 0;
-                                      updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
-                                      setModalPaymentStatus('paid');
-                                      setModalPaymentAmount(0);
-                                      setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
-                                    } else {
-                                      const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
-                                      const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
-                                      updates.payment_status = nextStatus;
-                                      updates.payment_amount = round2Fee;
-                                      updates.payment_notes = nextNotes;
-                                      setModalPaymentStatus(nextStatus);
-                                      setModalPaymentAmount(round2Fee);
-                                      setModalPaymentNotes(nextNotes);
-                                    }
-
-                                    await onUpdateAllocation(profileModalReg.user_id, updates);
-                                    setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                    triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
-                                  }}
-                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                                >
-                                  ✓ อนุมัติงวด 1
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const reason = await askPrompt({
-                                      title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
-                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
-                                      defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                      placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                      variant: 'danger',
-                                      confirmText: 'ตกลง',
-                                      cancelText: 'ยกเลิก'
-                                    });
-                                    if (reason) {
-                                      const isMsu = isMsuInstitution(profileModalReg.institution);
-                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                      const updates = {
-                                        installment_1_status: 'unpaid',
-                                        installment_1_notes: reason,
-                                        payment_status: 'unpaid',
-                                        payment_amount: totalFee,
-                                        payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
-                                      };
-                                      setModalPaymentStatus('unpaid');
-                                      setModalPaymentAmount(totalFee);
-                                      setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
-                                      await onUpdateAllocation(profileModalReg.user_id, updates);
-                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                      triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
-                                    }
-                                  }}
-                                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                                >
-                                  ✕ ให้ส่งใหม่
-                                </button>
-                              </div>
-                            )}
+                    return (
+                      <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-indigo-400" />
+                            <h4 className="font-bold text-white text-sm">หลักฐานการชำระแบบแบ่งจ่าย 2 งวด (แยกตรวจทีละงวด ไม่ซ้ำซ้อน)</h4>
                           </div>
-                        ) : (
-                          <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
-                            <Clock className="w-6 h-6 mb-2 opacity-50" />
-                            <span>ยังไม่มีการส่งสลิปงวดที่ 1</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ROUND 2 */}
-                      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-purple-300 text-xs">
-                            งวดที่ 2: {isMsuInstitution(profileModalReg?.institution) ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท ({isMsuInstitution(profileModalReg?.institution) ? 'นิสิต มมส' : 'ต่างสถาบัน'})
+                          <span className="text-[11px] font-bold px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded border border-indigo-500/30">
+                            💳 แผนผ่อนชำระ 2 งวด
                           </span>
-                          {profileModalReg.installment_2_slip_url && profileModalReg.installment_2_status === 'paid' ? (
-                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
-                              ✓ อนุมัติแล้ว
-                            </span>
-                          ) : profileModalReg.installment_2_slip_url ? (
-                            <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
-                              ⏳ รอตรวจสอบ
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
-                              ยังไม่ส่งสลิป
-                            </span>
-                          )}
                         </div>
 
-                        {profileModalReg.installment_2_slip_url ? (
-                          <div className="space-y-2">
-                            <div
-                              onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 2 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_2_slip_url, file_name: 'installment-2-slip.jpg' })}
-                              className="cursor-pointer group relative w-full h-44 rounded-xl overflow-hidden border border-slate-700 bg-slate-950"
-                            >
-                              <img
-                                src={profileModalReg.installment_2_slip_url}
-                                alt="สลิปงวด 2"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                              />
-                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
-                                <Eye className="w-4 h-4" /> คลิกเพื่อขยาย
-                              </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* ROUND 1 */}
+                          <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-indigo-300 text-xs">งวดที่ 1: {paymentConfig?.installment_round1_amount || 400} บาท (ค่าเสื้อฝึก)</span>
+                              {profileModalReg.installment_1_status === 'paid' ? (
+                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
+                                  ✓ อนุมัติงวด 1 แล้ว
+                                </span>
+                              ) : r1SlipUrl ? (
+                                <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
+                                  ⏳ รอตรวจสอบ
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
+                                  ยังไม่ส่งสลิป
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-                              <span>ส่งเมื่อ: {profileModalReg.installment_2_slip_date ? new Date(profileModalReg.installment_2_slip_date).toLocaleString('th-TH') : '-'}</span>
+                            {r1SlipUrl ? (
+                              <div className="space-y-2">
+                                <div
+                                  onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 1 - ' + profileModalReg.first_name, file_url: r1SlipUrl, file_name: 'installment-1-slip.jpg' })}
+                                  className="cursor-pointer group relative w-full h-44 rounded-xl overflow-hidden border border-slate-700 bg-slate-950"
+                                >
+                                  <img
+                                    src={r1SlipUrl}
+                                    alt="สลิปงวด 1"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
+                                    <Eye className="w-4 h-4" /> คลิกเพื่อขยาย
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                                  <span>ส่งเมื่อ: {r1SlipDate ? new Date(r1SlipDate).toLocaleString('th-TH') : '-'}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const hosted = await ensureHostedUrl(r1SlipUrl, 'slip-round1.jpg');
+                                        await navigator.clipboard.writeText(hosted);
+                                        triggerToast('คัดลอกลิงก์สลิปงวด 1 แล้ว');
+                                      }}
+                                      className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                      title="คัดลอก URL ลิงก์สลิป"
+                                    >
+                                      <Copy className="w-3 h-3 text-cyan-400" />
+                                      <span>ก๊อปลิ้งค์</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 1 - ' + profileModalReg.first_name, file_url: r1SlipUrl, file_name: 'installment-1-slip.jpg' })}
+                                      className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                      title="เปิดดูสลิป"
+                                    >
+                                      <ExternalLink className="w-3 h-3 text-cyan-400" />
+                                      <span>เปิดดู</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {profileModalReg.installment_1_notes && (
+                                  <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
+                                    หมายเหตุ: {profileModalReg.installment_1_notes}
+                                  </p>
+                                )}
+
+                                {r1Ocr && (
+                                  <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                                    r1Ocr.isFullyVerified 
+                                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                                      : r1Ocr.isDuplicate
+                                      ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                                  }`}>
+                                    <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                                      <span className="font-bold flex items-center gap-1">
+                                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                        ผลตรวจ OCR (งวด 1):
+                                      </span>
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                        r1Ocr.isFullyVerified 
+                                          ? 'bg-emerald-500/20 text-emerald-300' 
+                                          : r1Ocr.isDuplicate
+                                          ? 'bg-rose-500/20 text-rose-300'
+                                          : 'bg-amber-500/20 text-amber-300'
+                                      }`}>
+                                        {r1Ocr.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : r1Ocr.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+                                      <div>ยอดเงินในสลิป: <span className="font-bold text-white">{r1Ocr.amountFormatted || '-'}</span></div>
+                                      <div>วันเวลาโอน: <span className="font-bold text-white">{r1Ocr.transferDateTimeStr || '-'}</span></div>
+                                      <div>ธนาคาร: <span className="text-sky-300">{r1Ocr.bankDetected || '-'}</span></div>
+                                      <div className="truncate">TransRef: <span className="font-mono text-amber-300">{r1Ocr.transRef || '-'}</span></div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {profileModalReg.installment_1_status === 'paid' ? (
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>✓ อนุมัติงวด 1 แล้ว</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const reason = await askPrompt({
+                                          title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
+                                          message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                          defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                          placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                          variant: 'danger',
+                                          confirmText: 'ตกลง',
+                                          cancelText: 'ยกเลิก'
+                                        });
+                                        if (reason) {
+                                          const isMsu = isMsuInstitution(profileModalReg.institution);
+                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                          const updates = {
+                                            installment_1_status: 'unpaid',
+                                            installment_1_notes: reason,
+                                            payment_status: 'unpaid',
+                                            payment_amount: totalFee,
+                                            payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                          };
+                                          setModalPaymentStatus('unpaid');
+                                          setModalPaymentAmount(totalFee);
+                                          setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+                                          await onUpdateAllocation(profileModalReg.user_id, updates);
+                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                          triggerToast('ยกเลิกการอนุมัติสลิปงวด 1 และปรับให้ส่งใหม่แล้ว');
+                                        }
+                                      }}
+                                      className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
+                                      title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      <span>✕ ให้ส่งใหม่</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        askConfirm({
+                                          title: 'ยืนยันการอนุมัติสลิปงวดที่ 1',
+                                          message: `ต้องการยืนยันอนุมัติสลิปงวดที่ 1 (${paymentConfig?.installment_round1_amount || 400} บาท) ของคุณ ${profileModalReg.first_name} ใช่หรือไม่?`,
+                                          confirmText: '✓ ยืนยันอนุมัติงวด 1',
+                                          cancelText: 'ยกเลิก',
+                                          variant: 'info',
+                                          onConfirm: async () => {
+                                            const isMsu = isMsuInstitution(profileModalReg.institution);
+                                            const round2Fee = isMsu 
+                                              ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                              : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                            const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+                                            
+                                            const updates = {
+                                              installment_1_status: 'paid',
+                                              installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
+                                            };
+
+                                            if (isR2Paid) {
+                                              updates.payment_status = 'paid';
+                                              updates.payment_amount = 0;
+                                              updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                              setModalPaymentStatus('paid');
+                                              setModalPaymentAmount(0);
+                                              setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
+                                            } else {
+                                              const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                              const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
+                                              updates.payment_status = nextStatus;
+                                              updates.payment_amount = round2Fee;
+                                              updates.payment_notes = nextNotes;
+                                              setModalPaymentStatus(nextStatus);
+                                              setModalPaymentAmount(round2Fee);
+                                              setModalPaymentNotes(nextNotes);
+                                            }
+
+                                            await onUpdateAllocation(profileModalReg.user_id, updates);
+                                            setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                            triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
+                                          }
+                                        });
+                                      }}
+                                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      ✓ อนุมัติงวด 1
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const reason = await askPrompt({
+                                          title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 1',
+                                          message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                          defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                          placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                          variant: 'danger',
+                                          confirmText: 'ตกลง',
+                                          cancelText: 'ยกเลิก'
+                                        });
+                                        if (reason) {
+                                          const isMsu = isMsuInstitution(profileModalReg.institution);
+                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                          const updates = {
+                                            installment_1_status: 'unpaid',
+                                            installment_1_notes: reason,
+                                            payment_status: 'unpaid',
+                                            payment_amount: totalFee,
+                                            payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                          };
+                                          setModalPaymentStatus('unpaid');
+                                          setModalPaymentAmount(totalFee);
+                                          setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+                                          await onUpdateAllocation(profileModalReg.user_id, updates);
+                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                          triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
+                                        }
+                                      }}
+                                      className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      ✕ ให้ส่งใหม่
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
+                                <Clock className="w-6 h-6 mb-2 opacity-50" />
+                                <span>ยังไม่มีการส่งสลิปงวดที่ 1</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ROUND 2 */}
+                          <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-purple-300 text-xs">
+                                งวดที่ 2: {isMsuInstitution(profileModalReg?.institution) ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท ({isMsuInstitution(profileModalReg?.institution) ? 'นิสิต มมส' : 'ต่างสถาบัน'})
+                              </span>
+                              {profileModalReg.installment_2_slip_url && profileModalReg.installment_2_status === 'paid' ? (
+                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
+                                  ✓ อนุมัติงวด 2 แล้ว
+                                </span>
+                              ) : profileModalReg.installment_2_slip_url ? (
+                                <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
+                                  ⏳ รอตรวจสอบ
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
+                                  ยังไม่ส่งสลิป
+                                </span>
+                              )}
+                            </div>
+
+                            {profileModalReg.installment_2_slip_url ? (
+                              <div className="space-y-2">
+                                <div
+                                  onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 2 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_2_slip_url, file_name: 'installment-2-slip.jpg' })}
+                                  className="cursor-pointer group relative w-full h-44 rounded-xl overflow-hidden border border-slate-700 bg-slate-950"
+                                >
+                                  <img
+                                    src={profileModalReg.installment_2_slip_url}
+                                    alt="สลิปงวด 2"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
+                                    <Eye className="w-4 h-4" /> คลิกเพื่อขยาย
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                                  <span>ส่งเมื่อ: {profileModalReg.installment_2_slip_date ? new Date(profileModalReg.installment_2_slip_date).toLocaleString('th-TH') : '-'}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const hosted = await ensureHostedUrl(profileModalReg.installment_2_slip_url, 'slip-round2.jpg');
+                                        await navigator.clipboard.writeText(hosted);
+                                        triggerToast('คัดลอกลิงก์สลิปงวด 2 แล้ว');
+                                      }}
+                                      className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                      title="คัดลอก URL ลิงก์สลิป"
+                                    >
+                                      <Copy className="w-3 h-3 text-cyan-400" />
+                                      <span>ก๊อปลิ้งค์</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 2 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_2_slip_url, file_name: 'installment-2-slip.jpg' })}
+                                      className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                      title="เปิดดูสลิป"
+                                    >
+                                      <ExternalLink className="w-3 h-3 text-cyan-400" />
+                                      <span>เปิดดู</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {profileModalReg.installment_2_notes && (
+                                  <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
+                                    หมายเหตุ: {profileModalReg.installment_2_notes}
+                                  </p>
+                                )}
+
+                                {profileModalReg.slip_ocr_round2 && (
+                                  <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                                    profileModalReg.slip_ocr_round2.isFullyVerified 
+                                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                                      : profileModalReg.slip_ocr_round2.isDuplicate
+                                      ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                                  }`}>
+                                    <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                                      <span className="font-bold flex items-center gap-1">
+                                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                        ผลตรวจ OCR (งวด 2):
+                                      </span>
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                        profileModalReg.slip_ocr_round2.isFullyVerified 
+                                          ? 'bg-emerald-500/20 text-emerald-300' 
+                                          : profileModalReg.slip_ocr_round2.isDuplicate
+                                          ? 'bg-rose-500/20 text-rose-300'
+                                          : 'bg-amber-500/20 text-amber-300'
+                                      }`}>
+                                        {profileModalReg.slip_ocr_round2.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_round2.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+                                      <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_round2.amountFormatted || '-'}</span></div>
+                                      <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_round2.transferDateTimeStr || '-'}</span></div>
+                                      <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_round2.bankDetected || '-'}</span></div>
+                                      <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_round2.transRef || '-'}</span></div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {profileModalReg.installment_2_status === 'paid' && profileModalReg.installment_2_slip_url ? (
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>✓ อนุมัติงวด 2 แล้ว</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const reason = await askPrompt({
+                                          title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
+                                          message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                          defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                          placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                          variant: 'danger',
+                                          confirmText: 'ตกลง',
+                                          cancelText: 'ยกเลิก'
+                                        });
+                                        if (reason) {
+                                          const isMsu = isMsuInstitution(profileModalReg.institution);
+                                          const round2Fee = isMsu 
+                                            ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                            : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                          const isR1Paid = profileModalReg.installment_1_status === 'paid';
+
+                                          const updates = {
+                                            installment_2_status: 'unpaid',
+                                            installment_2_notes: reason,
+                                            payment_status: 'unpaid',
+                                            payment_amount: isR1Paid ? round2Fee : totalFee,
+                                            payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                          };
+                                          setModalPaymentStatus('unpaid');
+                                          setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                          setModalPaymentNotes(updates.payment_notes);
+                                          await onUpdateAllocation(profileModalReg.user_id, updates);
+                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                          triggerToast('ยกเลิกการอนุมัติสลิปงวด 2 และปรับให้ส่งใหม่แล้ว');
+                                        }
+                                      }}
+                                      className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
+                                      title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      <span>✕ ให้ส่งใหม่</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        askConfirm({
+                                          title: 'ยืนยันการอนุมัติสลิปงวดที่ 2',
+                                          message: `ต้องการยืนยันอนุมัติสลิปงวดที่ 2 ของคุณ ${profileModalReg.first_name} ใช่หรือไม่?`,
+                                          confirmText: '✓ ยืนยันอนุมัติงวด 2',
+                                          cancelText: 'ยกเลิก',
+                                          variant: 'info',
+                                          onConfirm: async () => {
+                                            const round1Fee = paymentConfig?.installment_round1_amount || 400;
+                                            const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                            
+                                            const updates = {
+                                              installment_2_status: 'paid',
+                                              installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
+                                            };
+
+                                            if (isR1Paid) {
+                                              updates.payment_status = 'paid';
+                                              updates.payment_amount = 0;
+                                              updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                              setModalPaymentStatus('paid');
+                                              setModalPaymentAmount(0);
+                                              setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
+                                            } else {
+                                              const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                              const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
+                                              updates.payment_status = nextStatus;
+                                              updates.payment_amount = round1Fee;
+                                              updates.payment_notes = nextNotes;
+                                              setModalPaymentStatus(nextStatus);
+                                              setModalPaymentAmount(round1Fee);
+                                              setModalPaymentNotes(nextNotes);
+                                            }
+
+                                            await onUpdateAllocation(profileModalReg.user_id, updates);
+                                            setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                            triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
+                                          }
+                                        });
+                                      }}
+                                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      ✓ อนุมัติงวด 2
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const reason = await askPrompt({
+                                          title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
+                                          message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                          defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
+                                          placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
+                                          variant: 'danger',
+                                          confirmText: 'ตกลง',
+                                          cancelText: 'ยกเลิก'
+                                        });
+                                        if (reason) {
+                                          const isMsu = isMsuInstitution(profileModalReg.institution);
+                                          const round2Fee = isMsu 
+                                            ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                            : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                          const isR1Paid = profileModalReg.installment_1_status === 'paid';
+
+                                          const updates = {
+                                            installment_2_status: 'unpaid',
+                                            installment_2_notes: reason,
+                                            payment_status: 'unpaid',
+                                            payment_amount: isR1Paid ? round2Fee : totalFee,
+                                            payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                          };
+                                          setModalPaymentStatus('unpaid');
+                                          setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                          setModalPaymentNotes(updates.payment_notes);
+                                          await onUpdateAllocation(profileModalReg.user_id, updates);
+                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                          triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
+                                        }
+                                      }}
+                                      className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      ✕ ให้ส่งใหม่
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
+                                <Clock className="w-6 h-6 mb-2 opacity-50" />
+                                <span>ยังไม่มีการส่งสลิปงวดที่ 2</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Single-Round Full Payment OR Staff 280 THB Payment (Single Unified Box — No Duplicate!)
+                  const effectiveSlipUrl = profileModalReg.payment_slip_url || profileModalReg.installment_1_slip_url;
+                  const effectiveSlipDate = profileModalReg.payment_slip_date || profileModalReg.installment_1_slip_date;
+                  const rawOcr = profileModalReg.slip_ocr_full || profileModalReg.slip_ocr_round1;
+                  const isStaffAmountMatch = isModalStaff && rawOcr && Math.abs((Number(rawOcr.amountDetected) || 0) - STAFF_SHIRT_FEE) <= 1;
+                  const effectiveOcr = rawOcr
+                    ? (isStaffAmountMatch
+                        ? {
+                            ...rawOcr,
+                            expectedAmount: STAFF_SHIRT_FEE,
+                            isAmountMatch: true,
+                            isFullyVerified: !rawOcr.isDuplicate
+                          }
+                        : rawOcr)
+                    : null;
+                  const isEffectivePaid = profileModalReg.payment_status === 'paid' || (isModalStaff && profileModalReg.installment_1_status === 'paid');
+
+                  return (
+                    <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                          <CheckCircle2 className={`w-4 h-4 ${isModalStaff ? 'text-purple-400' : 'text-emerald-400'}`} />
+                          <span>
+                            {isModalStaff
+                              ? `🛠️ หลักฐานสลิปค่าเสื้อ Staff (${STAFF_SHIRT_FEE} บาท - ชำระครั้งเดียว)`
+                              : '🌟 หลักฐานสลิปการโอนเงิน (ชำระเต็มจำนวน 1 รอบ)'}
+                          </span>
+                        </h4>
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded border ${
+                          isModalStaff
+                            ? 'bg-purple-500/20 text-purple-200 border-purple-400/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {isModalStaff ? `Staff ${STAFF_SHIRT_FEE} บ. (รอบเดียว)` : 'จ่ายครบ 1 รอบ'}
+                        </span>
+                      </div>
+
+                      {effectiveSlipUrl ? (
+                        <div className="flex flex-col sm:flex-row items-start gap-4">
+                          <div 
+                            onClick={() => setPreviewDoc({ title: 'สลิปการโอนเงิน - ' + profileModalReg.first_name, file_url: effectiveSlipUrl, file_name: 'payment-slip.jpg' })}
+                            className="cursor-pointer group relative w-40 h-48 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shrink-0"
+                          >
+                            <img 
+                              src={effectiveSlipUrl} 
+                              alt="สลิปโอนเงิน" 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                            />
+                            <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
+                              <Eye className="w-4 h-4" /> ดูสลิป
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 flex-1 w-full">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div>
+                                <p className="text-slate-400 text-xs">วันที่ส่งสลิป:</p>
+                                <p className="text-white font-semibold text-xs mt-0.5">
+                                  {effectiveSlipDate ? new Date(effectiveSlipDate).toLocaleString('th-TH') : '-'}
+                                </p>
+                              </div>
                               <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={async (e) => {
                                     e.stopPropagation();
-                                    const hosted = await ensureHostedUrl(profileModalReg.installment_2_slip_url, 'slip-round2.jpg');
+                                    const hosted = await ensureHostedUrl(effectiveSlipUrl, 'slip-full.jpg');
                                     await navigator.clipboard.writeText(hosted);
-                                    triggerToast('คัดลอกลิงก์สลิปงวด 2 แล้ว');
+                                    triggerToast('คัดลอกลิงก์สลิปเรียบร้อยแล้ว');
                                   }}
-                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                  className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs inline-flex items-center gap-1 cursor-pointer"
                                   title="คัดลอก URL ลิงก์สลิป"
                                 >
-                                  <Copy className="w-3 h-3 text-cyan-400" />
-                                  <span>ก๊อปลิ้งค์</span>
+                                  <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                                  <span>ก๊อปลิ้งค์สลิป</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setPreviewDoc({ title: 'สลิปงวดที่ 2 - ' + profileModalReg.first_name, file_url: profileModalReg.installment_2_slip_url, file_name: 'installment-2-slip.jpg' })}
-                                  className="p-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                                  onClick={() => setPreviewDoc({ title: 'สลิปการโอนเงิน - ' + profileModalReg.first_name, file_url: effectiveSlipUrl, file_name: 'payment-slip.jpg' })}
+                                  className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs inline-flex items-center gap-1 cursor-pointer"
                                   title="เปิดดูสลิป"
                                 >
-                                  <ExternalLink className="w-3 h-3 text-cyan-400" />
+                                  <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
                                   <span>เปิดดู</span>
                                 </button>
                               </div>
                             </div>
 
-                            {profileModalReg.installment_2_notes && (
-                              <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
-                                หมายเหตุ: {profileModalReg.installment_2_notes}
-                              </p>
-                            )}
-
-                            {profileModalReg.slip_ocr_round2 && (
+                            {effectiveOcr && (
                               <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
-                                profileModalReg.slip_ocr_round2.isFullyVerified 
+                                effectiveOcr.isFullyVerified 
                                   ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
-                                  : profileModalReg.slip_ocr_round2.isDuplicate
+                                  : effectiveOcr.isDuplicate
                                   ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
                                   : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
                               }`}>
                                 <div className="flex items-center justify-between pb-1 border-b border-white/10">
                                   <span className="font-bold flex items-center gap-1">
                                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                    ผลตรวจ OCR (งวด 2):
+                                    {isModalStaff ? `ผลตรวจ OCR (Staff ${STAFF_SHIRT_FEE} บ.):` : 'ผลตรวจ OCR (ชำระเต็มจำนวน):'}
                                   </span>
                                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                    profileModalReg.slip_ocr_round2.isFullyVerified 
+                                    effectiveOcr.isFullyVerified 
                                       ? 'bg-emerald-500/20 text-emerald-300' 
-                                      : profileModalReg.slip_ocr_round2.isDuplicate
+                                      : effectiveOcr.isDuplicate
                                       ? 'bg-rose-500/20 text-rose-300'
                                       : 'bg-amber-500/20 text-amber-300'
                                   }`}>
-                                    {profileModalReg.slip_ocr_round2.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_round2.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
+                                    {effectiveOcr.isFullyVerified
+                                      ? (isModalStaff ? `✓ ยอดตรงเกณฑ์ Staff ${STAFF_SHIRT_FEE}.00 บ. & สลิปใหม่` : '✓ ยอดตรง & สลิปใหม่')
+                                      : effectiveOcr.isDuplicate
+                                      ? '🚨 สลิปซ้ำ'
+                                      : '⚠️ ยอดไม่ตรง/รอตรวจ'}
                                   </span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-                                  <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_round2.amountFormatted || '-'}</span></div>
-                                  <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_round2.transferDateTimeStr || '-'}</span></div>
-                                  <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_round2.bankDetected || '-'}</span></div>
-                                  <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_round2.transRef || '-'}</span></div>
+                                  <div>ยอดเงินในสลิป: <span className="font-bold text-white">{effectiveOcr.amountFormatted || '-'}</span></div>
+                                  <div>วันเวลาโอน: <span className="font-bold text-white">{effectiveOcr.transferDateTimeStr || '-'}</span></div>
+                                  <div>ธนาคาร: <span className="text-sky-300">{effectiveOcr.bankDetected || '-'}</span></div>
+                                  <div className="truncate">TransRef: <span className="font-mono text-amber-300">{effectiveOcr.transRef || '-'}</span></div>
                                 </div>
                               </div>
                             )}
 
-                            {profileModalReg.installment_2_status === 'paid' && profileModalReg.installment_2_slip_url ? (
-                              <div className="flex items-center gap-2 pt-1">
-                                <div className="flex-1 py-1.5 px-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>✓ อนุมัติงวด 2 แล้ว</span>
+                            {isEffectivePaid ? (
+                              <div className="flex flex-wrap items-center gap-2 pt-2">
+                                <div className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold rounded-xl flex items-center gap-1.5 shadow-sm">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span>✓ อนุมัติสลิปแล้ว ({isModalStaff ? `ชำระค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บ. แล้ว` : 'ชำระครบแล้ว'})</span>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={async () => {
                                     const reason = await askPrompt({
-                                      title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
-                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                      title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิป',
+                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
                                       defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
                                       placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
                                       variant: 'danger',
@@ -6518,80 +6908,78 @@ export default function AdminDashboardView({
                                     });
                                     if (reason) {
                                       const isMsu = isMsuInstitution(profileModalReg.institution);
-                                      const round2Fee = isMsu 
-                                        ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                      const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                      const totalFee = isModalStaff
+                                        ? STAFF_SHIRT_FEE
+                                        : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
 
-                                      const updates = {
-                                        installment_2_status: 'unpaid',
-                                        installment_2_notes: reason,
-                                        payment_status: 'unpaid',
-                                        payment_amount: isR1Paid ? round2Fee : totalFee,
-                                        payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
-                                      };
                                       setModalPaymentStatus('unpaid');
-                                      setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
-                                      setModalPaymentNotes(updates.payment_notes);
-                                      await onUpdateAllocation(profileModalReg.user_id, updates);
-                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                      triggerToast('ยกเลิกการอนุมัติสลิปงวด 2 และปรับให้ส่งใหม่แล้ว');
+                                      setModalPaymentAmount(totalFee);
+                                      setModalPaymentNotes(reason);
+                                      const rejectUpdates = {
+                                        payment_status: 'unpaid',
+                                        installment_1_status: 'unpaid',
+                                        installment_1_notes: reason,
+                                        payment_amount: totalFee,
+                                        payment_notes: reason
+                                      };
+                                      await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                      setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
+                                      triggerToast('ยกเลิกการอนุมัติสลิปและปรับเป็นค้างชำระแล้ว');
                                     }
                                   }}
-                                  className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
+                                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95"
                                   title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
                                 >
-                                  <XCircle className="w-3.5 h-3.5" />
-                                  <span>✕ ให้ส่งใหม่</span>
+                                  <XCircle className="w-4 h-4" />
+                                  <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex gap-2 pt-1">
+                              <div className="flex flex-wrap gap-2 pt-2">
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    const isMsu = isMsuInstitution(profileModalReg.institution);
-                                    const round1Fee = paymentConfig?.installment_round1_amount || 400;
-                                    const isR1Paid = profileModalReg.installment_1_status === 'paid';
-                                    
-                                    const updates = {
-                                      installment_2_status: 'paid',
-                                      installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
-                                    };
-
-                                    if (isR1Paid) {
-                                      updates.payment_status = 'paid';
-                                      updates.payment_amount = 0;
-                                      updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
-                                      setModalPaymentStatus('paid');
-                                      setModalPaymentAmount(0);
-                                      setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
-                                    } else {
-                                      const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
-                                      const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
-                                      updates.payment_status = nextStatus;
-                                      updates.payment_amount = round1Fee;
-                                      updates.payment_notes = nextNotes;
-                                      setModalPaymentStatus(nextStatus);
-                                      setModalPaymentAmount(round1Fee);
-                                      setModalPaymentNotes(nextNotes);
-                                    }
-
-                                    await onUpdateAllocation(profileModalReg.user_id, updates);
-                                    setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                    triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
+                                  onClick={() => {
+                                    askConfirm({
+                                      title: 'ยืนยันการอนุมัติสลิปการโอนเงิน',
+                                      message: `ต้องการยืนยันอนุมัติสลิปการโอนเงิน (${isModalStaff ? `Staff ${STAFF_SHIRT_FEE} บาท` : 'ชำระเต็มจำนวน'}) ของคุณ ${profileModalReg.first_name} ใช่หรือไม่?`,
+                                      confirmText: '✓ ยืนยันอนุมัติสลิป (ชำระแล้ว)',
+                                      cancelText: 'ยกเลิก',
+                                      variant: 'info',
+                                      onConfirm: async () => {
+                                        const approvalNote = isModalStaff
+                                          ? `ตรวจสอบและอนุมัติสลิปค่าเสื้อ Staff (${STAFF_SHIRT_FEE} บาท) เรียบร้อยแล้ว`
+                                          : 'ตรวจสอบยอดเงินถูกต้องแล้ว';
+                                        const fullApprovalUpdates = {
+                                          payment_plan: 'full',
+                                          payment_status: 'paid',
+                                          payment_amount: 0,
+                                          payment_notes: approvalNote,
+                                          installment_1_status: 'paid',
+                                          installment_1_notes: approvalNote,
+                                          payment_slip_url: effectiveSlipUrl
+                                        };
+                                        setModalPaymentPlan('full');
+                                        setModalPaymentStatus('paid');
+                                        setModalPaymentAmount(0);
+                                        setModalPaymentNotes(approvalNote);
+                                        await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
+                                        setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
+                                        triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
+                                      }
+                                    });
                                   }}
-                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
                                 >
-                                  ✓ อนุมัติงวด 2
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span>✓ อนุมัติสลิป (ชำระแล้ว)</span>
                                 </button>
+
                                 <button
                                   type="button"
                                   onClick={async () => {
                                     const reason = await askPrompt({
-                                      title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
-                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
+                                      title: 'ระบุเหตุผลที่ปฏิเสธสลิป',
+                                      message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
                                       defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
                                       placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
                                       variant: 'danger',
@@ -6600,264 +6988,42 @@ export default function AdminDashboardView({
                                     });
                                     if (reason) {
                                       const isMsu = isMsuInstitution(profileModalReg.institution);
-                                      const round2Fee = isMsu 
-                                        ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                      const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                      const totalFee = isModalStaff
+                                        ? STAFF_SHIRT_FEE
+                                        : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
 
-                                      const updates = {
-                                        installment_2_status: 'unpaid',
-                                        installment_2_notes: reason,
-                                        payment_status: 'unpaid',
-                                        payment_amount: isR1Paid ? round2Fee : totalFee,
-                                        payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
-                                      };
                                       setModalPaymentStatus('unpaid');
-                                      setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
-                                      setModalPaymentNotes(updates.payment_notes);
-                                      await onUpdateAllocation(profileModalReg.user_id, updates);
-                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                      triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
+                                      setModalPaymentAmount(totalFee);
+                                      setModalPaymentNotes(reason);
+                                      const rejectUpdates = {
+                                        payment_status: 'unpaid',
+                                        installment_1_status: 'unpaid',
+                                        installment_1_notes: reason,
+                                        payment_amount: totalFee,
+                                        payment_notes: reason
+                                      };
+                                      await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                      setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
+                                      triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
                                     }
                                   }}
-                                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
                                 >
-                                  ✕ ให้ส่งใหม่
+                                  <XCircle className="w-4 h-4" />
+                                  <span>✕ ปฏิเสธสลิป / ให้ส่งใหม่</span>
                                 </button>
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
-                            <Clock className="w-6 h-6 mb-2 opacity-50" />
-                            <span>ยังไม่มีการส่งสลิปงวดที่ 2</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Uploaded Slip Card (Standard Full Payment or additional slip) */}
-                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
-                  <h4 className="font-bold text-white text-sm">
-                    {(profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url))
-                      ? 'หลักฐานสลิปการโอนเงินเพิ่มเติม / ทั่วไป'
-                      : 'หลักฐานสลิปการโอนเงิน (ชำระเต็มจำนวน 1 รอบ)'}
-                  </h4>
-                  
-                  {profileModalReg.payment_slip_url ? (
-                    <div className="flex flex-col sm:flex-row items-start gap-4">
-                      <div 
-                        onClick={() => setPreviewDoc({ title: 'สลิปการโอนเงิน - ' + profileModalReg.first_name, file_url: profileModalReg.payment_slip_url, file_name: 'payment-slip.jpg' })}
-                        className="cursor-pointer group relative w-40 h-48 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shrink-0"
-                      >
-                        <img 
-                          src={profileModalReg.payment_slip_url} 
-                          alt="สลิปโอนเงิน" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                        />
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold gap-1">
-                          <Eye className="w-4 h-4" /> ดูสลิป
                         </div>
-                      </div>
-
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-slate-400 text-xs">วันที่ส่งสลิป:</p>
-                            <p className="text-white font-semibold text-xs mt-0.5">
-                              {profileModalReg.payment_slip_date ? new Date(profileModalReg.payment_slip_date).toLocaleString('th-TH') : '-'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const hosted = await ensureHostedUrl(profileModalReg.payment_slip_url, 'slip-full.jpg');
-                                await navigator.clipboard.writeText(hosted);
-                                triggerToast('คัดลอกลิงก์สลิปเรียบร้อยแล้ว');
-                              }}
-                              className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs inline-flex items-center gap-1 cursor-pointer"
-                              title="คัดลอก URL ลิงก์สลิป"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-cyan-400" />
-                              <span>ก๊อปลิ้งค์สลิป</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPreviewDoc({ title: 'สลิปการโอนเงิน - ' + profileModalReg.first_name, file_url: profileModalReg.payment_slip_url, file_name: 'payment-slip.jpg' })}
-                              className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs inline-flex items-center gap-1 cursor-pointer"
-                              title="เปิดดูสลิป"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
-                              <span>เปิดดู</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {profileModalReg.slip_ocr_full && (
-                          <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
-                            profileModalReg.slip_ocr_full.isFullyVerified 
-                              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
-                              : profileModalReg.slip_ocr_full.isDuplicate
-                              ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
-                              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-                          }`}>
-                            <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                              <span className="font-bold flex items-center gap-1">
-                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                ผลตรวจ OCR (เต็มจำนวน):
-                              </span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                profileModalReg.slip_ocr_full.isFullyVerified 
-                                  ? 'bg-emerald-500/20 text-emerald-300' 
-                                  : profileModalReg.slip_ocr_full.isDuplicate
-                                  ? 'bg-rose-500/20 text-rose-300'
-                                  : 'bg-amber-500/20 text-amber-300'
-                              }`}>
-                                {profileModalReg.slip_ocr_full.isFullyVerified ? '✓ ยอดตรง & สลิปใหม่' : profileModalReg.slip_ocr_full.isDuplicate ? '🚨 สลิปซ้ำ' : '⚠️ ยอดไม่ตรง/รอตรวจ'}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-                              <div>ยอดเงินในสลิป: <span className="font-bold text-white">{profileModalReg.slip_ocr_full.amountFormatted || '-'}</span></div>
-                              <div>วันเวลาโอน: <span className="font-bold text-white">{profileModalReg.slip_ocr_full.transferDateTimeStr || '-'}</span></div>
-                              <div>ธนาคาร: <span className="text-sky-300">{profileModalReg.slip_ocr_full.bankDetected || '-'}</span></div>
-                              <div className="truncate">TransRef: <span className="font-mono text-amber-300">{profileModalReg.slip_ocr_full.transRef || '-'}</span></div>
-                            </div>
-                          </div>
-                        )}
-
-                        {profileModalReg.payment_status === 'paid' ? (
-                          <div className="flex flex-wrap items-center gap-2 pt-2">
-                            <div className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold rounded-xl flex items-center gap-1.5 shadow-sm">
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>✓ อนุมัติสลิปแล้ว (ชำระแล้ว)</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const reason = await askPrompt({
-                                  title: 'ยกเลิกการอนุมัติและระบุเหตุผลที่ปฏิเสธสลิป',
-                                  message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
-                                  defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                  placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                  variant: 'danger',
-                                  confirmText: 'ตกลง',
-                                  cancelText: 'ยกเลิก'
-                                });
-                                if (reason) {
-                                  const isMsu = isMsuInstitution(profileModalReg.institution);
-                                  const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                  const isInstallment = profileModalReg.payment_plan === 'installment';
-                                  const round2Fee = isMsu 
-                                    ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                    : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                  const isR1Paid = profileModalReg.installment_1_status === 'paid';
-                                  const remaining = (isInstallment && isR1Paid) ? round2Fee : totalFee;
-
-                                  setModalPaymentStatus('unpaid');
-                                  setModalPaymentAmount(remaining);
-                                  setModalPaymentNotes(reason);
-                                  const rejectUpdates = {
-                                    payment_status: 'unpaid',
-                                    payment_amount: remaining,
-                                    payment_notes: reason
-                                  };
-                                  await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
-                                  setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
-                                  triggerToast('ยกเลิกการอนุมัติสลิปและปรับเป็นค้างชำระแล้ว');
-                                }
-                              }}
-                              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95"
-                              title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-2 pt-2">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const isInstallment = profileModalReg.payment_plan === 'installment';
-                                const fullApprovalUpdates = {
-                                  payment_status: 'paid',
-                                  payment_amount: 0,
-                                  payment_notes: 'ตรวจสอบยอดเงินถูกต้องแล้ว'
-                                };
-                                if (isInstallment) {
-                                  fullApprovalUpdates.installment_1_status = 'paid';
-                                  fullApprovalUpdates.installment_2_status = 'paid';
-                                }
-                                setModalPaymentStatus('paid');
-                                setModalPaymentAmount(0);
-                                setModalPaymentNotes('ตรวจสอบยอดเงินถูกต้องแล้ว');
-                                await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
-                                setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
-                                triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
-                              }}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>อนุมัติสลิป (ชำระแล้ว)</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const reason = await askPrompt({
-                                  title: 'ระบุเหตุผลที่ปฏิเสธสลิป',
-                                  message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบ (เช่น ยอดเงินไม่ตรง หรือสลิปไม่ชัดเจน):',
-                                  defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
-                                  placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
-                                  variant: 'danger',
-                                  confirmText: 'ตกลง',
-                                  cancelText: 'ยกเลิก'
-                                });
-                                if (reason) {
-                                  const isMsu = isMsuInstitution(profileModalReg.institution);
-                                  const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                  const isInstallment = profileModalReg.payment_plan === 'installment';
-                                  const round2Fee = isMsu 
-                                    ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                    : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                  const isR1Paid = profileModalReg.installment_1_status === 'paid';
-                                  const remaining = (isInstallment && isR1Paid) ? round2Fee : totalFee;
-
-                                  setModalPaymentStatus('unpaid');
-                                  setModalPaymentAmount(remaining);
-                                  setModalPaymentNotes(reason);
-                                  const rejectUpdates = {
-                                    payment_status: 'unpaid',
-                                    payment_amount: remaining,
-                                    payment_notes: reason
-                                  };
-                                  await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
-                                  setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
-                                  triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
-                                }
-                              }}
-                              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              <span>ปฏิเสธสลิป / ให้ส่งใหม่</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      ) : (
+                        <p className="text-slate-500 italic py-2">
+                          ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน ({isModalStaff ? `ค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บาท` : 'ชำระเต็มจำนวน 1 รอบ'})
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-slate-500 italic py-2">
-                      {(profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url))
-                        ? 'ผู้สมัครเลือกแผนแบ่งจ่าย 2 งวด (ดูสลิปด้านบน)'
-                        : 'ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน (ชำระเต็มจำนวน 1 รอบ)'}
-                    </p>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -9301,6 +9467,7 @@ export default function AdminDashboardView({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                       {customSizeItems.map((cItem) => {
                         const isUpdating = updatingSizeId === cItem.id || updatingSizeId === cItem.user_id;
+                        const isEditingCustomCard = editingMerchSizeItemId === `custom_${cItem.id}`;
                         return (
                           <div
                             key={cItem.id}
@@ -9324,34 +9491,93 @@ export default function AdminDashboardView({
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                                <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
                                   <span>📞 โทรติดต่อ: <a href={`tel:${cItem.phone}`} className="text-emerald-400 font-mono font-bold hover:underline">{cItem.phone || '-'}</a></span>
-                                  <span>• ที่เลือกไว้: <strong className="text-rose-300 font-mono">{cItem.size}</strong></span>
+                                  <span>• หมวดที่เลือก: <strong className="text-rose-300 font-mono">{cItem.size}</strong></span>
                                 </div>
+                                {cItem.custom_shirt_note ? (
+                                  <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-[11px] text-amber-200 font-bold">
+                                    📝 ผู้สมัครระบุไซส์ที่ต้องการ: <span className="text-white underline">{cItem.custom_shirt_note}</span>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300">
+                                    ⚠️ ผู้สมัครยังไม่ได้ระบุรายละเอียดไซส์พิเศษ (แอดมินสามารถกดระบุให้ได้ด้านล่าง)
+                                  </div>
+                                )}
                               </div>
                               <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold shrink-0">
                                 {cItem.source === 'registration' ? 'ผู้สมัคร' : 'สั่งซื้อเพิ่ม'}
                               </span>
                             </div>
 
-                            <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
-                              <span className="text-[10px] font-bold text-amber-300 block">
-                                👉 คลิกระบุไซส์จริงที่ได้คุยตกลงกับ {cItem.customer_name} (อัปเดตขึ้นตามไซส์ในระบบทันที):
-                              </span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map((targetSz) => (
+                            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                              {!isEditingCustomCard ? (
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-slate-400">
+                                    🔒 ล็อกป้องกันกดเปลี่ยนไซส์โดยไม่ตั้งใจ
+                                  </span>
                                   <button
-                                    key={targetSz}
                                     type="button"
-                                    disabled={isUpdating}
-                                    onClick={() => handleAssignPersonShirtSize(cItem, targetSz)}
-                                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-amber-500 text-slate-200 hover:text-slate-950 border border-slate-700 hover:border-amber-400 text-xs font-mono font-black transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                                    title={`ตั้งค่าไซส์ของ ${cItem.customer_name} เป็น ${targetSz}`}
+                                    onClick={() => {
+                                      setEditingMerchSizeItemId(`custom_${cItem.id}`);
+                                      const norm = normalizeSize(cItem.size);
+                                      setEditingMerchSizeVal(['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(norm) ? norm : 'อื่นๆ');
+                                      setEditingMerchCustomNote(cItem.custom_shirt_note || '');
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
                                   >
-                                    {targetSz}
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <span>ระบุ/แก้ไขไซส์เสื้อจริง</span>
                                   </button>
-                                ))}
-                              </div>
+                                </div>
+                              ) : (
+                                <div className="p-2.5 rounded-xl bg-slate-900 border border-amber-500/50 space-y-2">
+                                  <span className="text-[10px] font-bold text-amber-300 block">
+                                    👉 เลือกไซส์มาตรฐาน หรือระบุขนาดสั่งตัดพิเศษ แล้วกด &ldquo;บันทึกไซส์&rdquo;:
+                                  </span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map((targetSz) => (
+                                      <button
+                                        key={targetSz}
+                                        type="button"
+                                        onClick={() => setEditingMerchSizeVal(targetSz)}
+                                        className={`px-2 py-1 rounded-lg text-[11px] font-mono font-black border transition-all cursor-pointer ${
+                                          editingMerchSizeVal === targetSz
+                                            ? 'bg-amber-500 text-slate-950 border-amber-300'
+                                            : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-amber-400'
+                                        }`}
+                                      >
+                                        {targetSz}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    value={editingMerchCustomNote}
+                                    onChange={(e) => setEditingMerchCustomNote(e.target.value)}
+                                    placeholder="ระบุรายละเอียดไซส์พิเศษ เช่น 6XL (รอบอก 52 นิ้ว)..."
+                                    className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg text-xs text-white focus:outline-none"
+                                  />
+                                  <div className="flex items-center justify-end gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingMerchSizeItemId(null)}
+                                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold cursor-pointer"
+                                    >
+                                      ✕ ยกเลิก
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isUpdating}
+                                      onClick={() => handleAssignPersonShirtSize(cItem, editingMerchSizeVal, editingMerchCustomNote)}
+                                      className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                    >
+                                      <Save className="w-3.5 h-3.5" />
+                                      <span>บันทึกไซส์</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -9360,7 +9586,7 @@ export default function AdminDashboardView({
                   ) : (
                     <div className="text-[11px] text-slate-400 flex items-center gap-2 pt-1">
                       <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>ขณะนี้ไม่มีผู้ค้างอยู่ในหมวด &ldquo;อื่นๆ&rdquo; — หากต้องการเปลี่ยนไซส์ให้คนไหนเพิ่มเติม สามารถเลือกเปลี่ยนได้จากปุ่ม <strong>&ldquo;ระบุ/เปลี่ยนไซส์จริง&rdquo;</strong> ในการ์ดรายชื่อแต่ละคนด้านล่างได้เลย</span>
+                      <span>ขณะนี้ไม่มีผู้ค้างอยู่ในหมวด &ldquo;อื่นๆ&rdquo; — หากต้องการเปลี่ยนไซส์ให้คนไหนเพิ่มเติม สามารถกดปุ่ม <strong>&ldquo;✏️ แก้ไขไซส์&rdquo;</strong> ในการ์ดรายชื่อแต่ละคนด้านล่างแล้วกดบันทึกได้เลย</span>
                     </div>
                   )}
                 </div>
@@ -9809,11 +10035,11 @@ export default function AdminDashboardView({
                           </div>
                         </div>
 
-                        {/* Col 2: Shirt Size & Items (4 cols) */}
+                        {/* Col 2: Shirt Size & Items (4 cols) — Locked by default to prevent accidental change */}
                         <div className="md:col-span-4 bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] text-slate-400 font-bold uppercase">ไซส์เสื้อ:</span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
                               <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-sm border ${
                                 !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(item.size))
                                   ? 'bg-rose-500/25 text-rose-200 border-rose-400/60 animate-pulse'
@@ -9827,22 +10053,76 @@ export default function AdminDashboardView({
                             </div>
                           </div>
 
-                          {/* Direct Admin Size Selector per Person */}
-                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
-                            <span className="text-[10px] text-amber-300/90 font-semibold">
-                              ระบุ/เปลี่ยนไซส์จริงรายคน:
-                            </span>
-                            <select
-                              value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(item.size)) ? normalizeSize(item.size) : 'อื่นๆ'}
-                              disabled={updatingSizeId === item.id || updatingSizeId === item.user_id}
-                              onChange={(e) => handleAssignPersonShirtSize(item, e.target.value)}
-                              className="px-2 py-1 bg-slate-950 border border-amber-500/40 hover:border-amber-400 rounded-lg text-xs font-mono font-bold text-white cursor-pointer focus:outline-none"
-                            >
-                              {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
-                                <option key={sz} value={sz}>ไซส์ {sz}</option>
-                              ))}
-                              <option value="อื่นๆ">อื่นๆ (รอติดต่อระบุไซส์)</option>
-                            </select>
+                          {item.custom_shirt_note && (
+                            <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-200 font-semibold">
+                              📝 ไซส์พิเศษที่ระบุ: <strong className="text-white">{item.custom_shirt_note}</strong>
+                            </div>
+                          )}
+
+                          {/* Locked-by-default Admin Size Editor per Person */}
+                          <div className="pt-1.5 border-t border-slate-800/80">
+                            {editingMerchSizeItemId !== item.id ? (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                  <Lock className="w-3 h-3 text-slate-500" />
+                                  <span>ล็อกป้องกันกดโดน</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingMerchSizeItemId(item.id);
+                                    const norm = normalizeSize(item.size);
+                                    setEditingMerchSizeVal(['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(norm) ? norm : 'อื่นๆ');
+                                    setEditingMerchCustomNote(item.custom_shirt_note || '');
+                                  }}
+                                  className="px-2.5 py-1 bg-slate-950 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>แก้ไขไซส์เสื้อ</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="p-2 rounded-lg bg-slate-950 border border-amber-500/50 space-y-2">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <span className="text-[10px] text-amber-300 font-bold">เลือกไซส์ใหม่:</span>
+                                  <select
+                                    value={editingMerchSizeVal}
+                                    onChange={(e) => setEditingMerchSizeVal(e.target.value)}
+                                    className="px-2 py-1 bg-slate-900 border border-amber-500/50 rounded text-xs font-mono font-bold text-white focus:outline-none"
+                                  >
+                                    {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
+                                      <option key={sz} value={sz}>ไซส์ {sz}</option>
+                                    ))}
+                                    <option value="อื่นๆ">อื่นๆ (ขนาดสั่งตัดพิเศษ)</option>
+                                  </select>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={editingMerchCustomNote}
+                                  onChange={(e) => setEditingMerchCustomNote(e.target.value)}
+                                  placeholder="ระบุไซส์พิเศษ เช่น 6XL (รอบอก 52 นิ้ว)..."
+                                  className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-[11px] text-white focus:outline-none focus:border-amber-400"
+                                />
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingMerchSizeItemId(null)}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold cursor-pointer"
+                                  >
+                                    ✕ ยกเลิก
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={updatingSizeId === item.id || updatingSizeId === item.user_id}
+                                    onClick={() => handleAssignPersonShirtSize(item, editingMerchSizeVal, editingMerchCustomNote)}
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                    <span>บันทึกไซส์</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/80">
@@ -9883,35 +10163,44 @@ export default function AdminDashboardView({
                             </div>
                           ) : null}
 
-                          {/* Handover Buttons */}
+                          {/* Handover Buttons (Protected by askConfirm against accidental clicks) */}
                           <div>
                             {!isReceived ? (
                               <button
                                 type="button"
                                 disabled={handoverLoadingId === item.id}
-                                onClick={async () => {
-                                  setHandoverLoadingId(item.id);
-                                  try {
-                                    if (isReg) {
-                                      const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || item.id?.replace('reg_shirt_', '');
-                                      if (onUpdateAllocation) {
-                                        await onUpdateAllocation(targetUserId, {
-                                          shirt_pickup_status: 'received',
-                                          shirt_received: true,
-                                          shirt_received_date: new Date().toISOString()
-                                        });
-                                        triggerToast(`บันทึกส่งมอบเสื้อฝึก (ไซส์ ${item.size}) แก่คุณ ${item.customer_name} เรียบร้อยแล้ว`);
+                                onClick={() => {
+                                  askConfirm({
+                                    title: 'ยืนยันการส่งมอบเสื้อฝึกปฏิบัติการ',
+                                    message: `ต้องการบันทึกว่า คุณ ${item.customer_name} (ไซส์ ${item.size}${item.custom_shirt_note ? ` • ${item.custom_shirt_note}` : ''}) ได้รับเสื้อเรียบร้อยแล้วใช่หรือไม่?`,
+                                    confirmText: '✓ ยืนยันรับเสื้อแล้ว',
+                                    cancelText: 'ยกเลิก',
+                                    variant: 'info',
+                                    onConfirm: async () => {
+                                      setHandoverLoadingId(item.id);
+                                      try {
+                                        if (isReg) {
+                                          const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || item.id?.replace('reg_shirt_', '');
+                                          if (onUpdateAllocation) {
+                                            await onUpdateAllocation(targetUserId, {
+                                              shirt_pickup_status: 'received',
+                                              shirt_received: true,
+                                              shirt_received_date: new Date().toISOString()
+                                            });
+                                            triggerToast(`บันทึกส่งมอบเสื้อฝึก (ไซส์ ${item.size}) แก่คุณ ${item.customer_name} เรียบร้อยแล้ว`);
+                                          }
+                                        } else {
+                                          await onMarkOrderReceived(item.id, 'Admin JRE 2027');
+                                          triggerToast(`บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว`);
+                                        }
+                                      } catch (err) {
+                                        console.error('Error confirming handover:', err);
+                                        triggerToast('เกิดข้อผิดพลาดในการบันทึกส่งมอบเสื้อ', 'error');
+                                      } finally {
+                                        setHandoverLoadingId(null);
                                       }
-                                    } else {
-                                      await onMarkOrderReceived(item.id, 'Admin JRE 2027');
-                                      triggerToast(`บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว`);
                                     }
-                                  } catch (err) {
-                                    console.error('Error confirming handover:', err);
-                                    triggerToast('เกิดข้อผิดพลาดในการบันทึกส่งมอบเสื้อ', 'error');
-                                  } finally {
-                                    setHandoverLoadingId(null);
-                                  }
+                                  });
                                 }}
                                 className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
                               >
@@ -9936,29 +10225,38 @@ export default function AdminDashboardView({
                                 <button
                                   type="button"
                                   disabled={handoverLoadingId === item.id}
-                                  onClick={async () => {
-                                    setHandoverLoadingId(item.id);
-                                    try {
-                                      if (isReg) {
-                                        const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || item.id?.replace('reg_shirt_', '');
-                                        if (onUpdateAllocation) {
-                                          await onUpdateAllocation(targetUserId, {
-                                            shirt_pickup_status: 'pending',
-                                            shirt_received: false,
-                                            shirt_received_date: null
-                                          });
-                                          triggerToast(`ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                                  onClick={() => {
+                                    askConfirm({
+                                      title: 'ยกเลิกสถานะการรับเสื้อ',
+                                      message: `ต้องการเปลี่ยนสถานะของคุณ ${item.customer_name} กลับเป็น "รอรับเสื้อ" ใช่หรือไม่?`,
+                                      confirmText: 'ยืนยันเปลี่ยนเป็นรอรับ',
+                                      cancelText: 'คงสถานะเดิม',
+                                      variant: 'warning',
+                                      onConfirm: async () => {
+                                        setHandoverLoadingId(item.id);
+                                        try {
+                                          if (isReg) {
+                                            const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || item.id?.replace('reg_shirt_', '');
+                                            if (onUpdateAllocation) {
+                                              await onUpdateAllocation(targetUserId, {
+                                                shirt_pickup_status: 'pending',
+                                                shirt_received: false,
+                                                shirt_received_date: null
+                                              });
+                                              triggerToast(`ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                                            }
+                                          } else {
+                                            await onMarkOrderReceived(item.id, null, 'pending');
+                                            triggerToast(`ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
+                                          }
+                                        } catch (err) {
+                                          console.error('Error canceling handover:', err);
+                                          triggerToast('เกิดข้อผิดพลาดในการยกเลิกสถานะส่งมอบ', 'error');
+                                        } finally {
+                                          setHandoverLoadingId(null);
                                         }
-                                      } else {
-                                        await onMarkOrderReceived(item.id, null, 'pending');
-                                        triggerToast(`ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
                                       }
-                                    } catch (err) {
-                                      console.error('Error canceling handover:', err);
-                                      triggerToast('เกิดข้อผิดพลาดในการยกเลิกสถานะส่งมอบ', 'error');
-                                    } finally {
-                                      setHandoverLoadingId(null);
-                                    }
+                                    });
                                   }}
                                   className="w-full text-center py-0.5 text-[10px] text-slate-500 hover:text-rose-400 disabled:opacity-50 transition-colors cursor-pointer flex items-center justify-center gap-1"
                                 >
@@ -9979,9 +10277,18 @@ export default function AdminDashboardView({
                               <div className="flex gap-1.5 pt-1.5">
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    await onVerifyOrderPayment(item.id, true, 'อนุมัติโดย Admin');
-                                    triggerToast(`อนุมัติสลิปออเดอร์ ${item.order_number} แล้ว`);
+                                  onClick={() => {
+                                    askConfirm({
+                                      title: 'ยืนยันการอนุมัติสลิปสั่งซื้อเสื้อ',
+                                      message: `ต้องการยืนยันอนุมัติสลิปคำสั่งซื้อ ${item.order_number} ของคุณ ${item.customer_name} ใช่หรือไม่?`,
+                                      confirmText: '✓ ยืนยันอนุมัติสลิป',
+                                      cancelText: 'ยกเลิก',
+                                      variant: 'info',
+                                      onConfirm: async () => {
+                                        await onVerifyOrderPayment(item.id, true, 'อนุมัติโดย Admin');
+                                        triggerToast(`อนุมัติสลิปออเดอร์ ${item.order_number} แล้ว`);
+                                      }
+                                    });
                                   }}
                                   className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold cursor-pointer"
                                 >
@@ -13345,6 +13652,34 @@ export default function AdminDashboardView({
               : 'ทั้งหมด'
           }
           merchandiseConfig={localMerchConfig}
+          onOpenScanner={() => setShowUniversalScanner(true)}
+          onTogglePickupStatus={(item, nextReceived) => {
+            askConfirm({
+              title: nextReceived ? 'ยืนยันการส่งมอบเสื้อ (ติ๊กรับเสื้อแล้ว)' : 'ยกเลิกสถานะการรับเสื้อ',
+              message: nextReceived
+                ? `ต้องการบันทึกว่า "${item.customer_name}" (${item.uni_short || '-'} • ไซส์ ${item.size}) ได้รับเสื้อเรียบร้อยแล้วใช่หรือไม่?`
+                : `ต้องการเปลี่ยนสถานะของ "${item.customer_name}" กลับเป็น "รอรับเสื้อ" ใช่หรือไม่?`,
+              confirmText: nextReceived ? '✓ ยืนยันรับเสื้อแล้ว' : 'ยืนยันเปลี่ยนเป็นรอรับ',
+              cancelText: 'ยกเลิก',
+              variant: nextReceived ? 'info' : 'warning',
+              onConfirm: async () => {
+                if (item.source === 'registration') {
+                  const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || String(item.id || '').replace('reg_shirt_', '');
+                  if (onUpdateAllocation && targetUserId) {
+                    await onUpdateAllocation(targetUserId, {
+                      shirt_pickup_status: nextReceived ? 'received' : 'pending',
+                      shirt_received: nextReceived,
+                      shirt_received_date: nextReceived ? new Date().toISOString() : null
+                    });
+                    triggerToast(nextReceived ? `บันทึกส่งมอบเสื้อคุณ ${item.customer_name} เรียบร้อยแล้ว` : `ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                  }
+                } else if (onMarkOrderReceived) {
+                  await onMarkOrderReceived(item.id, nextReceived ? 'Admin JRE 2027' : null, nextReceived ? 'received' : 'pending');
+                  triggerToast(nextReceived ? `บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว` : `ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
+                }
+              }
+            });
+          }}
         />
       )}
 
