@@ -1363,6 +1363,200 @@ export const ACCOMMODATION_DETAILS = {
   ]
 };
 
+// รายชื่อผู้ส่งข้อความแจ้งเตือนและระบบงานต่างๆ ของ Admin (แยกตามฝ่าย/ระบบ ไม่ได้จำกัดแค่ฝ่ายประสานงาน & การเงิน)
+export const ADMIN_MESSAGE_SENDERS = [
+  {
+    key: 'admin_central',
+    senderName: 'ผู้ดูแลระบบกลาง (Admin JRE 2027)',
+    roleBadge: 'Admin ระบบกลาง',
+    systemName: 'ระบบจัดการผู้สมัครและส่วนกลาง',
+    shortLabel: '🛡️ Admin กลาง',
+    defaultTitle: 'แจ้งเตือนจากผู้ดูแลระบบ JRE 2027',
+    colorTheme: 'purple'
+  },
+  {
+    key: 'finance_coord',
+    senderName: 'ฝ่ายประสานงาน & การเงิน JRE 2027',
+    roleBadge: 'Admin การเงิน',
+    systemName: 'ระบบการเงินและตรวจสอบสลิปโอนเงิน',
+    shortLabel: '💳 ฝ่ายประสานงาน & การเงิน',
+    defaultTitle: 'แจ้งผลการตรวจสอบสลิป / ยอดชำระเงิน',
+    colorTheme: 'amber'
+  },
+  {
+    key: 'registration_docs',
+    senderName: 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027',
+    roleBadge: 'Admin ทะเบียน/เอกสาร',
+    systemName: 'ระบบขอและตรวจสอบเอกสารแนบ',
+    shortLabel: '📄 ฝ่ายทะเบียน & เอกสาร',
+    defaultTitle: 'แจ้งเรื่องเอกสารประกอบการสมัคร',
+    colorTheme: 'emerald'
+  },
+  {
+    key: 'accommodation_shirt',
+    senderName: 'ฝ่ายจัดกลุ่มฝึก ห้องพัก & เสื้อฝึก JRE 2027',
+    roleBadge: 'Admin ห้องพัก/เสื้อฝึก',
+    systemName: 'ระบบจัดสรรห้องพัก กลุ่มฝึก และสวัสดิการเสื้อ',
+    shortLabel: '🏢 ฝ่ายห้องพัก/กลุ่มฝึก/เสื้อ',
+    defaultTitle: 'แจ้งการจัดกลุ่มฝึก ห้องพัก หรือไซส์เสื้อ',
+    colorTheme: 'sky'
+  },
+  {
+    key: 'medical_safety',
+    senderName: 'ฝ่ายการแพทย์ & ความปลอดภัย (Safety)',
+    roleBadge: 'Admin การแพทย์/ID Scanner',
+    systemName: 'ระบบคัดกรองสุขภาพและสแกนบัตรประจำตัว',
+    shortLabel: '🩺 ฝ่ายการแพทย์ & Safety',
+    defaultTitle: 'แจ้งเตือนด้านสุขภาพและความปลอดภัยในการฝึก',
+    colorTheme: 'rose'
+  },
+  {
+    key: 'director_board',
+    senderName: 'กองอำนวยการฝึกโครงการ JRE 2027',
+    roleBadge: 'กองอำนวยการฝึก',
+    systemName: 'ระบบประกาศและคำสั่งการฝึกอบรม',
+    shortLabel: '📢 กองอำนวยการฝึก',
+    defaultTitle: 'ประกาศสำคัญจากกองอำนวยการฝึก JRE 2027',
+    colorTheme: 'indigo'
+  },
+  {
+    key: 'custom',
+    senderName: 'ผู้ดูแลระบบ (กำหนดชื่อผู้ส่งเอง)',
+    roleBadge: 'Admin',
+    systemName: 'ระบบแจ้งเตือนเฉพาะกิจ',
+    shortLabel: '✏️ กำหนดผู้ส่งเอง',
+    defaultTitle: 'ข้อความแจ้งเตือนจากผู้ดูแลระบบ',
+    colorTheme: 'purple'
+  }
+];
+
+// รายการเอกสารมาตรฐานสำหรับให้ Admin กดขอ / กดยกเลิกการขอ ได้ในคลิกเดียว
+export const STANDARD_REQUESTABLE_DOCS = [
+  {
+    code: 'id_card_copy',
+    title: 'สำเนาบัตรประจำตัวประชาชน',
+    defaultSystem: 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027',
+    desc: 'ใช้ยืนยันตัวตนและทำประกันอุบัติเหตุระหว่างการฝึก'
+  },
+  {
+    code: 'house_reg_copy',
+    title: 'สำเนาทะเบียนบ้าน',
+    defaultSystem: 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027',
+    desc: 'เอกสารประกอบหลักฐานทางทะเบียนของผู้เข้าร่วม'
+  },
+  {
+    code: 'medical_cert',
+    title: 'ใบรับรองแพทย์ / ประวัติการรักษา',
+    defaultSystem: 'ฝ่ายการแพทย์ & ความปลอดภัย (Safety)',
+    desc: 'สำหรับผู้มีโรคประจำตัวหรือต้องการการดูแลพิเศษ'
+  },
+  {
+    code: 'parent_consent',
+    title: 'หนังสือยินยอมจากผู้ปกครอง',
+    defaultSystem: 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027',
+    desc: 'กรณีผู้สมัครอายุต่ำกว่าเกณฑ์หรือตามระเบียบสังกัด'
+  },
+  {
+    code: 'id_photo_1inch',
+    title: 'รูปถ่ายหน้าตรง 1 นิ้ว (สำหรับทำบัตร ID Card)',
+    defaultSystem: 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027',
+    desc: 'รูปถ่ายชุดสุภาพหรือชุดปฏิบัติการเห็นใบหน้าชัดเจน'
+  },
+  {
+    code: 'extra_payment_slip',
+    title: 'หลักฐานสลิปการโอนเงินเพิ่มเติม / สลิปแก้ไข',
+    defaultSystem: 'ฝ่ายประสานงาน & การเงิน JRE 2027',
+    desc: 'กรณีสลิปเดิมไม่ชัดเจนหรือโอนส่วนต่างเพิ่มเติม'
+  },
+  {
+    code: 'student_staff_id',
+    title: 'สำเนาบัตรนิสิต/นักศึกษา หรือหนังสือรับรองสังกัด',
+    defaultSystem: 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027',
+    desc: 'ยืนยันสังกัดมหาวิทยาลัยหรือชมรมเครือข่าย'
+  }
+];
+
+export const resolveMessageSenderInfo = (msg = {}) => {
+  if (!msg || typeof msg !== 'object') {
+    return ADMIN_MESSAGE_SENDERS[0];
+  }
+
+  // 1. If message explicitly specifies custom sender or sender_key
+  if (msg.sender_key && msg.sender_key !== 'custom') {
+    const matched = ADMIN_MESSAGE_SENDERS.find(s => s.key === msg.sender_key);
+    if (matched) {
+      return {
+        ...matched,
+        senderName: msg.sender_name || matched.senderName,
+        roleBadge: msg.sender_role || matched.roleBadge,
+        systemName: msg.system_name || matched.systemName,
+        title: msg.title || matched.defaultTitle
+      };
+    }
+  }
+
+  if (msg.sender_name) {
+    return {
+      key: msg.sender_key || 'custom',
+      senderName: msg.sender_name,
+      roleBadge: msg.sender_role || 'Admin',
+      systemName: msg.system_name || 'ระบบแจ้งเตือนโครงการ JRE 2027',
+      shortLabel: msg.sender_short || `🛡️ ${msg.sender_name}`,
+      defaultTitle: msg.title || 'ข้อความจากผู้ดูแลระบบ',
+      title: msg.title || 'ข้อความจากผู้ดูแลระบบ',
+      colorTheme: msg.color_theme || 'purple'
+    };
+  }
+
+  // 2. Auto-infer from sent_via or content for existing/legacy messages
+  if (msg.sent_via === 'id_card_scanner') {
+    const med = ADMIN_MESSAGE_SENDERS.find(s => s.key === 'medical_safety');
+    return {
+      ...med,
+      title: msg.title || med.defaultTitle
+    };
+  }
+
+  if (msg.sent_via === 'doc_request' || msg.category === 'docs') {
+    const docSender = ADMIN_MESSAGE_SENDERS.find(s => s.key === 'registration_docs');
+    return {
+      ...docSender,
+      title: msg.title || docSender.defaultTitle
+    };
+  }
+
+  const text = String(msg.text || '');
+  if (/เอกสาร|บัตรประชาชน|ทะเบียนบ้าน|ใบรับรองแพทย์|ใบยินยอม/.test(text)) {
+    const docSender = ADMIN_MESSAGE_SENDERS.find(s => s.key === 'registration_docs');
+    return {
+      ...docSender,
+      title: msg.title || docSender.defaultTitle
+    };
+  }
+  if (/ห้องพัก|กลุ่มฝึก|ไซส์เสื้อ|เสื้อฝึก/.test(text) && !/สลิป|โอนเงิน|ค้างชำระ/.test(text)) {
+    const accSender = ADMIN_MESSAGE_SENDERS.find(s => s.key === 'accommodation_shirt');
+    return {
+      ...accSender,
+      title: msg.title || accSender.defaultTitle
+    };
+  }
+  if (/สลิป|โอนเงิน|ชำระ|ค่างวด|ฝ่ายการเงิน|บัญชี/.test(text)) {
+    const finSender = ADMIN_MESSAGE_SENDERS.find(s => s.key === 'finance_coord');
+    return {
+      ...finSender,
+      title: msg.title || finSender.defaultTitle
+    };
+  }
+
+  // Default to Central Admin
+  const central = ADMIN_MESSAGE_SENDERS[0];
+  return {
+    ...central,
+    title: msg.title || central.defaultTitle
+  };
+};
+
+
 
 
 

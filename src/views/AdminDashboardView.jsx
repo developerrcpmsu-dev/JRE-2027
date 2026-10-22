@@ -92,7 +92,10 @@ import {
   hasHealthCondition,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
-  getCateringCategory
+  getCateringCategory,
+  ADMIN_MESSAGE_SENDERS,
+  STANDARD_REQUESTABLE_DOCS,
+  resolveMessageSenderInfo
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
@@ -833,11 +836,22 @@ export default function AdminDashboardView({
 
   // Admin Direct Message State
   const [newMsgText, setNewMsgText] = useState('');
+  const [msgSenderKey, setMsgSenderKey] = useState('admin_central');
+  const [msgCustomSenderName, setMsgCustomSenderName] = useState('');
+  const [msgCustomSystemName, setMsgCustomSystemName] = useState('');
+  const [msgTitle, setMsgTitle] = useState('');
+  const [msgAttachmentUrl, setMsgAttachmentUrl] = useState('');
+  const [msgAttachmentName, setMsgAttachmentName] = useState('');
+  const [isUploadingMsgAttachment, setIsUploadingMsgAttachment] = useState(false);
   const [isSendingMsg, setIsSendingMsg] = useState(false);
 
   // Document Request State
   const [newDocTitle, setNewDocTitle] = useState('');
   const [newDocRequired, setNewDocRequired] = useState(true);
+  const [newDocNote, setNewDocNote] = useState('');
+  const [docRequesterKey, setDocRequesterKey] = useState('registration_docs');
+  const [notifyUserOnDocAction, setNotifyUserOnDocAction] = useState(true);
+  const [uploadingAdminDocId, setUploadingAdminDocId] = useState(null);
 
   // Preview Slip Modal
   const [previewSlipUrl, setPreviewSlipUrl] = useState(null);
@@ -1990,15 +2004,53 @@ export default function AdminDashboardView({
     }
   };
 
-  // Send Direct Message to Participant
+  // Upload Attachment for Outgoing Admin Message
+  const handleUploadMsgAttachment = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingMsgAttachment(true);
+    try {
+      const uploaded = await DataService.uploadFile(file, 'docs');
+      if (uploaded?.url) {
+        setMsgAttachmentUrl(uploaded.url);
+        setMsgAttachmentName(file.name);
+        triggerToast(`แนบไฟล์ "${file.name}" กับข้อความเรียบร้อยแล้ว`);
+      }
+    } catch (err) {
+      console.error('Upload message attachment error:', err);
+      triggerToast('อัปโหลดไฟล์แนบไม่สำเร็จ', 'error');
+    } finally {
+      setIsUploadingMsgAttachment(false);
+      e.target.value = '';
+    }
+  };
+
+  // Send Direct Message to Participant (Separates by Admin / Department / System)
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMsgText.trim() || !profileModalReg) return;
 
+    const chosenSender = ADMIN_MESSAGE_SENDERS.find(s => s.key === msgSenderKey) || ADMIN_MESSAGE_SENDERS[0];
+    const finalSenderName = msgSenderKey === 'custom'
+      ? (msgCustomSenderName.trim() || 'ผู้ดูแลระบบ (Admin JRE 2027)')
+      : chosenSender.senderName;
+    const finalSystemName = msgSenderKey === 'custom'
+      ? (msgCustomSystemName.trim() || 'ระบบแจ้งเตือนโครงการ JRE 2027')
+      : chosenSender.systemName;
+    const finalTitle = msgTitle.trim() || chosenSender.defaultTitle;
+
     setIsSendingMsg(true);
     try {
       await DataService.sendAdminMessage(profileModalReg.user_id, newMsgText.trim(), {
-        payment_amount: Number(modalPaymentAmount) || (isMsuInstitution(profileModalReg.institution) ? 650 : 850),
+        sender_key: chosenSender.key,
+        sender_name: finalSenderName,
+        sender_role: chosenSender.roleBadge,
+        system_name: finalSystemName,
+        color_theme: chosenSender.colorTheme,
+        title: finalTitle,
+        attachment_url: msgAttachmentUrl || '',
+        attachment_name: msgAttachmentName || '',
+        payment_amount: Number(modalPaymentAmount) || (isStaffRegistration(profileModalReg) ? STAFF_SHIRT_FEE : (isMsuInstitution(profileModalReg.institution) ? 650 : 850)),
         payment_bank_info: modalPaymentBank.trim(),
         payment_status: modalPaymentStatus
       });
@@ -2008,9 +2060,15 @@ export default function AdminDashboardView({
       if (updatedTarget) {
         setProfileModalReg(updatedTarget);
       }
+      if (typeof onRefreshRegistrations === 'function') {
+        await onRefreshRegistrations();
+      }
 
       setNewMsgText('');
-      triggerToast(`ส่งข้อความแจ้งเตือนถึง ${profileModalReg.first_name} สำเร็จ`);
+      setMsgTitle('');
+      setMsgAttachmentUrl('');
+      setMsgAttachmentName('');
+      triggerToast(`ส่งข้อความแจ้งเตือนในนาม "${finalSenderName}" ถึง ${profileModalReg.first_name} สำเร็จ`);
     } catch (err) {
       console.error(err);
       triggerToast('เกิดข้อผิดพลาดในการส่งข้อความ');
@@ -2038,6 +2096,9 @@ export default function AdminDashboardView({
       if (updatedTarget) {
         setProfileModalReg(updatedTarget);
       }
+      if (typeof onRefreshRegistrations === 'function') {
+        await onRefreshRegistrations();
+      }
       triggerToast('ลบข้อความแจ้งเตือนสำเร็จ');
     } catch (err) {
       console.error(err);
@@ -2045,28 +2106,299 @@ export default function AdminDashboardView({
     }
   };
 
+  // Clear All Direct Messages for Applicant (Advanced Mode)
+  const handleClearAllAdminMessagesFromAdmin = async () => {
+    if (!profileModalReg) return;
+    if (!isAdvancedMode) {
+      triggerToast('🔒 กรุณาเปิด "โหมดขั้นสูง" ก่อนล้างประวัติข้อความทั้งหมด', 'warning');
+      return;
+    }
+    const ok = await askConfirm({
+      title: '⚠️ ยืนยันล้างข้อความแจ้งเตือนทั้งหมด (โหมดขั้นสูง)',
+      message: `คุณต้องการลบข้อความแจ้งเตือนทั้งหมดของ "${profileModalReg.first_name}" ออกจากระบบถาวรใช่หรือไม่?`,
+      confirmText: 'ยืนยันลบข้อความทั้งหมด',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await DataService.deleteAdminMessage(profileModalReg.user_id, 'all');
+      const updatedRegs = await DataService.getRegistrations({ admin: true });
+      const updatedTarget = updatedRegs.find(r => r.user_id === profileModalReg.user_id);
+      if (updatedTarget) {
+        setProfileModalReg(updatedTarget);
+      }
+      if (typeof onRefreshRegistrations === 'function') {
+        await onRefreshRegistrations();
+      }
+      triggerToast('ล้างประวัติข้อความแจ้งเตือนทั้งหมดเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการล้างข้อความ');
+    }
+  };
+
   // Add Document Request
-  const handleAddDocRequest = async (e) => {
-    e.preventDefault();
-    if (!newDocTitle.trim() || !profileModalReg) return;
+  const handleAddDocRequest = async (e, customTitle = null) => {
+    if (e) e.preventDefault();
+    const titleToUse = (customTitle !== null ? customTitle : newDocTitle).trim();
+    if (!titleToUse || !profileModalReg) return;
 
+    const chosenRequester = ADMIN_MESSAGE_SENDERS.find(s => s.key === docRequesterKey) || ADMIN_MESSAGE_SENDERS[2] || ADMIN_MESSAGE_SENDERS[0];
     const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
-    const newDoc = {
-      id: 'doc-' + Date.now(),
-      title: newDocTitle.trim(),
-      required: newDocRequired,
-      status: 'pending',
-      file_url: '',
-      file_name: '',
-      submitted_at: ''
-    };
 
-    const updatedDocs = [...currentDocs, newDoc];
+    // Check if there is an existing cancelled request with the same title — if so, re-open it
+    const existingIdx = currentDocs.findIndex(d => d.title === titleToUse);
+    let updatedDocs;
+    let actionDoc;
+
+    if (existingIdx >= 0 && currentDocs[existingIdx].status === 'cancelled') {
+      actionDoc = {
+        ...currentDocs[existingIdx],
+        status: currentDocs[existingIdx].file_url ? 'submitted' : 'pending',
+        required: newDocRequired,
+        requested_by: chosenRequester.senderName,
+        requested_by_key: chosenRequester.key,
+        requested_at: new Date().toISOString(),
+        note: newDocNote.trim() || ''
+      };
+      updatedDocs = [...currentDocs];
+      updatedDocs[existingIdx] = actionDoc;
+    } else {
+      actionDoc = {
+        id: 'doc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+        title: titleToUse,
+        required: newDocRequired,
+        status: 'pending',
+        requested_by: chosenRequester.senderName,
+        requested_by_key: chosenRequester.key,
+        requested_at: new Date().toISOString(),
+        note: newDocNote.trim() || '',
+        file_url: '',
+        file_name: '',
+        submitted_at: ''
+      };
+      updatedDocs = [...currentDocs, actionDoc];
+    }
+
     await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
     await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
     setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
-    setNewDocTitle('');
-    triggerToast(`เพิ่มคำขอเอกสาร "${newDoc.title}" เรียบร้อยแล้ว`);
+
+    if (notifyUserOnDocAction) {
+      try {
+        await DataService.sendAdminMessage(
+          profileModalReg.user_id,
+          `โปรดอัปโหลดเอกสารเพิ่มเติม: "${titleToUse}" ${newDocNote.trim() ? `(หมายเหตุ: ${newDocNote.trim()})` : ''} ผ่านเมนูเอกสารที่ต้องนำส่งในหน้าแดชบอร์ดผู้สมัคร`,
+          {
+            sender_key: chosenRequester.key,
+            sender_name: chosenRequester.senderName,
+            sender_role: chosenRequester.roleBadge,
+            system_name: chosenRequester.systemName,
+            color_theme: chosenRequester.colorTheme,
+            title: `ขอเอกสารเพิ่มเติม: ${titleToUse}`,
+            sent_via: 'doc_request'
+          }
+        );
+        const refreshed = await DataService.getRegistrations({ admin: true });
+        const target = refreshed.find(r => r.user_id === profileModalReg.user_id);
+        if (target) setProfileModalReg(target);
+      } catch (notifyErr) {
+        console.warn('Auto notify doc request warning:', notifyErr);
+      }
+    }
+
+    if (customTitle === null) {
+      setNewDocTitle('');
+      setNewDocNote('');
+    }
+    triggerToast(`ส่งคำขอเอกสาร "${titleToUse}" เรียบร้อยแล้ว`);
+  };
+
+  // Cancel or Re-open Document Request (กดยกเลิกการขอเอกสาร / กดขออีกครั้ง)
+  const handleCancelDocRequest = async (doc, removeFromList = false) => {
+    if (!profileModalReg || !doc) return;
+    const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
+    const chosenRequester = ADMIN_MESSAGE_SENDERS.find(s => s.key === docRequesterKey) || ADMIN_MESSAGE_SENDERS[2] || ADMIN_MESSAGE_SENDERS[0];
+
+    // If it is already cancelled and not removing, re-request it
+    if (doc.status === 'cancelled' && !removeFromList) {
+      const updatedDocs = currentDocs.map(d =>
+        d.id === doc.id
+          ? {
+              ...d,
+              status: d.file_url ? 'submitted' : 'pending',
+              requested_at: new Date().toISOString(),
+              note: d.note === 'ยกเลิกการขอเอกสารโดยผู้ดูแลระบบ' ? '' : (d.note || '')
+            }
+          : d
+      );
+      await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
+      await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
+      setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
+      triggerToast(`เปิดขอเอกสาร "${doc.title}" อีกครั้งเรียบร้อยแล้ว`);
+      return;
+    }
+
+    // If user hasn't uploaded a file yet, or removeFromList is true, remove or mark cancelled
+    let updatedDocs;
+    if (removeFromList || !doc.file_url) {
+      updatedDocs = currentDocs.filter(d => d.id !== doc.id);
+    } else {
+      updatedDocs = currentDocs.map(d =>
+        d.id === doc.id
+          ? {
+              ...d,
+              status: 'cancelled',
+              required: false,
+              note: 'ยกเลิกการขอเอกสารโดยผู้ดูแลระบบ'
+            }
+          : d
+      );
+    }
+
+    await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
+    await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
+    setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
+
+    if (notifyUserOnDocAction) {
+      try {
+        await DataService.sendAdminMessage(
+          profileModalReg.user_id,
+          `ยกเลิกการขอเอกสาร "${doc.title}" เรียบร้อยแล้ว ท่านไม่จำเป็นต้องนำส่งเอกสารรายการนี้อีกต่อไป`,
+          {
+            sender_key: chosenRequester.key,
+            sender_name: chosenRequester.senderName,
+            sender_role: chosenRequester.roleBadge,
+            system_name: chosenRequester.systemName,
+            color_theme: chosenRequester.colorTheme,
+            title: `ยกเลิกการขอเอกสาร: ${doc.title}`,
+            sent_via: 'doc_request'
+          }
+        );
+        const refreshed = await DataService.getRegistrations({ admin: true });
+        const target = refreshed.find(r => r.user_id === profileModalReg.user_id);
+        if (target) setProfileModalReg(target);
+      } catch (notifyErr) {}
+    }
+
+    triggerToast(`ยกเลิกการขอเอกสาร "${doc.title}" เรียบร้อยแล้ว`);
+  };
+
+  // Toggle 1-Click Standard Document Request / Cancel Request
+  const handleQuickToggleDocRequest = async (stdDoc) => {
+    if (!profileModalReg) return;
+    const currentDocs = Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs : [];
+    const activeDoc = currentDocs.find(d => d.title === stdDoc.title && d.status !== 'cancelled');
+    if (activeDoc) {
+      await handleCancelDocRequest(activeDoc, !activeDoc.file_url);
+    } else {
+      await handleAddDocRequest(null, stdDoc.title);
+    }
+  };
+
+  // Toggle Required / Optional on a Requested Document
+  const handleToggleDocRequired = async (docId) => {
+    if (!profileModalReg) return;
+    const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
+    const updatedDocs = currentDocs.map(d => d.id === docId ? { ...d, required: !d.required } : d);
+    await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
+    await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
+    setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
+    triggerToast('อัปเดตสถานะความจำเป็นของเอกสารแล้ว');
+  };
+
+  // Admin uploads/attaches document file on behalf of applicant
+  const handleAdminUploadDocForUser = async (e, docId) => {
+    const file = e.target.files?.[0];
+    if (!file || !profileModalReg) return;
+    setUploadingAdminDocId(docId);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'docs');
+      if (uploadResult?.url) {
+        const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
+        const updatedDocs = currentDocs.map(d =>
+          d.id === docId
+            ? {
+                ...d,
+                file_url: uploadResult.url,
+                file_name: file.name,
+                submitted_at: new Date().toISOString(),
+                status: 'approved',
+                note: 'แนบไฟล์และอนุมัติโดยผู้ดูแลระบบ (Admin)'
+              }
+            : d
+        );
+        await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
+        await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
+        setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
+        triggerToast(`อัปโหลดไฟล์ "${file.name}" และอนุมัติให้ผู้สมัครเรียบร้อยแล้ว`);
+      }
+    } catch (err) {
+      console.error('Admin upload doc error:', err);
+      triggerToast('อัปโหลดเอกสารไม่สำเร็จ', 'error');
+    } finally {
+      setUploadingAdminDocId(null);
+      e.target.value = '';
+    }
+  };
+
+  // Advanced Mode Delete Document Item or Clear Uploaded File
+  const handleAdvancedDeleteDoc = async (doc, mode = 'delete_item') => {
+    if (!profileModalReg || !doc) return;
+    if (!isAdvancedMode && (doc.file_url || doc.status === 'approved')) {
+      triggerToast('🔒 เอกสารนี้มีไฟล์แนบหรืออนุมัติแล้ว กรุณาเปิด "โหมดขั้นสูง" ก่อนทำการลบถาวร', 'warning');
+      return;
+    }
+
+    const isClearFileOnly = mode === 'clear_file';
+    const ok = await askConfirm({
+      title: isClearFileOnly ? '⚠️ ยืนยันล้างไฟล์เอกสารที่แนบมา (โหมดขั้นสูง)' : '⚠️ ยืนยันลบรายการขอเอกสารและไฟล์แนบถาวร (โหมดขั้นสูง)',
+      message: isClearFileOnly
+        ? `ต้องการลบเฉพาะไฟล์แนบ "${doc.file_name || doc.title}" ออก แล้วรีเซ็ตให้ผู้สมัครส่งใหม่ใช่หรือไม่?`
+        : `ต้องการลบรายการเอกสาร "${doc.title}" (รวมถึงไฟล์แนบถ้ามี) ออกจากผู้สมัครท่านนี้ถาวรใช่หรือไม่?`,
+      confirmText: isClearFileOnly ? 'ล้างไฟล์แนบ' : 'ลบถาวร',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
+    const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
+    const updatedDocs = isClearFileOnly
+      ? currentDocs.map(d =>
+          d.id === doc.id
+            ? { ...d, file_url: '', file_name: '', submitted_at: '', status: 'pending', note: 'ผู้ดูแลระบบล้างไฟล์เดิมเพื่อให้แนบใหม่' }
+            : d
+        )
+      : currentDocs.filter(d => d.id !== doc.id);
+
+    await DataService.updateRequestedDocs(profileModalReg.user_id, updatedDocs);
+    await onUpdateAllocation(profileModalReg.user_id, { requested_docs: updatedDocs });
+    setProfileModalReg(prev => ({ ...prev, requested_docs: updatedDocs }));
+    triggerToast(isClearFileOnly ? `ล้างไฟล์แนบของ "${doc.title}" เรียบร้อยแล้ว` : `ลบรายการเอกสาร "${doc.title}" ถาวรเรียบร้อยแล้ว`);
+  };
+
+  // Clear All Requested Documents for Applicant (Advanced Mode)
+  const handleClearAllRequestedDocs = async () => {
+    if (!profileModalReg) return;
+    if (!isAdvancedMode) {
+      triggerToast('🔒 กรุณาเปิด "โหมดขั้นสูง" ก่อนลบรายการเอกสารทั้งหมด', 'warning');
+      return;
+    }
+    const ok = await askConfirm({
+      title: '⚠️ ยืนยันลบรายการขอเอกสารทั้งหมด (โหมดขั้นสูง)',
+      message: `คุณต้องการล้างรายการขอเอกสารและไฟล์แนบทั้งหมดของ "${profileModalReg.first_name}" ออกจากระบบถาวรใช่หรือไม่?`,
+      confirmText: 'ยืนยันลบเอกสารทั้งหมด',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
+    await DataService.updateRequestedDocs(profileModalReg.user_id, []);
+    await onUpdateAllocation(profileModalReg.user_id, { requested_docs: [] });
+    setProfileModalReg(prev => ({ ...prev, requested_docs: [] }));
+    triggerToast('ล้างรายการขอเอกสารทั้งหมดของผู้สมัครเรียบร้อยแล้ว');
   };
 
   // Verify Document (Approve / Reject)
@@ -2075,14 +2407,40 @@ export default function AdminDashboardView({
     const currentDocs = Array.isArray(profileModalReg.requested_docs) ? [...profileModalReg.requested_docs] : [];
     const idx = currentDocs.findIndex(d => d.id === docId);
     if (idx >= 0) {
+      const targetDoc = currentDocs[idx];
       currentDocs[idx] = {
-        ...currentDocs[idx],
+        ...targetDoc,
         status,
         note
       };
       await DataService.updateRequestedDocs(profileModalReg.user_id, currentDocs);
       await onUpdateAllocation(profileModalReg.user_id, { requested_docs: currentDocs });
       setProfileModalReg(prev => ({ ...prev, requested_docs: currentDocs }));
+
+      if (notifyUserOnDocAction) {
+        const chosenRequester = ADMIN_MESSAGE_SENDERS.find(s => s.key === (targetDoc.requested_by_key || docRequesterKey)) || ADMIN_MESSAGE_SENDERS[2] || ADMIN_MESSAGE_SENDERS[0];
+        try {
+          await DataService.sendAdminMessage(
+            profileModalReg.user_id,
+            status === 'approved'
+              ? `เอกสาร "${targetDoc.title}" ของท่านได้รับการตรวจสอบและอนุมัติเรียบร้อยแล้ว`
+              : `เอกสาร "${targetDoc.title}" ไม่ผ่านการตรวจสอบ (${note || 'โปรดตรวจสอบความชัดเจน'}) กรุณาอัปโหลดไฟล์ใหม่ผ่านหน้าแดชบอร์ด`,
+            {
+              sender_key: chosenRequester.key,
+              sender_name: chosenRequester.senderName,
+              sender_role: chosenRequester.roleBadge,
+              system_name: chosenRequester.systemName,
+              color_theme: chosenRequester.colorTheme,
+              title: status === 'approved' ? `อนุมัติเอกสาร: ${targetDoc.title}` : `แจ้งแก้ไขเอกสาร: ${targetDoc.title}`,
+              sent_via: 'doc_request'
+            }
+          );
+          const refreshed = await DataService.getRegistrations({ admin: true });
+          const target = refreshed.find(r => r.user_id === profileModalReg.user_id);
+          if (target) setProfileModalReg(target);
+        } catch (notifyErr) {}
+      }
+
       triggerToast(status === 'approved' ? 'อนุมัติเอกสารเรียบร้อย' : 'ส่งคำขอแก้ไขเอกสารแล้ว');
     }
   };
@@ -4298,8 +4656,10 @@ export default function AdminDashboardView({
                   filteredRegs.map(reg => {
                     const isEditingThis = editingUserId === reg.user_id;
                     const paymentStatus = reg.payment_status || 'unpaid';
-                    const docs = Array.isArray(reg.requested_docs) ? reg.requested_docs : [];
+                    const allDocs = Array.isArray(reg.requested_docs) ? reg.requested_docs : [];
+                    const docs = allDocs.filter(d => d.status !== 'cancelled');
                     const submittedDocsCount = docs.filter(d => d.file_url).length;
+                    const msgs = Array.isArray(reg.admin_messages) ? reg.admin_messages : [];
                     const cardData = getRegistrationCardData(reg);
                     const isStaff = isStaffRegistration(reg);
                     const gender = resolveGender(reg);
@@ -4533,24 +4893,43 @@ export default function AdminDashboardView({
                           })()}
                         </td>
 
-                        {/* Documents Status */}
+                        {/* Documents Status & Quick Message Trigger */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          {docs.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {docs.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProfileModal(reg, 'docs')}
+                                className={`px-2 py-1 rounded-lg border text-[11px] flex items-center gap-1 font-bold cursor-pointer transition-colors ${
+                                  submittedDocsCount === docs.length
+                                    ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/50'
+                                    : 'bg-blue-950/40 text-blue-300 border-blue-500/40 hover:bg-blue-900/50'
+                                }`}
+                                title="คลิกเพื่อตรวจเอกสาร / ยกเลิกการขอ / ลบขั้นสูง"
+                              >
+                                <FileCheck className="w-3.5 h-3.5" />
+                                <span>ส่ง {submittedDocsCount}/{docs.length} รายการ</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProfileModal(reg, 'docs')}
+                                className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 hover:text-white font-semibold cursor-pointer transition-colors"
+                              >
+                                + ขอ/จัดการเอกสาร
+                              </button>
+                            )}
+
                             <button
-                              onClick={() => handleOpenProfileModal(reg, 'docs')}
-                              className="text-[11px] text-blue-400 hover:underline flex items-center gap-1 font-medium"
+                              type="button"
+                              onClick={() => handleOpenProfileModal(reg, 'messages')}
+                              className="px-2 py-0.5 rounded-lg bg-purple-950/30 hover:bg-purple-900/40 border border-purple-500/30 text-[10px] text-purple-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                              title="ส่งข้อความแจ้งเตือนแยกตามฝ่าย/ระบบ"
                             >
-                              <FileCheck className="w-3.5 h-3.5" />
-                              <span>ส่ง {submittedDocsCount}/{docs.length} รายการ</span>
+                              <MessageSquare className="w-3 h-3" />
+                              <span>แจ้งเตือน ({msgs.length})</span>
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => handleOpenProfileModal(reg, 'docs')}
-                              className="text-[10px] text-slate-500 hover:text-slate-300"
-                            >
-                              + ขอเอกสาร
-                            </button>
-                          )}
+                          </div>
                         </td>
 
                         {/* Health, Dietary & Special Notes */}
@@ -5108,8 +5487,26 @@ export default function AdminDashboardView({
                 </button>
               </div>
 
-              {/* Edit Mode Safeguard Toggle */}
-              <div className="shrink-0 flex items-center gap-2 self-end sm:self-auto">
+              {/* Edit Mode Safeguard Toggle & Advanced Mode Toggle */}
+              <div className="shrink-0 flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isAdvancedMode;
+                    setIsAdvancedMode(next);
+                    triggerToast(next ? '🔓 เปิดโหมดขั้นสูงแล้ว (สามารถกดลบเอกสาร/ข้อความถาวรได้)' : '🔒 ปิดโหมดขั้นสูงแล้ว');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                    isAdvancedMode
+                      ? 'bg-rose-600/25 hover:bg-rose-600/35 text-rose-200 border-rose-500/60 shadow-sm'
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                  title="เปิดโหมดขั้นสูงเพื่อแสดงปุ่มลบเอกสารแนบและล้างประวัติถาวร"
+                >
+                  {isAdvancedMode ? <Unlock className="w-3.5 h-3.5 text-rose-400" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                  <span>{isAdvancedMode ? 'โหมดขั้นสูง: เปิดอยู่' : 'โหมดขั้นสูง (ลบถาวร)'}</span>
+                </button>
+
                 {(profileModalTab === 'info' || profileModalTab === 'payment') && (
                   isEditingProfileModal ? (
                     <div className="flex items-center gap-2">
@@ -6464,54 +6861,207 @@ export default function AdminDashboardView({
               </div>
             )}
 
-            {/* TAB 3: ADMIN MESSAGING */}
+            {/* TAB 3: ADMIN MESSAGING (Separates by Admin / Department / System & Supports File Attachment) */}
             {profileModalTab === 'messages' && (
               <div className="mt-5 space-y-5 text-xs">
-                <form onSubmit={handleSendMessage} className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
-                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                    <Send className="w-4 h-4 text-purple-400" />
-                    ส่งข้อความหรือหมายเหตุตรงไปยัง {profileModalReg.first_name}
-                  </h4>
+                <form onSubmit={handleSendMessage} className="p-4 sm:p-5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                    <div>
+                      <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                        <Send className="w-4 h-4 text-purple-400" />
+                        ส่งข้อความหรือการแจ้งเตือนไปยัง {profileModalReg.first_name}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        เลือกผู้ส่ง/ฝ่าย/ระบบที่ต้องการได้อิสระ (แยกแต่ละฝ่าย แต่ละระบบ และแต่ละข้อความ พร้อมแนบเอกสารได้)
+                      </p>
+                    </div>
+                  </div>
 
-                  <textarea
-                    rows="3"
-                    required
-                    value={newMsgText}
-                    onChange={e => setNewMsgText(e.target.value)}
-                    placeholder="พิมพ์ข้อความที่ต้องการแจ้ง เช่น ขอแจ้งค้างชำระค่างวดที่ 1 จำนวน 400 บาท หรือค่างวดที่ 2 โปรดโอนเข้าบัญชี SCB 594-264865-5 ... หรือ เอกสารไม่สมบูรณ์..."
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none"
-                  />
+                  {/* Select Sender / Department / System */}
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-bold text-slate-300">
+                      1. เลือกผู้ส่ง / ฝ่าย / ระบบที่แจ้งเตือน:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {ADMIN_MESSAGE_SENDERS.map((s) => {
+                        const isSelected = msgSenderKey === s.key;
+                        return (
+                          <button
+                            key={s.key}
+                            type="button"
+                            onClick={() => setMsgSenderKey(s.key)}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-purple-600/20 border-purple-500 text-white shadow-sm ring-1 ring-purple-500/40'
+                                : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="font-bold text-xs flex items-center justify-between gap-1">
+                              <span>{s.shortLabel}</span>
+                              {isSelected && <span className="text-[10px] text-purple-300 font-black">✓ เลือกอยู่</span>}
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate mt-0.5">{s.senderName}</div>
+                            <div className="text-[9px] text-purple-300/80 truncate">ระบบ: {s.systemName}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                  {/* Quick message template buttons */}
+                    {msgSenderKey === 'custom' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 bg-slate-900/80 p-3 rounded-xl border border-purple-500/30">
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-300 mb-1">ระบุชื่อผู้ส่ง / ฝ่าย (กำหนดเอง):</label>
+                          <input
+                            type="text"
+                            value={msgCustomSenderName}
+                            onChange={e => setMsgCustomSenderName(e.target.value)}
+                            placeholder="เช่น ผู้ดูแลระบบ JRE 2027 / ฝ่ายสถานที่ / อาจารย์ที่ปรึกษา"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-300 mb-1">ระบุชื่อระบบงาน (กำหนดเอง):</label>
+                          <input
+                            type="text"
+                            value={msgCustomSystemName}
+                            onChange={e => setMsgCustomSystemName(e.target.value)}
+                            placeholder="เช่น ระบบประสานงานทั่วไป / ระบบลงทะเบียนหน้างาน"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Title & Attachment */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        2. หัวข้อข้อความ (เว้นว่างให้ตั้งตามฝ่ายอัตโนมัติได้):
+                      </label>
+                      <input
+                        type="text"
+                        value={msgTitle}
+                        onChange={e => setMsgTitle(e.target.value)}
+                        placeholder={(ADMIN_MESSAGE_SENDERS.find(s => s.key === msgSenderKey) || ADMIN_MESSAGE_SENDERS[0]).defaultTitle}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        แนบไฟล์เอกสาร / รูปภาพไปกับข้อความ (ถ้ามี):
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <label className={`px-3 py-2 bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${isUploadingMsgAttachment ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {isUploadingMsgAttachment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          <span>{msgAttachmentUrl ? 'เปลี่ยนไฟล์แนบ' : '+ แนบไฟล์/รูปภาพ'}</span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleUploadMsgAttachment}
+                            className="hidden"
+                          />
+                        </label>
+                        {msgAttachmentUrl && (
+                          <div className="flex items-center gap-1.5 bg-indigo-950/60 border border-indigo-500/40 px-2.5 py-1.5 rounded-xl text-[11px] text-indigo-200 min-w-0">
+                            <span className="truncate max-w-[140px]">{msgAttachmentName || 'ไฟล์แนบ'}</span>
+                            <button
+                              type="button"
+                              onClick={() => { setMsgAttachmentUrl(''); setMsgAttachmentName(''); }}
+                              className="text-rose-400 hover:text-rose-300 font-bold ml-1 cursor-pointer"
+                              title="เอาไฟล์แนบออก"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Message Content */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      3. รายละเอียดข้อความแจ้งเตือน:
+                    </label>
+                    <textarea
+                      rows="3"
+                      required
+                      value={newMsgText}
+                      onChange={e => setNewMsgText(e.target.value)}
+                      placeholder="พิมพ์ข้อความที่ต้องการแจ้งผู้สมัคร..."
+                      className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs leading-relaxed focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Quick message template buttons (Automatically selects matching sender/system!) */}
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="text-slate-500 text-[10px] self-center mr-1">ข้อความด่วน:</span>
+                    <span className="text-slate-500 text-[10px] self-center mr-1">ข้อความด่วนแยกตามระบบ:</span>
                     <button
                       type="button"
-                      onClick={() => setNewMsgText(`ขอแจ้งเตือนค้างชำระค่าลงทะเบียนโครงการ JRE 2027 จำนวน ${modalPaymentAmount} บาท โปรดโอนเข้าบัญชี ${modalPaymentBank} ภายในวันที่ 31 ต.ค. 2569 พร้อมแนบสลิปผ่านเว็บไซต์นี้`)}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-amber-300 rounded-lg border border-slate-800"
+                      onClick={() => {
+                        setMsgSenderKey('admin_central');
+                        setMsgTitle('แจ้งเตือนจากผู้ดูแลระบบกลาง (Admin JRE 2027)');
+                        setNewMsgText('ผู้ดูแลระบบตรวจสอบข้อมูลใบสมัครของท่านเรียบร้อยแล้ว กรุณาตรวจสอบสถานะและข้อมูลประจำตัวในหน้าแดชบอร์ด');
+                      }}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-purple-300 rounded-lg border border-slate-800 cursor-pointer"
                     >
-                      + แจ้งค้างชำระค่าสมัคร
+                      🛡️ Admin: ตรวจสอบข้อมูลแล้ว
                     </button>
                     <button
                       type="button"
-                      onClick={() => setNewMsgText('ได้รับสลิปการโอนเงินเรียบร้อยแล้ว อยู่ระหว่างการตรวจสอบยอดเงินจากฝ่ายการเงิน')}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-indigo-300 rounded-lg border border-slate-800"
+                      onClick={() => {
+                        setMsgSenderKey('finance_coord');
+                        setMsgTitle('แจ้งเตือนค้างชำระค่าลงทะเบียน');
+                        setNewMsgText(`ขอแจ้งเตือนค้างชำระค่าลงทะเบียนโครงการ JRE 2027 จำนวน ${modalPaymentAmount} บาท โปรดโอนเข้าบัญชี ${modalPaymentBank} ภายในกำหนด พร้อมแนบสลิปผ่านเว็บไซต์นี้`);
+                      }}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-amber-300 rounded-lg border border-slate-800 cursor-pointer"
                     >
-                      + ได้รับสลิปแล้ว
+                      💳 การเงิน: แจ้งค้างชำระ
                     </button>
                     <button
                       type="button"
-                      onClick={() => setNewMsgText('ฝ่ายการเงินได้ตรวจสอบและยืนยันการชำระเงินค่าลงทะเบียน JRE 2027 เรียบร้อยแล้ว ขอบคุณครับ')}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-emerald-300 rounded-lg border border-slate-800"
+                      onClick={() => {
+                        setMsgSenderKey('finance_coord');
+                        setMsgTitle('ยืนยันการชำระเงินสำเร็จ');
+                        setNewMsgText('ฝ่ายการเงินได้ตรวจสอบและยืนยันสลิปการชำระเงินโครงการ JRE 2027 ของท่านเรียบร้อยแล้ว ขอบคุณครับ');
+                      }}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-emerald-300 rounded-lg border border-slate-800 cursor-pointer"
                     >
-                      + ยืนยันชำระเงินสำเร็จ
+                      💳 การเงิน: ยืนยันสลิปผ่าน
                     </button>
                     <button
                       type="button"
-                      onClick={() => setNewMsgText('โปรดจัดส่งเอกสารสำคัญ (สำเนาบัตรประชาชน / ใบยินยอม) ผ่านระบบอัปโหลดเอกสารบนเว็บไซต์')}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-rose-300 rounded-lg border border-slate-800"
+                      onClick={() => {
+                        setMsgSenderKey('registration_docs');
+                        setMsgTitle('แจ้งขอเอกสารประกอบการสมัครเพิ่มเติม');
+                        setNewMsgText('โปรดจัดส่งเอกสารสำคัญ (สำเนาบัตรประชาชน / เอกสารเพิ่มเติม) ผ่านระบบอัปโหลดเอกสารแนบบนหน้าแดชบอร์ดเว็บไซต์');
+                      }}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-teal-300 rounded-lg border border-slate-800 cursor-pointer"
                     >
-                      + แจ้งเตือนส่งเอกสาร
+                      📄 ทะเบียนเอกสาร: แจ้งส่งเอกสาร
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMsgSenderKey('accommodation_shirt');
+                        setMsgTitle('แจ้งจัดกลุ่มฝึก ห้องพัก และไซส์เสื้อ');
+                        setNewMsgText(`แจ้งอัปเดตข้อมูลสวัสดิการ: กลุ่มฝึก "${modalGroup || 'รอจัดกลุ่ม'}" | ห้องพัก "${modalRoom || 'รอจัดห้อง'}" | ไซส์เสื้อฝึก "${modalShirtSize || 'L'}"`);
+                      }}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-sky-300 rounded-lg border border-slate-800 cursor-pointer"
+                    >
+                      🏢 ห้องพัก/เสื้อ: แจ้งห้องพัก & ไซส์เสื้อ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMsgSenderKey('medical_safety');
+                        setMsgTitle('คำแนะนำด้านสุขภาพและความปลอดภัย');
+                        setNewMsgText('ฝ่ายการแพทย์และความปลอดภัยรับทราบข้อมูลสุขภาพ/แพ้อาหารของท่านแล้ว โปรดเตรียมยาประจำตัวติดตัวมาในวันฝึกอบรม');
+                      }}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-rose-300 rounded-lg border border-slate-800 cursor-pointer"
+                    >
+                      🩺 การแพทย์: แจ้งเตรียมยา/ดูแลพิเศษ
                     </button>
                   </div>
 
@@ -6519,31 +7069,71 @@ export default function AdminDashboardView({
                     <button
                       type="submit"
                       disabled={isSendingMsg}
-                      className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow"
+                      className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow cursor-pointer"
                     >
                       {isSendingMsg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                      <span>ส่งข้อความถึงผู้สมัคร</span>
+                      <span>ส่งข้อความแจ้งเตือนถึงผู้สมัคร</span>
                     </button>
                   </div>
                 </form>
 
-                  {/* History of messages sent */}
-                  <div className="space-y-2.5">
-                    <h5 className="font-bold text-slate-300 text-xs">ประวัติข้อความที่ส่งหาผู้สมัครคนนี้ ({Array.isArray(profileModalReg.admin_messages) ? profileModalReg.admin_messages.length : 0} ข้อความ):</h5>
-                    {Array.isArray(profileModalReg.admin_messages) && profileModalReg.admin_messages.length > 0 ? (
-                      profileModalReg.admin_messages.map((m, idx) => (
-                        <div key={m.id || idx} className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
-                          <div className="flex items-center justify-between text-[10px] text-slate-500">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-purple-400">ผู้ดูแลระบบ JRE 2027</span>
-                              {m.read ? (
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold">
-                                  ✓ ผู้สมัครเปิดอ่านแล้ว
+                {/* History of messages sent */}
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h5 className="font-bold text-slate-300 text-xs">
+                      ประวัติข้อความที่ส่งหาผู้สมัครคนนี้ ({Array.isArray(profileModalReg.admin_messages) ? profileModalReg.admin_messages.length : 0} ข้อความ):
+                    </h5>
+                    {Array.isArray(profileModalReg.admin_messages) && profileModalReg.admin_messages.length > 0 && (
+                      isAdvancedMode ? (
+                        <button
+                          type="button"
+                          onClick={handleClearAllAdminMessagesFromAdmin}
+                          className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>ล้างประวัติข้อความทั้งหมด (ขั้นสูง)</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsAdvancedMode(true)}
+                          className="text-[11px] text-slate-400 hover:text-rose-300 underline cursor-pointer"
+                        >
+                          เปิดโหมดขั้นสูงเพื่อล้างข้อความทั้งหมด
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  {Array.isArray(profileModalReg.admin_messages) && profileModalReg.admin_messages.length > 0 ? (
+                    profileModalReg.admin_messages.map((m, idx) => {
+                      const sInfo = resolveMessageSenderInfo(m);
+                      return (
+                        <div key={m.id || idx} className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+                          <div className="flex flex-wrap items-start justify-between gap-2 text-[10px] text-slate-500">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-purple-300 text-xs">{sInfo.senderName}</span>
+                                <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded text-[9px] font-bold">
+                                  {sInfo.roleBadge}
                                 </span>
-                              ) : (
-                                <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold">
-                                  ⏳ ผู้สมัครยังไม่อ่าน
+                                <span className="px-1.5 py-0.5 bg-purple-500/15 text-purple-300 border border-purple-500/30 rounded text-[9px] font-semibold">
+                                  ระบบ: {sInfo.systemName}
                                 </span>
+                                {m.read ? (
+                                  <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold">
+                                    ✓ ผู้สมัครเปิดอ่านแล้ว
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold">
+                                    ⏳ ผู้สมัครยังไม่อ่าน
+                                  </span>
+                                )}
+                              </div>
+                              {m.title && (
+                                <div className="text-[11px] font-bold text-slate-300">
+                                  เรื่อง: {m.title}
+                                </div>
                               )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -6551,155 +7141,404 @@ export default function AdminDashboardView({
                               <button
                                 type="button"
                                 onClick={() => handleDeleteAdminMsgFromAdmin(m.id || idx)}
-                                className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                                className="px-2 py-1 text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors cursor-pointer flex items-center gap-1 font-bold"
                                 title="ลบข้อความนี้"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3 h-3" />
+                                <span>ลบ</span>
                               </button>
                             </div>
                           </div>
-                          <p className="text-slate-200 whitespace-pre-line text-xs">{m.text}</p>
+                          <p className="text-slate-200 whitespace-pre-line text-xs bg-slate-900/70 p-2.5 rounded-lg border border-slate-800/80">{m.text}</p>
+                          {m.attachment_url && (
+                            <div className="flex items-center justify-between bg-indigo-950/40 border border-indigo-500/30 px-2.5 py-1.5 rounded-lg text-[11px] text-indigo-200">
+                              <span>📎 ไฟล์แนบ: {m.attachment_name || 'เอกสารแนบ'}</span>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDoc({ title: m.title || 'ไฟล์แนบข้อความ', file_name: m.attachment_name, file_url: m.attachment_url })}
+                                className="text-indigo-300 hover:text-white font-bold underline cursor-pointer"
+                              >
+                                เปิดดูไฟล์
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-slate-500 italic">ยังไม่มีประวัติการส่งข้อความ</p>
-                    )}
-                  </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-slate-500 italic">ยังไม่มีประวัติการส่งข้อความ</p>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* TAB 4: REQUESTED DOCUMENTS */}
+            {/* TAB 4: REQUESTED DOCUMENTS (กดขอ / กดยกเลิกการขอ / แนบไฟล์แทน / โหมดขั้นสูงลบถาวร) */}
             {profileModalTab === 'docs' && (
-              <div className="mt-5 space-y-6 text-xs">
-                {/* Form to Request New Doc */}
+              <div className="mt-5 space-y-5 text-xs">
+                {/* Top Control Bar: Requester Department & Auto-Notify & Advanced Mode */}
+                <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                        <FileCheck className="w-4 h-4 text-emerald-400" />
+                        ระบบจัดการเอกสารแนบ (กดขอ / กดยกเลิกการขอ / ตรวจอนุมัติ / ลบขั้นสูง)
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        กดปุ่มด้านล่างเพื่อขอเอกสารหรือกดยกเลิกการขอได้ทันที และเปิดโหมดขั้นสูงเพื่อลบรายการหรือไฟล์แนบถาวรได้
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="flex items-center gap-1.5 text-[11px] text-purple-200 bg-purple-950/40 border border-purple-500/30 px-2.5 py-1.5 rounded-xl cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={notifyUserOnDocAction}
+                          onChange={e => setNotifyUserOnDocAction(e.target.checked)}
+                          className="rounded"
+                        />
+                        <span>แจ้งเตือนเข้ากล่องข้อความผู้สมัครอัตโนมัติ</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Select which Admin / System is requesting */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1">
+                    <span className="text-[11px] font-bold text-slate-300 shrink-0">ขอเอกสารในนามฝ่าย/ระบบ:</span>
+                    <select
+                      value={docRequesterKey}
+                      onChange={e => setDocRequesterKey(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs font-semibold"
+                    >
+                      {ADMIN_MESSAGE_SENDERS.filter(s => s.key !== 'custom').map(s => (
+                        <option key={s.key} value={s.key}>
+                          {s.shortLabel} — {s.senderName} ({s.systemName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 1-Click Standard Document Request / Cancel Grid */}
+                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                    <span className="text-[11px] font-bold text-emerald-300 block">
+                      ⚡ กดขอเอกสาร / กดยกเลิกการขอ (คลิกเดียวสลับสถานะได้ทันที):
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {STANDARD_REQUESTABLE_DOCS.map((stdDoc) => {
+                        const currentDocs = Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs : [];
+                        const existingActive = currentDocs.find(d => d.title === stdDoc.title && d.status !== 'cancelled');
+                        const isRequested = Boolean(existingActive);
+                        const hasFile = Boolean(existingActive?.file_url);
+
+                        return (
+                          <div
+                            key={stdDoc.code}
+                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                              isRequested
+                                ? 'bg-emerald-950/25 border-emerald-500/40'
+                                : 'bg-slate-900/80 border-slate-800'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-bold text-white text-xs truncate">{stdDoc.title}</div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {isRequested
+                                  ? (hasFile ? '📎 ผู้สมัครแนบไฟล์มาแล้ว' : '⏳ กำลังขอเอกสารนี้ (รอผู้สมัครส่ง)')
+                                  : stdDoc.desc}
+                              </div>
+                            </div>
+
+                            {isRequested ? (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickToggleDocRequest(stdDoc)}
+                                className="px-2.5 py-1.5 bg-amber-600/25 hover:bg-rose-600 text-amber-200 hover:text-white border border-amber-500/40 rounded-lg text-[11px] font-bold shrink-0 cursor-pointer transition-colors"
+                                title="กดเพื่อยกเลิกการขอเอกสารรายการนี้"
+                              >
+                                ✕ ยกเลิกการขอ
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickToggleDocRequest(stdDoc)}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold shrink-0 cursor-pointer transition-colors shadow-sm"
+                                title="กดเพื่อขอเอกสารรายการนี้ทันที"
+                              >
+                                + กดขอเอกสาร
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Form to Request Any Other Doc */}
                 <form onSubmit={handleAddDocRequest} className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
-                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
                     <Plus className="w-4 h-4 text-emerald-400" />
-                    ขอเอกสารเพิ่มเติมจาก {profileModalReg.first_name}
+                    ขอเอกสารอื่นๆ เพิ่มเติม (พิมพ์ชื่อเอกสารและหมายเหตุได้เอง)
                   </h4>
 
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input
                       type="text"
                       required
                       value={newDocTitle}
                       onChange={e => setNewDocTitle(e.target.value)}
-                      placeholder="ระบุชื่อเอกสาร เช่น สำเนาบัตรประชาชน หรือ สำเนาทะเบียนบ้าน"
-                      className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                      placeholder="ระบุชื่อเอกสารที่ต้องการขอ เช่น ใบรับรองสังกัด..."
+                      className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
                     />
+                    <input
+                      type="text"
+                      value={newDocNote}
+                      onChange={e => setNewDocNote(e.target.value)}
+                      placeholder="หมายเหตุถึงผู้สมัคร (ถ้ามี) เช่น ขอภาพสีชัดเจนพร้อมเซ็นสำเนาถูกต้อง"
+                      className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs"
+                    />
+                  </div>
 
-                    <label className="flex items-center gap-1.5 text-slate-300 shrink-0 px-2">
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <label className="flex items-center gap-1.5 text-slate-300 shrink-0 px-1 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={newDocRequired}
                         onChange={e => setNewDocRequired(e.target.checked)}
                         className="rounded"
                       />
-                      <span>จำเป็นต้องส่ง</span>
+                      <span>ระบุเป็นเอกสาร "จำเป็นต้องส่ง"</span>
                     </label>
 
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shrink-0"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shrink-0 cursor-pointer shadow"
                     >
-                      + ขอเอกสาร
+                      + เพิ่มคำขอเอกสารนี้
                     </button>
-                  </div>
-
-                  {/* Quick Doc suggestions */}
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-slate-500 text-[10px] self-center mr-1">เอกสารที่พบบ่อย:</span>
-                    {['สำเนาบัตรประจำตัวประชาชน', 'สำเนาทะเบียนบ้าน', 'ใบรับรองแพทย์ / ประวัติการรักษา', 'หนังสือยินยอมจากผู้ปกครอง', 'รูปถ่ายขนาด 1 นิ้ว'].map((docName, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setNewDocTitle(docName)}
-                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] text-slate-300 rounded-lg border border-slate-800"
-                      >
-                        + {docName}
-                      </button>
-                    ))}
                   </div>
                 </form>
 
-                {/* List of Requested Docs */}
+                {/* List of Requested Docs & Full Admin Controls */}
                 <div className="space-y-3">
-                  <h5 className="font-bold text-slate-300 text-xs">รายการเอกสารที่ร้องขอและสถานะ:</h5>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h5 className="font-bold text-slate-300 text-xs">
+                      รายการเอกสารแนบของผู้สมัครคนนี้ ({Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs.length : 0} รายการ):
+                    </h5>
+
+                    <div className="flex items-center gap-2">
+                      {!isAdvancedMode ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAdvancedMode(true);
+                            triggerToast('🔓 เปิดโหมดขั้นสูงแล้ว สามารถลบไฟล์แนบและลบรายการขอเอกสารได้');
+                          }}
+                          className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Lock className="w-3 h-3" />
+                          <span>กดเปิดโหมดขั้นสูงเพื่อลบถาวร</span>
+                        </button>
+                      ) : (
+                        Array.isArray(profileModalReg.requested_docs) && profileModalReg.requested_docs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllRequestedDocs}
+                            className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>ล้างรายการเอกสารทั้งหมด (ขั้นสูง)</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
                   {Array.isArray(profileModalReg.requested_docs) && profileModalReg.requested_docs.length > 0 ? (
-                    profileModalReg.requested_docs.map((doc, idx) => (
-                      <div key={doc.id || idx} className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white">{doc.title}</span>
-                            {doc.required && (
-                              <span className="px-1.5 py-0.5 bg-red-950 text-red-300 border border-red-800 text-[10px] rounded font-bold">
-                                จำเป็น
-                              </span>
-                            )}
-                            {doc.status === 'approved' ? (
-                              <span className="text-[10px] text-emerald-400 font-bold">✓ อนุมัติแล้ว</span>
-                            ) : doc.file_url ? (
-                              <span className="text-[10px] text-amber-400 font-bold">⏳ ส่งแล้ว รอตรวจ</span>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 font-bold">ยังไม่ส่ง</span>
-                            )}
-                          </div>
+                    profileModalReg.requested_docs.map((doc, idx) => {
+                      const isCancelled = doc.status === 'cancelled';
+                      const isUploadingThisAdmin = uploadingAdminDocId === doc.id;
 
-                          {doc.file_url && (
-                            <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
-                              <span>ไฟล์: {doc.file_name || 'เอกสารแนบ'}</span>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewDoc(doc)}
-                                className="text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                              >
-                                <Eye className="w-3.5 h-3.5" /> เปิดดู
-                              </button>
+                      return (
+                        <div
+                          key={doc.id || idx}
+                          className={`p-4 rounded-2xl border space-y-3 transition-all ${
+                            isCancelled
+                              ? 'bg-slate-950/40 border-slate-800/60 opacity-75'
+                              : 'bg-slate-950/80 border-slate-800'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`font-bold text-sm ${isCancelled ? 'line-through text-slate-400' : 'text-white'}`}>
+                                  {doc.title}
+                                </span>
+                                {!isCancelled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleDocRequired(doc.id)}
+                                    className={`px-2 py-0.5 text-[10px] rounded font-bold border cursor-pointer ${
+                                      doc.required
+                                        ? 'bg-red-950 text-red-300 border-red-800'
+                                        : 'bg-slate-900 text-slate-400 border-slate-700'
+                                    }`}
+                                    title="คลิกเพื่อสลับ จำเป็น / ไม่บังคับ"
+                                  >
+                                    {doc.required ? 'จำเป็นต้องส่ง' : 'ไม่บังคับ'}
+                                  </button>
+                                )}
+
+                                {isCancelled ? (
+                                  <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[10px] font-bold">
+                                    ✕ ยกเลิกการขอแล้ว
+                                  </span>
+                                ) : doc.status === 'approved' ? (
+                                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[10px] font-bold">
+                                    ✓ อนุมัติแล้ว
+                                  </span>
+                                ) : doc.status === 'rejected' ? (
+                                  <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded text-[10px] font-bold">
+                                    ⚠️ แจ้งให้ส่งใหม่
+                                  </span>
+                                ) : doc.file_url ? (
+                                  <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[10px] font-bold">
+                                    ⏳ ส่งแล้ว รอตรวจ
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[10px] font-bold">
+                                    ผู้สมัครยังไม่ส่งไฟล์
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[10px] text-slate-400 flex items-center gap-2 flex-wrap">
+                                <span>ขอโดย: <strong className="text-purple-300">{doc.requested_by || 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027'}</strong></span>
+                                {doc.requested_at && (
+                                  <span>• ขอเมื่อ: {new Date(doc.requested_at).toLocaleString('th-TH')}</span>
+                                )}
+                                {doc.submitted_at && (
+                                  <span>• ส่งเมื่อ: {new Date(doc.submitted_at).toLocaleString('th-TH')}</span>
+                                )}
+                              </div>
+
+                              {doc.note && (
+                                <p className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                                  หมายเหตุ: {doc.note}
+                                </p>
+                              )}
+
+                              {doc.file_url && (
+                                <div className="text-[11px] text-slate-300 pt-1 flex items-center gap-2 flex-wrap">
+                                  <span>📎 ไฟล์แนบ: <strong>{doc.file_name || 'เอกสารแนบ'}</strong></span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewDoc(doc)}
+                                    className="px-2 py-0.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg flex items-center gap-1 font-bold cursor-pointer"
+                                  >
+                                    <Eye className="w-3 h-3" /> เปิดดูไฟล์แนบ
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
 
-                        {doc.file_url && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyDoc(doc.id, 'approved')}
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-                            >
-                              ✓ อนุมัติ
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const reason = await askPrompt({
-                                  title: 'ระบุเหตุผลที่ให้ส่งเอกสารใหม่',
-                                  message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและแนบเอกสารใหม่:',
-                                  defaultValue: 'เอกสารไม่ชัดเจน',
-                                  placeholder: 'ระบุเหตุผล...',
-                                  variant: 'warning',
-                                  confirmText: 'ตกลง',
-                                  cancelText: 'ยกเลิก'
-                                });
-                                if (reason) handleVerifyDoc(doc.id, 'rejected', reason);
-                              }}
-                              className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-                            >
-                              ✕ ให้ส่งใหม่
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPreviewDoc(doc)}
-                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
-                              title="เปิดดูเอกสาร"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
+                            {/* Action Buttons for Admin */}
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                              {/* Approve / Reject when file exists */}
+                              {doc.file_url && !isCancelled && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyDoc(doc.id, 'approved', 'ตรวจสอบและอนุมัติเอกสารเรียบร้อยแล้ว')}
+                                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                                  >
+                                    ✓ อนุมัติ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const reason = await askPrompt({
+                                        title: 'ระบุเหตุผลที่ให้ส่งเอกสารใหม่',
+                                        message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและแนบเอกสารใหม่:',
+                                        defaultValue: 'เอกสารไม่ชัดเจน กรุณาถ่ายหรือสแกนส่งใหม่อีกครั้ง',
+                                        placeholder: 'ระบุเหตุผล...',
+                                        variant: 'warning',
+                                        confirmText: 'ส่งแจ้งเตือนให้แนบใหม่',
+                                        cancelText: 'ยกเลิก'
+                                      });
+                                      if (reason) handleVerifyDoc(doc.id, 'rejected', reason);
+                                    }}
+                                    className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                                  >
+                                    ↻ ให้ส่งใหม่
+                                  </button>
+                                </>
+                              )}
+
+                              {/* Admin Upload File on behalf of user */}
+                              {!isCancelled && (
+                                <label className={`px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${isUploadingThisAdmin ? 'opacity-50 pointer-events-none' : ''}`}>
+                                  {isUploadingThisAdmin ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                                  <span>{doc.file_url ? 'แนบไฟล์แทนใหม่' : 'Admin แนบไฟล์ให้'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    onChange={(e) => handleAdminUploadDocForUser(e, doc.id)}
+                                    className="hidden"
+                                  />
+                                </label>
+                              )}
+
+                              {/* Cancel Request / Re-open Request Button */}
+                              {isCancelled ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelDocRequest(doc, false)}
+                                  className="px-2.5 py-1.5 bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                                >
+                                  + กดขออีกครั้ง
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelDocRequest(doc, !doc.file_url)}
+                                  className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                                  title="ยกเลิกการขอเอกสารรายการนี้"
+                                >
+                                  ✕ ยกเลิกการขอ
+                                </button>
+                              )}
+
+                              {/* Advanced Mode Delete Controls */}
+                              {isAdvancedMode && (
+                                <>
+                                  {doc.file_url && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAdvancedDeleteDoc(doc, 'clear_file')}
+                                      className="px-2.5 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/60 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                                      title="ลบเฉพาะไฟล์แนบออก"
+                                    >
+                                      🧹 ล้างไฟล์แนบ
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdvancedDeleteDoc(doc, 'delete_item')}
+                                    className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow"
+                                    title="ลบรายการขอเอกสารนี้ถาวร (โหมดขั้นสูง)"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    <span>ลบถาวร</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ))
+                        </div>
+                      );
+                    })
                   ) : (
-                    <p className="text-slate-500 italic">ยังไม่มีการขอเอกสารเพิ่มเติมจากผู้สมัครท่านนี้</p>
+                    <p className="text-slate-500 italic">ยังไม่มีการขอเอกสารเพิ่มเติมจากผู้สมัครท่านนี้ (สามารถกดปุ่ม "+ กดขอเอกสาร" ด้านบนได้เลย)</p>
                   )}
                 </div>
               </div>

@@ -79,7 +79,8 @@ import {
   isMsuInstitution,
   isStaffRegistration,
   resolveGender,
-  resolveUniversityInfo
+  resolveUniversityInfo,
+  resolveMessageSenderInfo
 } from '../data/defaultData';
 import RegistrationCountdown from '../components/RegistrationCountdown';
 import { 
@@ -2596,38 +2597,45 @@ export default function RegisterView({
           </div>
 
           {/* NOTIFICATION HERO ALERT BANNER (If there are unread messages) */}
-          {unreadMessagesCount > 0 && (
-            <div 
-              onClick={() => setShowNotificationsModal(true)}
-              className="mt-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950/70 via-purple-950/60 to-slate-900 border-2 border-amber-500/60 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-400 transition-all group"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-                  <Bell className="w-5 h-5 animate-bounce" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-sm sm:text-base font-black text-amber-300">
-                      มี {unreadMessagesCount} ข้อความแจ้งเตือนใหม่จากฝ่ายประสานงาน & การเงิน JRE 2027
-                    </h4>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-500 text-white font-black animate-pulse">
-                      ยังไม่อ่าน
-                    </span>
+          {unreadMessagesCount > 0 && (() => {
+            const latestUnread = adminMessages.find(m => !m.read) || adminMessages[0];
+            const latestSender = resolveMessageSenderInfo(latestUnread);
+            return (
+              <div 
+                onClick={() => setShowNotificationsModal(true)}
+                className="mt-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950/70 via-purple-950/60 to-slate-900 border-2 border-amber-500/60 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-400 transition-all group"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+                    <Bell className="w-5 h-5 animate-bounce" />
                   </div>
-                  <p className="text-xs text-slate-300 mt-0.5 line-clamp-1">
-                    {adminMessages.find(m => !m.read)?.text || 'คลิกที่นี่เพื่อเปิดอ่านข้อความและการแจ้งเตือน'}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm sm:text-base font-black text-amber-300">
+                        มี {unreadMessagesCount} ข้อความแจ้งเตือนใหม่ ({latestSender.senderName})
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-500 text-white font-black animate-pulse">
+                        ยังไม่อ่าน
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-500/25 border border-purple-400/40 text-purple-200 font-bold">
+                        {latestSender.systemName}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-0.5 line-clamp-1">
+                      {latestUnread?.text || 'คลิกที่นี่เพื่อเปิดอ่านข้อความและการแจ้งเตือน'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <span className="text-xs font-bold text-amber-400 underline group-hover:text-amber-300">
+                    เปิดอ่านข้อความแจ้งเตือน
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                <span className="text-xs font-bold text-amber-400 underline group-hover:text-amber-300">
-                  เปิดอ่านข้อความแจ้งเตือน
-                </span>
-                <ChevronRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* OVERALL PAYMENT STATUS HERO BANNER */}
           <div className="mt-8">
@@ -3767,7 +3775,7 @@ export default function RegisterView({
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400">ส่งตรงจากฝ่ายประสานงาน & การเงินโครงการ JRE 2027</p>
+                    <p className="text-[11px] text-slate-400">ส่งตรงจาก Admin และฝ่ายงานต่างๆ ของโครงการ JRE 2027 (แยกตามฝ่ายและระบบ)</p>
                   </div>
                 </div>
 
@@ -3789,7 +3797,7 @@ export default function RegisterView({
                     className="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>เปิดแบบป๊อปอัป</span>
+                    <span>เปิดแบบป๊อปอัป (แยกตามฝ่าย)</span>
                   </button>
                 </div>
               </div>
@@ -3797,6 +3805,7 @@ export default function RegisterView({
               <div className="space-y-3">
                 {adminMessages.map((msg, idx) => {
                   const isUnread = !msg.read;
+                  const senderInfo = resolveMessageSenderInfo(msg);
                   return (
                     <div 
                       key={msg.id || idx} 
@@ -3806,18 +3815,33 @@ export default function RegisterView({
                           : 'bg-slate-900/90 border-slate-800 text-slate-300'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-purple-400">ฝ่ายประสานงาน JRE 2027</span>
-                          {isUnread ? (
-                            <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
-                              🔴 ยังไม่อ่าน
+                      <div className="flex flex-wrap items-start sm:items-center justify-between gap-2 text-[11px] mb-1">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-purple-300 text-xs sm:text-sm">{senderInfo.senderName}</span>
+                            <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded text-[10px] font-bold">
+                              {senderInfo.roleBadge}
                             </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
-                              ✓ อ่านแล้ว
+                            {isUnread ? (
+                              <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
+                                🔴 ยังไม่อ่าน
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                                ✓ อ่านแล้ว
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 bg-purple-500/15 text-purple-300 border border-purple-500/30 rounded text-[10px] font-semibold">
+                              ระบบ: {senderInfo.systemName}
                             </span>
-                          )}
+                            {msg.title && (
+                              <span className="text-[11px] font-bold text-slate-200">
+                                • เรื่อง: {msg.title}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <span className="text-slate-500 text-[10px] flex items-center gap-1">
                           <Clock className="w-3 h-3 text-slate-500" />
@@ -3828,6 +3852,29 @@ export default function RegisterView({
                       <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line select-text">
                         {msg.text}
                       </div>
+
+                      {msg.attachment_url && (
+                        <div className="p-2.5 bg-slate-950/90 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 min-w-0 text-indigo-300">
+                            <FileText className="w-3.5 h-3.5 shrink-0" />
+                            <span className="font-semibold truncate">
+                              เอกสารแนบ: {msg.attachment_name || 'ไฟล์แนบจากผู้ดูแลระบบ'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDocModal({
+                              title: msg.title || 'เอกสารแนบจากข้อความแจ้งเตือน',
+                              fileName: msg.attachment_name || 'เอกสารแนบ',
+                              fileUrl: msg.attachment_url
+                            })}
+                            className="px-2.5 py-1 bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>เปิดดูไฟล์</span>
+                          </button>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between pt-1">
                         <button
@@ -3890,7 +3937,7 @@ export default function RegisterView({
                 <div className="flex items-center gap-2 text-rose-400">
                   <FileCheck className="w-4 h-4" />
                   <h3 className="font-bold text-white text-sm">
-                    เอกสารที่ต้องนำส่งผ่านเว็บไซต์ ({requestedDocs.length} รายการ)
+                    เอกสารแนบที่ผู้ดูแลระบบแจ้งขอ ({requestedDocs.filter(d => d.status !== 'cancelled').length} รายการ)
                   </h3>
                 </div>
               </div>
@@ -3899,25 +3946,63 @@ export default function RegisterView({
                 {requestedDocs.map((doc, idx) => {
                   const isUploadingThis = uploadingDocId === doc.id;
                   const hasSubmitted = Boolean(doc.file_url);
+                  const isCancelled = doc.status === 'cancelled';
 
                   return (
-                    <div key={doc.id || idx} className="p-3.5 bg-slate-900 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-white">{doc.title}</span>
-                          {doc.required && (
+                    <div
+                      key={doc.id || idx}
+                      className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
+                        isCancelled
+                          ? 'bg-slate-950/50 border-slate-800/60 opacity-65'
+                          : 'bg-slate-900 border-slate-800'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-bold ${isCancelled ? 'line-through text-slate-400' : 'text-white'}`}>
+                            {doc.title}
+                          </span>
+                          {!isCancelled && doc.required && (
                             <span className="px-1.5 py-0.5 bg-red-950 text-red-300 border border-red-800 text-[10px] rounded font-bold">
                               จำเป็น
                             </span>
                           )}
-                          {doc.status === 'approved' ? (
-                            <span className="text-[10px] text-emerald-400 font-bold">✓ อนุมัติแล้ว</span>
+                          {isCancelled ? (
+                            <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[10px] font-bold">
+                              ✕ ยกเลิกการขอเอกสารแล้ว (ไม่ต้องส่ง)
+                            </span>
+                          ) : doc.status === 'approved' ? (
+                            <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded text-[10px] font-bold">
+                              ✓ อนุมัติแล้ว
+                            </span>
+                          ) : doc.status === 'rejected' ? (
+                            <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded text-[10px] font-bold">
+                              ⚠️ ให้ส่งใหม่
+                            </span>
                           ) : hasSubmitted ? (
-                            <span className="text-[10px] text-amber-400 font-bold">⏳ ส่งแล้ว รอตรวจ</span>
+                            <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded text-[10px] font-bold">
+                              ⏳ ส่งแล้ว รอตรวจ
+                            </span>
                           ) : (
-                            <span className="text-[10px] text-slate-500 font-bold">ยังไม่ได้ส่ง</span>
+                            <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[10px] font-bold">
+                              ยังไม่ได้ส่ง
+                            </span>
                           )}
                         </div>
+
+                        <div className="flex items-center gap-2 flex-wrap text-[10px] text-slate-400">
+                          <span>ร้องขอโดย: <strong className="text-purple-300">{doc.requested_by || 'ฝ่ายทะเบียน & เอกสารผู้สมัคร JRE 2027'}</strong></span>
+                          {doc.requested_at && (
+                            <span>• เมื่อ {new Date(doc.requested_at).toLocaleDateString('th-TH')}</span>
+                          )}
+                        </div>
+
+                        {doc.note && (
+                          <p className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                            หมายเหตุจาก Admin: {doc.note}
+                          </p>
+                        )}
+
                         {hasSubmitted && (
                           <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
                             <span>ไฟล์: {doc.file_name || 'เอกสารแนบ'}</span>
@@ -3937,27 +4022,29 @@ export default function RegisterView({
                         )}
                       </div>
 
-                      <div>
-                        <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-colors ${isUploadingThis ? 'opacity-50 pointer-events-none' : ''}`}>
-                          {isUploadingThis ? (
-                            <>
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              <span>กำลังอัปโหลด...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="w-3 h-3 text-rescue-400" />
-                              <span>{hasSubmitted ? 'อัปโหลดไฟล์ใหม่' : 'อัปโหลดไฟล์เอกสาร'}</span>
-                            </>
-                          )}
-                          <input
-                            type="file"
-                            accept="image/*,application/pdf"
-                            onChange={(e) => handleUploadUserDoc(e, doc.id)}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
+                      {!isCancelled && (
+                        <div>
+                          <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-colors ${isUploadingThis ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {isUploadingThis ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>กำลังอัปโหลด...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3 h-3 text-rescue-400" />
+                                <span>{hasSubmitted ? 'อัปโหลดไฟล์ใหม่' : 'อัปโหลดไฟล์เอกสาร'}</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              onChange={(e) => handleUploadUserDoc(e, doc.id)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

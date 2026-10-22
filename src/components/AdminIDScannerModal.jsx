@@ -23,7 +23,14 @@ import ModalPortal from './ModalPortal';
 import IDCardPreview from './IDCardPreview';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData } from '../utils/idCard';
-import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy } from '../data/defaultData';
+import {
+  getApplicantMedical,
+  getApplicantAllergy,
+  hasMedicalCondition,
+  hasFoodOrDrugAllergy,
+  ADMIN_MESSAGE_SENDERS,
+  resolveMessageSenderInfo
+} from '../data/defaultData';
 
 function DetailItem({ label, value, className = '' }) {
   return (
@@ -45,6 +52,7 @@ export default function AdminIDScannerModal({
   const [scanError, setScanError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [messageKind, setMessageKind] = useState('alert');
+  const [senderKey, setSenderKey] = useState('medical_safety');
   const [messageText, setMessageText] = useState('');
   const [internalNote, setInternalNote] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -153,10 +161,15 @@ export default function AdminIDScannerModal({
     if (!selectedRegistration || !messageText.trim() || isSendingMessage) return;
 
     const targetId = selectedRegistration.user_id || selectedRegistration.id;
+    const chosenSender = ADMIN_MESSAGE_SENDERS.find(s => s.key === senderKey) || ADMIN_MESSAGE_SENDERS[0];
     setIsSendingMessage(true);
     try {
       await DataService.sendAdminMessage(targetId, messageText.trim(), {
-        title: messageKind === 'alert' ? 'แจ้งเตือนจาก Admin JRE 2027' : 'หมายเหตุจากทีม JRE 2027',
+        sender_key: chosenSender.key,
+        sender_name: chosenSender.senderName,
+        sender_role: chosenSender.roleBadge,
+        system_name: chosenSender.systemName,
+        title: messageKind === 'alert' ? chosenSender.defaultTitle : `หมายเหตุจาก ${chosenSender.senderName}`,
         message_type: messageKind,
         priority: messageKind === 'alert' ? 'high' : 'normal',
         sent_via: 'id_card_scanner'
@@ -375,6 +388,20 @@ export default function AdminIDScannerModal({
                           {messageKind === 'alert' ? <Bell className="h-4 w-4 text-amber-400" /> : <MessageSquare className="h-4 w-4 text-sky-400" />}
                           <h3 className="text-sm font-black text-white">ส่งแจ้งเตือน / หมายเหตุ</h3>
                         </div>
+                        <div className="mb-2">
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">ส่งในนามฝ่าย / ระบบ:</label>
+                          <select
+                            value={senderKey}
+                            onChange={(e) => setSenderKey(e.target.value)}
+                            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white font-semibold outline-none focus:border-amber-400"
+                          >
+                            {ADMIN_MESSAGE_SENDERS.filter(s => s.key !== 'custom').map(s => (
+                              <option key={s.key} value={s.key}>
+                                {s.shortLabel} — {s.senderName} ({s.systemName})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="mb-2 flex gap-1.5 rounded-xl bg-slate-950 p-1">
                           <button type="button" onClick={() => setMessageKind('alert')} className={`flex-1 rounded-lg px-2 py-1.5 text-[10px] font-bold ${messageKind === 'alert' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>แจ้งเตือนผู้สมัคร</button>
                           <button type="button" onClick={() => setMessageKind('note')} className={`flex-1 rounded-lg px-2 py-1.5 text-[10px] font-bold ${messageKind === 'note' ? 'bg-sky-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>หมายเหตุถึงผู้สมัคร</button>
@@ -390,7 +417,7 @@ export default function AdminIDScannerModal({
                           {isSendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                           ส่งข้อความและบันทึกประวัติ
                         </button>
-                        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">ผู้สมัครจะเห็นข้อความนี้ในกล่องแจ้งเตือนของตนเอง</p>
+                        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">ผู้สมัครจะเห็นข้อความและชื่อฝ่ายที่ส่งในกล่องแจ้งเตือนของตนเอง</p>
                       </form>
 
                       <form onSubmit={handleSaveInternalNote} className="rounded-2xl border border-purple-500/30 bg-purple-950/[0.14] p-4">
@@ -418,19 +445,30 @@ export default function AdminIDScannerModal({
                           <Clock className="h-4 w-4 text-slate-400" />
                           <h3 className="text-sm font-black text-white">ประวัติข้อความ ({adminMessages.length})</h3>
                         </div>
-                        <span className="text-[10px] text-slate-500">ส่งจาก Admin ID Scanner</span>
+                        <span className="text-[10px] text-slate-500">รวมทุกฝ่าย/ระบบ</span>
                       </div>
                       {adminMessages.length > 0 ? (
                         <div className="space-y-2">
-                          {adminMessages.slice(0, 6).map((message, index) => (
-                            <div key={message.id || index} className="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
-                                <span className={message.message_type === 'alert' ? 'font-bold text-amber-300' : 'font-bold text-sky-300'}>{message.title || (message.message_type === 'alert' ? 'แจ้งเตือน' : 'หมายเหตุ')}</span>
-                                <span>{message.created_at ? new Date(message.created_at).toLocaleString('th-TH') : '-'}</span>
+                          {adminMessages.slice(0, 6).map((message, index) => {
+                            const sInfo = resolveMessageSenderInfo(message);
+                            return (
+                              <div key={message.id || index} className="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-purple-300">{sInfo.senderName}</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[9px] font-semibold">
+                                      {sInfo.systemName}
+                                    </span>
+                                    <span className={message.message_type === 'alert' ? 'font-bold text-amber-300' : 'font-bold text-sky-300'}>
+                                      • {message.title || sInfo.defaultTitle}
+                                    </span>
+                                  </div>
+                                  <span>{message.created_at ? new Date(message.created_at).toLocaleString('th-TH') : '-'}</span>
+                                </div>
+                                <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-slate-200">{message.text}</p>
                               </div>
-                              <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-slate-200">{message.text}</p>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="text-xs italic text-slate-500">ยังไม่มีข้อความที่ส่งถึงผู้สมัคร</p>
