@@ -77,7 +77,13 @@ import {
   DEFAULT_MERCHANDISE_CONFIG,
   DEFAULT_SPEAKERS,
   DEFAULT_TEAM_MEMBERS,
+  STAFF_SHIRT_FEE,
+  OFFICIAL_NETWORK_INSTITUTIONS,
   isMsuInstitution,
+  isStaffRegistration,
+  resolveGender,
+  resolveUniversityInfo,
+  normalizeShirtSize,
   getRegistrationFeeDetails,
   getSpeakerCategory,
   SPEAKER_CATEGORIES,
@@ -291,6 +297,8 @@ export default function AdminDashboardView({
   const [merchSizeFilter, setMerchSizeFilter] = useState('all'); // 'all', 'SS', 'S', 'M', 'L', 'XL', '2XL', etc.
   const [merchPaymentFilter, setMerchPaymentFilter] = useState('all'); // 'all', 'paid', 'pending', 'unpaid'
   const [merchDeliveryFilter, setMerchDeliveryFilter] = useState('all'); // 'all', 'pending', 'received'
+  const [merchUniFilter, setMerchUniFilter] = useState('all'); // 'all' or university shortTag
+  const [merchRoleFilter, setMerchRoleFilter] = useState('all'); // 'all', 'participant', 'staff'
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
   const [newSizeName, setNewSizeName] = useState('');
   const [newSizeMeasurement, setNewSizeMeasurement] = useState('');
@@ -333,20 +341,31 @@ export default function AdminDashboardView({
   const traineeShirtRecords = React.useMemo(() => {
     return (registrations || []).map((r) => {
       const { firstName, lastName } = resolveFirstAndLastName(r);
+      const isStaff = isStaffRegistration(r);
+      const gender = resolveGender(r);
+      const uniInfo = resolveUniversityInfo(r);
       const isRound1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid' || r.payment_status === 'full';
       const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
-      const isFullyPaid = r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && isR2Paid);
+      const isFullyPaid = isStaff
+        ? (r.payment_status === 'paid' || r.payment_status === 'full' || r.installment_1_status === 'paid')
+        : (r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && isR2Paid));
       const isReceived = r.shirt_pickup_status === 'received' || r.shirt_received === true;
       const rawSize = (r.shirt_size || 'L').trim();
       const normSize = normalizeSize(rawSize);
       const orderNumber = `JRE27-SHIRT-${(r.id || r.user_id || 'REG').slice(0, 6).toUpperCase()}`;
+      const expectedTotal = isStaff ? STAFF_SHIRT_FEE : (r.payment_amount || (uniInfo.isMsu ? 650 : 850));
 
       return {
         id: `reg_shirt_${r.id || r.user_id}`,
         user_id: r.user_id || r.id,
         reg_id: r.id || r.user_id,
         source: 'registration',
-        source_label: '📋 เสื้อฝึกผู้สมัคร (รวมในค่าสมัคร)',
+        source_label: isStaff ? '🛠️ เสื้อ Staff คณะทำงาน (280 บ.)' : '📋 เสื้อฝึกผู้สมัคร (รวมในค่าสมัคร)',
+        is_staff: isStaff,
+        gender,
+        uni_short: uniInfo.shortTag,
+        uni_name: uniInfo.university,
+        uni_club: uniInfo.club,
         order_number: orderNumber,
         first_name: firstName,
         last_name: lastName,
@@ -363,9 +382,11 @@ export default function AdminDashboardView({
         quantity: 1,
         product_name: 'เสื้อฝึก JRE 2027 คอเต่าซิป แขนสั้น โทนสีเทา–ดำ',
         color: 'สีเทาตัดดำ (Official Tactical Gray-Black)',
-        total_amount: r.payment_amount || (r.institution && (r.institution.includes('มหาสารคาม') || r.institution.includes('มมส')) ? 650 : 850),
+        total_amount: expectedTotal,
         payment_status: isFullyPaid ? 'paid_verified' : isRound1Paid ? 'paid_verified' : (r.payment_slip_url || r.installment_1_slip_url) ? 'pending_verification' : 'unpaid',
-        payment_badge: isFullyPaid ? 'ชำระเต็มจำนวน' : isRound1Paid ? 'ชำระงวดที่ 1 (ค่าเสื้อ)' : (r.payment_slip_url || r.installment_1_slip_url) ? 'รอตรวจสลิป' : 'ยังไม่ชำระ',
+        payment_badge: isStaff
+          ? (isFullyPaid ? 'ชำระแล้ว (Staff 280 บ.)' : (r.payment_slip_url || r.installment_1_slip_url) ? 'รอตรวจสลิป Staff (280 บ.)' : 'ยังไม่ชำระ (Staff 280 บ.)')
+          : (isFullyPaid ? 'ชำระเต็มจำนวน' : isRound1Paid ? 'ชำระงวดที่ 1 (ค่าเสื้อ)' : (r.payment_slip_url || r.installment_1_slip_url) ? 'รอตรวจสลิป' : 'ยังไม่ชำระ'),
         pickup_status: isReceived ? 'received' : 'pending',
         pickup_at: r.shirt_received_date || null,
         slip_url: r.payment_slip_url || r.installment_1_slip_url || r.slip_url || null,
@@ -391,6 +412,11 @@ export default function AdminDashboardView({
         user_id: ord.user_id,
         source: 'merchandise',
         source_label: '🛍️ สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
+        is_staff: false,
+        gender: '-',
+        uni_short: 'สั่งซื้อหน้าร้าน',
+        uni_name: 'สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
+        uni_club: '-',
         order_number: ord.order_number,
         first_name: firstName,
         last_name: lastName,
@@ -488,15 +514,203 @@ export default function AdminDashboardView({
       sizePeople,
       totalShirts,
       totalReceivedShirts,
-      totalPendingShirts
+      totalPendingShirts,
+      allShirtItems: [...traineeShirtRecords, ...merchandiseStoreRecords]
     };
   }, [traineeShirtRecords, merchandiseStoreRecords]);
+
+  // Comprehensive University Breakdown: Gender (Male/Female for Room Allocation), Shirt Sizes (SS..5XL), Staff (280 THB) & Finances
+  const universitySummary = React.useMemo(() => {
+    const STANDARD_SIZES = ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'];
+    const uniMap = {};
+
+    const ensureUniBucket = (uniInfo) => {
+      const key = uniInfo.shortTag || 'อื่นๆ';
+      if (!uniMap[key]) {
+        const sizesObj = {};
+        STANDARD_SIZES.forEach(sz => { sizesObj[sz] = 0; });
+        uniMap[key] = {
+          key,
+          shortTag: key,
+          label: uniInfo.university || key,
+          university: uniInfo.university || key,
+          club: uniInfo.club || '-',
+          isMsu: Boolean(uniInfo.isMsu),
+          totalPeople: 0,
+          male: 0,
+          female: 0,
+          staff: 0,
+          maleCount: 0,
+          femaleCount: 0,
+          unknownGenderCount: 0,
+          maleRoomAssigned: 0,
+          maleRoomPending: 0,
+          femaleRoomAssigned: 0,
+          femaleRoomPending: 0,
+          participantCount: 0,
+          staffCount: 0,
+          staffPaidCount: 0,
+          totalShirts: 0,
+          shirtSizes: sizesObj,
+          shirtCounts: sizesObj,
+          expectedAmount: 0,
+          collectedAmount: 0,
+          outstandingAmount: 0,
+          fullyPaidCount: 0,
+          partialPaidCount: 0,
+          pendingReviewCount: 0,
+          unpaidCount: 0,
+          people: []
+        };
+      }
+      return uniMap[key];
+    };
+
+    // Pre-initialize all 8 official network universities in order so they always appear clearly
+    OFFICIAL_NETWORK_INSTITUTIONS.forEach(inst => {
+      ensureUniBucket(inst);
+    });
+
+    (registrations || []).forEach(reg => {
+      const uniInfo = resolveUniversityInfo(reg);
+      const bucket = ensureUniBucket(uniInfo);
+      const isStaff = isStaffRegistration(reg);
+      const gender = resolveGender(reg);
+      const normSize = normalizeSize(reg.shirt_size || 'L');
+      const sizeKey = STANDARD_SIZES.includes(normSize) ? normSize : 'อื่นๆ';
+      const hasRoom = Boolean(reg.room_assigned && String(reg.room_assigned).trim() !== '');
+
+      bucket.totalPeople += 1;
+      bucket.totalShirts += 1;
+      bucket.shirtSizes[sizeKey] = (bucket.shirtSizes[sizeKey] || 0) + 1;
+
+      if (gender === 'ชาย') {
+        bucket.maleCount += 1;
+        bucket.male = bucket.maleCount;
+        if (hasRoom) bucket.maleRoomAssigned += 1;
+        else bucket.maleRoomPending += 1;
+      } else if (gender === 'หญิง') {
+        bucket.femaleCount += 1;
+        bucket.female = bucket.femaleCount;
+        if (hasRoom) bucket.femaleRoomAssigned += 1;
+        else bucket.femaleRoomPending += 1;
+      } else {
+        bucket.unknownGenderCount += 1;
+      }
+
+      if (isStaff) {
+        bucket.staffCount += 1;
+        bucket.staff = bucket.staffCount;
+      } else {
+        bucket.participantCount += 1;
+      }
+
+      // Financial calculation per person (Staff = 280 single payment, never installment)
+      const isMsu = uniInfo.isMsu;
+      const totalFee = isStaff
+        ? STAFF_SHIRT_FEE
+        : (isMsu
+            ? (paymentConfig?.fee_total_msu || 650)
+            : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
+      const round1Fee = isMsu
+        ? (paymentConfig?.installment_round1_amount_msu || 400)
+        : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
+      const round2Fee = isMsu
+        ? (paymentConfig?.installment_round2_amount_msu || 250)
+        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+
+      const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
+      bucket.expectedAmount += totalFee;
+
+      if (isInstallment) {
+        const isR1Paid = reg.installment_1_status === 'paid';
+        const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
+        const hasPending = reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review';
+        if (isR1Paid && isR2Paid) {
+          bucket.fullyPaidCount += 1;
+          bucket.collectedAmount += totalFee;
+        } else if (hasPending) {
+          bucket.pendingReviewCount += 1;
+          if (isR1Paid) {
+            bucket.collectedAmount += round1Fee;
+            bucket.outstandingAmount += round2Fee;
+          } else {
+            bucket.outstandingAmount += totalFee;
+          }
+        } else if (isR1Paid) {
+          bucket.partialPaidCount += 1;
+          bucket.collectedAmount += round1Fee;
+          bucket.outstandingAmount += round2Fee;
+        } else {
+          bucket.unpaidCount += 1;
+          bucket.outstandingAmount += totalFee;
+        }
+      } else {
+        const isPaid = reg.payment_status === 'paid' || (isStaff && reg.installment_1_status === 'paid');
+        const isPending = reg.payment_status === 'pending_review' || (isStaff && reg.installment_1_status === 'pending_review');
+        if (isPaid) {
+          bucket.fullyPaidCount += 1;
+          if (isStaff) bucket.staffPaidCount += 1;
+          bucket.collectedAmount += totalFee;
+        } else if (isPending) {
+          bucket.pendingReviewCount += 1;
+          bucket.outstandingAmount += totalFee;
+        } else {
+          bucket.unpaidCount += 1;
+          bucket.outstandingAmount += totalFee;
+        }
+      }
+
+      bucket.people.push(reg);
+    });
+
+    const list = Object.values(uniMap);
+    // Keep official institutions in order, followed by any custom institutions with > 0 people
+    const officialTags = new Set(OFFICIAL_NETWORK_INSTITUTIONS.map(i => i.shortTag));
+    const orderedList = [
+      ...OFFICIAL_NETWORK_INSTITUTIONS.map(i => uniMap[i.shortTag]),
+      ...list.filter(u => !officialTags.has(u.shortTag) && u.totalPeople > 0)
+    ].filter(Boolean);
+
+    const totals = {
+      totalPeople: orderedList.reduce((acc, u) => acc + u.totalPeople, 0),
+      male: orderedList.reduce((acc, u) => acc + u.maleCount, 0),
+      female: orderedList.reduce((acc, u) => acc + u.femaleCount, 0),
+      staff: orderedList.reduce((acc, u) => acc + u.staffCount, 0),
+      totalShirts: orderedList.reduce((acc, u) => acc + u.totalShirts, 0),
+      shirtCounts: STANDARD_SIZES.reduce((acc, sz) => {
+        acc[sz] = orderedList.reduce((sum, u) => sum + (u.shirtSizes[sz] || 0), 0);
+        return acc;
+      }, {})
+    };
+
+    return {
+      STANDARD_SIZES,
+      list: orderedList,
+      activeList: orderedList.filter(u => u.totalPeople > 0),
+      byTag: uniMap,
+      totals
+    };
+  }, [registrations, paymentConfig]);
 
   // Unified items filtered for search and inspector
   const filteredShirtItems = React.useMemo(() => {
     return [...traineeShirtRecords, ...merchandiseStoreRecords].filter(item => {
       // 1. Source filter
       if (merchSourceFilter !== 'all' && item.source !== merchSourceFilter) {
+        return false;
+      }
+
+      // 1b. University filter
+      if (merchUniFilter !== 'all' && item.uni_short !== merchUniFilter) {
+        return false;
+      }
+
+      // 1c. Role filter (participant vs staff)
+      if (merchRoleFilter === 'staff' && !item.is_staff) {
+        return false;
+      }
+      if (merchRoleFilter === 'participant' && (item.is_staff || item.source !== 'registration')) {
         return false;
       }
 
@@ -538,14 +752,14 @@ export default function AdminDashboardView({
         const matchesPhone = item.phone?.includes(q);
         const matchesEmail = item.user_email?.toLowerCase().includes(q);
         const matchesOrder = item.order_number?.toLowerCase().includes(q);
-        const matchesInst = item.institution?.toLowerCase().includes(q);
+        const matchesInst = item.institution?.toLowerCase().includes(q) || item.uni_short?.toLowerCase().includes(q);
         const matchesSize = item.size?.toLowerCase().includes(q);
         return matchesName || matchesCallsign || matchesNickname || matchesPhone || matchesEmail || matchesOrder || matchesInst || matchesSize;
       }
 
       return true;
     });
-  }, [traineeShirtRecords, merchandiseStoreRecords, merchSourceFilter, merchSizeFilter, merchDeliveryFilter, merchPaymentFilter, merchStatusFilter, merchSearchQuery]);
+  }, [traineeShirtRecords, merchandiseStoreRecords, merchSourceFilter, merchUniFilter, merchRoleFilter, merchSizeFilter, merchDeliveryFilter, merchPaymentFilter, merchStatusFilter, merchSearchQuery]);
 
   React.useEffect(() => {
     if (merchandiseConfig) {
@@ -577,13 +791,19 @@ export default function AdminDashboardView({
 
   // Search & Filter for Applicants
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'special_care', 'unpaid', 'pending_review', 'paid', 'no_group', 'has_group'
+  const [filterType, setFilterType] = useState('all'); // 'all', 'special_care', 'unpaid', 'pending_review', 'paid', 'no_group', 'has_group', 'staff'
   const [bloodFilter, setBloodFilter] = useState('all');
+  const [uniFilter, setUniFilter] = useState('all'); // 'all' or university shortTag
+  const [genderFilter, setGenderFilter] = useState('all'); // 'all', 'ชาย', 'หญิง'
+  const [roleFilter, setRoleFilter] = useState('all'); // 'all', 'participant', 'staff'
 
   // Inline Quick Edit Allocation State
   const [editingUserId, setEditingUserId] = useState(null);
   const [allocGroup, setAllocGroup] = useState('');
   const [allocRoom, setAllocRoom] = useState('');
+  const [allocShirtSize, setAllocShirtSize] = useState('L');
+  const [customSizeDrafts, setCustomSizeDrafts] = useState({});
+  const [updatingSizeId, setUpdatingSizeId] = useState(null);
 
   // Full Profile & Remarks Modal State
   const [profileModalReg, setProfileModalReg] = useState(null);
@@ -592,6 +812,7 @@ export default function AdminDashboardView({
   // Modal Fields
   const [modalGroup, setModalGroup] = useState('');
   const [modalRoom, setModalRoom] = useState('');
+  const [modalShirtSize, setModalShirtSize] = useState('L');
   const [modalSpecialCare, setModalSpecialCare] = useState(false);
   const [modalNotes, setModalNotes] = useState('');
   const [modalPhone, setModalPhone] = useState('');
@@ -599,6 +820,8 @@ export default function AdminDashboardView({
   const [modalMedical, setModalMedical] = useState('');
   const [modalAllergy, setModalAllergy] = useState('');
   const [modalTraining, setModalTraining] = useState('');
+  const [modalIsStaff, setModalIsStaff] = useState(false);
+  const [modalGender, setModalGender] = useState('ชาย');
   const [showCateringModal, setShowCateringModal] = useState(false);
   
   // Payment Modal Fields
@@ -1511,15 +1734,62 @@ export default function AdminDashboardView({
     setEditingUserId(reg.user_id);
     setAllocGroup(reg.group_assigned || '');
     setAllocRoom(reg.room_assigned || '');
+    setAllocShirtSize(normalizeSize(reg.shirt_size || 'L'));
   };
 
   const handleSaveAllocation = async (userId) => {
     await onUpdateAllocation(userId, {
       group_assigned: allocGroup.trim(),
-      room_assigned: allocRoom.trim()
+      room_assigned: allocRoom.trim(),
+      shirt_size: allocShirtSize.trim() || 'L'
     });
     setEditingUserId(null);
-    triggerToast('บันทึกการจัดสรรกลุ่มและห้องพักเรียบร้อย');
+    triggerToast(`บันทึกการจัดสรรกลุ่ม ห้องพัก และไซส์เสื้อ (${allocShirtSize}) เรียบร้อย`);
+  };
+
+  // Direct handler for Admin to specify/update a person's shirt size (especially when converting from 'อื่นๆ' after contacting them)
+  const handleAssignPersonShirtSize = async (itemOrReg, newSizeRaw) => {
+    const cleanNewSize = String(newSizeRaw || '').trim().toUpperCase();
+    if (!cleanNewSize) {
+      triggerToast('กรุณาเลือกหรือระบุไซส์เสื้อที่ต้องการบันทึก', 'warning');
+      return;
+    }
+
+    const recordId = itemOrReg.id || itemOrReg.user_id;
+    setUpdatingSizeId(recordId);
+    try {
+      const isMerchStoreOrder = itemOrReg.source === 'merchandise' && itemOrReg.rawOrder;
+      if (isMerchStoreOrder) {
+        const rawOrd = itemOrReg.rawOrder;
+        const updatedItems = Array.isArray(rawOrd.items) && rawOrd.items.length > 0
+          ? rawOrd.items.map((it, idx) => idx === 0 ? { ...it, size: cleanNewSize } : it)
+          : [{ product_name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027', size: cleanNewSize, quantity: 1 }];
+        await DataService.saveMerchandiseOrder({
+          ...rawOrd,
+          items: updatedItems
+        });
+        if (typeof onRefreshRegistrations === 'function') await onRefreshRegistrations();
+        triggerToast(`อัปเดตไซส์เสื้อออเดอร์ ${rawOrd.order_number} เป็นไซส์ "${cleanNewSize}" เรียบร้อยแล้ว`);
+      } else {
+        const targetUserId = itemOrReg.rawRegistration?.user_id || itemOrReg.user_id || itemOrReg.reg_id || String(itemOrReg.id || '').replace('reg_shirt_', '');
+        const personName = itemOrReg.customer_name || `${itemOrReg.first_name || ''} ${itemOrReg.last_name || ''}`.trim() || 'ผู้สมัคร';
+        if (onUpdateAllocation && targetUserId) {
+          await onUpdateAllocation(targetUserId, {
+            shirt_size: cleanNewSize
+          });
+          if (profileModalReg && (profileModalReg.user_id === targetUserId || profileModalReg.id === targetUserId)) {
+            setProfileModalReg(prev => prev ? { ...prev, shirt_size: cleanNewSize } : prev);
+            setModalShirtSize(cleanNewSize);
+          }
+          triggerToast(`อัปเดตไซส์เสื้อของคุณ ${personName} เป็นไซส์ "${cleanNewSize}" ในระบบเรียบร้อยแล้ว`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to assign shirt size:', err);
+      triggerToast('เกิดข้อผิดพลาดในการอัปเดตไซส์เสื้อ', 'error');
+    } finally {
+      setUpdatingSizeId(null);
+    }
   };
 
   // Open Full Profile & Remarks Modal (Locked / View-only by default)
@@ -1529,6 +1799,7 @@ export default function AdminDashboardView({
     setProfileModalTab(initialTab);
     setModalGroup(reg.group_assigned || '');
     setModalRoom(reg.room_assigned || '');
+    setModalShirtSize(reg.shirt_size || 'L');
     setModalSpecialCare(Boolean(reg.is_special_care));
     setModalNotes(reg.special_notes || '');
     setModalPhone(reg.phone || '');
@@ -1536,15 +1807,24 @@ export default function AdminDashboardView({
     setModalMedical(getApplicantMedical(reg));
     setModalAllergy(getApplicantAllergy(reg));
     setModalTraining(reg.previous_training || '');
+
+    const isStaff = isStaffRegistration(reg);
+    const resolvedGen = resolveGender(reg);
+    setModalIsStaff(isStaff);
+    setModalGender(resolvedGen === 'หญิง' ? 'หญิง' : 'ชาย');
+
     const isMsu = isMsuInstitution(reg.institution);
-    const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+    const totalFee = isStaff
+      ? STAFF_SHIRT_FEE
+      : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
     const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-    const isInstallment = reg.payment_plan 
+    // Staff never has 2-round installment payment
+    const isInstallment = !isStaff && (reg.payment_plan 
       ? (reg.payment_plan === 'installment') 
-      : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+      : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
     const isR1Paid = reg.installment_1_status === 'paid';
     const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
-    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid');
+    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid' || (isStaff && isR1Paid));
 
     let effStatus = reg.payment_status || 'unpaid';
     let effAmount = reg.payment_amount;
@@ -1561,7 +1841,9 @@ export default function AdminDashboardView({
         effAmount = totalFee;
       }
     } else {
-      effAmount = (reg.payment_status === 'paid') ? 0 : (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee);
+      if (isStaff && isR1Paid) effStatus = 'paid';
+      else if (isStaff && reg.installment_1_status === 'pending_review') effStatus = 'pending_review';
+      effAmount = (effStatus === 'paid') ? 0 : (isStaff ? STAFF_SHIRT_FEE : (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee));
     }
 
     setModalPaymentPlan(isInstallment ? 'installment' : 'full');
@@ -1583,6 +1865,7 @@ export default function AdminDashboardView({
       onConfirm: () => {
         setModalGroup(profileModalReg.group_assigned || '');
         setModalRoom(profileModalReg.room_assigned || '');
+        setModalShirtSize(profileModalReg.shirt_size || 'L');
         setModalSpecialCare(Boolean(profileModalReg.is_special_care));
         setModalNotes(profileModalReg.special_notes || '');
         setModalPhone(profileModalReg.phone || '');
@@ -1590,16 +1873,23 @@ export default function AdminDashboardView({
         setModalMedical(getApplicantMedical(profileModalReg));
         setModalAllergy(getApplicantAllergy(profileModalReg));
         setModalTraining(profileModalReg.previous_training || '');
+
+        const isStaff = isStaffRegistration(profileModalReg);
+        const resolvedGen = resolveGender(profileModalReg);
+        setModalIsStaff(isStaff);
+        setModalGender(resolvedGen === 'หญิง' ? 'หญิง' : 'ชาย');
         
         const isMsu = isMsuInstitution(profileModalReg.institution);
-        const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+        const totalFee = isStaff
+          ? STAFF_SHIRT_FEE
+          : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
         const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-        const isInstallment = profileModalReg.payment_plan 
+        const isInstallment = !isStaff && (profileModalReg.payment_plan 
           ? (profileModalReg.payment_plan === 'installment') 
-          : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url);
+          : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url));
         const isR1Paid = profileModalReg.installment_1_status === 'paid';
         const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
-        const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (profileModalReg.payment_status === 'paid');
+        const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (profileModalReg.payment_status === 'paid' || (isStaff && isR1Paid));
 
         let effStatus = profileModalReg.payment_status || 'unpaid';
         let effAmount = profileModalReg.payment_amount;
@@ -1616,7 +1906,9 @@ export default function AdminDashboardView({
             effAmount = totalFee;
           }
         } else {
-          effAmount = (profileModalReg.payment_status === 'paid') ? 0 : (profileModalReg.payment_amount !== undefined && profileModalReg.payment_amount !== null ? profileModalReg.payment_amount : totalFee);
+          if (isStaff && isR1Paid) effStatus = 'paid';
+          else if (isStaff && profileModalReg.installment_1_status === 'pending_review') effStatus = 'pending_review';
+          effAmount = (effStatus === 'paid') ? 0 : (isStaff ? STAFF_SHIRT_FEE : (profileModalReg.payment_amount !== undefined && profileModalReg.payment_amount !== null ? profileModalReg.payment_amount : totalFee));
         }
 
         setModalPaymentPlan(isInstallment ? 'installment' : 'full');
@@ -1656,9 +1948,18 @@ export default function AdminDashboardView({
 
     setIsSavingProfile(true);
     try {
+      const effectivePlan = modalIsStaff ? 'full' : modalPaymentPlan;
+      const defaultFee = modalIsStaff
+        ? STAFF_SHIRT_FEE
+        : (isMsuInstitution(modalInstitution || profileModalReg.institution) ? 650 : 850);
+      const effectiveAmount = modalIsStaff
+        ? (modalPaymentStatus === 'paid' ? STAFF_SHIRT_FEE : (Number(modalPaymentAmount) > 0 ? Number(modalPaymentAmount) : STAFF_SHIRT_FEE))
+        : (Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : defaultFee);
+
       const updates = {
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
+        shirt_size: (modalShirtSize || 'L').trim().toUpperCase(),
         is_special_care: modalSpecialCare,
         special_notes: modalNotes.trim(),
         phone: modalPhone.trim(),
@@ -1666,9 +1967,12 @@ export default function AdminDashboardView({
         medical_history: modalMedical.trim(),
         food_allergy: modalAllergy.trim(),
         previous_training: modalTraining.trim(),
-        payment_plan: modalPaymentPlan,
+        is_staff: Boolean(modalIsStaff),
+        registration_type: modalIsStaff ? 'staff' : 'participant',
+        gender: modalGender,
+        payment_plan: effectivePlan,
         payment_status: modalPaymentStatus,
-        payment_amount: Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : (isMsuInstitution(profileModalReg.institution) ? 650 : 850),
+        payment_amount: effectiveAmount,
         payment_bank_info: modalPaymentBank.trim(),
         payment_notes: modalPaymentNotes.trim()
       };
@@ -1818,7 +2122,7 @@ export default function AdminDashboardView({
     }
   };
 
-  // Calculate comprehensive registration payment & allocation metrics
+  // Calculate comprehensive registration payment, gender & Staff 280 THB metrics
   const regMetrics = (() => {
     let fullPlanCount = 0;
     let fullPlanPaidCount = 0;
@@ -1830,12 +2134,42 @@ export default function AdminDashboardView({
     let unpaidTotalCount = 0;
     let totalCollectedAmount = 0;
     let totalOutstandingBalance = 0;
+    let expectedTotalAmount = 0;
+
+    let staffCount = 0;
+    let staffPaidCount = 0;
+    let staffPendingCount = 0;
+    let staffUnpaidCount = 0;
+    let staffCollectedAmount = 0;
+    let participantCount = 0;
+    let msuParticipantCount = 0;
+    let externalParticipantCount = 0;
+    let maleCount = 0;
+    let femaleCount = 0;
+    let unknownGenderCount = 0;
 
     (registrations || []).forEach(reg => {
+      const isStaff = isStaffRegistration(reg);
+      const gender = resolveGender(reg);
       const isMsu = isMsuInstitution(reg.institution);
-      const totalFee = isMsu
-        ? (paymentConfig?.fee_total_msu || 650)
-        : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+
+      if (gender === 'ชาย') maleCount++;
+      else if (gender === 'หญิง') femaleCount++;
+      else unknownGenderCount++;
+
+      if (isStaff) {
+        staffCount++;
+      } else {
+        participantCount++;
+        if (isMsu) msuParticipantCount++;
+        else externalParticipantCount++;
+      }
+
+      const totalFee = isStaff
+        ? STAFF_SHIRT_FEE
+        : (isMsu
+            ? (paymentConfig?.fee_total_msu || 650)
+            : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
       const round1Fee = isMsu
         ? (paymentConfig?.installment_round1_amount_msu || 400)
         : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
@@ -1843,7 +2177,10 @@ export default function AdminDashboardView({
         ? (paymentConfig?.installment_round2_amount_msu || 250)
         : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
 
-      const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+      expectedTotalAmount += totalFee;
+
+      // Staff never has 2-round installment payment (จ่ายแค่ค่าเสื้อ 280 บาท ครั้งเดียว)
+      const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
 
       if (isInstallment) {
         installmentPlanCount++;
@@ -1875,16 +2212,25 @@ export default function AdminDashboardView({
         }
       } else {
         fullPlanCount++;
-        if (reg.payment_status === 'paid') {
+        const isPaid = reg.payment_status === 'paid' || (isStaff && reg.installment_1_status === 'paid');
+        const isPending = reg.payment_status === 'pending_review' || (isStaff && reg.installment_1_status === 'pending_review');
+        if (isPaid) {
           fullPlanPaidCount++;
           fullyPaidCount++;
-          totalCollectedAmount += (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee);
-        } else if (reg.payment_status === 'pending_review') {
+          const paidAmt = isStaff ? STAFF_SHIRT_FEE : (reg.payment_amount !== undefined && reg.payment_amount !== null && Number(reg.payment_amount) > 0 ? Number(reg.payment_amount) : totalFee);
+          totalCollectedAmount += paidAmt;
+          if (isStaff) {
+            staffPaidCount++;
+            staffCollectedAmount += STAFF_SHIRT_FEE;
+          }
+        } else if (isPending) {
           pendingReviewCount++;
           totalOutstandingBalance += totalFee;
+          if (isStaff) staffPendingCount++;
         } else {
           unpaidTotalCount++;
           totalOutstandingBalance += totalFee;
+          if (isStaff) staffUnpaidCount++;
         }
       }
     });
@@ -1896,6 +2242,17 @@ export default function AdminDashboardView({
 
     return {
       total: all.length,
+      participantCount,
+      msuParticipantCount,
+      externalParticipantCount,
+      staffCount,
+      staffPaidCount,
+      staffPendingCount,
+      staffUnpaidCount,
+      staffCollectedAmount,
+      maleCount,
+      femaleCount,
+      unknownGenderCount,
       fullPlanCount,
       fullPlanPaidCount,
       installmentPlanCount,
@@ -1905,6 +2262,7 @@ export default function AdminDashboardView({
       pendingReviewCount,
       unpaidTotalCount,
       totalOutstandingCount: partialPaidCount + unpaidTotalCount,
+      expectedTotalAmount,
       totalCollectedAmount,
       totalOutstandingBalance,
       allergyCount,
@@ -1915,6 +2273,9 @@ export default function AdminDashboardView({
 
   // Filtered registrations
   const filteredRegs = registrations.filter(reg => {
+    const isStaff = isStaffRegistration(reg);
+    const gender = resolveGender(reg);
+    const uniInfo = resolveUniversityInfo(reg);
     const medText = getApplicantMedical(reg);
     const allergyText = getApplicantAllergy(reg);
     const textTarget = (
@@ -1928,6 +2289,9 @@ export default function AdminDashboardView({
       (reg.shirt_size || '') + ' ' +
       (reg.phone || '') + ' ' + 
       (reg.institution || '') + ' ' +
+      (uniInfo.shortTag || '') + ' ' +
+      (gender || '') + ' ' +
+      (isStaff ? 'staff สตาฟ คณะทำงาน 280' : 'ผู้เข้าอบรม') + ' ' +
       (reg.user_email || '') + ' ' +
       (reg.group_assigned || '') + ' ' +
       (reg.room_assigned || '') + ' ' +
@@ -1938,22 +2302,27 @@ export default function AdminDashboardView({
 
     const matchSearch = textTarget.includes(searchTerm.toLowerCase());
     const matchBlood = bloodFilter === 'all' || reg.blood_group === bloodFilter;
+    const matchUni = uniFilter === 'all' || uniInfo.shortTag === uniFilter;
+    const matchGender = genderFilter === 'all' || gender === genderFilter;
+    const matchRole = roleFilter === 'all' || (roleFilter === 'staff' ? isStaff : !isStaff);
     
     let matchFilter = true;
-    const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+    const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
     const isR1Paid = reg.installment_1_status === 'paid';
     const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
-    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid');
+    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid' || (isStaff && isR1Paid));
     const isPartialPaid = isInstallment && isR1Paid && !isR2Paid;
     const hasPendingReview = isInstallment 
       ? (reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review') 
-      : (reg.payment_status === 'pending_review');
+      : (reg.payment_status === 'pending_review' || (isStaff && reg.installment_1_status === 'pending_review'));
     const isUnpaid = isInstallment 
       ? (!isR1Paid && !isR2Paid && !hasPendingReview) 
-      : (reg.payment_status === 'unpaid' || !reg.payment_status || reg.payment_status === 'rejected');
+      : (!isBothPaid && !hasPendingReview);
     const hasOutstanding = isPartialPaid || isUnpaid;
 
     if (filterType === 'special_care') matchFilter = Boolean(reg.is_special_care);
+    else if (filterType === 'staff') matchFilter = isStaff;
+    else if (filterType === 'participant_only') matchFilter = !isStaff;
     else if (filterType === 'has_allergy') matchFilter = hasFoodOrDrugAllergy(reg);
     else if (filterType === 'has_medical') matchFilter = hasMedicalCondition(reg);
     else if (filterType === 'full_plan') matchFilter = !isInstallment;
@@ -1969,7 +2338,7 @@ export default function AdminDashboardView({
     else if (filterType === 'no_room') matchFilter = !reg.room_assigned;
     else if (filterType === 'has_room') matchFilter = Boolean(reg.room_assigned);
 
-    return matchSearch && matchBlood && matchFilter;
+    return matchSearch && matchBlood && matchUni && matchGender && matchRole && matchFilter;
   });
 
   // Export Excel (.xlsx) with all fields, dates, statuses, slips, photos, and remarks (Embeds actual visible images into cells)
@@ -1994,46 +2363,138 @@ export default function AdminDashboardView({
     }
   };
 
-  // Export CSV with both =IMAGE() formula (renders image in sheets) and pure URL link
+  // Export CSV with Summary Tables at top (University x Gender Room Allocation, University x Shirt Sizes, Financial & Staff 280 Summary) + Sorted Detail Rows
   const handleExportCSV = async () => {
     if (!registrations || registrations.length === 0) {
       triggerToast('ยังไม่มีข้อมูลผู้สมัครในระบบ');
       return;
     }
 
+    const esc = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+    // 1. Build Top Summary Sections so opening the CSV immediately shows clear University, Gender, Shirt & Financial breakdowns
+    const summaryLines = [];
+    summaryLines.push([esc('=== รายงานสรุปข้อมูลผู้สมัครและสตาฟ โครงการ JRE 2027 (แยกตามมหาวิทยาลัย / ชาย-หญิงจัดห้องพัก / ไซส์เสื้อ / ยอดการเงิน) ===')].join(','));
+    summaryLines.push([
+      esc('รวมผู้ลงทะเบียนทั้งหมด'), esc(`${regMetrics.total} คน`),
+      esc('ผู้เข้าอบรมปกติ'), esc(`${regMetrics.participantCount} คน (มมส ${regMetrics.msuParticipantCount} / ต่างสถาบัน ${regMetrics.externalParticipantCount})`),
+      esc('Staff คณะทำงาน (ชำระค่าเสื้อ 280 บ.)'), esc(`${regMetrics.staffCount} คน (ชำระแล้ว ${regMetrics.staffPaidCount} คน)`),
+      esc('แยกเพศรวม'), esc(`ชาย ${regMetrics.maleCount} คน / หญิง ${regMetrics.femaleCount} คน${regMetrics.unknownGenderCount > 0 ? ` / ไม่ระบุ ${regMetrics.unknownGenderCount} คน` : ''}`),
+      esc('ยอดรับเงินจริงรวม'), esc(`${regMetrics.totalCollectedAmount.toLocaleString()} บาท`),
+      esc('ยอดค้างชำระรวม'), esc(`${regMetrics.totalOutstandingBalance.toLocaleString()} บาท`)
+    ].join(','));
+    summaryLines.push('');
+
+    // Section A: University x Gender (Room Allocation) & Shirt Sizes Matrix
+    summaryLines.push([esc('=== ตารางที่ 1: สรุปจำนวนคน แยกชาย-หญิง (สำหรับจัดห้องพัก) แยกประเภท Staff และแยกไซส์เสื้อแต่ละมหาวิทยาลัย ===')].join(','));
+    summaryLines.push([
+      esc('มหาวิทยาลัย (ตัวย่อ)'),
+      esc('ชื่อสถาบันเต็ม'),
+      esc('องค์กร/ชมรมกู้ภัย'),
+      esc('รวมทั้งหมด (คน)'),
+      esc('ชาย (คน)'),
+      esc('หญิง (คน)'),
+      esc('ชาย จัดห้องแล้ว/รอจัด'),
+      esc('หญิง จัดห้องแล้ว/รอจัด'),
+      esc('ผู้เข้าอบรม (คน)'),
+      esc('Staff 280 บ. (คน)'),
+      esc('รวมเสื้อ (ตัว)'),
+      ...universitySummary.STANDARD_SIZES.map(sz => esc(`ไซส์ ${sz}`)),
+      esc('สรุปรายการไซส์เสื้อของมหาลัยนี้'),
+      esc('ยอดเงินที่ต้องรับรวม (บาท)'),
+      esc('ยอดรับจริงแล้ว (บาท)'),
+      esc('ยอดค้างชำระ (บาท)')
+    ].join(','));
+
+    universitySummary.list.forEach(u => {
+      const sizeTextSummary = universitySummary.STANDARD_SIZES
+        .filter(sz => (u.shirtSizes[sz] || 0) > 0)
+        .map(sz => `${sz}=${u.shirtSizes[sz]} ตัว`)
+        .join(' | ') || 'ยังไม่มีรายการ';
+      summaryLines.push([
+        esc(u.shortTag),
+        esc(u.university),
+        esc(u.club),
+        esc(u.totalPeople),
+        esc(u.maleCount),
+        esc(u.femaleCount),
+        esc(`จัดแล้ว ${u.maleRoomAssigned} / รอจัด ${u.maleRoomPending}`),
+        esc(`จัดแล้ว ${u.femaleRoomAssigned} / รอจัด ${u.femaleRoomPending}`),
+        esc(u.participantCount),
+        esc(u.staffCount),
+        esc(u.totalShirts),
+        ...universitySummary.STANDARD_SIZES.map(sz => esc(u.shirtSizes[sz] || 0)),
+        esc(sizeTextSummary),
+        esc(u.expectedAmount),
+        esc(u.collectedAmount),
+        esc(u.outstandingAmount)
+      ].join(','));
+    });
+
+    // Total Row for Table 1
+    summaryLines.push([
+      esc('รวมทั้งสิ้น'),
+      esc('ทุกมหาวิทยาลัยรวมกัน'),
+      esc('-'),
+      esc(regMetrics.total),
+      esc(regMetrics.maleCount),
+      esc(regMetrics.femaleCount),
+      esc('-'),
+      esc('-'),
+      esc(regMetrics.participantCount),
+      esc(regMetrics.staffCount),
+      esc(regMetrics.total),
+      ...universitySummary.STANDARD_SIZES.map(sz => esc(universitySummary.list.reduce((acc, u) => acc + (u.shirtSizes[sz] || 0), 0))),
+      esc(
+        universitySummary.STANDARD_SIZES
+          .map(sz => ({ sz, cnt: universitySummary.list.reduce((acc, u) => acc + (u.shirtSizes[sz] || 0), 0) }))
+          .filter(x => x.cnt > 0)
+          .map(x => `${x.sz}=${x.cnt} ตัว`)
+          .join(' | ')
+      ),
+      esc(regMetrics.expectedTotalAmount),
+      esc(regMetrics.totalCollectedAmount),
+      esc(regMetrics.totalOutstandingBalance)
+    ].join(','));
+    summaryLines.push('');
+    summaryLines.push([esc('=== ตารางที่ 2: รายชื่อผู้สมัครและ Staff รายบุคคล (เรียงตามมหาวิทยาลัย -> ประเภทผู้สมัคร/Staff -> เพศ ชาย/หญิง เพื่อจัดห้องพักง่าย) ===')].join(','));
+
     const headers = [
       'ลำดับ',
+      'มหาวิทยาลัย (ตัวย่อ)',
+      'เพศ (ชาย/หญิง)',
+      'ประเภทผู้สมัคร (ผู้เข้าอบรม / Staff 280 บ.)',
+      'ไซส์เสื้อฝึก JRE 2027',
+      'ห้องนอนที่จัดสรร',
+      'กลุ่มฝึกที่จัดสรร',
+      'คำนำหน้า',
       'ชื่อ',
       'สกุล',
-      'หน่วยงาน',
+      'ชื่อเล่น',
       'รหัสนามเรียกขาน',
       'เบอร์โทร',
+      'หน่วยงาน / มหาวิทยาลัยเต็ม',
+      'สถานะการชำระเงิน',
+      'ยอดค่าสมัครรวม (บาท)',
+      'ยอดที่ชำระแล้ว (บาท)',
+      'ยอดค้างชำระ (บาท)',
+      'มียอดค้างชำระไหม',
+      'จ่ายครั้งแรกวันที่',
+      'จำนวนเงินงวดที่ 1 / เต็มจำนวน',
+      'ครั้งที่ 2 วันที่',
+      'จำนวนเงินงวดที่ 2',
       'ชื่อสกุลผู้ที่ติดต่อได้',
       'เบอร์โทรผู้ที่ติดต่อได้',
+      'ความสัมพันธ์ผู้ติดต่อฉุกเฉิน',
       'โรคประจำตัว / ข้อจำกัดทางกาย',
       'ประวัติการแพ้ยา / แพ้อาหาร',
       'ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา',
-      'สถานะการชำระเงิน',
-      'จ่ายครั้งแรกวันที่',
-      'จำนวนเงินงวดที่ 1',
-      'ครั้งที่ 2 วันที่',
-      'จำนวนเงินงวดที่ 2',
-      'มียอดค้างชำระไหม',
       'รูปทำบัตร ID Card (สูตรแสดงภาพ =IMAGE)',
       'รูปทำบัตร ID Card (URL ลิงก์ตรง)',
-      'ไซส์เสื้อฝึก JRE 2027',
-      'กลุ่มฝึกที่จัดสรร',
-      'ห้องนอนที่จัดสรร',
-      'ชื่อเล่น',
       'อีเมล Google',
       'วันเกิด',
       'อายุ',
       'กรุ๊ปเลือด',
-      'ความสัมพันธ์ผู้ติดต่อฉุกเฉิน',
-      'ประเภทสถาบัน',
-      'ยอดค่าสมัครรวม (บาท)',
-      'ยอดที่ชำระแล้ว (บาท)',
-      'ยอดค้างชำระ (บาท)',
       'สถานะงวด 1',
       'สลิปงวด 1 (สูตร =IMAGE)',
       'สลิปงวด 1 (URL ลิงก์ตรง)',
@@ -2046,28 +2507,59 @@ export default function AdminDashboardView({
       'หมายเหตุพิเศษ'
     ];
 
-    const rows = await Promise.all(registrations.map(async (r, idx) => {
+    // Sort registrations by University order -> Role (Participant first, then Staff) -> Gender (ชาย first, then หญิง) -> Name
+    const uniOrderMap = {};
+    OFFICIAL_NETWORK_INSTITUTIONS.forEach((inst, i) => { uniOrderMap[inst.shortTag] = i; });
+    const sortedRegistrations = [...registrations].sort((a, b) => {
+      const ua = resolveUniversityInfo(a).shortTag;
+      const ub = resolveUniversityInfo(b).shortTag;
+      const oa = uniOrderMap[ua] ?? 99;
+      const ob = uniOrderMap[ub] ?? 99;
+      if (oa !== ob) return oa - ob;
+      if (ua !== ub) return ua.localeCompare(ub, 'th');
+      const sa = isStaffRegistration(a) ? 1 : 0;
+      const sb = isStaffRegistration(b) ? 1 : 0;
+      if (sa !== sb) return sa - sb;
+      const ga = resolveGender(a);
+      const gb = resolveGender(b);
+      if (ga !== gb) return ga === 'ชาย' ? -1 : 1;
+      return String(a.first_name || '').localeCompare(String(b.first_name || ''), 'th');
+    });
+
+    const rows = await Promise.all(sortedRegistrations.map(async (r, idx) => {
       const { firstName, lastName } = resolveFirstAndLastName(r);
-      const isMsu = isMsuInstitution(r.institution);
-      const totalFee = isMsu ? 650 : 850;
-      const round1Amount = 400;
-      const round2Amount = isMsu ? 250 : 450;
+      const isStaff = isStaffRegistration(r);
+      const gender = resolveGender(r);
+      const uniInfo = resolveUniversityInfo(r);
+      const isMsu = uniInfo.isMsu;
+      const totalFee = isStaff ? STAFF_SHIRT_FEE : (isMsu ? 650 : 850);
+      const round1Amount = isStaff ? STAFF_SHIRT_FEE : 400;
+      const round2Amount = isStaff ? 0 : (isMsu ? 250 : 450);
+      const isInstallment = !isStaff && (r.payment_plan === 'installment' || Boolean(r.installment_1_slip_url || r.installment_2_slip_url));
 
       let paidAmount = 0;
       const isR1Paid = r.installment_1_status === 'paid';
       const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
-      if (r.payment_plan === 'installment') {
+      if (isInstallment) {
         if (isR1Paid) paidAmount += round1Amount;
         if (isR2Paid) paidAmount += round2Amount;
       } else {
-        if (r.payment_status === 'paid') paidAmount = totalFee;
+        if (r.payment_status === 'paid' || (isStaff && isR1Paid)) paidAmount = totalFee;
       }
       const remainingAmount = Math.max(0, totalFee - paidAmount);
 
       let paymentStatusDesc = '';
-      if (r.payment_plan === 'installment') {
+      if (isStaff) {
+        if (r.payment_status === 'paid' || isR1Paid) {
+          paymentStatusDesc = 'Staff (ชำระค่าเสื้อ 280 บาทครบแล้ว)';
+        } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
+          paymentStatusDesc = 'Staff 280 บาท (รอตรวจสอบสลิป)';
+        } else {
+          paymentStatusDesc = 'Staff 280 บาท (ยังไม่ชำระ)';
+        }
+      } else if (isInstallment) {
         if (isR1Paid && isR2Paid) {
-          paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
+          paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบ 2 งวดแล้ว)';
         } else if (isR1Paid) {
           paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
         } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
@@ -2086,7 +2578,7 @@ export default function AdminDashboardView({
       }
 
       let paidRound1Date = '-';
-      if (r.payment_plan === 'installment') {
+      if (isInstallment) {
         if (r.installment_1_slip_date) {
           paidRound1Date = new Date(r.installment_1_slip_date).toLocaleString('th-TH');
         } else if (r.installment_1_status === 'paid') {
@@ -2095,9 +2587,10 @@ export default function AdminDashboardView({
           paidRound1Date = 'ยังไม่ชำระ';
         }
       } else {
-        if (r.payment_slip_date) {
-          paidRound1Date = new Date(r.payment_slip_date).toLocaleString('th-TH');
-        } else if (r.payment_status === 'paid') {
+        const dt = r.payment_slip_date || r.installment_1_slip_date;
+        if (dt) {
+          paidRound1Date = new Date(dt).toLocaleString('th-TH');
+        } else if (r.payment_status === 'paid' || (isStaff && isR1Paid)) {
           paidRound1Date = 'ชำระแล้ว';
         } else {
           paidRound1Date = 'ยังไม่ชำระ';
@@ -2105,7 +2598,15 @@ export default function AdminDashboardView({
       }
 
       let paidRound1Amount = '';
-      if (r.payment_plan === 'installment') {
+      if (isStaff) {
+        if (r.payment_status === 'paid' || isR1Paid) {
+          paidRound1Amount = '280 บาท (ค่าเสื้อ Staff จ่ายครบ)';
+        } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
+          paidRound1Amount = '280 บาท (Staff รอตรวจสอบ)';
+        } else {
+          paidRound1Amount = '280 บาท (Staff ยังไม่ชำระ)';
+        }
+      } else if (isInstallment) {
         if (r.installment_1_status === 'paid') {
           paidRound1Amount = '400 บาท';
         } else if (r.installment_1_status === 'pending_review') {
@@ -2124,7 +2625,7 @@ export default function AdminDashboardView({
       }
 
       let paidRound2Date = '-';
-      if (r.payment_plan === 'installment') {
+      if (isInstallment) {
         if (r.installment_2_slip_date) {
           paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
         } else if (isR2Paid) {
@@ -2133,11 +2634,11 @@ export default function AdminDashboardView({
           paidRound2Date = 'ยังไม่ชำระ';
         }
       } else {
-        paidRound2Date = '-';
+        paidRound2Date = isStaff ? 'ไม่มีแบ่งจ่าย 2 งวด (Staff)' : '-';
       }
 
       let paidRound2Amount = '-';
-      if (r.payment_plan === 'installment') {
+      if (isInstallment) {
         if (isR2Paid) {
           paidRound2Amount = `${round2Amount} บาท`;
         } else if (r.installment_2_status === 'pending_review' && r.installment_2_slip_url) {
@@ -2146,7 +2647,7 @@ export default function AdminDashboardView({
           paidRound2Amount = `${round2Amount} บาท (ยังไม่ชำระ)`;
         }
       } else {
-        paidRound2Amount = '-';
+        paidRound2Amount = isStaff ? 'ไม่มี (โครงการออกให้)' : '-';
       }
 
       const remainingBalanceStatus = remainingAmount === 0 
@@ -2158,61 +2659,72 @@ export default function AdminDashboardView({
       const sFull = r.payment_slip_url ? await ensureHostedUrl(r.payment_slip_url, 'slip-full.jpg') : '';
       const idPhoto = r.id_card_photo ? await ensureHostedUrl(r.id_card_photo, 'id-card.jpg') : '';
 
+      const roleLabel = isStaff
+        ? 'Staff คณะทำงาน (ค่าเสื้อ 280 บาท)'
+        : (isMsu ? 'ผู้เข้าอบรม มมส (650 บาท)' : 'ผู้เข้าอบรม ต่างสถาบัน (850 บาท)');
+
       return [
         idx + 1,
-        `"${firstName.replace(/"/g, '""')}"`,
-        `"${lastName.replace(/"/g, '""')}"`,
-        `"${(r.institution || '-').replace(/"/g, '""')}"`,
-        `"${r.callsign || '-'}"`,
-        `"${r.phone || '-'}"`,
-        `"${(r.emergency_name || '-').replace(/"/g, '""')}"`,
-        `"${r.emergency_phone || '-'}"`,
-        `"${(getApplicantMedical(r) || 'ไม่มี').replace(/"/g, '""')}"`,
-        `"${(getApplicantAllergy(r) || 'ไม่มี').replace(/"/g, '""')}"`,
-        `"${(r.previous_training && r.previous_training.trim() !== '' ? r.previous_training.trim() : 'ไม่มี').replace(/"/g, '""')}"`,
-        `"${paymentStatusDesc}"`,
-        `"${paidRound1Date}"`,
-        `"${paidRound1Amount}"`,
-        `"${paidRound2Date}"`,
-        `"${paidRound2Amount}"`,
-        `"${remainingBalanceStatus}"`,
-        `"${idPhoto ? `=IMAGE(""${idPhoto}"")` : 'ยังไม่แนบ'}"`,
-        `"${idPhoto || 'ยังไม่แนบ'}"`,
-        `"${r.shirt_size || 'L'}"`,
-        `"${r.group_assigned || 'ยังไม่จัดสรร'}"`,
-        `"${r.room_assigned || 'ยังไม่จัดสรร'}"`,
-        `"${r.nickname || '-'}"`,
-        `"${r.user_email || '-'}"`,
-        `"${r.dob || '-'}"`,
-        `"${r.age_years || 0} ปี ${r.age_months || 0} เดือน"`,
-        `"${r.blood_group || '-'}"`,
-        `"${r.emergency_relation || '-'}"`,
-        `"${isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)'}"`,
-        `"${totalFee}"`,
-        `"${paidAmount}"`,
-        `"${remainingAmount}"`,
-        `"${r.installment_1_status || '-'}"`,
-        `"${s1 ? `=IMAGE(""${s1}"")` : 'ยังไม่แนบ'}"`,
-        `"${s1 || 'ยังไม่แนบ'}"`,
-        `"${r.installment_2_status || '-'}"`,
-        `"${s2 ? `=IMAGE(""${s2}"")` : 'ยังไม่แนบ'}"`,
-        `"${s2 || 'ยังไม่แนบ'}"`,
-        `"${sFull ? `=IMAGE(""${sFull}"")` : 'ยังไม่แนบ'}"`,
-        `"${sFull || 'ยังไม่แนบ'}"`,
-        `"${r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'}"`,
-        `"${(r.special_notes || '').replace(/"/g, '""')}"`
+        esc(uniInfo.shortTag),
+        esc(gender),
+        esc(roleLabel),
+        esc(normalizeSize(r.shirt_size || 'L')),
+        esc(r.room_assigned || 'ยังไม่จัดสรร'),
+        esc(r.group_assigned || 'ยังไม่จัดสรร'),
+        esc(r.title || '-'),
+        esc(firstName),
+        esc(lastName),
+        esc(r.nickname || '-'),
+        esc(r.callsign || '-'),
+        esc(r.phone || '-'),
+        esc(r.institution || '-'),
+        esc(paymentStatusDesc),
+        esc(totalFee),
+        esc(paidAmount),
+        esc(remainingAmount),
+        esc(remainingBalanceStatus),
+        esc(paidRound1Date),
+        esc(paidRound1Amount),
+        esc(paidRound2Date),
+        esc(paidRound2Amount),
+        esc(r.emergency_name || '-'),
+        esc(r.emergency_phone || '-'),
+        esc(r.emergency_relation || '-'),
+        esc(getApplicantMedical(r) || 'ไม่มี'),
+        esc(getApplicantAllergy(r) || 'ไม่มี'),
+        esc(r.previous_training && r.previous_training.trim() !== '' ? r.previous_training.trim() : 'ไม่มี'),
+        esc(idPhoto ? `=IMAGE("${idPhoto}")` : 'ยังไม่แนบ'),
+        esc(idPhoto || 'ยังไม่แนบ'),
+        esc(r.user_email || '-'),
+        esc(r.dob || '-'),
+        esc(`${r.age_years || 0} ปี ${r.age_months || 0} เดือน`),
+        esc(r.blood_group || '-'),
+        esc(r.installment_1_status || '-'),
+        esc(s1 ? `=IMAGE("${s1}")` : 'ยังไม่แนบ'),
+        esc(s1 || 'ยังไม่แนบ'),
+        esc(r.installment_2_status || '-'),
+        esc(s2 ? `=IMAGE("${s2}")` : 'ยังไม่แนบ'),
+        esc(s2 || 'ยังไม่แนบ'),
+        esc(sFull ? `=IMAGE("${sFull}")` : 'ยังไม่แนบ'),
+        esc(sFull || 'ยังไม่แนบ'),
+        esc(r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'),
+        esc(r.special_notes || '')
       ];
     }));
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [
+      ...summaryLines,
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `JRE2027_รายชื่อผู้สมัครทุกคน_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `JRE2027_สรุปแยกมหาลัย_ชายหญิง_ไซส์เสื้อ_และรายชื่อทุกคน_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    triggerToast("ส่งออกไฟล์ CSV สำเร็จ (พร้อมสูตรแสดงภาพสลิป =IMAGE และลิงก์ตรง)");
+    triggerToast("ส่งออกไฟล์ CSV สำเร็จ (พร้อมตารางสรุปแยกมหาลัย ชาย/หญิง ไซส์เสื้อ และ Staff 280 บ.)");
   };
 
   // Export Merchandise Shirt Orders to Excel (.xlsx)
@@ -2236,23 +2748,81 @@ export default function AdminDashboardView({
     }
   };
 
-  // Export Merchandise Shirt Orders to CSV
+  // Export Merchandise Shirt Orders to CSV with University x Shirt Size Breakdown at the top
   const handleExportMerchandiseCSV = async () => {
     if (!filteredShirtItems || filteredShirtItems.length === 0) {
       triggerToast('ไม่พบรายการเสื้อสำหรับส่งออก');
       return;
     }
 
+    const esc = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+    const summaryLines = [];
+    summaryLines.push([esc('=== สรุปยอดเสื้อปฏิบัติการกู้ภัย JRE 2027 แยกตามมหาวิทยาลัยและไซส์เสื้อ (SS ถึง 5XL) ===')].join(','));
+    summaryLines.push([
+      esc('มหาวิทยาลัย (ตัวย่อ)'),
+      esc('ชื่อสถาบันเต็ม'),
+      esc('รวมเสื้อทั้งหมด (ตัว)'),
+      esc('ชาย (คน)'),
+      esc('หญิง (คน)'),
+      esc('ผู้เข้าอบรม (ตัว)'),
+      esc('Staff 280 บ. (ตัว)'),
+      ...universitySummary.STANDARD_SIZES.map(sz => esc(`ไซส์ ${sz}`)),
+      esc('สรุปรายการไซส์เสื้อของมหาลัยนี้')
+    ].join(','));
+
+    universitySummary.list.forEach(u => {
+      const sizeText = universitySummary.STANDARD_SIZES
+        .filter(sz => (u.shirtSizes[sz] || 0) > 0)
+        .map(sz => `${sz}=${u.shirtSizes[sz]} ตัว`)
+        .join(' | ') || 'ไม่มีรายการ';
+      summaryLines.push([
+        esc(u.shortTag),
+        esc(u.university),
+        esc(u.totalShirts),
+        esc(u.maleCount),
+        esc(u.femaleCount),
+        esc(u.participantCount),
+        esc(u.staffCount),
+        ...universitySummary.STANDARD_SIZES.map(sz => esc(u.shirtSizes[sz] || 0)),
+        esc(sizeText)
+      ].join(','));
+    });
+
+    summaryLines.push([
+      esc('รวมเสื้อทั้งหมด (ทุกสังกัด + หน้าร้าน)'),
+      esc('-'),
+      esc(sizeStats.totalShirts),
+      esc(regMetrics.maleCount),
+      esc(regMetrics.femaleCount),
+      esc(regMetrics.participantCount),
+      esc(regMetrics.staffCount),
+      ...sizeStats.STANDARD_SIZES.map(sz => esc(sizeStats.counts[sz] || 0)),
+      esc(
+        sizeStats.STANDARD_SIZES
+          .filter(sz => (sizeStats.counts[sz] || 0) > 0)
+          .map(sz => `${sz}=${sizeStats.counts[sz]} ตัว`)
+          .join(' | ')
+      )
+    ].join(','));
+    summaryLines.push('');
+    summaryLines.push([esc('=== รายการส่งมอบเสื้อรายบุคคล (เรียงตามมหาวิทยาลัย -> ประเภท -> เพศ -> ไซส์เสื้อ) ===')].join(','));
+
     const headers = [
       'ลำดับ',
+      'มหาวิทยาลัย (ตัวย่อ)',
+      'เพศ (ชาย/หญิง)',
+      'ประเภทผู้รับเสื้อ',
+      'ไซต์เสื้อ',
+      'จำนวน (ตัว)',
       'ชื่อ',
       'สกุล',
-      'เบอร์โทร',
-      'หน่วยงาน',
-      'ไซต์เสื้อ',
-      'รหัสนามเรียกขาน',
       'ชื่อเล่น',
-      'ประเภทรายการ',
+      'รหัสนามเรียกขาน',
+      'เบอร์โทร',
+      'หน่วยงานเต็ม',
+      'ห้องนอน',
+      'กลุ่มฝึก',
       'รหัสออเดอร์',
       'รายละเอียดสินค้า',
       'ยอดรวม (บาท)',
@@ -2261,12 +2831,24 @@ export default function AdminDashboardView({
       'สลิปโอนเงิน (URL ลิงก์ตรง)',
       'สถานะการส่งมอบ',
       'วันเวลาที่ส่งมอบ',
-      'กลุ่มฝึก',
-      'ห้องนอน',
       'อีเมล'
     ];
 
-    const rows = await Promise.all(filteredShirtItems.map(async (it, idx) => {
+    const uniOrderMap = {};
+    OFFICIAL_NETWORK_INSTITUTIONS.forEach((inst, i) => { uniOrderMap[inst.shortTag] = i; });
+    const sortedItems = [...filteredShirtItems].sort((a, b) => {
+      const ua = a.uni_short || 'อื่นๆ';
+      const ub = b.uni_short || 'อื่นๆ';
+      const oa = uniOrderMap[ua] ?? 99;
+      const ob = uniOrderMap[ub] ?? 99;
+      if (oa !== ob) return oa - ob;
+      if (ua !== ub) return ua.localeCompare(ub, 'th');
+      if (Boolean(a.is_staff) !== Boolean(b.is_staff)) return a.is_staff ? 1 : -1;
+      if ((a.gender || '') !== (b.gender || '')) return a.gender === 'ชาย' ? -1 : 1;
+      return String(a.first_name || '').localeCompare(String(b.first_name || ''), 'th');
+    });
+
+    const rows = await Promise.all(sortedItems.map(async (it, idx) => {
       const { firstName, lastName } = resolveFirstAndLastName(it);
       const isReg = it.source === 'registration' || it.itemType === 'registration';
       const isReceived = it.pickup_status === 'received';
@@ -2277,39 +2859,50 @@ export default function AdminDashboardView({
         ? it.items.map(p => `${p.product_name || 'เสื้อ'} (${p.size || it.shirt_size || it.size}) x${p.quantity || 1}`).join('; ')
         : `เสื้อปฏิบัติการกู้ภัย JRE 2027 (${it.shirt_size || it.size || 'L'}) x1`;
 
+      const typeLabel = isReg
+        ? (it.is_staff ? 'Staff คณะทำงาน (ค่าเสื้อ 280 บ.)' : 'ผู้เข้าอบรม (รวมในใบสมัคร)')
+        : 'สั่งซื้อเพิ่มหน้าร้าน';
+
       return [
         idx + 1,
-        `"${firstName.replace(/"/g, '""')}"`,
-        `"${lastName.replace(/"/g, '""')}"`,
-        `"${(it.customer_phone || it.phone || '-').replace(/"/g, '""')}"`,
-        `"${(it.institution || '-').replace(/"/g, '""')}"`,
-        `"${it.shirt_size || it.size || 'L'}"`,
-        `"${it.callsign || ''}"`,
-        `"${it.nickname || ''}"`,
-        `"${isReg ? 'เสื้อฝึกในใบสมัคร' : 'สั่งซื้อหน้าร้าน'}"`,
-        `"${it.order_number || `ORD-${(it.id || '').slice(0, 8)}`}"`,
-        `"${itemsSummary.replace(/"/g, '""')}"`,
-        `"${it.total_amount || 0}"`,
-        `"${isPaid ? 'ชำระแล้ว (อนุมัติ)' : (it.payment_status === 'pending_verification' ? 'รอตรวจสลิป' : 'ค้างชำระ')}"`,
-        `"${slipUrl ? `=IMAGE(""${slipUrl}"")` : 'ไม่มีสลิป'}"`,
-        `"${slipUrl || 'ไม่มีสลิป'}"`,
-        `"${isReceived ? 'ส่งมอบแล้ว' : 'รอรับ'}"`,
-        `"${it.pickup_at ? new Date(it.pickup_at).toLocaleString('th-TH') : '-'}"`,
-        `"${it.group_assigned || 'ยังไม่จัดสรร'}"`,
-        `"${it.room_assigned || 'ยังไม่จัดสรร'}"`,
-        `"${it.user_email || ''}"`
+        esc(it.uni_short || resolveUniversityInfo(it).shortTag),
+        esc(it.gender || resolveGender(it)),
+        esc(typeLabel),
+        esc(it.normalized_size || it.shirt_size || it.size || 'L'),
+        esc(it.quantity || 1),
+        esc(firstName),
+        esc(lastName),
+        esc(it.nickname || ''),
+        esc(it.callsign || ''),
+        esc(it.customer_phone || it.phone || '-'),
+        esc(it.institution || '-'),
+        esc(it.room_assigned || 'ยังไม่จัดสรร'),
+        esc(it.group_assigned || 'ยังไม่จัดสรร'),
+        esc(it.order_number || `ORD-${(it.id || '').slice(0, 8)}`),
+        esc(itemsSummary),
+        esc(it.total_amount || 0),
+        esc(it.payment_badge || (isPaid ? 'ชำระแล้ว (อนุมัติ)' : (it.payment_status === 'pending_verification' ? 'รอตรวจสลิป' : 'ค้างชำระ'))),
+        esc(slipUrl ? `=IMAGE("${slipUrl}")` : 'ไม่มีสลิป'),
+        esc(slipUrl || 'ไม่มีสลิป'),
+        esc(isReceived ? 'ส่งมอบแล้ว' : 'รอรับ'),
+        esc(it.pickup_at ? new Date(it.pickup_at).toLocaleString('th-TH') : '-'),
+        esc(it.user_email || '')
       ];
     }));
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [
+      ...summaryLines,
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `JRE2027_รายการส่งมอบเสื้อทุกคน_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `JRE2027_สรุปเสื้อแยกมหาลัย_และรายการส่งมอบทุกคน_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    triggerToast("ส่งออกไฟล์ CSV รายการเสื้อสำเร็จ (พร้อมสูตรแสดงภาพสลิป =IMAGE และลิงก์ตรง)");
+    triggerToast("ส่งออกไฟล์ CSV รายการเสื้อสำเร็จ (พร้อมตารางสรุปเสื้อแยกมหาลัยและไซส์)");
   };
 
   // --- Handlers for Forms Config ---
@@ -2807,36 +3400,58 @@ export default function AdminDashboardView({
                 สรุปแผนการชำระเงิน & สถานะการเงินจริง (Real-time Financial Overview)
               </span>
             </div>
-            {(regMetrics.totalCollectedAmount > 0 || regMetrics.totalOutstandingBalance > 0) && (
-              <div className="flex items-center gap-2 text-[11px] font-mono">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
-                  รับเงินแล้ว: ฿{regMetrics.totalCollectedAmount.toLocaleString()}
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 font-bold">
-                  ยอดค้างรับ: ฿{regMetrics.totalOutstandingBalance.toLocaleString()}
-                </span>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+              <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 font-bold">
+                🛠️ Staff (280 บ.): {regMetrics.staffCount} คน (จ่ายแล้ว {regMetrics.staffPaidCount})
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 font-bold">
+                👨 ชาย {regMetrics.maleCount} • 👩 หญิง {regMetrics.femaleCount}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                รับเงินจริงแล้ว: ฿{regMetrics.totalCollectedAmount.toLocaleString()} / ฿{regMetrics.expectedTotalAmount.toLocaleString()}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 font-bold">
+                ยอดค้างรับ: ฿{regMetrics.totalOutstandingBalance.toLocaleString()}
+              </span>
+            </div>
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
             {/* 1. ผู้สมัครทั้งหมด */}
             <button
               type="button"
-              onClick={() => setFilterType('all')}
+              onClick={() => { setFilterType('all'); setRoleFilter('all'); }}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                filterType === 'all'
+                filterType === 'all' && roleFilter === 'all'
                   ? 'bg-slate-900 border-purple-500 ring-2 ring-purple-500/30'
                   : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 font-bold">ผู้สมัครทั้งหมด</span>
+                <span className="text-[11px] text-slate-400 font-bold">ทั้งหมดในระบบ</span>
                 <Users className="w-3.5 h-3.5 text-slate-400" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-white mt-1">{regMetrics.total} <span className="text-xs font-normal text-slate-400">คน</span></p>
-              <div className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">ทุกแผนการสมัคร</div>
+              <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">ชาย {regMetrics.maleCount} • หญิง {regMetrics.femaleCount}</div>
+            </button>
+
+            {/* 1b. Staff คณะทำงาน (280 บ.) */}
+            <button
+              type="button"
+              onClick={() => { setFilterType('staff'); setRoleFilter('staff'); }}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                filterType === 'staff' || roleFilter === 'staff'
+                  ? 'bg-purple-950/50 border-purple-500 ring-2 ring-purple-500/30'
+                  : 'bg-slate-950/70 border-purple-900/40 hover:border-purple-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-purple-300 font-bold">🛠️ Staff (280 บ.)</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-purple-300 mt-1">{regMetrics.staffCount} <span className="text-xs font-normal text-purple-200">คน</span></p>
+              <div className="text-[10px] text-purple-300/80 mt-0.5">จ่ายแล้ว {regMetrics.staffPaidCount} • รับ ฿{regMetrics.staffCollectedAmount.toLocaleString()}</div>
             </button>
 
             {/* 2. แผนจ่ายครบ (1 รอบ) */}
@@ -2850,7 +3465,7 @@ export default function AdminDashboardView({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-blue-400 font-bold">แผนจ่ายครบ</span>
+                <span className="text-[11px] text-blue-400 font-bold">แผนจ่ายครบ 1 รอบ</span>
                 <CreditCard className="w-3.5 h-3.5 text-blue-400" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-blue-400 mt-1">{regMetrics.fullPlanCount} <span className="text-xs font-normal text-blue-300">คน</span></p>
@@ -3253,6 +3868,289 @@ export default function AdminDashboardView({
       {/* TAB 1: APPLICANTS & ALLOCATION & PROFILE VIEWER */}
       {activeTab === 'applicants' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+
+          {/* COMPREHENSIVE SUMMARY HUB: UNIVERSITY x GENDER (ROOM ALLOCATION) x SHIRT SIZES x STAFF 280 */}
+          <div className="bg-slate-950/85 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-inner">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[11px] font-black mb-1.5">
+                  <Building className="w-3.5 h-3.5 text-purple-400" />
+                  <span>ตารางสรุปแยกแต่ละมหาวิทยาลัย • แยกชาย-หญิง (จัดห้องพักง่าย) • แยกไซส์เสื้อ • แยก Staff 280 บ.</span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white">
+                  สรุปยอดผู้สมัคร เสื้อฝึก และการเงิน แยกตามมหาวิทยาลัยเครือข่าย JRE 2027
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  คลิกที่ <strong className="text-amber-300">ชื่อมหาวิทยาลัย</strong>, <strong className="text-sky-300">ชาย/หญิง</strong> หรือ <strong className="text-purple-300">Staff (280 บ.)</strong> ในตารางเพื่อกรองดูรายชื่อและจัดห้องพักด้านล่างได้ทันที
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowShirtPrintModal(true)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>พิมพ์ใบสรุปยอดเสื้อแยกมหาลัย</span>
+                </button>
+                {(uniFilter !== 'all' || genderFilter !== 'all' || roleFilter !== 'all' || filterType !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUniFilter('all');
+                      setGenderFilter('all');
+                      setRoleFilter('all');
+                      setFilterType('all');
+                    }}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ล้างตัวกรองทั้งหมด</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Financial & Role Highlight Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-1">
+                <div className="flex items-center justify-between text-amber-300 font-bold">
+                  <span>🏫 ผู้เข้าอบรม มมส (650 บ.)</span>
+                  <span className="font-mono font-black">{regMetrics.msuParticipantCount} คน</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  แบ่งจ่าย 2 งวดได้ (400 + 250 บ.) หรือจ่ายเต็ม 650 บ.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-blue-500/30 space-y-1">
+                <div className="flex items-center justify-between text-blue-300 font-bold">
+                  <span>🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)</span>
+                  <span className="font-mono font-black">{regMetrics.externalParticipantCount} คน</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  รวมค่าหอพัก • แบ่งจ่าย 2 งวดได้ (400 + 450 บ.) หรือจ่ายเต็ม 850 บ.
+                </p>
+              </div>
+
+              <div
+                onClick={() => {
+                  const next = roleFilter === 'staff' ? 'all' : 'staff';
+                  setRoleFilter(next);
+                  setFilterType(next === 'staff' ? 'staff' : 'all');
+                }}
+                className={`p-3.5 rounded-2xl border space-y-1 cursor-pointer transition-all ${
+                  roleFilter === 'staff'
+                    ? 'bg-purple-950/60 border-purple-400 ring-2 ring-purple-500/30'
+                    : 'bg-slate-900/90 border-purple-500/40 hover:border-purple-400'
+                }`}
+              >
+                <div className="flex items-center justify-between text-purple-300 font-bold">
+                  <span>🛠️ Staff คณะทำงาน (ค่าเสื้อ 280 บ.)</span>
+                  <span className="font-mono font-black">{regMetrics.staffCount} คน</span>
+                </div>
+                <p className="text-[11px] text-purple-200/80">
+                  ชำระแล้ว <strong className="text-emerald-400">{regMetrics.staffPaidCount}</strong> คน (฿{regMetrics.staffCollectedAmount.toLocaleString()}) • <span className="underline">ไม่มีแบ่งจ่าย 2 งวด</span>
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-emerald-500/30 space-y-1">
+                <div className="flex items-center justify-between text-emerald-300 font-bold">
+                  <span>💰 สรุปยอดเงินรับจริงรวม</span>
+                  <span className="font-mono font-black text-sm">฿{regMetrics.totalCollectedAmount.toLocaleString()}</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  จากยอดรวม ฿{regMetrics.expectedTotalAmount.toLocaleString()} • ค้างชำระ <strong className="text-rose-400">฿{regMetrics.totalOutstandingBalance.toLocaleString()}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* University x Gender (Room Allocation) & Shirt Size Matrix Table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+              <table className="w-full min-w-[980px] text-left text-xs text-slate-200">
+                <thead className="bg-slate-900 text-slate-300 text-[11px] font-bold border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-3">มหาวิทยาลัย / สังกัด</th>
+                    <th className="py-3 px-2.5 text-center bg-slate-950/60">รวม (คน)</th>
+                    <th className="py-3 px-2.5 text-center bg-sky-950/30 text-sky-300">👨 ชาย (จัดห้อง)</th>
+                    <th className="py-3 px-2.5 text-center bg-pink-950/30 text-pink-300">👩 หญิง (จัดห้อง)</th>
+                    <th className="py-3 px-2.5 text-center bg-purple-950/30 text-purple-300">🛠️ Staff (280 บ.)</th>
+                    <th className="py-3 px-2.5 text-center bg-amber-950/30 text-amber-300">👕 รวมเสื้อ</th>
+                    {universitySummary.STANDARD_SIZES.map(sz => (
+                      <th key={sz} className="py-3 px-1.5 text-center font-mono text-[10px] text-amber-200 bg-slate-950/40">
+                        {sz}
+                      </th>
+                    ))}
+                    <th className="py-3 px-3 text-right bg-emerald-950/20 text-emerald-300">รับเงินแล้ว / ค้างรับ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70">
+                  {universitySummary.list.map((u) => {
+                    const isUniSelected = uniFilter === u.shortTag;
+                    return (
+                      <tr
+                        key={u.shortTag}
+                        onClick={() => setUniFilter(isUniSelected ? 'all' : u.shortTag)}
+                        className={`transition-colors cursor-pointer ${
+                          isUniSelected
+                            ? 'bg-purple-950/40 hover:bg-purple-950/60'
+                            : u.totalPeople > 0
+                            ? 'bg-slate-950/40 hover:bg-slate-900/70'
+                            : 'bg-slate-950/10 opacity-50 hover:opacity-80'
+                        }`}
+                      >
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-md font-black text-[11px] shrink-0 ${
+                              u.isMsu
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                            }`}>
+                              {u.shortTag}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-white truncate max-w-[210px]" title={u.university}>
+                                {u.university}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate max-w-[210px]">
+                                {u.club}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-2.5 text-center font-mono font-black text-sm text-white bg-slate-950/40">
+                          {u.totalPeople}
+                        </td>
+
+                        {/* Male Count & Room Allocation */}
+                        <td
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUniFilter(u.shortTag);
+                            setGenderFilter(genderFilter === 'ชาย' && uniFilter === u.shortTag ? 'all' : 'ชาย');
+                          }}
+                          className="py-2.5 px-2.5 text-center bg-sky-950/15 hover:bg-sky-900/30 transition-colors"
+                          title={`คลิกดูเฉพาะผู้ชายของ ${u.shortTag} เพื่อจัดห้องพัก`}
+                        >
+                          <div className="font-mono font-black text-sky-300 text-xs">
+                            {u.maleCount} <span className="text-[10px] font-normal">คน</span>
+                          </div>
+                          {u.maleCount > 0 && (
+                            <div className="text-[9px] text-slate-400">
+                              ห้อง: <span className="text-emerald-400 font-bold">{u.maleRoomAssigned}</span>/<span className="text-amber-300">{u.maleCount}</span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Female Count & Room Allocation */}
+                        <td
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUniFilter(u.shortTag);
+                            setGenderFilter(genderFilter === 'หญิง' && uniFilter === u.shortTag ? 'all' : 'หญิง');
+                          }}
+                          className="py-2.5 px-2.5 text-center bg-pink-950/15 hover:bg-pink-900/30 transition-colors"
+                          title={`คลิกดูเฉพาะผู้หญิงของ ${u.shortTag} เพื่อจัดห้องพัก`}
+                        >
+                          <div className="font-mono font-black text-pink-300 text-xs">
+                            {u.femaleCount} <span className="text-[10px] font-normal">คน</span>
+                          </div>
+                          {u.femaleCount > 0 && (
+                            <div className="text-[9px] text-slate-400">
+                              ห้อง: <span className="text-emerald-400 font-bold">{u.femaleRoomAssigned}</span>/<span className="text-amber-300">{u.femaleCount}</span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Staff 280 Count */}
+                        <td
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUniFilter(u.shortTag);
+                            setRoleFilter(roleFilter === 'staff' && uniFilter === u.shortTag ? 'all' : 'staff');
+                          }}
+                          className="py-2.5 px-2.5 text-center bg-purple-950/15 hover:bg-purple-900/30 transition-colors"
+                          title={`คลิกดูเฉพาะ Staff (280 บ.) ของ ${u.shortTag}`}
+                        >
+                          {u.staffCount > 0 ? (
+                            <div>
+                              <span className="font-mono font-black text-purple-300 text-xs">{u.staffCount} คน</span>
+                              <span className="block text-[9px] text-slate-400">ผู้เข้าอบรม {u.participantCount}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-600">-</span>
+                          )}
+                        </td>
+
+                        {/* Total Shirts */}
+                        <td className="py-2.5 px-2.5 text-center font-mono font-black text-amber-300 bg-amber-950/15">
+                          {u.totalShirts} <span className="text-[10px] font-normal">ตัว</span>
+                        </td>
+
+                        {/* Shirt Sizes Breakdown SS..5XL */}
+                        {universitySummary.STANDARD_SIZES.map(sz => {
+                          const cnt = u.shirtSizes[sz] || 0;
+                          return (
+                            <td key={sz} className="py-2.5 px-1.5 text-center font-mono">
+                              {cnt > 0 ? (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black text-[11px]">
+                                  {cnt}
+                                </span>
+                              ) : (
+                                <span className="text-slate-700 text-[10px]">-</span>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                        {/* Financial Summary per University */}
+                        <td className="py-2.5 px-3 text-right font-mono bg-emerald-950/10">
+                          <div className="text-emerald-400 font-bold text-xs">
+                            ฿{u.collectedAmount.toLocaleString()}
+                          </div>
+                          {u.outstandingAmount > 0 ? (
+                            <div className="text-[10px] text-rose-400">
+                              ค้าง ฿{u.outstandingAmount.toLocaleString()}
+                            </div>
+                          ) : u.totalPeople > 0 ? (
+                            <div className="text-[10px] text-emerald-500">ครบ 100%</div>
+                          ) : (
+                            <div className="text-[10px] text-slate-600">-</div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-slate-900 border-t-2 border-slate-700 font-bold text-xs text-white">
+                  <tr>
+                    <td className="py-3 px-3">รวมทั้งหมดทุกมหาวิทยาลัย</td>
+                    <td className="py-3 px-2.5 text-center font-mono text-sm text-white">{regMetrics.total} คน</td>
+                    <td className="py-3 px-2.5 text-center font-mono text-sky-300">👨 {regMetrics.maleCount} คน</td>
+                    <td className="py-3 px-2.5 text-center font-mono text-pink-300">👩 {regMetrics.femaleCount} คน</td>
+                    <td className="py-3 px-2.5 text-center font-mono text-purple-300">🛠️ {regMetrics.staffCount} คน</td>
+                    <td className="py-3 px-2.5 text-center font-mono text-amber-300">{regMetrics.total} ตัว</td>
+                    {universitySummary.STANDARD_SIZES.map(sz => {
+                      const totalSz = universitySummary.list.reduce((acc, u) => acc + (u.shirtSizes[sz] || 0), 0);
+                      return (
+                        <td key={sz} className="py-3 px-1.5 text-center font-mono text-amber-300">
+                          {totalSz > 0 ? totalSz : '-'}
+                        </td>
+                      );
+                    })}
+                    <td className="py-3 px-3 text-right font-mono">
+                      <span className="text-emerald-400">฿{regMetrics.totalCollectedAmount.toLocaleString()}</span>
+                      {regMetrics.totalOutstandingBalance > 0 && (
+                        <span className="block text-[10px] text-rose-400">ค้าง ฿{regMetrics.totalOutstandingBalance.toLocaleString()}</span>
+                      )}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
           
           {/* Search & Filters */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
@@ -3262,12 +4160,12 @@ export default function AdminDashboardView({
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                placeholder="ค้นหาชื่อ, เบอร์โทร, สังกัด, หมายเหตุ..."
+                placeholder="ค้นหาชื่อ, มหาลัย, เพศ, Staff, เบอร์โทร, ไซส์เสื้อ..."
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => {
@@ -3299,12 +4197,49 @@ export default function AdminDashboardView({
                 <span>{isAdvancedMode ? '🛡️ โหมดขั้นสูง (เปิดอยู่)' : '🛡️ โหมดแก้ไขขั้นสูง'}</span>
               </button>
 
+              {/* University Filter */}
+              <select
+                value={uniFilter}
+                onChange={e => setUniFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-950 border border-purple-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-bold"
+              >
+                <option value="all">🏛️ ทุกมหาวิทยาลัย ({regMetrics.total} คน)</option>
+                {universitySummary.list.map(u => (
+                  <option key={u.shortTag} value={u.shortTag}>
+                    {u.shortTag} - {u.university} ({u.totalPeople} คน | ชาย {u.maleCount} หญิง {u.femaleCount})
+                  </option>
+                ))}
+              </select>
+
+              {/* Gender Filter for Room Allocation */}
+              <select
+                value={genderFilter}
+                onChange={e => setGenderFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-950 border border-sky-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-sky-500 font-bold"
+              >
+                <option value="all">🚻 ทุกเพศ (ชาย {regMetrics.maleCount} / หญิง {regMetrics.femaleCount})</option>
+                <option value="ชาย">👨 เฉพาะผู้ชาย ({regMetrics.maleCount} คน)</option>
+                <option value="หญิง">👩 เฉพาะผู้หญิง ({regMetrics.femaleCount} คน)</option>
+              </select>
+
+              {/* Role Filter (Participant vs Staff 280) */}
+              <select
+                value={roleFilter}
+                onChange={e => setRoleFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-950 border border-amber-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+              >
+                <option value="all">👥 ทุกประเภท (ผู้เข้าอบรม + Staff)</option>
+                <option value="participant">🎓 เฉพาะผู้เข้าอบรม ({regMetrics.participantCount} คน)</option>
+                <option value="staff">🛠️ เฉพาะ Staff ค่าเสื้อ 280 บ. ({regMetrics.staffCount} คน)</option>
+              </select>
+
               <select
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
                 className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
               >
                 <option value="all">สถานะทั้งหมด ({regMetrics.total} คน)</option>
+                <option value="staff">🛠️ เฉพาะ Staff 280 บ. ({regMetrics.staffCount} คน)</option>
                 <option value="full_plan">💳 แผนจ่ายครบ ({regMetrics.fullPlanCount} คน)</option>
                 <option value="installment_plan">📦 แผนแบ่งจ่าย 2 งวด ({regMetrics.installmentPlanCount} คน)</option>
                 <option value="fully_paid">🟢 ชำระครบถ้วนแล้ว ({regMetrics.fullyPaidCount} คน)</option>
@@ -3366,12 +4301,15 @@ export default function AdminDashboardView({
                     const docs = Array.isArray(reg.requested_docs) ? reg.requested_docs : [];
                     const submittedDocsCount = docs.filter(d => d.file_url).length;
                     const cardData = getRegistrationCardData(reg);
+                    const isStaff = isStaffRegistration(reg);
+                    const gender = resolveGender(reg);
+                    const uniInfo = resolveUniversityInfo(reg);
 
                     return (
                       <tr 
                         key={reg.user_id || reg.id} 
                         className={`hover:bg-slate-800/40 transition-colors ${
-                          reg.is_special_care ? 'bg-rose-950/10' : ''
+                          reg.is_special_care ? 'bg-rose-950/10' : isStaff ? 'bg-purple-950/10' : ''
                         }`}
                       >
                         
@@ -3402,17 +4340,60 @@ export default function AdminDashboardView({
                                     ({reg.nickname})
                                   </span>
                                 )}
+                                {/* University Badge */}
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-black border ${
+                                  uniInfo.isMsu
+                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                                }`}>
+                                  🏛️ {uniInfo.shortTag}
+                                </span>
+                                {/* Gender Badge for Room Allocation */}
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                  gender === 'ชาย'
+                                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                    : gender === 'หญิง'
+                                    ? 'bg-pink-500/20 text-pink-300 border-pink-500/30'
+                                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}>
+                                  {gender === 'ชาย' ? '👨 ชาย' : gender === 'หญิง' ? '👩 หญิง' : 'ไม่ระบุเพศ'}
+                                </span>
                                 {reg.callsign && (
                                   <span className="px-1.5 py-0.2 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded text-[10px] font-mono font-bold">
                                     📡 {reg.callsign}
                                   </span>
                                 )}
-                                {reg.shirt_size && (
-                                  <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[10px] font-bold">
-                                    👕 {reg.shirt_size}
+                                <select
+                                  value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) ? normalizeSize(reg.shirt_size) : 'อื่นๆ'}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleAssignPersonShirtSize(reg, e.target.value);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  disabled={updatingSizeId === (reg.user_id || reg.id)}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border cursor-pointer focus:outline-none transition-all ${
+                                    !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size))
+                                      ? 'bg-rose-500/25 text-rose-200 border-rose-400/70 ring-1 ring-rose-400/40 animate-pulse'
+                                      : 'bg-purple-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400'
+                                  }`}
+                                  title="คลิกเพื่อระบุหรือเปลี่ยนไซส์เสื้อจริงรายคน (ขึ้นในระบบตามไซส์ทันที)"
+                                >
+                                  {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
+                                    <option key={sz} value={sz} className="bg-slate-900 text-white">
+                                      👕 ไซส์ {sz}
+                                    </option>
+                                  ))}
+                                  <option value="อื่นๆ" className="bg-slate-900 text-amber-300">
+                                    👕 {!['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(reg.shirt_size)) && reg.shirt_size && reg.shirt_size !== 'อื่นๆ'
+                                      ? `อื่นๆ (${reg.shirt_size} - รอระบุไซส์)`
+                                      : 'อื่นๆ (รอติดต่อระบุไซส์จริง)'}
+                                  </option>
+                                </select>
+                                {isStaff ? (
+                                  <span className="px-2 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/50 rounded-full text-[10px] font-black">
+                                    🛠️ Staff (ค่าเสื้อ 280 บ.)
                                   </span>
-                                )}
-                                {isMsuInstitution(reg.institution) ? (
+                                ) : isMsuInstitution(reg.institution) ? (
                                   <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-semibold">
                                     มมส (650 บ.)
                                   </span>
@@ -3457,7 +4438,33 @@ export default function AdminDashboardView({
 
                         {/* Payment Status & Slip */}
                         <td className="py-4 px-3 whitespace-nowrap">
-                          {(reg.payment_plan ? reg.payment_plan === 'installment' : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url)) ? (() => {
+                          {isStaff ? (() => {
+                            const isStaffPaid = paymentStatus === 'paid' || reg.installment_1_status === 'paid';
+                            const isStaffPending = paymentStatus === 'pending_review' || reg.installment_1_status === 'pending_review';
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProfileModal(reg, 'payment')}
+                                className="text-left group cursor-pointer block hover:opacity-90"
+                              >
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="px-1.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/40 rounded text-[9px] font-black">
+                                    🛠️ Staff 280 บ. (ครั้งเดียว)
+                                  </span>
+                                  {isStaffPaid ? (
+                                    <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระแล้ว</span>
+                                  ) : isStaffPending ? (
+                                    <span className="text-[10px] text-amber-300 font-bold animate-pulse">⏳ รอตรวจสลิป</span>
+                                  ) : (
+                                    <span className="text-[10px] text-rose-400 font-bold">🔴 ค้างชำระ</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-purple-300/90 font-mono">
+                                  เฉพาะค่าเสื้อ: 280 บ. (ไม่มีแบ่ง 2 งวด)
+                                </div>
+                              </button>
+                            );
+                          })() : (reg.payment_plan ? reg.payment_plan === 'installment' : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url)) ? (() => {
                             const isMsu = isMsuInstitution(reg.institution);
                             const round2Amount = isMsu 
                               ? (paymentConfig?.installment_round2_amount_msu || 250) 
@@ -3629,13 +4636,24 @@ export default function AdminDashboardView({
                         {/* Room Allocation */}
                         <td className="py-4 px-4 bg-amber-950/20">
                           {isEditingThis ? (
-                            <input
-                              type="text"
-                              value={allocRoom}
-                              onChange={e => setAllocRoom(e.target.value)}
-                              placeholder="เช่น หอนอน 1 ห้อง 204"
-                              className="w-36 px-2.5 py-1.5 bg-slate-950 border border-amber-500 rounded-lg text-xs text-white focus:outline-none"
-                            />
+                            <div className="space-y-1.5">
+                              <input
+                                type="text"
+                                value={allocRoom}
+                                onChange={e => setAllocRoom(e.target.value)}
+                                placeholder="เช่น หอนอน 1 ห้อง 204"
+                                className="w-36 px-2.5 py-1.5 bg-slate-950 border border-amber-500 rounded-lg text-xs text-white focus:outline-none block"
+                              />
+                              <select
+                                value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(allocShirtSize)) ? normalizeSize(allocShirtSize) : 'อื่นๆ'}
+                                onChange={e => setAllocShirtSize(e.target.value)}
+                                className="w-36 px-2 py-1 bg-slate-950 border border-purple-500 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none block"
+                              >
+                                {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                                  <option key={sz} value={sz}>👕 ไซส์ {sz}</option>
+                                ))}
+                              </select>
+                            </div>
                           ) : (
                             <span className={reg.room_assigned ? 'font-bold text-amber-300' : 'text-slate-500 italic'}>
                               {reg.room_assigned || 'ยังไม่จัดห้อง'}
@@ -3790,11 +4808,31 @@ export default function AdminDashboardView({
                     </span>
                   )}
                   {profileModalReg.shirt_size && (
-                    <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-bold">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${
+                      !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(profileModalReg.shirt_size))
+                        ? 'bg-rose-500/25 text-rose-200 border-rose-400/50 animate-pulse'
+                        : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                    }`}>
                       👕 ไซส์ {profileModalReg.shirt_size}
                     </span>
                   )}
-                  {isMsuInstitution(profileModalReg.institution) ? (
+                  <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-bold">
+                    🏛️ {resolveUniversityInfo(profileModalReg).shortTag}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${
+                    modalGender === 'ชาย'
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                      : modalGender === 'หญิง'
+                      ? 'bg-pink-500/20 text-pink-300 border-pink-500/30'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    {modalGender === 'ชาย' ? '👨 ชาย' : modalGender === 'หญิง' ? '👩 หญิง' : 'ไม่ระบุเพศ'}
+                  </span>
+                  {modalIsStaff ? (
+                    <span className="px-2.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/50 rounded-full text-xs font-black">
+                      🛠️ Staff (ชำระค่าเสื้อ 280 บ. ครั้งเดียว)
+                    </span>
+                  ) : isMsuInstitution(profileModalReg.institution) ? (
                     <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold">
                       🏫 มมส (650 บ.)
                     </span>
@@ -3809,9 +4847,11 @@ export default function AdminDashboardView({
                     </span>
                   )}
                   {(() => {
-                    const isInstallment = profileModalReg.payment_plan 
-                      ? (profileModalReg.payment_plan === 'installment') 
-                      : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url);
+                    const isInstallment = modalIsStaff
+                      ? false
+                      : (profileModalReg.payment_plan 
+                          ? (profileModalReg.payment_plan === 'installment') 
+                          : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url));
                     const isR1Paid = profileModalReg.installment_1_status === 'paid';
                     const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
                     const isBothPaid = isR1Paid && isR2Paid;
@@ -4298,6 +5338,120 @@ export default function AdminDashboardView({
                     />
                   </div>
 
+                  {/* Staff Role, Gender (Room Allocation) & Per-Person Shirt Size Assignment */}
+                  <div className="p-3.5 bg-slate-950/90 border border-purple-500/40 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                      <div>
+                        <span className="text-xs font-black text-purple-200 flex items-center gap-1.5">
+                          <Shirt className="w-3.5 h-3.5 text-purple-400" />
+                          การระบุประเภท Staff (280 บ.) • เพศ (แยกจัดห้องพัก) • ไซส์เสื้อรายคน
+                        </span>
+                        <span className="text-[11px] text-slate-400 block mt-0.5">
+                          กรณีผู้สมัครเลือกไซส์ <strong className="text-rose-300">"อื่นๆ (ขนาดสั่งตัดพิเศษ)"</strong> แล้วแอดมินติดต่อสอบถามแล้ว สามารถคลิกเลือกไซส์จริงด้านล่างเพื่ออัปเดตเข้าระบบตามไซส์ได้ทันที
+                        </span>
+                      </div>
+
+                      {/* Staff 280 THB Checkbox */}
+                      <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all shrink-0 ${
+                        modalIsStaff
+                          ? 'bg-purple-600/25 border-purple-400 text-purple-100 shadow-sm'
+                          : 'bg-slate-900 border-slate-700 text-slate-300'
+                      } ${!isEditingProfileModal ? 'cursor-not-allowed opacity-85' : 'cursor-pointer hover:border-purple-400'}`}>
+                        <input
+                          type="checkbox"
+                          disabled={!isEditingProfileModal}
+                          checked={modalIsStaff}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setModalIsStaff(checked);
+                            if (checked) {
+                              setModalPaymentPlan('full');
+                              if (modalPaymentStatus !== 'paid') {
+                                setModalPaymentAmount(STAFF_SHIRT_FEE);
+                              }
+                            } else {
+                              const isMsu = isMsuInstitution(profileModalReg.institution);
+                              const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                              if (modalPaymentStatus !== 'paid') {
+                                setModalPaymentAmount(totalFee);
+                              }
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400"
+                        />
+                        <div>
+                          <span className="text-xs font-black block">
+                            🛠️ เป็น Staff (ชำระเฉพาะค่าเสื้อ 280 บ.)
+                          </span>
+                          <span className="text-[10px] text-purple-300 block">
+                            จ่ายครั้งเดียว 280 บ. (ไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข)
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                      {/* Gender Selector for Room Allocation */}
+                      <div className="sm:col-span-4">
+                        <label className="block text-[11px] font-bold text-sky-300 mb-1">
+                          เพศ (สำหรับแยกชาย-หญิง จัดห้องพัก):
+                        </label>
+                        <select
+                          disabled={!isEditingProfileModal}
+                          value={modalGender}
+                          onChange={e => setModalGender(e.target.value)}
+                          className={`w-full px-3 py-2 rounded-xl text-xs font-bold text-white transition-all ${
+                            !isEditingProfileModal
+                              ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80'
+                              : 'bg-slate-900 border border-sky-500/50 focus:ring-2 focus:ring-sky-500'
+                          }`}
+                        >
+                          <option value="ชาย">👨 ชาย (จัดห้องพักชาย)</option>
+                          <option value="หญิง">👩 หญิง (จัดห้องพักหญิง)</option>
+                          <option value="ไม่ระบุ">⚪ ไม่ระบุ</option>
+                        </select>
+                      </div>
+
+                      {/* Direct Per-Person Shirt Size Selector */}
+                      <div className="sm:col-span-8 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-bold text-amber-300">
+                            👕 ระบุไซส์เสื้อจริงรายคน (คลิกปุ่มไซส์เพื่ออัปเดตเข้าระบบตามไซส์ทันที):
+                          </label>
+                          <span className="text-[10px] text-slate-400">
+                            ปัจจุบัน: <strong className="text-white font-mono">{modalShirtSize || profileModalReg.shirt_size || '-'}</strong>
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map((sz) => {
+                            const isSelectedSize = normalizeSize(modalShirtSize) === sz;
+                            return (
+                              <button
+                                key={sz}
+                                type="button"
+                                disabled={updatingSizeId === (profileModalReg.user_id || profileModalReg.id)}
+                                onClick={async () => {
+                                  setModalShirtSize(sz);
+                                  await handleAssignPersonShirtSize(profileModalReg, sz);
+                                }}
+                                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-black border transition-all cursor-pointer ${
+                                  isSelectedSize
+                                    ? sz === 'อื่นๆ'
+                                      ? 'bg-rose-600 text-white border-rose-400 shadow-md'
+                                      : 'bg-amber-500 text-slate-950 border-amber-300 shadow-md'
+                                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-amber-400 hover:text-white'
+                                }`}
+                                title={`คลิกเพื่อกำหนดไซส์ ${sz} ให้ ${profileModalReg.first_name} ทันที`}
+                              >
+                                {sz}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
                       <label className="block text-xs font-semibold text-indigo-300 mb-1">
@@ -4403,18 +5557,65 @@ export default function AdminDashboardView({
                 )}
 
                 <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
-                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-amber-400" />
-                    การจัดการยอดชำระเงินและตรวจสอบสลิป
-                  </h4>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-amber-400" />
+                      การจัดการยอดชำระเงินและตรวจสอบสลิป
+                    </h4>
+
+                    {/* Staff 280 THB Checkbox in Payment Tab */}
+                    <label className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all ${
+                      modalIsStaff
+                        ? 'bg-purple-600/25 border-purple-400 text-purple-100 shadow-sm'
+                        : 'bg-slate-900 border-slate-700 text-slate-300'
+                    } ${!isEditingProfileModal ? 'cursor-not-allowed opacity-85' : 'cursor-pointer hover:border-purple-400'}`}>
+                      <input
+                        type="checkbox"
+                        disabled={!isEditingProfileModal}
+                        checked={modalIsStaff}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setModalIsStaff(checked);
+                          if (checked) {
+                            setModalPaymentPlan('full');
+                            if (modalPaymentStatus !== 'paid') {
+                              setModalPaymentAmount(STAFF_SHIRT_FEE);
+                            }
+                            if (!modalPaymentNotes) {
+                              setModalPaymentNotes('Staff โครงการ - ชำระเฉพาะค่าเสื้อ 280 บาท (จ่ายครั้งเดียว)');
+                            }
+                          } else {
+                            const isMsu = isMsuInstitution(profileModalReg.institution);
+                            const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                            if (modalPaymentStatus !== 'paid') {
+                              setModalPaymentAmount(totalFee);
+                            }
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400"
+                      />
+                      <div>
+                        <span className="text-xs font-black block">
+                          🛠️ เป็น Staff โครงการ (โอนเฉพาะค่าเสื้อ 280 บ. ครั้งเดียว)
+                        </span>
+                        <span className="text-[10px] text-purple-300 block">
+                          ค่าใช้จ่ายที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข
+                        </span>
+                      </div>
+                    </label>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-slate-300 mb-1 font-semibold">แผนการชำระเงิน:</label>
                       <select
-                        disabled={!isEditingProfileModal}
-                        value={modalPaymentPlan}
+                        disabled={!isEditingProfileModal || modalIsStaff}
+                        value={modalIsStaff ? 'full' : modalPaymentPlan}
                         onChange={e => {
+                          if (modalIsStaff) {
+                            setModalPaymentPlan('full');
+                            return;
+                          }
                           const newPlan = e.target.value;
                           setModalPaymentPlan(newPlan);
                           const isMsu = isMsuInstitution(profileModalReg.institution);
@@ -4436,13 +5637,17 @@ export default function AdminDashboardView({
                           }
                         }}
                         className={`w-full px-3 py-2 rounded-xl text-white font-bold transition-all ${
-                          !isEditingProfileModal 
+                          !isEditingProfileModal || modalIsStaff
                             ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
                             : 'bg-slate-900 border border-slate-700'
                         }`}
                       >
-                        <option value="full">🌟 จ่ายครบ 1 รอบ</option>
-                        <option value="installment">💳 แบ่งจ่าย 2 งวด</option>
+                        <option value="full">
+                          {modalIsStaff ? '🛠️ Staff จ่ายครั้งเดียว (280 บ.)' : '🌟 จ่ายครบ 1 รอบ'}
+                        </option>
+                        {!modalIsStaff && (
+                          <option value="installment">💳 แบ่งจ่าย 2 งวด</option>
+                        )}
                       </select>
                     </div>
 
@@ -7089,6 +8294,241 @@ export default function AdminDashboardView({
             </div>
           </div>
 
+          {/* SECTION: UNIVERSITY × SHIRT SIZE & GENDER MATRIX + CUSTOM "อื่นๆ" PER-PERSON SIZE ASSIGNMENT */}
+          <div className="bg-slate-950/90 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 space-y-5 shadow-xl">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 mb-1.5">
+                  <Building className="w-3.5 h-3.5" />
+                  <span>สรุปยอดเสื้อแยกตามมหาวิทยาลัย × ไซส์เสื้อ (SS - 5XL) & แยกชาย-หญิง / Staff 280 บ.</span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white">
+                  ตารางแยกไซส์เสื้อแต่ละมหาวิทยาลัย (คลิกที่มหาวิทยาลัยหรือตัวเลขไซส์เพื่อกรองดูรายชื่อด้านล่าง)
+                </h3>
+              </div>
+
+              {(merchUniFilter !== 'all' || merchRoleFilter !== 'all' || merchSizeFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMerchUniFilter('all');
+                    setMerchRoleFilter('all');
+                    setMerchSizeFilter('all');
+                  }}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-slate-700 self-start lg:self-auto cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>ล้างตัวกรองมหาลัย/ไซส์ ({merchUniFilter !== 'all' ? merchUniFilter : 'ทั้งหมด'})</span>
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-900 text-slate-300 border-b border-slate-800 text-[11px]">
+                    <th className="py-2.5 px-3 font-bold">มหาวิทยาลัย / สถาบัน</th>
+                    <th className="py-2.5 px-2 text-center font-bold text-sky-300 bg-sky-950/20">👨 ชาย</th>
+                    <th className="py-2.5 px-2 text-center font-bold text-pink-300 bg-pink-950/20">👩 หญิง</th>
+                    <th className="py-2.5 px-2 text-center font-bold text-purple-300 bg-purple-950/20">🛠️ Staff (280 บ.)</th>
+                    <th className="py-2.5 px-2.5 text-center font-black text-amber-300 bg-amber-950/20 border-x border-slate-800">รวมเสื้อ</th>
+                    {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                      <th
+                        key={sz}
+                        onClick={() => setMerchSizeFilter(merchSizeFilter === sz ? 'all' : sz)}
+                        className={`py-2.5 px-2 text-center font-mono font-bold cursor-pointer transition-colors ${
+                          merchSizeFilter === sz
+                            ? 'bg-amber-500 text-slate-950'
+                            : sz === 'อื่นๆ'
+                            ? 'text-rose-300 hover:bg-rose-950/40'
+                            : 'text-slate-300 hover:bg-slate-800'
+                        }`}
+                        title={`คลิกเพื่อกรองเฉพาะไซส์ ${sz}`}
+                      >
+                        {sz}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70">
+                  {universitySummary.list.map(u => {
+                    const isSelectedUni = merchUniFilter === u.key;
+                    return (
+                      <tr
+                        key={u.key}
+                        onClick={() => setMerchUniFilter(isSelectedUni ? 'all' : u.key)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelectedUni ? 'bg-indigo-950/50 ring-1 ring-indigo-500/50' : 'hover:bg-slate-900/70'
+                        }`}
+                      >
+                        <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[11px] mr-1.5 font-black ${
+                            u.isMsu
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                          }`}>
+                            {u.shortTag}
+                          </span>
+                          <span className="text-slate-400 text-[11px] hidden xl:inline">{u.label}</span>
+                        </td>
+                        <td className="py-2.5 px-2 text-center font-mono font-bold text-sky-300 bg-sky-950/10">
+                          {u.male > 0 ? u.male : '-'}
+                        </td>
+                        <td className="py-2.5 px-2 text-center font-mono font-bold text-pink-300 bg-pink-950/10">
+                          {u.female > 0 ? u.female : '-'}
+                        </td>
+                        <td className="py-2.5 px-2 text-center font-mono font-bold text-purple-300 bg-purple-950/10">
+                          {u.staff > 0 ? u.staff : '-'}
+                        </td>
+                        <td className="py-2.5 px-2.5 text-center font-mono font-black text-amber-300 bg-amber-950/15 border-x border-slate-800/80">
+                          {u.totalShirts} ตัว
+                        </td>
+                        {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => {
+                          const c = u.shirtCounts[sz] || 0;
+                          return (
+                            <td
+                              key={sz}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMerchUniFilter(u.key);
+                                setMerchSizeFilter(sz);
+                              }}
+                              className={`py-2.5 px-2 text-center font-mono ${
+                                c > 0
+                                  ? sz === 'อื่นๆ'
+                                    ? 'font-black text-rose-300 bg-rose-950/30 hover:bg-rose-900/50'
+                                    : 'font-black text-white bg-slate-900/90 hover:bg-amber-500/20'
+                                  : 'text-slate-600'
+                              }`}
+                              title={`คลิกดู ${u.shortTag} ไซส์ ${sz}`}
+                            >
+                              {c > 0 ? c : '-'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-900/95 border-t-2 border-slate-700 font-black text-white text-xs">
+                    <td className="py-2.5 px-3 text-amber-300">รวมทั้งหมด ({universitySummary.list.length} สถาบัน)</td>
+                    <td className="py-2.5 px-2 text-center font-mono text-sky-300">{universitySummary.totals.male}</td>
+                    <td className="py-2.5 px-2 text-center font-mono text-pink-300">{universitySummary.totals.female}</td>
+                    <td className="py-2.5 px-2 text-center font-mono text-purple-300">{universitySummary.totals.staff}</td>
+                    <td className="py-2.5 px-2.5 text-center font-mono text-amber-300 border-x border-slate-800">{universitySummary.totals.totalShirts} ตัว</td>
+                    {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                      <td key={sz} className={`py-2.5 px-2 text-center font-mono ${sz === 'อื่นๆ' ? 'text-rose-300' : 'text-amber-300'}`}>
+                        {universitySummary.totals.shirtCounts[sz] || 0}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* PER-PERSON CUSTOM SIZE ("อื่นๆ") MANAGEMENT PANEL */}
+            {(() => {
+              const customSizeItems = sizeStats.allShirtItems.filter(
+                it => !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(it.size))
+              );
+              return (
+                <div className={`p-4 rounded-2xl border space-y-3 ${
+                  customSizeItems.length > 0
+                    ? 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-amber-950/30 border-rose-500/50 shadow-lg'
+                    : 'bg-slate-900/60 border-slate-800'
+                }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <span className={`px-2.5 py-1 rounded-xl text-xs font-black font-mono shrink-0 ${
+                        customSizeItems.length > 0
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}>
+                        {customSizeItems.length > 0 ? `⚠️ รอระบุไซส์จริง ${customSizeItems.length} คน` : '✓ ระบุไซส์ครบทุกคนแล้ว'}
+                      </span>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-black text-white">
+                          จัดการผู้เลือกไซส์ &ldquo;อื่นๆ (ขนาดสั่งตัดพิเศษ)&rdquo; — ให้ Admin ระบุไซส์จริงรายคนหลังติดต่อแล้ว
+                        </h4>
+                        <p className="text-[11px] text-slate-400">
+                          เมื่อแอดมินติดต่อไปคุยกับผู้สมัครที่เลือก &ldquo;อื่นๆ&rdquo; แล้วว่าตกลงใช้ไซส์อะไร ให้กดเลือกปุ่มไซส์จริงรายคนด้านล่าง ระบบจะย้ายคนนั้นไปขึ้นตามไซส์จริงในระบบทันที
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {customSizeItems.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      {customSizeItems.map((cItem) => {
+                        const isUpdating = updatingSizeId === cItem.id || updatingSizeId === cItem.user_id;
+                        return (
+                          <div
+                            key={cItem.id}
+                            className="p-3.5 rounded-xl bg-slate-950/90 border border-rose-500/40 flex flex-col justify-between gap-2.5 shadow"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-black text-white text-xs sm:text-sm">
+                                    {cItem.customer_name}
+                                  </span>
+                                  {cItem.nickname && cItem.nickname !== '-' && (
+                                    <span className="text-amber-300 text-xs font-bold">({cItem.nickname})</span>
+                                  )}
+                                  <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                                    🏛️ {cItem.uni_short || resolveUniversityInfo(cItem).shortTag}
+                                  </span>
+                                  {cItem.is_staff && (
+                                    <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-200 border border-purple-400/40 text-[10px] font-bold">
+                                      🛠️ Staff 280 บ.
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                                  <span>📞 โทรติดต่อ: <a href={`tel:${cItem.phone}`} className="text-emerald-400 font-mono font-bold hover:underline">{cItem.phone || '-'}</a></span>
+                                  <span>• ที่เลือกไว้: <strong className="text-rose-300 font-mono">{cItem.size}</strong></span>
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold shrink-0">
+                                {cItem.source === 'registration' ? 'ผู้สมัคร' : 'สั่งซื้อเพิ่ม'}
+                              </span>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                              <span className="text-[10px] font-bold text-amber-300 block">
+                                👉 คลิกระบุไซส์จริงที่ได้คุยตกลงกับ {cItem.customer_name} (อัปเดตขึ้นตามไซส์ในระบบทันที):
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map((targetSz) => (
+                                  <button
+                                    key={targetSz}
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() => handleAssignPersonShirtSize(cItem, targetSz)}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-amber-500 text-slate-200 hover:text-slate-950 border border-slate-700 hover:border-amber-400 text-xs font-mono font-black transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                    title={`ตั้งค่าไซส์ของ ${cItem.customer_name} เป็น ${targetSz}`}
+                                  >
+                                    {targetSz}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400 flex items-center gap-2 pt-1">
+                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>ขณะนี้ไม่มีผู้ค้างอยู่ในหมวด &ldquo;อื่นๆ&rdquo; — หากต้องการเปลี่ยนไซส์ให้คนไหนเพิ่มเติม สามารถเลือกเปลี่ยนได้จากปุ่ม <strong>&ldquo;ระบุ/เปลี่ยนไซส์จริง&rdquo;</strong> ในการ์ดรายชื่อแต่ละคนด้านล่างได้เลย</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* SECTION: VISUAL CHART & SIZE BREAKDOWN ANALYTICS */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-3xl p-5 sm:p-7 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
@@ -7325,6 +8765,29 @@ export default function AdminDashboardView({
 
               <div className="flex flex-wrap items-center gap-2">
                 <select
+                  value={merchUniFilter}
+                  onChange={(e) => setMerchUniFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-950 border border-indigo-500/40 rounded-xl text-xs text-indigo-200 font-bold focus:outline-none"
+                >
+                  <option value="all">🏛️ ทุกมหาวิทยาลัย</option>
+                  {universitySummary.list.map(u => (
+                    <option key={u.key} value={u.key}>
+                      {u.shortTag} ({u.totalShirts} ตัว)
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={merchRoleFilter}
+                  onChange={(e) => setMerchRoleFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-950 border border-purple-500/40 rounded-xl text-xs text-purple-200 font-bold focus:outline-none"
+                >
+                  <option value="all">👥 ทุกประเภท (ผู้สมัคร + Staff)</option>
+                  <option value="staff">🛠️ เฉพาะ Staff (280 บ.)</option>
+                  <option value="participant">🎓 เฉพาะผู้เข้าอบรมปกติ</option>
+                </select>
+
+                <select
                   value={merchSizeFilter}
                   onChange={(e) => setMerchSizeFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
@@ -7356,11 +8819,13 @@ export default function AdminDashboardView({
                   <option value="unpaid">ยังไม่ชำระ</option>
                 </select>
 
-                {(merchSearchQuery || merchSizeFilter !== 'all' || merchDeliveryFilter !== 'all' || merchPaymentFilter !== 'all' || merchSourceFilter !== 'all') && (
+                {(merchSearchQuery || merchUniFilter !== 'all' || merchRoleFilter !== 'all' || merchSizeFilter !== 'all' || merchDeliveryFilter !== 'all' || merchPaymentFilter !== 'all' || merchSourceFilter !== 'all') && (
                   <button
                     type="button"
                     onClick={() => {
                       setMerchSearchQuery('');
+                      setMerchUniFilter('all');
+                      setMerchRoleFilter('all');
                       setMerchSizeFilter('all');
                       setMerchDeliveryFilter('all');
                       setMerchPaymentFilter('all');
@@ -7455,6 +8920,23 @@ export default function AdminDashboardView({
                             {item.nickname && item.nickname !== '-' && (
                               <span className="text-amber-300 text-xs font-bold">({item.nickname})</span>
                             )}
+                            <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-black">
+                              🏛️ {item.uni_short || resolveUniversityInfo(item).shortTag}
+                            </span>
+                            {item.gender && item.gender !== 'ไม่ระบุ' && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                item.gender === 'ชาย'
+                                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                  : 'bg-pink-500/20 text-pink-300 border-pink-500/30'
+                              }`}>
+                                {item.gender === 'ชาย' ? '👨 ชาย' : '👩 หญิง'}
+                              </span>
+                            )}
+                            {item.is_staff && (
+                              <span className="px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-200 border border-purple-400/50 text-[10px] font-black">
+                                🛠️ Staff (ค่าเสื้อ 280 บ.)
+                              </span>
+                            )}
                           </h4>
 
                           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-400">
@@ -7464,8 +8946,8 @@ export default function AdminDashboardView({
                               </span>
                             )}
                             {item.institution && item.institution !== '-' && (
-                              <span className="truncate max-w-[220px]" title={item.institution}>
-                                🏛️ {item.institution}
+                              <span className="truncate max-w-[260px]" title={item.institution}>
+                                🏫 {item.institution}
                               </span>
                             )}
                           </div>
@@ -7489,11 +8971,15 @@ export default function AdminDashboardView({
                         </div>
 
                         {/* Col 2: Shirt Size & Items (4 cols) */}
-                        <div className="md:col-span-4 bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-1.5">
-                          <div className="flex items-center justify-between">
+                        <div className="md:col-span-4 bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] text-slate-400 font-bold uppercase">ไซส์เสื้อ:</span>
                             <div className="flex items-center gap-1.5">
-                              <span className="px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-black text-sm">
+                              <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-sm border ${
+                                !['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(item.size))
+                                  ? 'bg-rose-500/25 text-rose-200 border-rose-400/60 animate-pulse'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              }`}>
                                 👕 ไซส์ {item.size}
                               </span>
                               <span className="px-2 py-0.5 rounded bg-slate-800 text-white font-mono font-bold text-xs">
@@ -7502,12 +8988,29 @@ export default function AdminDashboardView({
                             </div>
                           </div>
 
-                          <p className="text-xs text-slate-300 truncate" title={item.product_name}>
-                            {item.product_name}
-                          </p>
+                          {/* Direct Admin Size Selector per Person */}
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                            <span className="text-[10px] text-amber-300/90 font-semibold">
+                              ระบุ/เปลี่ยนไซส์จริงรายคน:
+                            </span>
+                            <select
+                              value={['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(normalizeSize(item.size)) ? normalizeSize(item.size) : 'อื่นๆ'}
+                              disabled={updatingSizeId === item.id || updatingSizeId === item.user_id}
+                              onChange={(e) => handleAssignPersonShirtSize(item, e.target.value)}
+                              className="px-2 py-1 bg-slate-950 border border-amber-500/40 hover:border-amber-400 rounded-lg text-xs font-mono font-bold text-white cursor-pointer focus:outline-none"
+                            >
+                              {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].map(sz => (
+                                <option key={sz} value={sz}>ไซส์ {sz}</option>
+                              ))}
+                              <option value="อื่นๆ">อื่นๆ (รอติดต่อระบุไซส์)</option>
+                            </select>
+                          </div>
+
                           <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/80">
-                            <span className="text-slate-400">ยอดเงิน:</span>
-                            <span className="font-black text-amber-400 font-mono">
+                            <span className="text-slate-400 truncate max-w-[160px]" title={item.product_name}>
+                              {item.product_name}
+                            </span>
+                            <span className="font-black text-amber-400 font-mono shrink-0">
                               {item.total_amount ? `${item.total_amount.toLocaleString()} บาท` : '-'}
                             </span>
                           </div>
@@ -10987,11 +12490,14 @@ export default function AdminDashboardView({
           isOpen={showShirtPrintModal}
           onClose={() => setShowShirtPrintModal(false)}
           sizeStats={sizeStats}
+          universitySummary={universitySummary}
           sizeMeasurements={SIZE_MEASUREMENTS}
           allItems={[...traineeShirtRecords, ...merchandiseStoreRecords]}
           filteredItems={filteredShirtItems}
           currentFilterLabel={
-            merchSizeFilter !== 'all'
+            merchUniFilter !== 'all'
+              ? `มหาวิทยาลัย ${merchUniFilter}`
+              : merchSizeFilter !== 'all'
               ? `ไซส์ ${merchSizeFilter}`
               : merchSourceFilter !== 'all'
               ? (merchSourceFilter === 'registration' ? 'เสื้อฝึกผู้สมัคร' : 'สั่งซื้อเพิ่มหน้าร้าน')

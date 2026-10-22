@@ -6,7 +6,10 @@ import {
   DEFAULT_SPEAKERS,
   DEFAULT_PAYMENT_CONFIG,
   DEFAULT_MERCHANDISE_CONFIG,
-  DEFAULT_MERCHANDISE_ORDERS
+  DEFAULT_MERCHANDISE_ORDERS,
+  STAFF_SHIRT_FEE,
+  isStaffRegistration,
+  resolveGender
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
 import { 
@@ -149,8 +152,26 @@ const unpackRegistration = (row) => {
     special_notes: extra.user_notes !== undefined ? extra.user_notes : row.special_notes
   };
 
+  // Auto-detect Staff (280 THB) & Gender
+  const detectedStaff = isStaffRegistration(unpacked);
+  if (detectedStaff) {
+    unpacked.is_staff = true;
+    unpacked.registration_type = 'staff';
+    unpacked.payment_plan = 'full';
+    if (unpacked.payment_status === 'paid') {
+      unpacked.payment_amount = 0;
+    } else if (Number(unpacked.payment_amount) === 650 || Number(unpacked.payment_amount) === 850 || Number(unpacked.payment_amount) === 400) {
+      unpacked.payment_amount = STAFF_SHIRT_FEE;
+    }
+  } else {
+    unpacked.is_staff = Boolean(unpacked.is_staff);
+    unpacked.registration_type = unpacked.registration_type || 'participant';
+  }
+
+  unpacked.gender = resolveGender(unpacked);
+
   // Guard against phantom approval for round 2 if no slip has been uploaded
-  if (unpacked.payment_plan === 'installment') {
+  if (!unpacked.is_staff && unpacked.payment_plan === 'installment') {
     if (!unpacked.installment_2_slip_url && unpacked.installment_2_status === 'paid') {
       unpacked.installment_2_status = 'unpaid';
     }
@@ -179,6 +200,7 @@ const unpackRegistration = (row) => {
 };
 
 const packRegistrationForSupabase = (fullData) => {
+  const isStaff = isStaffRegistration(fullData);
   const extra = {
     user_notes: fullData.special_notes || '',
     full_name_affiliation: fullData.full_name_affiliation || '',
@@ -202,7 +224,10 @@ const packRegistrationForSupabase = (fullData) => {
     shirt_received: fullData.shirt_received || false,
     shirt_received_date: fullData.shirt_received_date || '',
     id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
-    payment_plan: fullData.payment_plan || 'full',
+    is_staff: Boolean(isStaff),
+    registration_type: isStaff ? 'staff' : (fullData.registration_type || 'participant'),
+    gender: fullData.gender || resolveGender(fullData),
+    payment_plan: isStaff ? 'full' : (fullData.payment_plan || 'full'),
     installment_1_amount: fullData.installment_1_amount,
     installment_1_status: fullData.installment_1_status,
     installment_1_due: fullData.installment_1_due,

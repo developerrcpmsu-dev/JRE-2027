@@ -659,10 +659,13 @@ export const DEFAULT_FORMS_CONFIG = {
   }
 };
 
+export const STAFF_SHIRT_FEE = 280;
+
 export const DEFAULT_PAYMENT_CONFIG = {
   fee_total: 850,
   fee_total_msu: 650,
   fee_total_external: 850,
+  fee_staff_shirt: 280,
   bank_name: 'ธนาคารไทยพาณิชย์',
   bank_account_number: '594-264865-5',
   bank_account_name: 'นางสาวมัญชุพร ยังเหล็ก',
@@ -675,7 +678,7 @@ export const DEFAULT_PAYMENT_CONFIG = {
   installment_round2_amount_msu: 250,
   installment_round2_amount_external: 450,
   installment_round2_due: '1-5 พฤศจิกายน 2569 (สำหรับค่าใช้จ่ายด้านที่พักและอาหาร / นิสิต มมส 250 บ. ต่างสถาบัน 450 บ.)',
-  notes: 'ต่างมหาวิทยาลัย 850 บาท (รวมค่าที่พักหอพักกุดรัง มมส) / นิสิต มมส 650 บาท (ไม่มีค่าที่พัก) • แบ่งชำระ 2 รอบ (รอบ 1: 400 บาท [15-20 ต.ค. 2569], รอบ 2: 450/250 บาท [1-5 พ.ย. 2569])',
+  notes: 'ต่างมหาวิทยาลัย 850 บาท (รวมค่าที่พักหอพักกุดรัง มมส) / นิสิต มมส 650 บาท (ไม่มีค่าที่พัก) / Staff โครงการ 280 บาท (ค่าเสื้อฝึก) • แบ่งชำระ 2 รอบ (รอบ 1: 400 บาท [15-20 ต.ค. 2569], รอบ 2: 450/250 บาท [1-5 พ.ย. 2569])',
   // Registration Schedule & Live Countdown Settings:
   reg_open_datetime: '2026-10-15T08:30:00',
   reg_close_datetime: '2026-10-20T23:59:59',
@@ -697,7 +700,10 @@ export const SHIRT_SIZE_OPTIONS = [
 
 export const isMsuInstitution = (inst) => {
   if (!inst) return false;
-  const s = inst.toLowerCase().trim();
+  const raw = typeof inst === 'object'
+    ? `${inst.institution || ''} ${inst.affiliation || ''} ${inst.institution_abbr_th || ''} ${inst.full_name_affiliation || ''}`
+    : String(inst);
+  const s = raw.toLowerCase().trim();
   return (
     s.includes('มหาสารคาม') ||
     s.includes('มมส') ||
@@ -709,14 +715,293 @@ export const isMsuInstitution = (inst) => {
   );
 };
 
-export const getRegistrationFeeDetails = (institution) => {
-  const isMsu = isMsuInstitution(institution);
+/**
+ * ตรวจสอบว่าผู้สมัครเป็น Staff โครงการ (โอน 280 บาท ค่าเสื้อ) หรือไม่
+ * รองรับทั้งการติ๊กเลือก is_staff และการตรวจจับอัตโนมัติจากยอดโอน 280 บาท
+ */
+export const isStaffRegistration = (reg) => {
+  if (!reg) return false;
+  if (typeof reg === 'boolean') return reg;
+  if (reg.is_staff === true || reg.is_staff === 'true') return true;
+  if (reg.registration_type === 'staff' || reg.applicant_role === 'staff' || reg.payment_plan === 'staff') return true;
+
+  // ตรวจจากยอดสลิป OCR หรือยอดเงินที่บันทึกว่าเป็น 280 บาท
+  const ocrFullAmt = Number(reg.slip_ocr_full?.amount || 0);
+  const ocrR1Amt = Number(reg.slip_ocr_round1?.amount || 0);
+  const paymentAmt = Number(reg.payment_amount || 0);
+  if (Math.abs(ocrFullAmt - STAFF_SHIRT_FEE) <= 0.01) return true;
+  if (Math.abs(ocrR1Amt - STAFF_SHIRT_FEE) <= 0.01) return true;
+  if (Math.abs(paymentAmt - STAFF_SHIRT_FEE) <= 0.01) return true;
+
+  // ตรวจจากหมายเหตุการโอนเงิน
+  const notesStr = `${reg.payment_notes || ''} ${reg.installment_1_notes || ''} ${reg.special_notes || ''}`.toLowerCase();
+  if (notesStr.includes('staff') || notesStr.includes('สตาฟ') || notesStr.includes('280')) {
+    if (notesStr.includes('280') || notesStr.includes('ค่าเสื้อ staff') || notesStr.includes('สตาฟ')) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * แยกเพศ (ชาย / หญิง) จากข้อมูลที่กรอกหรือคำนำหน้าชื่อ
+ * เพื่อใช้แยกชาย-หญิงในแต่ละมหาวิทยาลัยสำหรับจัดห้องพัก (Dormitory Room Allocation)
+ */
+export const resolveGender = (reg) => {
+  if (!reg) return 'ไม่ระบุ';
+
+  const explicit = String(reg.gender || '').trim().toLowerCase();
+  if (explicit === 'ชาย' || explicit === 'male' || explicit === 'm') return 'ชาย';
+  if (explicit === 'หญิง' || explicit === 'female' || explicit === 'f') return 'หญิง';
+
+  const titleTh = String(reg.title_th || reg.title || '').trim();
+  const titleOtherTh = String(reg.title_other_th || '').trim();
+  const titleEn = String(reg.title_en || '').trim().toLowerCase();
+  const fullStr = `${titleTh} ${titleOtherTh} ${reg.full_name_affiliation || ''} ${reg.first_name || ''} ${reg.customer_name || ''}`.trim();
+
+  // ตรวจคำนำหน้าหญิงก่อน (เพราะ 'นางสาว' / 'ว่าที่ร้อยตรีหญิง' มีคำซ้อน)
+  if (
+    titleTh === 'นางสาว' ||
+    titleTh === 'นาง' ||
+    titleTh === 'ว่าที่ร้อยตรีหญิง' ||
+    titleTh.includes('หญิง') ||
+    titleOtherTh.includes('หญิง') ||
+    titleOtherTh.includes('น.ส.') ||
+    titleOtherTh.includes('นาง') ||
+    titleEn === 'miss' ||
+    titleEn === 'mrs.' ||
+    titleEn === 'ms.' ||
+    titleEn.includes('(w)') ||
+    /(นางสาว|น\.ส\.|ด\.ญ\.|เด็กหญิง|ว่าที่ร้อยตรีหญิง|ว่าที่\s*ร\.ต\.หญิง|\bMiss\b|\bMrs\.|\bMs\.)/i.test(fullStr) ||
+    /^นาง\s*[ก-ฮ]/.test(fullStr)
+  ) {
+    return 'หญิง';
+  }
+
+  if (
+    titleTh === 'นาย' ||
+    titleTh === 'ว่าที่ร้อยตรี' ||
+    titleOtherTh.includes('นาย') ||
+    titleOtherTh.includes('ชาย') ||
+    titleEn === 'mr.' ||
+    titleEn === 'act.2nd lt.' ||
+    /(^|\s|-)(นาย|ด\.ช\.|เด็กชาย|ว่าที่ร้อยตรี|ว่าที่\s*ร\.ต\.|พระ|สามเณร|\bMr\.)/i.test(fullStr)
+  ) {
+    return 'ชาย';
+  }
+
+  return 'ไม่ระบุ';
+};
+
+/**
+ * แปลงชื่อไซส์เสื้อให้เป็นมาตรฐานเดียวกัน (SS, S, M, L, XL, 2XL, 3XL, 4XL, 5XL, อื่นๆ)
+ */
+export const normalizeShirtSize = (rawSize) => {
+  if (!rawSize) return 'L';
+  const s = String(rawSize).toUpperCase().trim();
+  if (s === 'XXL' || s.startsWith('XXL ') || s.startsWith('2XL')) return '2XL';
+  if (s === 'SS' || s.startsWith('SS ')) return 'SS';
+  if (s === 'S' || s.startsWith('S ')) return 'S';
+  if (s === 'M' || s.startsWith('M ')) return 'M';
+  if (s === 'L' || s.startsWith('L ')) return 'L';
+  if (s === 'XL' || s.startsWith('XL ')) return 'XL';
+  if (s === '3XL' || s.startsWith('3XL ')) return '3XL';
+  if (s === '4XL' || s.startsWith('4XL ')) return '4XL';
+  if (s === '5XL' || s.startsWith('5XL ')) return '5XL';
+  const match = s.match(/^(SS|S|M|L|XL|2XL|XXL|3XL|4XL|5XL)\b/);
+  if (match) {
+    return match[1] === 'XXL' ? '2XL' : match[1];
+  }
+  return 'อื่นๆ';
+};
+
+/**
+ * แยกสังกัดมหาวิทยาลัยของผู้สมัคร/ออเดอร์เสื้อ ให้อยู่ในรูปแบบมาตรฐานของแต่ละมหาวิทยาลัย
+ */
+export const resolveUniversityInfo = (regOrStr) => {
+  const withAliases = (obj) => ({
+    ...obj,
+    key: obj.shortTag || obj.id || 'อื่นๆ',
+    label: obj.university || obj.fullName || obj.shortTag || 'อื่นๆ'
+  });
+
+  if (!regOrStr) {
+    return withAliases({
+      id: 'other',
+      shortTag: 'อื่นๆ / ไม่ระบุ',
+      shortEn: 'OTHER',
+      university: 'ไม่ระบุสังกัดมหาวิทยาลัย',
+      club: '-',
+      fullName: 'ไม่ระบุสังกัดมหาวิทยาลัย',
+      isMsu: false,
+      orderIndex: 99
+    });
+  }
+
+  const rawText = typeof regOrStr === 'object'
+    ? `${regOrStr.institution || ''} ${regOrStr.affiliation || ''} ${regOrStr.institution_abbr_th || ''} ${regOrStr.institution_abbr_en || ''} ${regOrStr.full_name_affiliation || ''} ${regOrStr.unit || ''} ${regOrStr.customer_affiliation || ''}`
+    : String(regOrStr);
+
+  const textLower = rawText.toLowerCase().trim();
+
+  // 1. มมส (MSU)
+  if (
+    textLower.includes('มหาสารคาม') ||
+    textLower.includes('มมส') ||
+    textLower.includes('msu') ||
+    textLower.includes('ราชพฤกษ์') ||
+    textLower.includes('rcpmsu') ||
+    textLower.includes('mahasarakham')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[0];
+    return withAliases({ ...inst, isMsu: true, orderIndex: 1 });
+  }
+
+  // 2. มข (KKU)
+  if (
+    textLower.includes('ขอนแก่น') ||
+    textLower.includes('มข') ||
+    textLower.includes('kku') ||
+    textLower.includes('tactic of special') ||
+    /\btsi\b/.test(textLower) ||
+    textLower.includes('khon kaen')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[1];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 2 });
+  }
+
+  // 3. มทส (SUT)
+  if (
+    textLower.includes('สุรนารี') ||
+    textLower.includes('มทส') ||
+    textLower.includes('sut') ||
+    textLower.includes('suranaree')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[2];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 3 });
+  }
+
+  // 4. มช (CMU)
+  if (
+    textLower.includes('เชียงใหม่') ||
+    textLower.includes('มช') ||
+    textLower.includes('cmu') ||
+    textLower.includes('พิงคนคร') ||
+    textLower.includes('chiang mai')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[3];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 4 });
+  }
+
+  // 5. มกส (KSU - กาฬสินธุ์)
+  if (
+    textLower.includes('กาฬสินธุ์') ||
+    textLower.includes('มกส') ||
+    textLower.includes('ksu') ||
+    textLower.includes('ลูกพระยาโสม') ||
+    textLower.includes('kalasin')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[4];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 5 });
+  }
+
+  // 6. มรภ.อุดรธานี (UDRU)
+  if (
+    textLower.includes('อุดรธานี') ||
+    textLower.includes('มรภ.อุดร') ||
+    textLower.includes('udru') ||
+    textLower.includes('삼พร้าว') ||
+    textLower.includes('สามพร้าว') ||
+    textLower.includes('udon')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[5];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 6 });
+  }
+
+  // 7. มวล. (WU - วลัยลักษณ์)
+  if (
+    textLower.includes('วลัยลักษณ์') ||
+    textLower.includes('มวล') ||
+    /\bwu\b/.test(textLower) ||
+    textLower.includes('ตุมปัง') ||
+    textLower.includes('walailak')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[6];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 7 });
+  }
+
+  // 8. มก.ฉกส (KU CSC - สกลนคร)
+  if (
+    textLower.includes('สกลนคร') ||
+    textLower.includes('ฉกส') ||
+    textLower.includes('เกษตรศาสตร์') ||
+    textLower.includes('อินทนิล') ||
+    textLower.includes('kucsc') ||
+    textLower.includes('ku.csc') ||
+    textLower.includes('kasetsart')
+  ) {
+    const inst = OFFICIAL_NETWORK_INSTITUTIONS[7];
+    return withAliases({ ...inst, isMsu: false, orderIndex: 8 });
+  }
+
+  // กรณีระบุชื่อสถาบันอื่น
+  const cleanInst = (typeof regOrStr === 'object' ? (regOrStr.institution || regOrStr.affiliation || regOrStr.unit || '') : String(regOrStr)).trim();
+  if (cleanInst && cleanInst !== '-') {
+    return withAliases({
+      id: `custom_${cleanInst}`,
+      shortTag: cleanInst.length > 22 ? `${cleanInst.slice(0, 20)}..` : cleanInst,
+      shortEn: 'EXT',
+      university: cleanInst,
+      club: cleanInst,
+      fullName: cleanInst,
+      isMsu: false,
+      orderIndex: 50
+    });
+  }
+
+  return withAliases({
+    id: 'other',
+    shortTag: 'อื่นๆ / ไม่ระบุ',
+    shortEn: 'OTHER',
+    university: 'สถาบันอื่นๆ / ไม่ระบุสังกัด',
+    club: '-',
+    fullName: 'สถาบันอื่นๆ / ไม่ระบุสังกัด',
+    isMsu: false,
+    orderIndex: 99
+  });
+};
+
+export const getRegistrationFeeDetails = (institutionOrReg, explicitIsStaff = false) => {
+  const isStaff = Boolean(explicitIsStaff || (typeof institutionOrReg === 'object' && isStaffRegistration(institutionOrReg)));
+  const instStr = typeof institutionOrReg === 'object'
+    ? (institutionOrReg?.institution || institutionOrReg?.affiliation || '')
+    : institutionOrReg;
+  const isMsu = isMsuInstitution(instStr);
+
+  if (isStaff) {
+    return {
+      isMsu,
+      isStaff: true,
+      totalFee: STAFF_SHIRT_FEE, // 280 บาท
+      round1Amount: STAFF_SHIRT_FEE,
+      round1Due: 'ชำระครั้งเดียว (ค่าเสื้อ Staff 280 บาท)',
+      round1Purpose: 'สำหรับคณะทำงาน / Staff โครงการ JRE 2027 (ชำระเฉพาะค่าเสื้อโครงการ 280 บาท)',
+      round2Amount: 0,
+      round2Due: '-',
+      round2Purpose: 'Staff โครงการไม่ต้องชำระงวดที่ 2',
+      accommodationIncluded: false,
+      feeNote: 'คณะทำงาน / Staff โครงการ ชำระเฉพาะค่าเสื้อ 280 บาท (โอนครั้งเดียว)'
+    };
+  }
+
   const totalFee = isMsu ? 650 : 850;
   const round1 = 400; // 15-20 ต.ค. 2569
   const round2 = isMsu ? 250 : 450; // 1-5 พ.ย. 2569
 
   return {
     isMsu,
+    isStaff: false,
     totalFee,
     round1Amount: round1,
     round1Due: '15-20 ตุลาคม 2569',

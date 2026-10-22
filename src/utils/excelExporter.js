@@ -1,5 +1,16 @@
 import ExcelJS from 'exceljs';
-import { isMsuInstitution, getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy } from '../data/defaultData';
+import {
+  isMsuInstitution,
+  isStaffRegistration,
+  STAFF_SHIRT_FEE,
+  resolveGender,
+  resolveUniversityInfo,
+  normalizeShirtSize,
+  getApplicantMedical,
+  getApplicantAllergy,
+  hasMedicalCondition,
+  hasFoodOrDrugAllergy
+} from '../data/defaultData';
 import { DataService, ensureHostedUrl } from '../supabase';
 
 const THAI_HONORIFIC_TITLES = [
@@ -80,15 +91,108 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
   workbook.created = new Date();
   workbook.modified = new Date();
 
+  // Sort registrations by University -> Gender -> Role -> Name for easy room allocation
+  const sortedRegs = [...registrations].sort((a, b) => {
+    const uA = resolveUniversityInfo(a);
+    const uB = resolveUniversityInfo(b);
+    if (uA.isMsu !== uB.isMsu) return uA.isMsu ? -1 : 1;
+    if (uA.shortTag !== uB.shortTag) return uA.shortTag.localeCompare(uB.shortTag, 'th');
+    const gA = resolveGender(a);
+    const gB = resolveGender(b);
+    if (gA !== gB) return gA.localeCompare(gB, 'th');
+    return `${a.first_name || ''} ${a.last_name || ''}`.localeCompare(`${b.first_name || ''} ${b.last_name || ''}`, 'th');
+  });
+
+  // Sheet 1: Summary by University × Gender (Room Allocation) × Shirt Size
+  const summarySheet = workbook.addWorksheet('สรุปแยกมหาลัย-ชายหญิง-เสื้อ', {
+    views: [{ state: 'frozen', ySplit: 1, xSplit: 1 }]
+  });
+  const SIZES = ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'];
+  summarySheet.columns = [
+    { header: 'มหาวิทยาลัย / สถาบัน', key: 'uni_label', width: 32 },
+    { header: 'ตัวย่อ', key: 'uni_short', width: 14 },
+    { header: 'รวมคน', key: 'total_people', width: 10 },
+    { header: 'ชาย (จัดห้องชาย)', key: 'male', width: 16 },
+    { header: 'หญิง (จัดห้องหญิง)', key: 'female', width: 16 },
+    { header: 'ไม่ระบุเพศ', key: 'unknown_gender', width: 12 },
+    { header: 'ผู้เข้าอบรมปกติ', key: 'regular', width: 16 },
+    { header: 'Staff (280 บ.)', key: 'staff', width: 15 },
+    { header: 'รวมเสื้อ (ตัว)', key: 'total_shirts', width: 14 },
+    ...SIZES.map(sz => ({ header: `ไซส์ ${sz}`, key: `sz_${sz}`, width: 10 }))
+  ];
+  const sumHeader = summarySheet.getRow(1);
+  sumHeader.height = 28;
+  sumHeader.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E1B4B' } };
+    cell.font = { name: 'Sarabun', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+
+  const uniMap = {};
+  sortedRegs.forEach((r) => {
+    const u = resolveUniversityInfo(r);
+    if (!uniMap[u.key]) {
+      uniMap[u.key] = {
+        uni_label: u.label,
+        uni_short: u.shortTag,
+        isMsu: u.isMsu,
+        total_people: 0,
+        male: 0,
+        female: 0,
+        unknown_gender: 0,
+        regular: 0,
+        staff: 0,
+        total_shirts: 0,
+        sizes: SIZES.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
+      };
+    }
+    const entry = uniMap[u.key];
+    entry.total_people += 1;
+    const g = resolveGender(r);
+    if (g === 'ชาย') entry.male += 1;
+    else if (g === 'หญิง') entry.female += 1;
+    else entry.unknown_gender += 1;
+
+    if (isStaffRegistration(r)) entry.staff += 1;
+    else entry.regular += 1;
+
+    const rawSz = normalizeShirtSize(r.shirt_size || 'L');
+    const bucket = SIZES.includes(rawSz) ? rawSz : 'อื่นๆ';
+    entry.sizes[bucket] = (entry.sizes[bucket] || 0) + 1;
+    entry.total_shirts += 1;
+  });
+
+  Object.values(uniMap).forEach((u) => {
+    const rowObj = {
+      uni_label: u.uni_label,
+      uni_short: u.uni_short,
+      total_people: u.total_people,
+      male: u.male,
+      female: u.female,
+      unknown_gender: u.unknown_gender,
+      regular: u.regular,
+      staff: u.staff,
+      total_shirts: u.total_shirts
+    };
+    SIZES.forEach(sz => {
+      rowObj[`sz_${sz}`] = u.sizes[sz] || 0;
+    });
+    const r = summarySheet.addRow(rowObj);
+    r.height = 22;
+  });
+
   const worksheet = workbook.addWorksheet('ผู้สมัคร JRE 2027', {
-    views: [{ state: 'frozen', ySplit: 1, xSplit: 3 }]
+    views: [{ state: 'frozen', ySplit: 1, xSplit: 5 }]
   });
 
   const columns = [
     { header: 'ลำดับ', key: 'index', width: 8 },
+    { header: 'มหาวิทยาลัย (ตัวย่อ)', key: 'uni_short', width: 18 },
+    { header: 'เพศ (จัดห้องพัก)', key: 'gender', width: 15 },
+    { header: 'ประเภทผู้สมัคร', key: 'role_label', width: 24 },
     { header: 'ชื่อ', key: 'first_name', width: 18 },
     { header: 'สกุล', key: 'last_name', width: 18 },
-    { header: 'หน่วยงาน', key: 'institution', width: 28 },
+    { header: 'หน่วยงาน / สถาบันเต็ม', key: 'institution', width: 28 },
     { header: 'รหัสนามเรียกขาน', key: 'callsign', width: 16 },
     { header: 'เบอร์โทร', key: 'phone', width: 16 },
     { header: 'ชื่อสกุลผู้ที่ติดต่อได้', key: 'emergency_name', width: 22 },
@@ -96,7 +200,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'โรคประจำตัว / ข้อจำกัดทางกาย', key: 'medical_history', width: 26 },
     { header: 'ประวัติการแพ้ยา / แพ้อาหาร', key: 'food_allergy', width: 26 },
     { header: 'ประวัติและประสบการณ์การฝึกอบรมกู้ภัยที่ผ่านมา', key: 'previous_training', width: 32 },
-    { header: 'สถานะการชำระเงิน', key: 'payment_status_desc', width: 24 },
+    { header: 'สถานะการชำระเงิน', key: 'payment_status_desc', width: 26 },
     { header: 'จ่ายครั้งแรกวันที่', key: 'paid_round1_date', width: 22 },
     { header: 'จำนวนเงินงวดที่ 1', key: 'paid_round1_amount', width: 22 },
     { header: 'ครั้งที่ 2 วันที่', key: 'paid_round2_date', width: 22 },
@@ -112,7 +216,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'อายุ', key: 'age_full', width: 18 },
     { header: 'กรุ๊ปเลือด', key: 'blood_group', width: 12 },
     { header: 'ความสัมพันธ์ผู้ติดต่อฉุกเฉิน', key: 'emergency_relation', width: 18 },
-    { header: 'ประเภทสถาบัน', key: 'institution_tier', width: 24 },
+    { header: 'ประเภทสถาบันและอัตราค่าสมัคร', key: 'institution_tier', width: 28 },
     { header: 'ยอดค่าสมัครรวม (บาท)', key: 'total_fee', width: 18 },
     { header: 'ยอดที่ชำระแล้ว (บาท)', key: 'paid_amount', width: 18 },
     { header: 'ยอดค้างชำระ (บาท)', key: 'remaining_amount', width: 18 },
@@ -166,22 +270,29 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
   const round2ColIdx = columns.findIndex(c => c.key === 'round2_slip') + 1;
   const fullSlipColIdx = columns.findIndex(c => c.key === 'full_slip') + 1;
 
-  for (let i = 0; i < registrations.length; i++) {
-    const r = registrations[i];
+  for (let i = 0; i < sortedRegs.length; i++) {
+    const r = sortedRegs[i];
     if (onProgress) {
-      onProgress(i + 1, registrations.length);
+      onProgress(i + 1, sortedRegs.length);
     }
 
     const { firstName, lastName } = resolveFirstAndLastName(r);
+    const isStaff = isStaffRegistration(r);
+    const gender = resolveGender(r);
+    const uniInfo = resolveUniversityInfo(r);
     const isMsu = isMsuInstitution(r.institution);
-    const totalFee = isMsu ? 650 : 850;
-    const round1Amount = 400;
-    const round2Amount = isMsu ? 250 : 450;
+    const totalFee = isStaff ? STAFF_SHIRT_FEE : (isMsu ? 650 : 850);
+    const round1Amount = isStaff ? STAFF_SHIRT_FEE : 400;
+    const round2Amount = isStaff ? 0 : (isMsu ? 250 : 450);
 
     let paidAmount = 0;
     const isR1Paid = r.installment_1_status === 'paid';
     const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
-    if (r.payment_plan === 'installment') {
+    if (isStaff) {
+      if (r.payment_status === 'paid' || isR1Paid) {
+        paidAmount = STAFF_SHIRT_FEE;
+      }
+    } else if (r.payment_plan === 'installment') {
       if (isR1Paid) paidAmount += round1Amount;
       if (isR2Paid) paidAmount += round2Amount;
     } else {
@@ -190,7 +301,15 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     const remainingAmount = Math.max(0, totalFee - paidAmount);
 
     let paymentStatusDesc = '';
-    if (r.payment_plan === 'installment') {
+    if (isStaff) {
+      if (r.payment_status === 'paid' || isR1Paid) {
+        paymentStatusDesc = 'Staff (ชำระค่าเสื้อ 280 บ. ครั้งเดียวแล้ว)';
+      } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
+        paymentStatusDesc = 'Staff (รอตรวจสลิป 280 บ.)';
+      } else {
+        paymentStatusDesc = 'Staff (ค้างชำระค่าเสื้อ 280 บ.)';
+      }
+    } else if (r.payment_plan === 'installment') {
       if (isR1Paid && isR2Paid) {
         paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
       } else if (isR1Paid) {
@@ -211,7 +330,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound1Date = '-';
-    if (r.payment_plan === 'installment') {
+    if (!isStaff && r.payment_plan === 'installment') {
       if (r.installment_1_slip_date) {
         paidRound1Date = new Date(r.installment_1_slip_date).toLocaleString('th-TH');
       } else if (r.installment_1_status === 'paid') {
@@ -222,7 +341,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     } else {
       if (r.payment_slip_date) {
         paidRound1Date = new Date(r.payment_slip_date).toLocaleString('th-TH');
-      } else if (r.payment_status === 'paid') {
+      } else if (r.payment_status === 'paid' || (isStaff && isR1Paid)) {
         paidRound1Date = 'ชำระแล้ว';
       } else {
         paidRound1Date = 'ยังไม่ชำระ';
@@ -230,7 +349,15 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound1Amount = '';
-    if (r.payment_plan === 'installment') {
+    if (isStaff) {
+      if (r.payment_status === 'paid' || isR1Paid) {
+        paidRound1Amount = '280 บาท (ค่าเสื้อ Staff จ่ายครั้งเดียว)';
+      } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
+        paidRound1Amount = '280 บาท (Staff รอตรวจสอบ)';
+      } else {
+        paidRound1Amount = '280 บาท (Staff ยังไม่ชำระ)';
+      }
+    } else if (r.payment_plan === 'installment') {
       if (r.installment_1_status === 'paid') {
         paidRound1Amount = '400 บาท';
       } else if (r.installment_1_status === 'pending_review') {
@@ -249,7 +376,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound2Date = '-';
-    if (r.payment_plan === 'installment') {
+    if (!isStaff && r.payment_plan === 'installment') {
       if (r.installment_2_slip_date) {
         paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
       } else if (isR2Paid) {
@@ -262,7 +389,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound2Amount = '-';
-    if (r.payment_plan === 'installment') {
+    if (!isStaff && r.payment_plan === 'installment') {
       if (isR2Paid) {
         paidRound2Amount = `${round2Amount} บาท`;
       } else if (r.installment_2_status === 'pending_review' && r.installment_2_slip_url) {
@@ -284,6 +411,9 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     const rowData = {
       index: i + 1,
+      uni_short: uniInfo.shortTag,
+      gender: gender,
+      role_label: isStaff ? 'Staff (ค่าเสื้อ 280 บ. ครั้งเดียว)' : 'ผู้เข้าอบรมปกติ',
       first_name: firstName || '-',
       last_name: lastName || '-',
       institution: r.institution || '-',
@@ -310,14 +440,14 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       age_full: `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,
       blood_group: r.blood_group || '-',
       emergency_relation: r.emergency_relation || '-',
-      institution_tier: isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)',
+      institution_tier: isStaff ? `Staff ${uniInfo.shortTag} (ค่าเสื้อ 280 บาท ครั้งเดียว)` : (isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)'),
       total_fee: totalFee,
       paid_amount: paidAmount,
       remaining_amount: remainingAmount,
-      round1_status: r.installment_1_status === 'paid' ? 'ชำระแล้ว' : r.installment_1_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ',
+      round1_status: isStaff ? 'ไม่แบ่งงวด (Staff 280 บ.)' : (r.installment_1_status === 'paid' ? 'ชำระแล้ว' : r.installment_1_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
       round1_slip: '',
       round1_notes: r.installment_1_notes || '',
-      round2_status: r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ',
+      round2_status: isStaff ? 'ไม่แบ่งงวด (Staff 280 บ.)' : (r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
       round2_slip: '',
       round2_notes: r.installment_2_notes || '',
       full_slip_date: r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
@@ -473,15 +603,18 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
   workbook.modified = new Date();
 
   const worksheet = workbook.addWorksheet('รายการส่งมอบเสื้อ JRE 2027', {
-    views: [{ state: 'frozen', ySplit: 1, xSplit: 3 }]
+    views: [{ state: 'frozen', ySplit: 1, xSplit: 5 }]
   });
 
   const columns = [
     { header: 'ลำดับ', key: 'index', width: 8 },
+    { header: 'มหาวิทยาลัย (ตัวย่อ)', key: 'uni_short', width: 18 },
+    { header: 'เพศ (ชาย/หญิง)', key: 'gender', width: 14 },
+    { header: 'ประเภทผู้รับ', key: 'role_label', width: 22 },
     { header: 'ชื่อ', key: 'first_name', width: 18 },
     { header: 'สกุล', key: 'last_name', width: 18 },
     { header: 'เบอร์โทร', key: 'phone', width: 16 },
-    { header: 'หน่วยงาน', key: 'institution', width: 28 },
+    { header: 'หน่วยงาน / สถาบันเต็ม', key: 'institution', width: 28 },
     { header: 'ไซต์เสื้อ', key: 'shirt_size', width: 14 },
     { header: 'รหัสนามเรียกขาน', key: 'callsign', width: 16 },
     { header: 'ชื่อเล่น', key: 'nickname', width: 14 },
@@ -540,6 +673,9 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
     const isReg = it.source === 'registration' || it.itemType === 'registration';
     const isReceived = it.pickup_status === 'received';
     const isPaid = it.payment_status === 'paid_verified' || it.payment_status === 'paid';
+    const uniInfo = resolveUniversityInfo(it.rawRegistration || it);
+    const gender = it.gender || resolveGender(it.rawRegistration || it);
+    const isStaff = it.is_staff !== undefined ? it.is_staff : isStaffRegistration(it.rawRegistration || it);
 
     const itemsSummary = Array.isArray(it.items) && it.items.length > 0
       ? it.items.map(p => `${p.product_name || 'เสื้อ'} (ไซส์ ${p.size || it.shirt_size || it.size}) x${p.quantity || 1}`).join(', ')
@@ -547,6 +683,9 @@ export async function exportMerchandiseOrdersToExcel(items, onProgress) {
 
     const rowData = {
       index: i + 1,
+      uni_short: it.uni_short || uniInfo.shortTag,
+      gender: gender,
+      role_label: isStaff ? 'Staff (ค่าเสื้อ 280 บ.)' : (isReg ? 'ผู้เข้าอบรมปกติ' : 'สั่งซื้อหน้าร้าน'),
       first_name: firstName || '-',
       last_name: lastName || '-',
       phone: it.customer_phone || it.phone || '-',

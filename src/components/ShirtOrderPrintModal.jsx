@@ -13,12 +13,13 @@ import {
   Sparkles
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
-import { DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
+import { DEFAULT_MERCHANDISE_CONFIG, resolveUniversityInfo, resolveGender, isStaffRegistration } from '../data/defaultData';
 
 export default function ShirtOrderPrintModal({
   isOpen,
   onClose,
   sizeStats,
+  universitySummary = null,
   sizeMeasurements = {},
   allItems = [],
   filteredItems = [],
@@ -27,6 +28,7 @@ export default function ShirtOrderPrintModal({
 }) {
   const [printScope, setPrintScope] = useState('filtered'); // 'all' or 'filtered'
   const [includeSummaryTable, setIncludeSummaryTable] = useState(true);
+  const [includeUniversityTable, setIncludeUniversityTable] = useState(true);
   const [includeSignatureCol, setIncludeSignatureCol] = useState(true);
   const [includeFinancialSummary, setIncludeFinancialSummary] = useState(true);
 
@@ -142,6 +144,16 @@ export default function ShirtOrderPrintModal({
                 className="rounded border-slate-700 text-purple-600 focus:ring-0 cursor-pointer"
               />
               <span>ตารางสรุปยอดแยกไซส์</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
+              <input
+                type="checkbox"
+                checked={includeUniversityTable}
+                onChange={e => setIncludeUniversityTable(e.target.checked)}
+                className="rounded border-slate-700 text-purple-600 focus:ring-0 cursor-pointer"
+              />
+              <span>ตารางแยกมหาลัย × ไซส์เสื้อ & ชาย-หญิง</span>
             </label>
 
             <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
@@ -311,11 +323,70 @@ export default function ShirtOrderPrintModal({
               </div>
             )}
 
+            {/* SECTION 1.5: UNIVERSITY × SHIRT SIZE & GENDER BREAKDOWN TABLE */}
+            {includeUniversityTable && universitySummary && universitySummary.list && universitySummary.list.length > 0 && (
+              <div className="space-y-2 print-avoid-break">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>ตารางสรุปแยกตามมหาวิทยาลัย × เพศ (ชาย/หญิง จัดห้องพัก) × ไซส์เสื้อ (SS - 5XL)</span>
+                  </h3>
+                  <span className="text-[10px] text-slate-500">
+                    แยกตามสถาบันและขนาดไซส์เสื้อ
+                  </span>
+                </div>
+
+                <table className="w-full border-collapse border border-slate-400 text-[10px]">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-400">
+                      <th className="border border-slate-300 py-1 px-2 text-left">มหาวิทยาลัย / สถาบัน</th>
+                      <th className="border border-slate-300 py-1 px-1.5 text-center">ชาย</th>
+                      <th className="border border-slate-300 py-1 px-1.5 text-center">หญิง</th>
+                      <th className="border border-slate-300 py-1 px-1.5 text-center">Staff (280฿)</th>
+                      <th className="border border-slate-300 py-1 px-1.5 text-center bg-slate-200 font-black">รวมเสื้อ</th>
+                      {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                        <th key={sz} className="border border-slate-300 py-1 px-1 text-center font-mono">{sz}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {universitySummary.list.map(u => (
+                      <tr key={u.key} className="hover:bg-slate-50">
+                        <td className="border border-slate-300 py-1 px-2 font-bold text-slate-900">
+                          {u.shortTag} <span className="font-normal text-slate-600 text-[9px]">({u.totalPeople} คน)</span>
+                        </td>
+                        <td className="border border-slate-300 py-1 px-1 text-center font-mono">{u.male || '-'}</td>
+                        <td className="border border-slate-300 py-1 px-1 text-center font-mono">{u.female || '-'}</td>
+                        <td className="border border-slate-300 py-1 px-1 text-center font-mono">{u.staff || '-'}</td>
+                        <td className="border border-slate-300 py-1 px-1.5 text-center font-black font-mono bg-slate-50">{u.totalShirts}</td>
+                        {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                          <td key={sz} className="border border-slate-300 py-1 px-1 text-center font-mono">
+                            {u.shirtCounts[sz] > 0 ? <strong>{u.shirtCounts[sz]}</strong> : '-'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-200 font-black text-slate-950 border-t-2 border-slate-600">
+                      <td className="border border-slate-400 py-1 px-2">รวมทั้งหมด ({universitySummary.list.length} สถาบัน)</td>
+                      <td className="border border-slate-400 py-1 px-1 text-center font-mono">{universitySummary.totals.male}</td>
+                      <td className="border border-slate-400 py-1 px-1 text-center font-mono">{universitySummary.totals.female}</td>
+                      <td className="border border-slate-400 py-1 px-1 text-center font-mono">{universitySummary.totals.staff}</td>
+                      <td className="border border-slate-400 py-1 px-1.5 text-center font-mono">{universitySummary.totals.totalShirts}</td>
+                      {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
+                        <td key={sz} className="border border-slate-400 py-1 px-1 text-center font-mono">
+                          {universitySummary.totals.shirtCounts[sz] || 0}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {/* SECTION 2: PARTICIPANTS ORDER & SIGNATURE ROSTER */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  ตารางที่ 2: บัญชีรายชื่อผู้รับเสื้อฝึก และการส่งมอบ ({targetItems.length} รายการ)
+                  ตารางบัญชีรายชื่อผู้รับเสื้อฝึก แยกมหาลัย • ชาย/หญิง • ประเภท ({targetItems.length} รายการ)
                 </h3>
                 <span className="text-[10px] text-slate-500">
                   {isFilteredScope ? `* แสดงเฉพาะข้อมูลที่กรอง: ${currentFilterLabel}` : '* แสดงข้อมูลผู้สั่งเสื้อทั้งหมด'}
@@ -325,18 +396,19 @@ export default function ShirtOrderPrintModal({
               <table className="w-full border-collapse border border-slate-400 text-[10px]">
                 <thead>
                   <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-400">
-                    <th className="border border-slate-300 py-1.5 px-1.5 text-center w-8">#</th>
-                    <th className="border border-slate-300 py-1.5 px-2 text-left w-24">เลขที่คำสั่งซื้อ/รหัส</th>
+                    <th className="border border-slate-300 py-1.5 px-1 text-center w-7">#</th>
+                    <th className="border border-slate-300 py-1.5 px-1.5 text-left w-20">มหาลัย</th>
                     <th className="border border-slate-300 py-1.5 px-2 text-left">ชื่อ - นามสกุล</th>
-                    <th className="border border-slate-300 py-1.5 px-2 text-left">หน่วยงาน / สังกัด</th>
-                    <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20">เบอร์โทรศัพท์</th>
-                    <th className="border border-slate-300 py-1.5 px-1 text-center w-12">ไซส์</th>
+                    <th className="border border-slate-300 py-1.5 px-1 text-center w-10">เพศ</th>
+                    <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">ประเภท</th>
+                    <th className="border border-slate-300 py-1.5 px-1.5 text-center w-20">เบอร์โทร</th>
+                    <th className="border border-slate-300 py-1.5 px-1 text-center w-11">ไซส์</th>
                     <th className="border border-slate-300 py-1.5 px-1 text-center w-8">จน.</th>
                     <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">สถานะชำระ</th>
                     <th className="border border-slate-300 py-1.5 px-1.5 text-center w-16">การส่งมอบ</th>
                     {includeSignatureCol && (
-                      <th className="border border-slate-300 py-1.5 px-2 text-center w-28 bg-slate-50">
-                        ลายมือชื่อผู้รับของ
+                      <th className="border border-slate-300 py-1.5 px-2 text-center w-24 bg-slate-50">
+                        ลายมือชื่อผู้รับ
                       </th>
                     )}
                   </tr>
@@ -344,7 +416,7 @@ export default function ShirtOrderPrintModal({
                 <tbody>
                   {targetItems.length === 0 ? (
                     <tr>
-                      <td colSpan={includeSignatureCol ? 10 : 9} className="py-6 text-center text-slate-500">
+                      <td colSpan={includeSignatureCol ? 11 : 10} className="py-6 text-center text-slate-500">
                         ไม่พบรายการข้อมูลเสื้อตามเงื่อนไขที่เลือก
                       </td>
                     </tr>
@@ -352,6 +424,9 @@ export default function ShirtOrderPrintModal({
                     targetItems.map((item, index) => {
                       const isReceived = item.pickup_status === 'received';
                       const isPaid = item.payment_status === 'paid_verified';
+                      const uniShort = item.uni_short || resolveUniversityInfo(item).shortTag;
+                      const genderLabel = item.gender || resolveGender(item.rawRegistration || item);
+                      const isStaff = item.is_staff !== undefined ? item.is_staff : isStaffRegistration(item.rawRegistration || item);
 
                       return (
                         <tr 
@@ -361,8 +436,8 @@ export default function ShirtOrderPrintModal({
                           <td className="border border-slate-300 py-1 px-1 text-center font-mono text-slate-600">
                             {index + 1}
                           </td>
-                          <td className="border border-slate-300 py-1 px-2 font-mono font-bold text-slate-800">
-                            {item.order_number || '-'}
+                          <td className="border border-slate-300 py-1 px-1.5 font-bold text-slate-900">
+                            {uniShort}
                           </td>
                           <td className="border border-slate-300 py-1 px-2 font-bold text-slate-900">
                             {item.customer_name || '-'}
@@ -370,8 +445,11 @@ export default function ShirtOrderPrintModal({
                               <span className="text-slate-600 font-normal ml-1">({item.nickname})</span>
                             )}
                           </td>
-                          <td className="border border-slate-300 py-1 px-2 text-slate-700">
-                            {item.institution && item.institution !== '-' ? item.institution : (item.source_label || '-')}
+                          <td className="border border-slate-300 py-1 px-1 text-center text-slate-700">
+                            {genderLabel || '-'}
+                          </td>
+                          <td className="border border-slate-300 py-1 px-1 text-center text-[9px] font-bold">
+                            {isStaff ? 'Staff (280฿)' : (item.source === 'registration' ? 'ผู้เข้าอบรม' : 'ซื้อเพิ่ม')}
                           </td>
                           <td className="border border-slate-300 py-1 px-1.5 text-center font-mono text-slate-700">
                             {item.phone || '-'}

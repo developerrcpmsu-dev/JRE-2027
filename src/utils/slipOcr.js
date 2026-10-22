@@ -397,6 +397,14 @@ export function parseSlipText(text, expectedAmount = null) {
       }
     }
 
+    // A2. Check if 280.00 (Staff shirt amount) or standard JRE fee with .00 is explicitly present
+    if (!detectedAmount) {
+      const jreStandardMatch = cleaned.match(/(?:^|\D)(280|400|650|850|450|250)\.00(?:$|\D)/);
+      if (jreStandardMatch) {
+        detectedAmount = parseFloat(jreStandardMatch[1]);
+      }
+    }
+
     // B. Keyword-anchored amount with 2 decimals:
     // "จำนวนเงิน\n10.00", "จำนวน: 50.00 บาท", "ยอดเงิน 650.00"
     if (!detectedAmount) {
@@ -734,6 +742,7 @@ export async function scanSlipImage(file, expectedAmount = null) {
     result.isDetected = true;
     result.isBankSlip = true;
     result.amountFormatted = `${Number(result.amount).toFixed(2)} บาท`;
+    result.isStaffAmountDetected = Math.abs(Number(result.amount) - 280) < 1;
 
     if (expectedAmount) {
       const numExpected = Number(expectedAmount);
@@ -741,7 +750,15 @@ export async function scanSlipImage(file, expectedAmount = null) {
       result.matchExpected = isMatch;
       if (isMatch) {
         result.status = 'verified';
-        result.message = `สแกนพบยอดเงิน ${result.amountFormatted} ตรงตามที่กำหนดเรียบร้อย`;
+        result.message = result.isStaffAmountDetected
+          ? `สแกนพบยอดเงิน ${result.amountFormatted} (ค่าเสื้อ Staff โครงการ 280 บาท) ตรงตามที่กำหนดเรียบร้อย`
+          : `สแกนพบยอดเงิน ${result.amountFormatted} ตรงตามที่กำหนดเรียบร้อย`;
+      } else if (result.isStaffAmountDetected) {
+        // โอนมา 280 บาท คือ Staff โครงการ (ค่าเสื้อ)
+        result.status = 'verified';
+        result.matchExpected = true;
+        result.autoDetectedAsStaff = true;
+        result.message = `ตรวจพบยอดโอน 280.00 บาท — ระบบตรวจสลิปยืนยันสิทธิ์เป็น Staff โครงการ (ชำระค่าเสื้อ 280 บาท) อัตโนมัติ`;
       } else {
         result.status = 'mismatch';
         result.message = `ตรวจพบยอดเงิน ${result.amountFormatted} (ต่างจากยอดที่กำหนด ${numExpected.toFixed(2)} บาท) เจ้าหน้าที่จะตรวจสอบสลิป`;
@@ -749,7 +766,9 @@ export async function scanSlipImage(file, expectedAmount = null) {
     } else {
       result.status = 'verified';
       result.matchExpected = true;
-      result.message = `สแกนพบยอดเงิน ${result.amountFormatted} ในสลิปเรียบร้อย`;
+      result.message = result.isStaffAmountDetected
+        ? `สแกนพบยอดเงิน ${result.amountFormatted} (ค่าเสื้อ Staff โครงการ 280 บาท) เรียบร้อย`
+        : `สแกนพบยอดเงิน ${result.amountFormatted} ในสลิปเรียบร้อย`;
     }
   } else {
     // If QR was detected with valid bank/reference, treat as bank slip confirmed
