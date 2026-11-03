@@ -716,14 +716,21 @@ export const isMsuInstitution = (inst) => {
 };
 
 /**
- * ตรวจสอบว่าผู้สมัครเป็น Staff โครงการ (โอน 280 บาท ค่าเสื้อ) หรือไม่
- * รองรับทั้งการติ๊กเลือก is_staff และการตรวจจับอัตโนมัติจากยอดโอน 280 บาท
+ * ตรวจสอบว่าผู้สมัครเป็น Staff โครงการ (โอน 280 บาท ค่าเสื้อ หรือหมายเหตุเป็น (STAFF) แม้โอนเกิน) หรือไม่
+ * รองรับทั้งการติ๊กเลือก is_staff, การกดปุ่มหมายเหตุ (STAFF) โดย Admin/Dev, และการตรวจจับอัตโนมัติจากยอดโอน 280 บาท
  */
 export const isStaffRegistration = (reg) => {
   if (!reg) return false;
   if (typeof reg === 'boolean') return reg;
-  if (reg.is_staff === true || reg.is_staff === 'true') return true;
+  if (reg.admin_staff_override === false) return false;
+  if (reg.admin_staff_override === true || reg.is_staff === true || reg.is_staff === 'true') return true;
   if (reg.registration_type === 'staff' || reg.applicant_role === 'staff' || reg.payment_plan === 'staff') return true;
+
+  // ตรวจจากรหัสนามเรียกขาน ชื่อ หรือชื่อเล่นที่มีคำว่า (STAFF) / STAFF / สตาฟ
+  const callsignAndNameStr = `${reg.callsign || ''} ${reg.full_name_affiliation || ''} ${reg.nickname || ''}`.toLowerCase();
+  if (callsignAndNameStr.includes('staff') || callsignAndNameStr.includes('สตาฟ')) {
+    return true;
+  }
 
   // ตรวจจากยอดสลิป OCR หรือยอดเงินที่บันทึกว่าเป็น 280 บาท
   const ocrFullAmt = Number(reg.slip_ocr_full?.amount || 0);
@@ -733,15 +740,66 @@ export const isStaffRegistration = (reg) => {
   if (Math.abs(ocrR1Amt - STAFF_SHIRT_FEE) <= 0.01) return true;
   if (Math.abs(paymentAmt - STAFF_SHIRT_FEE) <= 0.01) return true;
 
-  // ตรวจจากหมายเหตุการโอนเงิน
-  const notesStr = `${reg.payment_notes || ''} ${reg.installment_1_notes || ''} ${reg.special_notes || ''}`.toLowerCase();
-  if (notesStr.includes('staff') || notesStr.includes('สตาฟ') || notesStr.includes('280')) {
-    if (notesStr.includes('280') || notesStr.includes('ค่าเสื้อ staff') || notesStr.includes('สตาฟ')) {
-      return true;
-    }
+  // ตรวจจากหมายเหตุการโอนเงินและหมายเหตุแอดมิน (รองรับกรณีจ่ายเกินมาแต่แอดมินหมายเหตุว่า (STAFF))
+  const notesStr = `${reg.payment_notes || ''} ${reg.installment_1_notes || ''} ${reg.special_notes || ''} ${reg.admin_private_notes || ''}`.toLowerCase();
+  if (
+    notesStr.includes('(staff)') ||
+    notesStr.includes('[staff]') ||
+    notesStr.includes('เป็น staff') ||
+    notesStr.includes('ค่าเสื้อ staff') ||
+    notesStr.includes('สตาฟ') ||
+    (notesStr.includes('staff') && notesStr.includes('280'))
+  ) {
+    return true;
   }
 
   return false;
+};
+
+/**
+ * จัดรูปแบบนามเรียกขานให้มีคำว่า (STAFF) ต่อท้ายเสมอหากเป็น Staff (หรือลบออกหากยกเลิก Staff)
+ */
+export const formatStaffCallsign = (rawCallsign = '', shouldBeStaff = false) => {
+  const cleaned = String(rawCallsign || '')
+    .replace(/\s*\(\s*staff\s*\)/gi, '')
+    .replace(/\s*\[\s*staff\s*\]/gi, '')
+    .trim();
+  if (!shouldBeStaff) return cleaned;
+  return cleaned ? `${cleaned} (STAFF)` : '(STAFF)';
+};
+
+/**
+ * คำนวณสรุปยอดโอนของ Staff (รองรับกรณีโอน 280 บ. พอดี หรือโอนเกินมา เช่น 400 / 650 / 850 บ.)
+ */
+export const getStaffPaymentSummary = (reg) => {
+  if (!reg) {
+    return {
+      isStaff: false,
+      actualSlipAmount: 0,
+      overpaidAmount: 0,
+      isOverpaid: false,
+      staffFee: STAFF_SHIRT_FEE
+    };
+  }
+  const isStaff = isStaffRegistration(reg);
+  const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
+  const ocrR1 = Number(reg.slip_ocr_round1?.amount || 0);
+  const ocrR2 = Number(reg.slip_ocr_round2?.amount || 0);
+  const detectedSlipAmt = ocrFull > 0 ? ocrFull : (ocrR1 + ocrR2 > 0 ? ocrR1 + ocrR2 : 0);
+  const fallbackPaidAmt = (reg.payment_status === 'paid' || reg.installment_1_status === 'paid')
+    ? (detectedSlipAmt > 0 ? detectedSlipAmt : STAFF_SHIRT_FEE)
+    : detectedSlipAmt;
+  const overpaidAmount = isStaff && fallbackPaidAmt > STAFF_SHIRT_FEE
+    ? fallbackPaidAmt - STAFF_SHIRT_FEE
+    : 0;
+
+  return {
+    isStaff,
+    actualSlipAmount: fallbackPaidAmt,
+    overpaidAmount,
+    isOverpaid: overpaidAmount > 0,
+    staffFee: STAFF_SHIRT_FEE
+  };
 };
 
 /**

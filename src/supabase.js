@@ -9,6 +9,7 @@ import {
   DEFAULT_MERCHANDISE_ORDERS,
   STAFF_SHIRT_FEE,
   isStaffRegistration,
+  formatStaffCallsign,
   resolveGender
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
@@ -152,12 +153,13 @@ const unpackRegistration = (row) => {
     special_notes: extra.user_notes !== undefined ? extra.user_notes : row.special_notes
   };
 
-  // Auto-detect Staff (280 THB) & Gender
+  // Auto-detect Staff (280 THB or manually marked as (STAFF) even when overpaid) & Gender
   const detectedStaff = isStaffRegistration(unpacked);
   if (detectedStaff) {
     unpacked.is_staff = true;
     unpacked.registration_type = 'staff';
     unpacked.payment_plan = 'full';
+    unpacked.callsign = formatStaffCallsign(unpacked.callsign, true);
     if (!unpacked.payment_slip_url && unpacked.installment_1_slip_url) {
       unpacked.payment_slip_url = unpacked.installment_1_slip_url;
       unpacked.payment_slip_date = unpacked.installment_1_slip_date || unpacked.payment_slip_date;
@@ -165,7 +167,7 @@ const unpackRegistration = (row) => {
     if (!unpacked.slip_ocr_full && unpacked.slip_ocr_round1) {
       unpacked.slip_ocr_full = { ...unpacked.slip_ocr_round1 };
     }
-    if (unpacked.slip_ocr_full && Math.abs(Number(unpacked.slip_ocr_full.amount || 0) - STAFF_SHIRT_FEE) <= 1) {
+    if (unpacked.slip_ocr_full && Number(unpacked.slip_ocr_full.amount || 0) >= STAFF_SHIRT_FEE - 1) {
       unpacked.slip_ocr_full = {
         ...unpacked.slip_ocr_full,
         expectedAmount: STAFF_SHIRT_FEE,
@@ -174,7 +176,7 @@ const unpackRegistration = (row) => {
         isFullyVerified: !unpacked.slip_ocr_full.isDuplicate
       };
     }
-    if (unpacked.slip_ocr_round1 && Math.abs(Number(unpacked.slip_ocr_round1.amount || 0) - STAFF_SHIRT_FEE) <= 1) {
+    if (unpacked.slip_ocr_round1 && Number(unpacked.slip_ocr_round1.amount || 0) >= STAFF_SHIRT_FEE - 1) {
       unpacked.slip_ocr_round1 = {
         ...unpacked.slip_ocr_round1,
         expectedAmount: STAFF_SHIRT_FEE,
@@ -192,7 +194,7 @@ const unpackRegistration = (row) => {
       if (unpacked.installment_1_status === 'pending_review' && unpacked.payment_status === 'unpaid') {
         unpacked.payment_status = 'pending_review';
       }
-      if (Number(unpacked.payment_amount) === 650 || Number(unpacked.payment_amount) === 850 || Number(unpacked.payment_amount) === 400 || !unpacked.payment_amount) {
+      if (Number(unpacked.payment_amount) === 650 || Number(unpacked.payment_amount) === 850 || Number(unpacked.payment_amount) === 400 || Number(unpacked.payment_amount) === 450 || !unpacked.payment_amount) {
         unpacked.payment_amount = STAFF_SHIRT_FEE;
       }
     }
@@ -264,13 +266,14 @@ const packRegistrationForSupabase = (fullData) => {
     last_name_en: fullData.last_name_en || '',
     institution_abbr_en: fullData.institution_abbr_en || '',
     nickname: fullData.nickname || '',
-    callsign: fullData.callsign || '',
+    callsign: isStaff ? formatStaffCallsign(fullData.callsign || '', true) : (fullData.callsign || ''),
     member_type: fullData.member_type || '',
     unit: fullData.unit || '',
     affiliation: fullData.affiliation || '',
     emergency_relation: fullData.emergency_relation || '',
     admin_private_notes: fullData.admin_private_notes || '',
     admin_manual_override: Boolean(fullData.admin_manual_override),
+    admin_staff_override: typeof fullData.admin_staff_override === 'boolean' ? fullData.admin_staff_override : undefined,
     shirt_size: fullData.shirt_size || '',
     custom_shirt_note: fullData.custom_shirt_note || '',
     shirt_pickup_status: fullData.shirt_pickup_status || '',

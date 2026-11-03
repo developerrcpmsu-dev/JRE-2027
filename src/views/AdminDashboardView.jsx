@@ -82,6 +82,8 @@ import {
   OFFICIAL_NETWORK_INSTITUTIONS,
   isMsuInstitution,
   isStaffRegistration,
+  formatStaffCallsign,
+  getStaffPaymentSummary,
   resolveGender,
   resolveUniversityInfo,
   resolveApplicantMemberType,
@@ -2289,7 +2291,7 @@ export default function AdminDashboardView({
         institution_abbr_en: cleanAbbrEn,
         full_name_affiliation: finalFullNameAffiliation,
         nickname: (modalNickname || '').trim(),
-        callsign: (modalCallsign || '').trim(),
+        callsign: formatStaffCallsign((modalCallsign || '').trim(), Boolean(modalIsStaff)),
         member_type: modalMemberType || 'club',
         user_email: (modalEmail || '').trim(),
         unit: (modalUnit || '').trim(),
@@ -2316,6 +2318,7 @@ export default function AdminDashboardView({
         food_allergy: modalAllergy.trim(),
         previous_training: modalTraining.trim(),
         is_staff: Boolean(modalIsStaff),
+        admin_staff_override: Boolean(modalIsStaff),
         registration_type: modalIsStaff ? 'staff' : 'participant',
         gender: modalGender,
         payment_plan: effectivePlan,
@@ -2355,6 +2358,108 @@ export default function AdminDashboardView({
       triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  // Quick 1-click toggle to mark/unmark any applicant as (STAFF) (supports applicants who paid > 280 THB)
+  const handleQuickToggleStaff = async (reg, forcedState) => {
+    if (!reg) return;
+    const currentlyStaff = isStaffRegistration(reg);
+    const nextStaff = typeof forcedState === 'boolean' ? forcedState : !currentlyStaff;
+    const rawCurrentCallsign = (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id))
+      ? (modalCallsign || reg.callsign || '')
+      : (reg.callsign || '');
+    const nextCallsign = formatStaffCallsign(rawCurrentCallsign, nextStaff);
+
+    const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
+    const ocrR1 = Number(reg.slip_ocr_round1?.amount || 0);
+    const ocrR2 = Number(reg.slip_ocr_round2?.amount || 0);
+    const slipAmt = ocrFull > 0 ? ocrFull : (ocrR1 + ocrR2 > 0 ? ocrR1 + ocrR2 : 0);
+
+    let updates = {};
+    if (nextStaff) {
+      const hasPaidAny = reg.payment_status === 'paid' || reg.installment_1_status === 'paid' || slipAmt >= STAFF_SHIRT_FEE;
+      const hasPending = !hasPaidAny && (reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review' || Boolean(reg.payment_slip_url || reg.installment_1_slip_url));
+      const effStatus = hasPaidAny ? 'paid' : (hasPending ? 'pending_review' : 'unpaid');
+      const effAmount = hasPaidAny ? 0 : STAFF_SHIRT_FEE;
+      const overpaid = slipAmt > STAFF_SHIRT_FEE ? slipAmt - STAFF_SHIRT_FEE : 0;
+      const autoNote = hasPaidAny
+        ? (overpaid > 0
+            ? `หมายเหตุ: (STAFF) ชำระค่าเสื้อ 280 บ. ครบแล้ว (โอนมา ${slipAmt} บ. / ชำระเกิน +${overpaid} บ.)`
+            : 'หมายเหตุ: (STAFF) ชำระค่าเสื้อ 280 บ. ครบถ้วนแล้ว')
+        : 'หมายเหตุ: (STAFF) รอชำระค่าเสื้อ 280 บ. (จ่ายครั้งเดียว)';
+
+      updates = {
+        is_staff: true,
+        admin_staff_override: true,
+        admin_manual_override: true,
+        registration_type: 'staff',
+        payment_plan: 'full',
+        callsign: nextCallsign,
+        payment_status: effStatus,
+        payment_amount: effAmount,
+        installment_1_status: effStatus,
+        installment_1_amount: slipAmt > 0 ? slipAmt : STAFF_SHIRT_FEE,
+        installment_2_status: 'unpaid',
+        installment_2_amount: 0,
+        payment_notes: autoNote
+      };
+    } else {
+      const isMsu = isMsuInstitution(reg.institution);
+      const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+      const round1Fee = isMsu ? (paymentConfig?.installment_round1_amount_msu || 400) : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
+      const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+
+      const isFullPaid = slipAmt >= totalFee;
+      const isR1Paid = slipAmt >= round1Fee && slipAmt < totalFee;
+      const effPlan = isR1Paid ? 'installment' : 'full';
+      const effStatus = isFullPaid ? 'paid' : 'unpaid';
+      const effAmount = isFullPaid ? 0 : (isR1Paid ? round2Fee : totalFee);
+
+      updates = {
+        is_staff: false,
+        admin_staff_override: false,
+        admin_manual_override: true,
+        registration_type: 'participant',
+        payment_plan: effPlan,
+        callsign: nextCallsign,
+        payment_status: effStatus,
+        payment_amount: effAmount,
+        installment_1_status: (isFullPaid || isR1Paid) ? 'paid' : 'unpaid',
+        installment_1_amount: round1Fee,
+        installment_2_status: isFullPaid ? 'paid' : 'unpaid',
+        installment_2_amount: round2Fee,
+        payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)` : ''
+      };
+    }
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, updates);
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setModalIsStaff(nextStaff);
+      setModalCallsign(nextCallsign);
+      setModalPaymentPlan(updates.payment_plan);
+      setModalPaymentStatus(updates.payment_status);
+      setModalPaymentAmount(updates.payment_amount);
+      setModalInstallment1Status(updates.installment_1_status);
+      setModalInstallment1Amount(updates.installment_1_amount);
+      setModalInstallment2Status(updates.installment_2_status);
+      setModalInstallment2Amount(updates.installment_2_amount);
+      setModalPaymentNotes(updates.payment_notes);
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    const personName = resolvePersonFullNameWithTitle(reg).fullName;
+    if (nextStaff) {
+      const overpaid = slipAmt > STAFF_SHIRT_FEE ? slipAmt - STAFF_SHIRT_FEE : 0;
+      triggerToast(
+        overpaid > 0
+          ? `🛠️ หมายเหตุ "${personName}" เป็น (STAFF) เรียบร้อยแล้ว! (โอนมา ${slipAmt} บ. / เกินค่าเสื้อ +${overpaid} บ. • ปรับสถานะเป็นชำระครบแล้ว)`
+          : `🛠️ หมายเหตุ "${personName}" เป็น (STAFF) เรียบร้อยแล้ว! (${nextCallsign})`
+      );
+    } else {
+      triggerToast(`ยกเลิกสถานะ (STAFF) ของ "${personName}" กลับเป็นผู้เข้าอบรมทั่วไปแล้ว`);
     }
   };
 
@@ -5385,18 +5490,49 @@ export default function AdminDashboardView({
                                     </span>
                                   );
                                 })()}
-                                {isStaff ? (
-                                  <span className="px-2 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/50 rounded-full text-[10px] font-black">
-                                    🛠️ Staff (ค่าเสื้อ 280 บ.)
-                                  </span>
-                                ) : isMsuInstitution(reg.institution) ? (
-                                  <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-semibold">
-                                    มมส (650 บ.)
-                                  </span>
-                                ) : (
-                                  <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px] font-semibold">
-                                    ต่างสถาบัน (850 บ.)
-                                  </span>
+                                {isStaff ? (() => {
+                                  const staffPayInfo = getStaffPaymentSummary(reg);
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuickToggleStaff(reg, false);
+                                      }}
+                                      className="px-2 py-0.5 bg-purple-500/30 hover:bg-purple-500/45 text-purple-100 border border-purple-400/70 rounded-full text-[10px] font-black inline-flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                      title="หมายเหตุเป็น (STAFF) แล้ว • คลิกเพื่อยกเลิกสถานะ (STAFF)"
+                                    >
+                                      <span>🛠️ (STAFF) • ค่าเสื้อ 280 บ.</span>
+                                      {staffPayInfo.isOverpaid && (
+                                        <span className="px-1 py-0.2 bg-amber-400/25 text-amber-200 border border-amber-300/40 rounded text-[9px]">
+                                          โอน {staffPayInfo.actualSlipAmount} บ. (+{staffPayInfo.overpaidAmount})
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })() : (
+                                  <>
+                                    {isMsuInstitution(reg.institution) ? (
+                                      <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-semibold">
+                                        มมส (650 บ.)
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px] font-semibold">
+                                        ต่างสถาบัน (850 บ.)
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuickToggleStaff(reg, true);
+                                      }}
+                                      className="px-2 py-0.5 bg-slate-900/90 hover:bg-purple-600/30 text-purple-300 hover:text-purple-100 border border-purple-500/40 hover:border-purple-400 rounded-full text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all"
+                                      title="คลิก 1 ครั้งเพื่อหมายเหตุผู้สมัครคนนี้ว่าเป็น (STAFF) ทันที (แม้โอนเกิน 280 บ. ระบบจะปรับเป็นชำระครบ + ระบุยอดโอนเกินให้อัตโนมัติ)"
+                                    >
+                                      <span>+ หมายเหตุ (STAFF)</span>
+                                    </button>
+                                  </>
                                 )}
                                 {reg.is_special_care && (
                                   <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[10px] font-black animate-pulse flex items-center gap-1">
@@ -5437,6 +5573,7 @@ export default function AdminDashboardView({
                           {isStaff ? (() => {
                             const isStaffPaid = paymentStatus === 'paid' || reg.installment_1_status === 'paid';
                             const isStaffPending = paymentStatus === 'pending_review' || reg.installment_1_status === 'pending_review';
+                            const staffPayInfo = getStaffPaymentSummary(reg);
                             return (
                               <button
                                 type="button"
@@ -5445,7 +5582,7 @@ export default function AdminDashboardView({
                               >
                                 <div className="flex items-center gap-1.5 mb-1">
                                   <span className="px-1.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/40 rounded text-[9px] font-black">
-                                    🛠️ Staff 280 บ. (ครั้งเดียว)
+                                    🛠️ (STAFF) 280 บ.
                                   </span>
                                   {isStaffPaid ? (
                                     <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระแล้ว</span>
@@ -5456,7 +5593,9 @@ export default function AdminDashboardView({
                                   )}
                                 </div>
                                 <div className="text-[10px] text-purple-300/90 font-mono">
-                                  เฉพาะค่าเสื้อ: 280 บ. (ไม่มีแบ่ง 2 งวด)
+                                  {staffPayInfo.isOverpaid
+                                    ? `โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกินค่าเสื้อ +${staffPayInfo.overpaidAmount} บ.)`
+                                    : 'เฉพาะค่าเสื้อ: 280 บ. (ครั้งเดียว)'}
                                 </div>
                               </button>
                             );
@@ -5868,18 +6007,43 @@ export default function AdminDashboardView({
                   }`}>
                     {modalGender === 'ชาย' ? '👨 ชาย' : modalGender === 'หญิง' ? '👩 หญิง' : 'ไม่ระบุเพศ'}
                   </span>
-                  {modalIsStaff ? (
-                    <span className="px-2.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/50 rounded-full text-xs font-black">
-                      🛠️ Staff (ชำระค่าเสื้อ 280 บ. ครั้งเดียว)
-                    </span>
-                  ) : isMsuInstitution(profileModalReg.institution) ? (
-                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold">
-                      🏫 มมส (650 บ.)
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold">
-                      🏢 ต่างสถาบัน (850 บ. รวมหอพัก)
-                    </span>
+                  {modalIsStaff ? (() => {
+                    const staffPayInfo = getStaffPaymentSummary(profileModalReg);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickToggleStaff(profileModalReg, false)}
+                        className="px-3 py-1 bg-purple-600/35 hover:bg-purple-600/50 text-purple-100 border border-purple-400/80 rounded-full text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                        title="หมายเหตุเป็น (STAFF) แล้ว • คลิกเพื่อยกเลิกสถานะ (STAFF)"
+                      >
+                        <span>🛠️ (STAFF) ✓ • ชำระค่าเสื้อ 280 บ.</span>
+                        {staffPayInfo.isOverpaid && (
+                          <span className="px-1.5 py-0.5 bg-amber-400/25 text-amber-200 border border-amber-300/40 rounded-full text-[10px]">
+                            โอน {staffPayInfo.actualSlipAmount} บ. (เกิน +{staffPayInfo.overpaidAmount} บ.)
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })() : (
+                    <>
+                      {isMsuInstitution(profileModalReg.institution) ? (
+                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold">
+                          🏫 มมส (650 บ.)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold">
+                          🏢 ต่างสถาบัน (850 บ. รวมหอพัก)
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleQuickToggleStaff(profileModalReg, true)}
+                        className="px-3 py-1 bg-purple-600/25 hover:bg-purple-600/45 text-purple-200 hover:text-white border border-purple-400/60 hover:border-purple-300 rounded-full text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                        title="คลิก 1 ครั้งเพื่อหมายเหตุว่าเป็น (STAFF) ทันทีโดยไม่ต้องกดปลดล็อก (แม้โอนเกิน 280 บ. ระบบจะปรับเป็นชำระครบ + บันทึกยอดโอนเกินให้อัตโนมัติ)"
+                      >
+                        <span>🛠️ + หมายเหตุว่าเป็น (STAFF)</span>
+                      </button>
+                    </>
                   )}
                   {modalSpecialCare && (
                     <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-xs font-black animate-pulse flex items-center gap-1">
@@ -6878,40 +7042,26 @@ export default function AdminDashboardView({
                         </span>
                       </div>
 
-                      {/* Staff 280 THB Checkbox */}
-                      <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all shrink-0 ${
+                      {/* Staff 280 THB Checkbox (Always 1-click active for Admin/Dev) */}
+                      <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all shrink-0 cursor-pointer hover:border-purple-400 ${
                         modalIsStaff
-                          ? 'bg-purple-600/25 border-purple-400 text-purple-100 shadow-sm'
+                          ? 'bg-purple-600/30 border-purple-400 text-purple-100 shadow-sm'
                           : 'bg-slate-900 border-slate-700 text-slate-300'
-                      } ${!isEditingProfileModal ? 'cursor-not-allowed opacity-85' : 'cursor-pointer hover:border-purple-400'}`}>
+                      }`}>
                         <input
                           type="checkbox"
-                          disabled={!isEditingProfileModal}
                           checked={modalIsStaff}
                           onChange={(e) => {
-                            const checked = e.target.checked;
-                            setModalIsStaff(checked);
-                            if (checked) {
-                              setModalPaymentPlan('full');
-                              if (modalPaymentStatus !== 'paid') {
-                                setModalPaymentAmount(STAFF_SHIRT_FEE);
-                              }
-                            } else {
-                              const isMsu = isMsuInstitution(profileModalReg.institution);
-                              const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                              if (modalPaymentStatus !== 'paid') {
-                                setModalPaymentAmount(totalFee);
-                              }
-                            }
+                            handleQuickToggleStaff(profileModalReg, e.target.checked);
                           }}
-                          className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400"
+                          className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400 cursor-pointer"
                         />
                         <div>
                           <span className="text-xs font-black block">
-                            🛠️ เป็น Staff (ชำระเฉพาะค่าเสื้อ 280 บ.)
+                            🛠️ หมายเหตุว่าเป็น (STAFF) • ค่าเสื้อ 280 บ. (คลิกบันทึกทันที)
                           </span>
                           <span className="text-[10px] text-purple-300 block">
-                            จ่ายครั้งเดียว 280 บ. (ไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข)
+                            แม้โอนเกิน 280 บ. (เช่น 400/650/850 บ.) ระบบจะหมายเหตุ (STAFF) และปรับเป็นชำระครบให้อัตโนมัติ
                           </span>
                         </div>
                       </label>
@@ -7210,43 +7360,26 @@ export default function AdminDashboardView({
                       การจัดการยอดชำระเงินและตรวจสอบสลิป
                     </h4>
 
-                    {/* Staff 280 THB Checkbox in Payment Tab */}
-                    <label className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all ${
+                    {/* Staff 280 THB Checkbox in Payment Tab (Always 1-click active for Admin/Dev) */}
+                    <label className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all cursor-pointer hover:border-purple-400 ${
                       modalIsStaff
-                        ? 'bg-purple-600/25 border-purple-400 text-purple-100 shadow-sm'
+                        ? 'bg-purple-600/30 border-purple-400 text-purple-100 shadow-sm'
                         : 'bg-slate-900 border-slate-700 text-slate-300'
-                    } ${!isEditingProfileModal ? 'cursor-not-allowed opacity-85' : 'cursor-pointer hover:border-purple-400'}`}>
+                    }`}>
                       <input
                         type="checkbox"
-                        disabled={!isEditingProfileModal}
                         checked={modalIsStaff}
                         onChange={(e) => {
-                          const checked = e.target.checked;
-                          setModalIsStaff(checked);
-                          if (checked) {
-                            setModalPaymentPlan('full');
-                            if (modalPaymentStatus !== 'paid') {
-                              setModalPaymentAmount(STAFF_SHIRT_FEE);
-                            }
-                            if (!modalPaymentNotes) {
-                              setModalPaymentNotes('Staff โครงการ - ชำระเฉพาะค่าเสื้อ 280 บาท (จ่ายครั้งเดียว)');
-                            }
-                          } else {
-                            const isMsu = isMsuInstitution(profileModalReg.institution);
-                            const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                            if (modalPaymentStatus !== 'paid') {
-                              setModalPaymentAmount(totalFee);
-                            }
-                          }
+                          handleQuickToggleStaff(profileModalReg, e.target.checked);
                         }}
-                        className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400"
+                        className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400 cursor-pointer"
                       />
                       <div>
                         <span className="text-xs font-black block">
-                          🛠️ เป็น Staff โครงการ (โอนเฉพาะค่าเสื้อ 280 บ. ครั้งเดียว)
+                          🛠️ หมายเหตุว่าเป็น (STAFF) โครงการ • ค่าเสื้อ 280 บ. (คลิกบันทึกทันที)
                         </span>
                         <span className="text-[10px] text-purple-300 block">
-                          ค่าใช้จ่ายที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข
+                          แม้โอนเกิน 280 บ. (เช่น 400/650/850 บ.) ระบบจะหมายเหตุ (STAFF) และปรับสถานะเป็นชำระครบให้อัตโนมัติ
                         </span>
                       </div>
                     </label>
