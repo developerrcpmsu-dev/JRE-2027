@@ -265,6 +265,7 @@ const packRegistrationForSupabase = (fullData) => {
     institution_abbr_en: fullData.institution_abbr_en || '',
     nickname: fullData.nickname || '',
     callsign: fullData.callsign || '',
+    member_type: fullData.member_type || '',
     unit: fullData.unit || '',
     affiliation: fullData.affiliation || '',
     emergency_relation: fullData.emergency_relation || '',

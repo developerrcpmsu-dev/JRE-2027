@@ -1,4 +1,4 @@
-import { OFFICIAL_NETWORK_INSTITUTIONS, resolvePersonFullNameWithTitle } from '../data/defaultData';
+import { OFFICIAL_NETWORK_INSTITUTIONS, resolvePersonFullNameWithTitle, resolveApplicantMemberType } from '../data/defaultData';
 
 export const ID_CARD_PAYLOAD_TYPE = 'JRE27_ID_CARD';
 
@@ -168,6 +168,7 @@ export function getRegistrationCardData(registration) {
   const firstNameEn = clean(r.first_name_en || legacyName.firstNameEn);
   const lastNameEn = clean(r.last_name_en || legacyName.lastNameEn);
   const organization = splitOrganizationFields(r);
+  const memberTypeInfo = resolveApplicantMemberType(r);
   const affiliationAbbrTh = clean(r.institution_abbr_th || legacyName.institutionAbbrTh);
   const affiliationAbbrEn = clean(r.institution_abbr_en || legacyName.institutionAbbrEn || ENGLISH_ABBR_BY_THAI[affiliationAbbrTh]);
   const thaiName = formatThaiFullName(titleTh, firstNameTh, lastNameTh, affiliationAbbrTh);
@@ -181,7 +182,9 @@ export function getRegistrationCardData(registration) {
     englishName: englishName || '-',
     callsign: r.callsign || r.call_sign || '-',
     nickname: r.nickname || (r.nickname_th && r.nickname_en ? `${r.nickname_th} / ${r.nickname_en}` : (r.nickname_th || r.nickname_en || '-')),
-    unit: organization.unit || r.group_assigned || '-',
+    unit: memberTypeInfo.isVolunteer ? memberTypeInfo.unitDisplay : (organization.unit || memberTypeInfo.unitDisplay || r.group_assigned || '-'),
+    memberType: memberTypeInfo.type,
+    memberTypeLabel: memberTypeInfo.shortLabel,
     affiliation: organization.affiliation || affiliationAbbrTh || '-',
     affiliationAbbrTh: affiliationAbbrTh || '-',
     affiliationAbbrEn: affiliationAbbrEn || '-',

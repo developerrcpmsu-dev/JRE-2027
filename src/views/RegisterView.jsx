@@ -80,6 +80,7 @@ import {
   isStaffRegistration,
   resolveGender,
   resolveUniversityInfo,
+  resolveApplicantMemberType,
   resolveMessageSenderInfo
 } from '../data/defaultData';
 import RegistrationCountdown from '../components/RegistrationCountdown';
@@ -438,12 +439,17 @@ export default function RegisterView({
     const selectedInstitution = OFFICIAL_NETWORK_INSTITUTIONS.find(
       inst => inst.fullName === instName || inst.university === instName
     );
+    const mapped = INSTITUTION_ABBR_MAP[instName] || INSTITUTION_ABBR_MAP[selectedInstitution?.university];
+    const shortTh = mapped?.th || selectedInstitution?.shortTag || '';
 
-    // Keep Unit (rescue club/agency) and Affiliation (university) separate.
-    setUnit(selectedInstitution?.club || '');
+    // Keep Unit (rescue club/agency vs general university student volunteer) and Affiliation (university) separate.
+    if (memberType === 'volunteer' || String(callsign || '').trim().startsWith('อาสา')) {
+      setUnit(`อาสาสมัคร (นิสิต/นักศึกษาทั่วไป ${shortTh})`.trim());
+    } else {
+      setUnit(selectedInstitution?.club || '');
+    }
     setInstitution(selectedInstitution?.university || instName);
     clearFieldError('institution');
-    const mapped = INSTITUTION_ABBR_MAP[instName] || INSTITUTION_ABBR_MAP[selectedInstitution?.university];
     if (mapped) {
       setInstitutionAbbrTh(mapped.th);
       setInstitutionAbbrEn(mapped.en);
@@ -492,6 +498,7 @@ export default function RegisterView({
     setNickname(buildNicknameString(nicknameTh, nicknameEn));
   }, [nicknameTh, nicknameEn]);
   const [callsign, setCallsign] = useState('');
+  const [memberType, setMemberType] = useState('club'); // 'club' | 'volunteer'
   const [unit, setUnit] = useState('');
   const [shirtSize, setShirtSize] = useState('L');
   const [customShirtNote, setCustomShirtNote] = useState('');
@@ -1249,7 +1256,9 @@ export default function RegisterView({
     const inferredAffiliation = selectedInstitution?.university || (
       inferredUnit ? storedAffiliation.slice(inferredUnit.length).trim() : storedAffiliation
     );
-    setUnit(reg.unit || reg.unit_name || selectedInstitution?.club || inferredUnit || '');
+    const resolvedMType = resolveApplicantMemberType(reg);
+    setMemberType(resolvedMType.memberType);
+    setUnit(resolvedMType.unitDisplay || reg.unit || reg.unit_name || selectedInstitution?.club || inferredUnit || '');
     setShirtSize(reg.shirt_size || 'L');
     setCustomShirtNote(reg.custom_shirt_note || '');
     setDashboardCustomShirtNote(reg.custom_shirt_note || '');
@@ -1722,6 +1731,7 @@ export default function RegisterView({
         nickname_th: nicknameTh.trim(),
         nickname_en: nicknameEn.trim(),
         callsign: callsign.trim(),
+        member_type: memberType,
         unit: unit.trim(),
         affiliation: institution.trim(),
         gender: resolvedFinalGender,
@@ -5908,49 +5918,119 @@ export default function RegisterView({
                 </div>
               </div>
 
-              {/* ฟิลด์รหัสนามเรียกขาน & หน่วย/ชมรม */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    <span>รหัสนามเรียกขานหน่วยตัวเอง <span className="text-rose-400 font-bold">*</span></span>
+              {/* ประเภทผู้สมัครในมหาวิทยาลัย: สังกัดองค์กร/ชมรม (มีนามเรียกขาน) vs อาสา (นิสิต/นักศึกษาทั่วไป) */}
+              <div className="space-y-3 bg-slate-950/60 border border-slate-800 rounded-2xl p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <label className="text-xs font-bold text-slate-200">
+                    ประเภทสังกัดในมหาวิทยาลัยของท่าน <span className="text-rose-400 font-bold">*</span>
                   </label>
-                  <input
-                    id="field-callsign"
-                    type="text"
-                    required
-                    value={callsign}
-                    onChange={e => {
-                      setCallsign(e.target.value);
-                      if (e.target.value.trim()) clearFieldError('callsign');
+                  <span className="text-[11px] text-teal-400 font-medium">
+                    แยกชัดเจนระหว่าง "องค์กร/ชมรมกู้ภัยในมหาลัย" กับ "อาสา (นิสิต/นักศึกษาทั่วไป)"
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => {
+                      setMemberType('club');
+                      const selectedInstitution = OFFICIAL_NETWORK_INSTITUTIONS.find(
+                        inst => inst.fullName === institution || inst.university === institution || inst.shortTag === institutionAbbrTh
+                      );
+                      if (selectedInstitution?.club && (!unit || unit.includes('อาสาสมัคร'))) {
+                        setUnit(selectedInstitution.club);
+                      }
                     }}
-                    placeholder="JRE-01 หรือรหัสประจำตัว (ตัวอย่าง)"
-                    className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-mono font-medium transition-all ${
-                      fieldErrors.callsign 
-                        ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
-                        : 'border-slate-700 focus:ring-rescue-500'
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none space-y-1 ${
+                      memberType === 'club'
+                        ? 'bg-sky-950/50 border-sky-400 ring-2 ring-sky-500/30'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                     }`}
-                  />
-                  {fieldErrors.callsign && (
-                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{fieldErrors.callsign}</span>
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs text-sky-300">📡 สังกัดองค์กร / ชมรมในมหาวิทยาลัย (มีนามเรียกขาน)</span>
+                      {memberType === 'club' && (
+                        <span className="px-2 py-0.5 rounded-full bg-sky-500 text-slate-950 font-black text-[10px]">เลือกอยู่</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      สมาชิกชมรม/หน่วยกู้ชีพของมหาวิทยาลัยที่มีรหัสนามเรียกขาน (เช่น RCP 16-37, TSI 2115)
                     </p>
-                  )}
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setMemberType('volunteer');
+                      setUnit(`อาสาสมัคร (นิสิต/นักศึกษาทั่วไป ${institutionAbbrTh || ''})`.trim());
+                      if (!callsign.trim()) {
+                        setCallsign(nicknameTh.trim() ? `อาสา${nicknameTh.trim()}` : 'อาสา');
+                      }
+                    }}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none space-y-1 ${
+                      memberType === 'volunteer'
+                        ? 'bg-teal-950/50 border-teal-400 ring-2 ring-teal-500/30'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs text-teal-300">🙋 อาสา (นิสิต / นักศึกษาทั่วไปของมหาวิทยาลัยนั้นๆ)</span>
+                      {memberType === 'volunteer' && (
+                        <span className="px-2 py-0.5 rounded-full bg-teal-400 text-slate-950 font-black text-[10px]">เลือกอยู่</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      นิสิต/นักศึกษาทั่วไปของมหาวิทยาลัยนั้นๆ ที่ไม่ได้สังกัดชมรมกู้ภัย (เช่น อาสาคิม, อาสาจำลอง)
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    <span>หน่วย / Unit <span className="text-slate-500 font-normal">(ชื่อหน่วยงาน/ชมรม)</span></span>
-                  </label>
-                  <input
-                    id="field-unit"
-                    type="text"
-                    value={unit}
-                    onChange={e => setUnit(e.target.value)}
-                    placeholder="เช่น ชมรมกู้ภัยราชพฤกษ์, ฝ่ายพยาบาล"
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
-                  />
-                  <p className="mt-1 text-[10px] text-slate-500">ใช้แสดงบนบัตร ID Card และข้อมูล Admin</p>
+                {/* ฟิลด์รหัสนามเรียกขาน & หน่วย/ชมรม */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      <span>{memberType === 'volunteer' ? 'ชื่อเรียกอาสา (เช่น อาสาคิม, อาสาจำลอง)' : 'รหัสนามเรียกขานหน่วยตัวเอง'} <span className="text-rose-400 font-bold">*</span></span>
+                    </label>
+                    <input
+                      id="field-callsign"
+                      type="text"
+                      required
+                      value={callsign}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setCallsign(val);
+                        if (val.trim().startsWith('อาสา')) {
+                          setMemberType('volunteer');
+                          setUnit(`อาสาสมัคร (นิสิต/นักศึกษาทั่วไป ${institutionAbbrTh || ''})`.trim());
+                        }
+                        if (val.trim()) clearFieldError('callsign');
+                      }}
+                      placeholder={memberType === 'volunteer' ? 'เช่น อาสาคิม, อาสาจำลอง' : 'เช่น 16-37, TSI 2115, RCP15-05'}
+                      className={`w-full px-4 py-3 bg-slate-950 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 text-sm font-mono font-medium transition-all ${
+                        fieldErrors.callsign 
+                          ? 'border-rose-500 ring-2 ring-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40' 
+                          : 'border-slate-700 focus:ring-rescue-500'
+                      }`}
+                    />
+                    {fieldErrors.callsign && (
+                      <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{fieldErrors.callsign}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      <span>หน่วย / Unit <span className="text-slate-500 font-normal">{memberType === 'volunteer' ? '(อาสา นิสิต/นักศึกษาทั่วไป)' : '(ชื่อองค์กร/ชมรมในมหาวิทยาลัย)'}</span></span>
+                    </label>
+                    <input
+                      id="field-unit"
+                      type="text"
+                      value={unit}
+                      onChange={e => setUnit(e.target.value)}
+                      placeholder={memberType === 'volunteer' ? `อาสาสมัคร (นิสิต/นักศึกษาทั่วไป ${institutionAbbrTh || 'มมส'})` : 'เช่น ชมรมกู้ภัยราชพฤกษ์, TSI มข'}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rescue-500 text-sm font-medium"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">ใช้แสดงบนบัตร ID Card และข้อมูล Admin</p>
+                  </div>
                 </div>
               </div>
 

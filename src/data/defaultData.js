@@ -1156,6 +1156,84 @@ export const resolveUniversityInfo = (regOrStr) => {
   });
 };
 
+/**
+ * แยกประเภทผู้สมัครในแต่ละมหาวิทยาลัย:
+ * 1) 'club' (มีนามเรียกขานขององค์กร/ชมรม เช่น 16-37, RCP15-05, TSI 2115 ฯลฯ) -> สังกัดองค์กร/ชมรมกู้ภัยในมหาวิทยาลัยนั้นๆ
+ * 2) 'volunteer' (ขึ้นต้นด้วย "อาสา..." เช่น อาสาคิม, อาสาจำลอง หรือไม่มีรหัสนามเรียกขานชมรม) -> อาสาสมัคร (นิสิต/นักศึกษาทั่วไปของมหาวิทยาลัยนั้นๆ)
+ */
+export const resolveApplicantMemberType = (reg) => {
+  if (!reg || typeof reg !== 'object') {
+    return {
+      type: 'volunteer',
+      isClubMember: false,
+      isVolunteer: true,
+      callsign: '',
+      shortLabel: 'อาสา (นิสิต/นักศึกษาทั่วไป)',
+      badgeText: '🙋 อาสา (นิสิต/นักศึกษาทั่วไป)',
+      unitDisplay: 'อาสาสมัคร (นิสิต/นักศึกษาทั่วไป)'
+    };
+  }
+
+  const uniInfo = resolveUniversityInfo(reg);
+  const rawCallsign = String(reg.callsign || reg.call_sign || '').trim();
+  const rawUnit = String(reg.unit || reg.unit_name || '').trim();
+  const explicitType = String(reg.member_type || '').trim().toLowerCase();
+
+  const isNoCallsign =
+    !rawCallsign ||
+    rawCallsign === '-' ||
+    rawCallsign === '--' ||
+    /^(ไม่มี|ไม่ระบุ|none|no|n\/a|nil)$/i.test(rawCallsign);
+
+  const isVolunteerCallsign =
+    /^อาสา/i.test(rawCallsign) ||
+    rawCallsign.includes('นิสิตทั่วไป') ||
+    rawCallsign.includes('นักศึกษาทั่วไป');
+
+  const isVolunteerUnit =
+    rawUnit.includes('นิสิต/นักศึกษาทั่วไป') ||
+    rawUnit.includes('นิสิตนักศึกษาทั่วไป') ||
+    rawUnit.startsWith('อาสาสมัคร (นิสิต');
+
+  let isVolunteer = false;
+  if (explicitType === 'volunteer') {
+    isVolunteer = true;
+  } else if (explicitType === 'club') {
+    isVolunteer = false;
+  } else if (isVolunteerCallsign || isNoCallsign || isVolunteerUnit) {
+    isVolunteer = true;
+  } else {
+    isVolunteer = false;
+  }
+
+  const isClubMember = !isVolunteer;
+  const uniTag = uniInfo.shortTag && uniInfo.shortTag !== 'อื่นๆ / ไม่ระบุ' ? uniInfo.shortTag : '';
+
+  const clubUnitName =
+    rawUnit && !isVolunteerUnit
+      ? rawUnit
+      : (uniInfo.club && uniInfo.club !== '-' ? uniInfo.club : (rawUnit || 'องค์กร/ชมรมกู้ภัยในสถาบัน'));
+
+  const volunteerUnitName = uniTag
+    ? `อาสาสมัคร (นิสิต/นักศึกษาทั่วไป ${uniTag})`
+    : 'อาสาสมัคร (นิสิต/นักศึกษาทั่วไป)';
+
+  return {
+    type: isClubMember ? 'club' : 'volunteer',
+    isClubMember,
+    isVolunteer,
+    callsign: rawCallsign,
+    shortLabel: isClubMember ? 'องค์กร/ชมรม (มีนามเรียกขาน)' : 'อาสา (นิสิต/นักศึกษาทั่วไป)',
+    fullLabel: isClubMember
+      ? `สังกัดองค์กร/ชมรม (${clubUnitName})`
+      : volunteerUnitName,
+    badgeText: isClubMember
+      ? `📡 ${rawCallsign} • องค์กร/ชมรม${uniTag ? ` (${uniTag})` : ''}`
+      : `🙋 ${rawCallsign && !isNoCallsign ? `${rawCallsign} • ` : ''}อาสา (นิสิต/นักศึกษาทั่วไป${uniTag ? ` ${uniTag}` : ''})`,
+    unitDisplay: isClubMember ? clubUnitName : volunteerUnitName
+  };
+};
+
 export const getRegistrationFeeDetails = (institutionOrReg, explicitIsStaff = false) => {
   const isStaff = Boolean(explicitIsStaff || (typeof institutionOrReg === 'object' && isStaffRegistration(institutionOrReg)));
   const instStr = typeof institutionOrReg === 'object'

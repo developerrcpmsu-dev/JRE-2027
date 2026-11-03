@@ -5,6 +5,7 @@ import {
   STAFF_SHIRT_FEE,
   resolveGender,
   resolveUniversityInfo,
+  resolveApplicantMemberType,
   normalizeShirtSize,
   getApplicantMedical,
   getApplicantAllergy,
@@ -97,6 +98,8 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'มหาวิทยาลัย / สถาบัน', key: 'uni_label', width: 32 },
     { header: 'ตัวย่อ', key: 'uni_short', width: 14 },
     { header: 'รวมคน', key: 'total_people', width: 10 },
+    { header: 'องค์กร/ชมรม (มีนามเรียกขาน)', key: 'club_members', width: 24 },
+    { header: 'อาสา (นิสิต/นักศึกษาทั่วไป)', key: 'volunteers', width: 24 },
     { header: 'ชาย (จัดห้องชาย)', key: 'male', width: 16 },
     { header: 'หญิง (จัดห้องหญิง)', key: 'female', width: 16 },
     { header: 'ไม่ระบุเพศ', key: 'unknown_gender', width: 12 },
@@ -122,6 +125,8 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
         uni_short: u.shortTag,
         isMsu: u.isMsu,
         total_people: 0,
+        club_members: 0,
+        volunteers: 0,
         male: 0,
         female: 0,
         unknown_gender: 0,
@@ -133,6 +138,9 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
     const entry = uniMap[u.key];
     entry.total_people += 1;
+    const mType = resolveApplicantMemberType(r);
+    if (mType.isClubMember) entry.club_members += 1;
+    else entry.volunteers += 1;
     const g = resolveGender(r);
     if (g === 'ชาย') entry.male += 1;
     else if (g === 'หญิง') entry.female += 1;
@@ -152,6 +160,8 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       uni_label: u.uni_label,
       uni_short: u.uni_short,
       total_people: u.total_people,
+      club_members: u.club_members,
+      volunteers: u.volunteers,
       male: u.male,
       female: u.female,
       unknown_gender: u.unknown_gender,
@@ -179,7 +189,9 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'ชื่อ', key: 'first_name', width: 18 },
     { header: 'สกุล', key: 'last_name', width: 18 },
     { header: 'หน่วยงาน / สถาบันเต็ม', key: 'institution', width: 28 },
-    { header: 'รหัสนามเรียกขาน', key: 'callsign', width: 16 },
+    { header: 'ประเภทสังกัดในมหาลัย (ชมรม vs อาสา)', key: 'member_type_label', width: 28 },
+    { header: 'หน่วย / ชมรม / อาสา', key: 'unit_display', width: 32 },
+    { header: 'รหัสนามเรียกขาน / ชื่ออาสา', key: 'callsign', width: 18 },
     { header: 'เบอร์โทร', key: 'phone', width: 16 },
     { header: 'ชื่อสกุลผู้ที่ติดต่อได้', key: 'emergency_name', width: 22 },
     { header: 'เบอร์โทรผู้ที่ติดต่อได้', key: 'emergency_phone', width: 18 },
@@ -404,6 +416,8 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       first_name: firstName || '-',
       last_name: lastName || '-',
       institution: r.institution || '-',
+      member_type_label: resolveApplicantMemberType(r).shortLabel,
+      unit_display: resolveApplicantMemberType(r).unitDisplay,
       callsign: r.callsign || '-',
       phone: r.phone || '-',
       emergency_name: r.emergency_name || '-',
