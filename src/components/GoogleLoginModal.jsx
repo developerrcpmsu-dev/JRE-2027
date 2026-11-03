@@ -76,14 +76,15 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   }, [successMsg]);
 
   // Handle Google Profile Success
-  const handleUserLoginSuccess = async (cleanName, cleanEmail, avatar) => {
+  const handleUserLoginSuccess = async (cleanName, cleanEmail, avatar, googleIdToken = null) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
       const user = await DataService.loginWithGoogleProfile({
         name: cleanName,
         email: cleanEmail,
-        avatar: avatar
+        avatar: avatar,
+        googleIdToken
       });
 
       localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
@@ -114,7 +115,7 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
             const cleanEmail = payload.email.trim().toLowerCase();
             const cleanName = payload.name || cleanEmail.split('@')[0];
             const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`;
-            await handleUserLoginSuccess(cleanName, cleanEmail, avatar);
+            await handleUserLoginSuccess(cleanName, cleanEmail, avatar, response.credential);
           } else {
             setErrorMsg('ไม่สามารถอ่านข้อมูลอีเมลจากบัญชี Google ได้');
           }

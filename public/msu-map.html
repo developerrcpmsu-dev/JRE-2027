@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แผนผังมหาวิทยาลัยมหาสารคาม (เขตพื้นที่ขามเรียง) • ขนาด 75 x 45 cm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --msu-gold: #d4af37;
+      --msu-yellow: #f1b51c;
+      --msu-navy: #0f2942;
+      --msu-slate: #1e293b;
+      --msu-light: #f8fafc;
+      --border-color: #e2e8f0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Prompt', 'Sarabun', 'Leelawadee UI', Tahoma, sans-serif;
+      background-color: #0b1120;
+      color: #f1f5f9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header Nav */
+    header {
+      background: #0f172a;
+      border-bottom: 2px solid var(--msu-gold);
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--msu-yellow), #b45309);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
+    }
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+    .brand-sub {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-size {
+      background: rgba(212, 175, 55, 0.15);
+      border: 1px solid rgba(212, 175, 55, 0.5);
+      color: var(--msu-gold);
+    }
+    .badge-dpi {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      color: #34d399;
+    }
+
+    .btn-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      border: none;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #d4af37, #b45309);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(212, 175, 55, 0.35);
+    }
+    .btn-gold:hover {
+      background: linear-gradient(135deg, #f1b51c, #d97706);
+      transform: translateY(-1px);
+    }
+    .btn-blue {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+    }
+    .btn-blue:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    /* Sub Toolbar */
+    .toolbar {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: 8px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+    }
+    .tab-group {
+      display: flex;
+      background: #0f172a;
+      padding: 3px;
+      border-radius: 8px;
+      gap: 4px;
+    }
+    .tab-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .tab-btn.active {
+      background: #2563eb;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+    }
+    .zoom-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f172a;
+      padding: 3px 8px;
+      border-radius: 8px;
+    }
+    .zoom-btn {
+      width: 28px;
+      height: 28px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .zoom-btn:hover {
+      background: #334155;
+    }
+    .zoom-level {
+      min-width: 50px;
+      text-align: center;
+      font-weight: 600;
+      color: #94a3b8;
+      font-size: 0.8rem;
+    }
+
+    /* Main Workspace Layout */
+    .workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 120px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Map Viewport Area */
+    .viewport-container {
+      flex: 1;
+      position: relative;
+      background: #070d19;
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+    }
+    .viewport-container:active {
+      cursor: grabbing;
+    }
+
+    .map-stage {
+      position: absolute;
+      transform-origin: 0 0;
+      transition: transform 0.05s ease-out;
+      display: inline-block;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    }
+    .map-img {
+      display: block;
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+    }
+
+    /* Interactive Pins Layer */
+    .pins-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .map-pin {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #dc2626;
+      border: 2px solid #ffffff;
+      color: white;
+      font-size: 11px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+      cursor: pointer;
+      pointer-events: auto;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .map-pin:hover {
+      transform: translate(-50%, -50%) scale(1.35);
+      z-index: 100;
+      box-shadow: 0 0 15px var(--msu-gold);
+    }
+    .map-pin.active {
+      transform: translate(-50%, -50%) scale(1.5);
+      z-index: 101;
+      box-shadow: 0 0 25px #facc15, 0 0 40px #f59e0b;
+      border-color: #fef08a;
+      animation: pulse-ring 1.5s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(250, 204, 21, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+    }
+
+    /* Ruler Overlay */
+    .ruler-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 22px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 10px;
+      font-size: 10px;
+      color: #94a3b8;
+      align-items: center;
+      pointer-events: none;
+    }
+    .ruler-dim-badge {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      z-index: 30;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Right Sidebar Directory */
+    .sidebar {
+      width: 380px;
+      background: #0f172a;
+      border-left: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 40;
+    }
+    .search-box {
+      padding: 14px;
+      border-bottom: 1px solid #1e293b;
+      background: #131d33;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: #0b1120;
+      border: 1px solid #334155;
+      color: #ffffff;
+      font-size: 0.88rem;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .search-input:focus {
+      border-color: #3b82f6;
+    }
+    .cat-filters {
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      border-bottom: 1px solid #1e293b;
+      background: #0f172a;
+    }
+    .cat-pill {
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 0.72rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cat-pill.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #3b82f6;
+    }
+
+    .building-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .building-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #131d33;
+      border: 1px solid #1e293b;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .building-item:hover {
+      background: #1e293b;
+      border-color: #334155;
+      transform: translateX(4px);
+    }
+    .building-item.active {
+      background: rgba(37, 99, 235, 0.2);
+      border-color: #3b82f6;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+    }
+    .b-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #2563eb;
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .b-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .b-name {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .b-en {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 780px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+      position: relative;
+    }
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-close {
+      background: #1e293b;
+      border: none;
+      color: #94a3b8;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-close:hover {
+      background: #334155;
+      color: white;
+    }
+    .modal-body {
+      padding: 24px;
+    }
+
+    .dl-item {
+      background: #131d33;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      transition: all 0.2s;
+    }
+    .dl-item:hover {
+      border-color: #3b82f6;
+      background: #16223d;
+    }
+    .dl-info h4 {
+      font-size: 0.95rem;
+      color: #f1f5f9;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dl-info p {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .dl-specs {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .spec-tag {
+      background: #1e293b;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+    }
+
+    /* Print Tiling Preview */
+    .tiling-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .tile-card {
+      background: #1e293b;
+      border: 1px dashed #64748b;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.8rem;
+    }
+
+    /* Tooltip */
+    #tooltip {
+      position: absolute;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--msu-gold);
+      padding: 8px 14px;
+      border-radius: 8px;
+      color: white;
+      font-size: 0.82rem;
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      transform: translate(-50%, -120%);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+      white-space: nowrap;
+    }
+
+    /* PRINT MEDIA QUERY FOR 75cm x 45cm */
+    @media print {
+      @page {
+        size: 750mm 450mm landscape;
+        margin: 0;
+      }
+      body, html {
+        width: 750mm !important;
+        height: 450mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+      }
+      header, .toolbar, .sidebar, .ruler-top, .ruler-dim-badge, .modal-backdrop, .zoom-group, #tooltip {
+        display: none !important;
+      }
+      .workspace, .viewport-container {
+        width: 750mm !important;
+        height: 450mm !important;
+        position: static !important;
+        background: white !important;
+      }
+      .map-stage {
+        position: static !important;
+        transform: none !important;
+        width: 750mm !important;
+        height: 450mm !important;
+        box-shadow: none !important;
+      }
+      .map-img {
+        width: 750mm !important;
+        height: 450mm !important;
+        object-fit: fill !important;
+      }
+      .pins-layer {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="brand-group">
+      <div class="brand-icon">🛰️</div>
+      <div>
+        <div class="brand-title">แผนที่ภาพถ่ายทางอากาศ มหาวิทยาลัยมหาสารคาม (ทั้งเขตพื้นที่ขามเรียง - ท่าขอนยาง - ลำน้ำชี)</div>
+        <div class="brand-sub">MAHASARAKHAM UNIVERSITY • REGIONAL AERIAL ORTHOPHOTO ATLAS (75.0 × 45.0 cm)</div>
+      </div>
+      <div class="badge-pill badge-size">📏 ขนาดพิมพ์ 75.0 × 45.0 cm (5:3)</div>
+      <div class="badge-pill badge-dpi">⭐ 300 DPI Ultra HD Ready</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-gold" onclick="openDownloadModal()">
+        <span>📥</span> ดาวน์โหลดรูปภาพ 300 DPI
+      </button>
+      <button class="btn btn-primary" onclick="directPrint()">
+        <span>🖨️</span> พิมพ์ขนาดใหญ่ 75×45 cm
+      </button>
+      <button class="btn btn-blue" onclick="openTilingModal()">
+        <span>📑</span> พิมพ์แยกแผ่น A4/A3
+      </button>
+      <button class="btn btn-blue" onclick="openGuideModal()">
+        <span>📘</span> วิธีพิมพ์
+      </button>
+    </div>
+  </header>
+
+  <!-- Control Sub-Toolbar -->
+  <div class="toolbar">
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <div class="tab-group">
+        <button class="tab-btn active" id="tab-satellite-poster" onclick="switchMapMode('satellite-poster')">
+          <span>🛰️</span> แผนที่ดาวเทียมทั้งเขต (Poster 75×45cm)
+        </button>
+        <button class="tab-btn" id="tab-satellite-bleed" onclick="switchMapMode('satellite-bleed')">
+          <span>🌍</span> ภาพดาวเทียมไร้ขอบ (Full-Bleed)
+        </button>
+        <button class="tab-btn" id="tab-exact-view" onclick="switchMapMode('exact-view')">
+          <span>📸</span> มุมมองตรงตามภาพที่ส่ง (Exact 4K)
+        </button>
+        <button class="tab-btn" id="tab-master" onclick="switchMapMode('master')">
+          <span>🏛️</span> ผังแม่บทอาคาร (Campus Plan)
+        </button>
+      </div>
+
+      <div id="chk-pins-container" style="display: none; align-items: center; gap: 6px; cursor: pointer; color: #94a3b8; font-size: 0.82rem;">
+        <input type="checkbox" id="chk-pins" checked onchange="togglePins(this.checked)"> แสดงหมุด 43 อาคาร
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div class="zoom-group">
+        <button class="zoom-btn" onclick="zoomMap(-0.2)" title="ซูมออก">-</button>
+        <span class="zoom-level" id="zoom-text">100%</span>
+        <button class="zoom-btn" onclick="zoomMap(0.2)" title="ซูมเข้า">+</button>
+        <button class="zoom-btn" onclick="resetZoom()" title="ขนาดพอดีหน้าจอ" style="width: auto; padding: 0 8px; font-size: 0.75rem;">Reset</button>
+      </div>
+      <button class="btn btn-blue" style="padding: 5px 10px; font-size: 0.78rem;" onclick="toggleSidebar()">
+        <span id="sidebar-toggle-text">ซ่อนแถบสารบัญ ◀</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Workspace -->
+  <div class="workspace">
+    
+    <!-- Viewport Container -->
+    <div class="viewport-container" id="viewport">
+      <!-- Top Ruler simulation -->
+      <div class="ruler-top">
+        <span>0 cm</span>
+        <span>15 cm</span>
+        <span>30 cm</span>
+        <span>45 cm</span>
+        <span>60 cm</span>
+        <span>75.0 cm (ความยาวพิมพ์จริง)</span>
+      </div>
+
+      <!-- Stage with Pan & Zoom -->
+      <div class="map-stage" id="stage">
+        <img id="map-image" class="map-img" src="msu_satellite_poster_75x45cm_150dpi.jpg" alt="แผนที่ภาพถ่ายทางอากาศ มมส ทั้งเขต 75x45 cm">
+        <div class="pins-layer" id="pins-layer"></div>
+      </div>
+
+      <!-- Floating Dimension Badge -->
+      <div class="ruler-dim-badge">
+        <div id="dim-badge-title"><strong>สัดส่วนกระดาษ:</strong> 75.0 ซม. × 45.0 ซม. (5:3)</div>
+        <div style="color: #64748b;">|</div>
+        <div><strong>พิกัด:</strong> 16°14'58"N, 103°15'04"E</div>
+        <div style="color: #64748b;">|</div>
+        <div id="dim-badge-res"><strong>ความละเอียด:</strong> 8,858 × 5,315 px @ 300 DPI</div>
+      </div>
+
+      <!-- Tooltip -->
+      <div id="tooltip"></div>
+    </div>
+
+    <!-- Right Sidebar Directory -->
+    <div class="sidebar" id="sidebar">
+      <div class="search-box">
+        <input type="text" id="search-input" class="search-input" placeholder="🔍 ค้นหาอาคาร, คณะ, หอพัก, ลานแปดเหลี่ยม..." oninput="filterBuildings()">
+      </div>
+      <div class="cat-filters" id="cat-filters">
+        <button class="cat-pill active" onclick="setCategory('all')">ทั้งหมด (43)</button>
+        <button class="cat-pill" onclick="setCategory('admin')">🏛️ บริหาร</button>
+        <button class="cat-pill" onclick="setCategory('sci')">🔬 วิทย์-วิศวะ</button>
+        <button class="cat-pill" onclick="setCategory('health')">🩺 สุขภาพ</button>
+        <button class="cat-pill" onclick="setCategory('hum')">📚 มนุษย์-ศิลป์</button>
+        <button class="cat-pill" onclick="setCategory('learn')">📖 ศูนย์เรียนรู้</button>
+        <button class="cat-pill" onclick="setCategory('life')">⚽ กีฬา-หอพัก</button>
+      </div>
+      <div class="building-list" id="building-list"></div>
+    </div>
+
+  </div>
+
+  <!-- MODAL: DOWNLOAD CENTER -->
+  <div class="modal-backdrop" id="download-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title"><span>📥</span> ศูนย์ดาวน์โหลดไฟล์ภาพและแผนผังความคมชัดสูง (75 × 45 cm)</div>
+        <button class="modal-close" onclick="closeModal('download-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: #94a3b8; font-size: 0.88rem; margin-bottom: 20px;">
+          ไฟล์ทั้งหมดได้รับการตั้งค่าขนาดมาตรฐาน <strong>75.0 cm × 45.0 cm (อัตราส่วน 5:3)</strong> สามารถนำไปส่งร้านพิมพ์โปสเตอร์ สติ๊กเกอร์ หรือพิมพ์ไวนิลขนาดใหญ่ได้คมชัดสูงสุดโดยภาพไม่แตก
+        </p>
+
+        <!-- Item 1: Full District Poster 300 DPI (Top Recommended) -->
+        <div class="dl-item" style="border: 2px solid var(--msu-gold); background: rgba(212, 175, 55, 0.08);">
+          <div class="dl-info">
+            <h4><span style="color: var(--msu-gold);">⭐</span> [แนะนำสำหรับพิมพ์โปสเตอร์ 75×45 cm] แผนที่ดาวเทียมทั้งเขต Ultra HD (Poster Edition 300 DPI)</h4>
+            <p>ครอบคลุมทั้งเขต (ชุมชนขามเรียง - มมส - ท่าขอนยาง - คุ้งแม่น้ำชี) พร้อมหัวเรื่องทางการ กรอบบอกสเกลเซนติเมตร 0-75cm สเกลบาร์ 0-2km และหมุดสถานที่สำคัญ</p>
+            <div class="dl-specs">
+              <span class="spec-tag" style="background: rgba(212,175,55,0.2); color:#ffd700;">8,858 × 5,315 px</span>
+              <span class="spec-tag" style="background: rgba(16,185,129,0.2); color:#34d399;">300 DPI</span>
+              <span class="spec-tag">ขนาดพิมพ์ 75.0 × 45.0 cm (5:3)</span>
+              <span class="spec-tag">JPG Quality 94%</span>
+            </div>
+          </div>
+          <a href="msu_satellite_poster_75x45cm_300dpi.jpg" download="msu_satellite_poster_75x45cm_300dpi.jpg" class="btn btn-gold">
+            ดาวน์โหลด (14.0 MB)
+          </a>
+        </div>
+
+        <!-- Item 2: Full-Bleed Satellite 300 DPI -->
+        <div class="dl-item">
+          <div class="dl-info">
+            <h4><span>🌍</span> ภาพถ่ายดาวเทียมทั้งเขต แบบเต็มแผ่นไร้ขอบ (Full-Bleed 300 DPI Ultra HD)</h4>
+            <p>ภาพถ่ายทางอากาศออร์โธโฟโตความคมชัดสูงเต็มผืน 100% สัดส่วน 75×45 cm ไร้กรอบและข้อความ เหมาะสำหรับนำไปวางกราฟิกเองหรือพิมพ์ภาพทิวทัศน์ดาวเทียม</p>
+            <div class="dl-specs">
+              <span class="spec-tag">8,858 × 5,315 px</span>
+              <span class="spec-tag">300 DPI</span>
+              <span class="spec-tag">ขนาดพิมพ์ 75.0 × 45.0 cm</span>
+              <span class="spec-tag">Full-Bleed 100%</span>
+            </div>
+          </div>
+          <a href="msu_satellite_full_district_75x45cm_300dpi.jpg" download="msu_satellite_full_district_75x45cm_300dpi.jpg" class="btn btn-blue">
+            ดาวน์โหลด (14.7 MB)
+          </a>
+        </div>
+
+        <!-- Item 3: Exact Match User View 4K -->
+        <div class="dl-item">
+          <div class="dl-info">
+            <h4><span>📸</span> ภาพถ่ายทางอากาศมุมมองเดียวกับรูปที่ส่ง 100% (Exact Match View 4K)</h4>
+            <p>ครอบคลุมพิกัดมุมมองและองศาตามภาพถ่ายที่ส่งมาเป๊ะๆ ตั้งแต่ชุมชนขามเรียง ทุ่งนาฝั่งตะวันตก วงแหวน มมส จรดคุ้งแม่น้ำชีโบราณฝั่งตะวันออก</p>
+            <div class="dl-specs">
+              <span class="spec-tag">4,096 × 1,716 px</span>
+              <span class="spec-tag">4K Panoramic</span>
+              <span class="spec-tag">อัตราส่วนตรงภาพต้นฉบับ</span>
+            </div>
+          </div>
+          <a href="msu_exact_district_view.jpg" download="msu_exact_district_view.jpg" class="btn btn-blue">
+            ดาวน์โหลด (3.9 MB)
+          </a>
+        </div>
+
+        <!-- Item 4: Satellite Poster 150 DPI -->
+        <div class="dl-item">
+          <div class="dl-info">
+            <h4><span>📄</span> แผนที่ดาวเทียมทั้งเขต Standard Print (150 DPI)</h4>
+            <p>ความละเอียดมาตรฐาน 150 DPI สำหรับดูในคอมพิวเตอร์ ทำเอกสาร หรือพิมพ์ทดสอบ</p>
+            <div class="dl-specs">
+              <span class="spec-tag">4,429 × 2,657 px</span>
+              <span class="spec-tag">150 DPI</span>
+              <span class="spec-tag">ขนาดพิมพ์ 75.0 × 45.0 cm</span>
+            </div>
+          </div>
+          <a href="msu_satellite_poster_75x45cm_150dpi.jpg" download="msu_satellite_poster_75x45cm_150dpi.jpg" class="btn btn-blue">
+            ดาวน์โหลด (5.0 MB)
+          </a>
+        </div>
+
+        <!-- Item 5: Master Plan PNG Lossless -->
+        <div class="dl-item">
+          <div class="dl-info">
+            <h4><span>🏛️</span> ผังแม่บทกราฟิกมหาวิทยาลัย (Master Blueprint 300 DPI PNG)</h4>
+            <p>แผนผังแม่บทกราฟิกทางการ แสดงตำแหน่ง 43 อาคาร พร้อมสารบัญและสัญลักษณ์ความคมชัดสูง</p>
+            <div class="dl-specs">
+              <span class="spec-tag">8,858 × 5,315 px</span>
+              <span class="spec-tag">300 DPI</span>
+              <span class="spec-tag">ขนาดพิมพ์ 75 × 45 cm</span>
+              <span class="spec-tag">PNG Lossless</span>
+            </div>
+          </div>
+          <a href="msu_map_75x45cm_300dpi.png" download="msu_map_master_75x45cm_300dpi.png" class="btn btn-blue">
+            ดาวน์โหลด (6.8 MB)
+          </a>
+        </div>
+
+        <!-- Item 6: Vector SVG -->
+        <div class="dl-item">
+          <div class="dl-info">
+            <h4><span>📐</span> ผังแม่บทแบบเวกเตอร์ (Vector SVG Scalable)</h4>
+            <p>ไฟล์กราฟิกแบบเวกเตอร์ ซูมได้ไม่จำกัด คมชัด 100% เหมาะสำหรับ Adobe Illustrator / Inkscape / CAD</p>
+            <div class="dl-specs">
+              <span class="spec-tag">750 mm × 450 mm</span>
+              <span class="spec-tag">Scalable Vector</span>
+              <span class="spec-tag">SVG Format</span>
+            </div>
+          </div>
+          <a href="msu_map_75x45cm.svg" download="msu_map_75x45cm.svg" class="btn btn-blue">
+            ดาวน์โหลด (1.5 MB)
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: POSTER TILING GUIDE -->
+  <div class="modal-backdrop" id="tiling-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title"><span>📑</span> ระบบพิมพ์แยกแผ่นปะติดโปสเตอร์ (Multi-page Poster Tiling)</div>
+        <button class="modal-close" onclick="closeModal('tiling-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: #94a3b8; font-size: 0.88rem; margin-bottom: 16px;">
+          หากคุณไม่มีเครื่องพิมพ์หน้ากว้างขนาด 75 × 45 cm คุณสามารถใช้เครื่องพิมพ์ตั้งโต๊ะธรรมดาพิมพ์แยกเป็นแผ่น A4 หรือ A3 แล้วนำมาติดกาวต่อกันเป็นแผ่นใหญ่ขนาด 75 × 45 cm ได้อย่างพอดีเป๊ะ!
+        </p>
+
+        <h4 style="color: var(--msu-gold); margin-bottom: 10px;">การแบ่งจำนวนแผ่นกระดาษ:</h4>
+        <div class="tiling-grid">
+          <div class="tile-card">แผ่น 1 (A1)<br><span style="color:#94a3b8; font-size:0.75rem;">ซ้ายบน</span></div>
+          <div class="tile-card">แผ่น 2 (A2)<br><span style="color:#94a3b8; font-size:0.75rem;">กลางซ้ายบน</span></div>
+          <div class="tile-card">แผ่น 3 (A3)<br><span style="color:#94a3b8; font-size:0.75rem;">กลางขวาบน</span></div>
+          <div class="tile-card">แผ่น 4 (A4)<br><span style="color:#94a3b8; font-size:0.75rem;">ขวาบน (สารบัญ)</span></div>
+          <div class="tile-card">แผ่น 5 (B1)<br><span style="color:#94a3b8; font-size:0.75rem;">ซ้ายล่าง</span></div>
+          <div class="tile-card">แผ่น 6 (B2)<br><span style="color:#94a3b8; font-size:0.75rem;">กลางซ้ายล่าง</span></div>
+          <div class="tile-card">แผ่น 7 (B3)<br><span style="color:#94a3b8; font-size:0.75rem;">กลางขวาล่าง</span></div>
+          <div class="tile-card">แผ่น 8 (B4)<br><span style="color:#94a3b8; font-size:0.75rem;">ขวาล่าง (สัญลักษณ์)</span></div>
+        </div>
+
+        <div style="background: #131d33; padding: 16px; border-radius: 10px; border: 1px solid #1e293b; margin-top: 15px;">
+          <h4 style="color: #ffffff; margin-bottom: 8px;">💡 ขั้นตอนการประกอบโปสเตอร์ 75 × 45 cm:</h4>
+          <ol style="color: #cbd5e1; font-size: 0.85rem; padding-left: 20px; line-height: 1.6;">
+            <li>เปิดไฟล์ภาพ 300 DPI ด้วยโปรแกรม Adobe Acrobat Reader หรือโปรแกรมดูภาพ</li>
+            <li>ในหน้าต่างสั่งพิมพ์ (Print Dialog) เลือกหัวข้อ <strong>"Poster" (โปสเตอร์) หรือ "Tile Large Pages"</strong></li>
+            <li>ตั้งค่า <strong>Tile Scale: 100%</strong> และ <strong>Overlap: 0.5 นิ้ว (12.7 มม.)</strong></li>
+            <li>สั่งพิมพ์ออกมาทั้งหมด 8 แผ่น A4 จากนั้นตัดขอบสีขาวตามเส้นแนวต่อแล้วใช้กาวหรือเทปใสประกบติดกัน</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PRINT GUIDE -->
+  <div class="modal-backdrop" id="guide-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title"><span>📘</span> คู่มือการพิมพ์ขนาดใหญ่ 75.0 cm × 45.0 cm</div>
+        <button class="modal-close" onclick="closeModal('guide-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; flex-direction: column; gap: 16px; font-size: 0.88rem; color: #cbd5e1;">
+          <div style="background: #131d33; padding: 16px; border-radius: 10px; border: 1px solid #1e293b;">
+            <h4 style="color: var(--msu-gold); margin-bottom: 6px;">1. การสั่งพิมพ์ผ่านเบราว์เซอร์ทันที (Direct Print)</h4>
+            <p>เมื่อกดปุ่ม <strong>"พิมพ์ขนาดใหญ่ 75×45 cm"</strong> หน้าเว็บได้กำหนด CSS Print Size <code>750mm 450mm landscape</code> ไว้แล้ว:</p>
+            <ul style="padding-left: 20px; margin-top: 6px; line-height: 1.6;">
+              <li><strong>Destination:</strong> เลือกเครื่องพิมพ์ Plotter หรือเลือก <em>"Save as PDF" / "Microsoft Print to PDF"</em></li>
+              <li><strong>Paper size:</strong> เลือกขนาด 750 × 450 mm หรือ Custom Size</li>
+              <li><strong>Margins (ระยะขอบ):</strong> เลือก <strong>"None" (ไม่มีขอบ)</strong></li>
+              <li><strong>Scale (มาตราส่วน):</strong> เลือก <strong>"Fit to printable area" หรือ "100%"</strong></li>
+            </ul>
+          </div>
+
+          <div style="background: #131d33; padding: 16px; border-radius: 10px; border: 1px solid #1e293b;">
+            <h4 style="color: var(--msu-gold); margin-bottom: 6px;">2. การส่งไฟล์ให้ร้านพิมพ์ป้าย / ร้านถ่ายเอกสาร</h4>
+            <p>แนะนำให้ดาวน์โหลดไฟล์ <strong>"ผังแม่บททางการ Ultra HD (300 DPI PNG Master)"</strong> ใส่แฟลชไดรฟ์หรือส่งไลน์/อีเมลให้ร้าน:</p>
+            <ul style="padding-left: 20px; margin-top: 6px; line-height: 1.6;">
+              <li>แจ้งร้านพิมพ์: <strong>"ต้องการพิมพ์ขนาด ความยาว 75 ซม. สูง 45 ซม."</strong></li>
+              <li>วัสดุแนะนำ: <strong>กระดาษ Photo Satin 240g, แผ่น PP Film เคลือบด้าน, หรือผ้าใบไวนิลความละเอียดสูง</strong></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DATA
+    let currentMapMode = 'satellite-poster';
+    let zoomLevel = 1.0;
+    let panX = 0, panY = 0;
+    let isDragging = false;
+    let startX, startY;
+    let buildingsData = [];
+    let coordsData = {};
+    let selectedBuildingId = null;
+    let currentCategory = 'all';
+
+    const districtLandmarks = [
+      { id: "มมส", name_th: "มหาวิทยาลัยมหาสารคาม (เขตขามเรียง)", name_en: "Mahasarakham University (Kham Riang)", color: "#D32F2F", cat: "admin", px: 0.449, py: 0.595 },
+      { id: "1", name_th: "อาคารบรมราชกุมารี (สำนักงานอธิการบดี)", name_en: "President's Office (Borommaratchakumari)", color: "#1976D2", cat: "admin", px: 0.428, py: 0.625 },
+      { id: "28", name_th: "คณะการบัญชีและการจัดการ (MBS)", name_en: "Mahasarakham Business School", color: "#E65100", cat: "hum", px: 0.415, py: 0.535 },
+      { id: "12", name_th: "คณะวิทยาศาสตร์ & วิศวกรรมศาสตร์", name_en: "Science & Engineering Complex", color: "#7B1FA2", cat: "sci", px: 0.470, py: 0.540 },
+      { id: "32", name_th: "กลุ่มหอพักนิสิต & ตลาดน้อย มมส", name_en: "Student Dormitories & Talat Noi", color: "#0288D1", cat: "life", px: 0.405, py: 0.460 },
+      { id: "36", name_th: "สนามกีฬากลาง & ศูนย์ออกกำลังกาย", name_en: "Main Stadium & Sports Complex", color: "#2E7D32", cat: "life", px: 0.355, py: 0.485 },
+      { id: "ขามเรียง", name_th: "ชุมชนบ้านขามเรียง และทุ่งนาฝั่งตะวันตก", name_en: "Ban Kham Riang Community & Farmlands", color: "#455A64", cat: "life", px: 0.190, py: 0.525 },
+      { id: "ขอนยาง", name_th: "ชุมชนบ้านท่าขอนยาง", name_en: "Tha Khon Yang District Center", color: "#D97706", cat: "life", px: 0.620, py: 0.660 },
+      { id: "สะพาน", name_th: "สะพานข้ามแม่น้ำชี (ท่าขอนยาง)", name_en: "Tha Khon Yang Chi River Bridge", color: "#0288D1", cat: "health", px: 0.705, py: 0.655 },
+      { id: "แม่น้ำชี", name_th: "ลำน้ำชี & คุ้งน้ำชีเก่า (Oxbow Lake)", name_en: "Chi River & Ancient Oxbow Meander", color: "#0288D1", cat: "health", px: 0.865, py: 0.640 },
+      { id: "ทล.213", name_th: "ทางหลวงแผ่นดิน 213 (ไป อ.กันทรวิชัย)", name_en: "Highway 213 (To Kantharawichai)", color: "#475569", cat: "admin", px: 0.670, py: 0.320 }
+    ];
+
+    const stage = document.getElementById('stage');
+    const viewport = document.getElementById('viewport');
+    const mapImage = document.getElementById('map-image');
+    const pinsLayer = document.getElementById('pins-layer');
+    const zoomText = document.getElementById('zoom-text');
+    const tooltip = document.getElementById('tooltip');
+
+    // Fetch Building Data
+    fetch('msu_buildings_data.json')
+      .then(res => res.json())
+      .then(data => {
+        buildingsData = data.buildings;
+        coordsData = data.coords;
+        renderBuildingList();
+        centerMap();
+      })
+      .catch(err => {
+        console.warn("Building data loaded with defaults:", err);
+        renderBuildingList();
+        centerMap();
+      });
+
+    function renderBuildingList() {
+      const container = document.getElementById('building-list');
+      const searchVal = document.getElementById('search-input').value.toLowerCase();
+      container.innerHTML = '';
+
+      if (currentMapMode === 'master') {
+        const filtered = buildingsData.filter(b => {
+          const matchCat = (currentCategory === 'all' || b.cat === currentCategory);
+          const matchSearch = (b.name_th.toLowerCase().includes(searchVal) ||
+                               b.name_en.toLowerCase().includes(searchVal) ||
+                               b.id.toString() === searchVal);
+          return matchCat && matchSearch;
+        });
+
+        filtered.forEach(b => {
+          const item = document.createElement('div');
+          item.className = `building-item ${selectedBuildingId === b.id ? 'active' : ''}`;
+          item.onclick = () => focusBuilding(b.id);
+          item.innerHTML = `
+            <div class="b-badge" style="background: ${b.color};">${b.id}</div>
+            <div class="b-info">
+              <div class="b-name">${b.name_th}</div>
+              <div class="b-en">${b.name_en}</div>
+            </div>
+          `;
+          container.appendChild(item);
+        });
+      } else {
+        // District Landmarks
+        const filtered = districtLandmarks.filter(b => {
+          const matchCat = (currentCategory === 'all' || b.cat === currentCategory);
+          const matchSearch = (b.name_th.toLowerCase().includes(searchVal) ||
+                               b.name_en.toLowerCase().includes(searchVal) ||
+                               b.id.toString().includes(searchVal));
+          return matchCat && matchSearch;
+        });
+
+        filtered.forEach(b => {
+          const item = document.createElement('div');
+          item.className = `building-item ${selectedBuildingId === b.id ? 'active' : ''}`;
+          item.onclick = () => focusLandmark(b);
+          item.innerHTML = `
+            <div class="b-badge" style="background: ${b.color}; font-size: 0.72rem; padding: 0 4px;">${b.id}</div>
+            <div class="b-info">
+              <div class="b-name">${b.name_th}</div>
+              <div class="b-en">${b.name_en}</div>
+            </div>
+          `;
+          container.appendChild(item);
+        });
+      }
+    }
+
+    function renderPins() {
+      pinsLayer.innerHTML = '';
+      if (currentMapMode !== 'master') return;
+      if (!document.getElementById('chk-pins').checked) return;
+
+      buildingsData.forEach(b => {
+        const c = coordsData[b.id];
+        if (!c) return;
+        
+        const relX = c[0] - 180;
+        const relY = c[1] - 320;
+        const pinPxX = 35 + relX * 1.503;
+        const pinPxY = 260 + relY * 1.589;
+
+        const pctX = (pinPxX / 4429) * 100;
+        const pctY = (pinPxY / 2657) * 100;
+
+        const pin = document.createElement('div');
+        pin.className = `map-pin ${selectedBuildingId === b.id ? 'active' : ''}`;
+        pin.style.left = `${pctX}%`;
+        pin.style.top = `${pctY}%`;
+        pin.style.background = b.color;
+        pin.innerText = b.id;
+
+        pin.onmouseenter = (e) => {
+          tooltip.style.display = 'block';
+          tooltip.innerHTML = `<strong>${b.id}. ${b.name_th}</strong><br><span style="color:#cbd5e1;">${b.name_en}</span>`;
+          moveTooltip(e);
+        };
+        pin.onmousemove = moveTooltip;
+        pin.onmouseleave = () => { tooltip.style.display = 'none'; };
+        pin.onclick = (e) => {
+          e.stopPropagation();
+          focusBuilding(b.id);
+        };
+
+        pinsLayer.appendChild(pin);
+      });
+    }
+
+    function moveTooltip(e) {
+      const rect = viewport.getBoundingClientRect();
+      tooltip.style.left = `${e.clientX - rect.left}px`;
+      tooltip.style.top = `${e.clientY - rect.top}px`;
+    }
+
+    function focusBuilding(id) {
+      selectedBuildingId = id;
+      renderBuildingList();
+      renderPins();
+
+      const c = coordsData[id];
+      if (c && stage) {
+        const relX = c[0] - 180;
+        const relY = c[1] - 320;
+        const pinPxX = 35 + relX * 1.503;
+        const pinPxY = 260 + relY * 1.589;
+
+        zoomLevel = 1.8;
+        panX = (viewport.clientWidth / 2) - (pinPxX * (stage.offsetWidth / 4429) * zoomLevel);
+        panY = (viewport.clientHeight / 2) - (pinPxY * (stage.offsetHeight / 2657) * zoomLevel);
+        updateTransform();
+      }
+    }
+
+    function focusLandmark(lm) {
+      selectedBuildingId = lm.id;
+      renderBuildingList();
+      zoomLevel = 2.0;
+      panX = (viewport.clientWidth / 2) - (lm.px * stage.offsetWidth * zoomLevel);
+      panY = (viewport.clientHeight / 2) - (lm.py * stage.offsetHeight * zoomLevel);
+      updateTransform();
+    }
+
+    function togglePins(show) {
+      pinsLayer.style.display = show ? 'block' : 'none';
+      renderPins();
+    }
+
+    function setCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-pill').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      renderBuildingList();
+    }
+
+    function filterBuildings() {
+      renderBuildingList();
+    }
+
+    function switchMapMode(mode) {
+      currentMapMode = mode;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      
+      const tabEl = document.getElementById(`tab-${mode}`);
+      if (tabEl) tabEl.classList.add('active');
+
+      const chkPinsContainer = document.getElementById('chk-pins-container');
+      const badgeTitle = document.getElementById('dim-badge-title');
+      const badgeRes = document.getElementById('dim-badge-res');
+
+      if (mode === 'satellite-poster') {
+        mapImage.src = 'msu_satellite_poster_75x45cm_150dpi.jpg';
+        pinsLayer.style.display = 'none';
+        if (chkPinsContainer) chkPinsContainer.style.display = 'none';
+        if (badgeTitle) badgeTitle.innerHTML = '<strong>สัดส่วนกระดาษ:</strong> 75.0 ซม. × 45.0 ซม. (5:3)';
+        if (badgeRes) badgeRes.innerHTML = '<strong>ความละเอียด:</strong> 8,858 × 5,315 px @ 300 DPI';
+      } else if (mode === 'satellite-bleed') {
+        mapImage.src = 'msu_satellite_full_district_75x45cm_150dpi.jpg';
+        pinsLayer.style.display = 'none';
+        if (chkPinsContainer) chkPinsContainer.style.display = 'none';
+        if (badgeTitle) badgeTitle.innerHTML = '<strong>สัดส่วนกระดาษ:</strong> 75.0 ซม. × 45.0 ซม. (Full-Bleed ไร้ขอบ)';
+        if (badgeRes) badgeRes.innerHTML = '<strong>ความละเอียด:</strong> 8,858 × 5,315 px @ 300 DPI';
+      } else if (mode === 'exact-view') {
+        mapImage.src = 'msu_exact_district_view.jpg';
+        pinsLayer.style.display = 'none';
+        if (chkPinsContainer) chkPinsContainer.style.display = 'none';
+        if (badgeTitle) badgeTitle.innerHTML = '<strong>สัดส่วน:</strong> มุมมองตรงตามภาพถ่ายที่ส่ง 1:1';
+        if (badgeRes) badgeRes.innerHTML = '<strong>ความละเอียด:</strong> 4,096 × 1,716 px Ultra HD';
+      } else if (mode === 'master') {
+        mapImage.src = 'msu_map_75x45cm_150dpi.jpg';
+        pinsLayer.style.display = document.getElementById('chk-pins').checked ? 'block' : 'none';
+        if (chkPinsContainer) chkPinsContainer.style.display = 'flex';
+        if (badgeTitle) badgeTitle.innerHTML = '<strong>สัดส่วนกระดาษ:</strong> 75.0 ซม. × 45.0 ซม. (ผังแม่บททางการ)';
+        if (badgeRes) badgeRes.innerHTML = '<strong>ความละเอียด:</strong> 8,858 × 5,315 px @ 300 DPI';
+        renderPins();
+      }
+
+      renderBuildingList();
+      mapImage.onload = () => {
+        centerMap();
+      };
+    }
+
+    // PAN & ZOOM ENGINE
+    function updateTransform() {
+      stage.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+      zoomText.innerText = `${Math.round(zoomLevel * 100)}%`;
+    }
+
+    function centerMap() {
+      const vW = viewport.clientWidth;
+      const vH = viewport.clientHeight;
+      const imgAspect = (mapImage.naturalWidth && mapImage.naturalHeight) 
+        ? (mapImage.naturalWidth / mapImage.naturalHeight) 
+        : (75 / 45);
+
+      let initW = vW * 0.95;
+      let initH = initW / imgAspect;
+
+      if (initH > vH * 0.95) {
+        initH = vH * 0.95;
+        initW = initH * imgAspect;
+      }
+
+      stage.style.width = `${initW}px`;
+      stage.style.height = `${initH}px`;
+      zoomLevel = 1.0;
+      panX = (vW - initW) / 2;
+      panY = (vH - initH) / 2;
+      updateTransform();
+    }
+
+    function zoomMap(delta) {
+      const oldZoom = zoomLevel;
+      zoomLevel = Math.max(0.5, Math.min(5.0, zoomLevel + delta));
+      const cx = viewport.clientWidth / 2;
+      const cy = viewport.clientHeight / 2;
+      panX = cx - (cx - panX) * (zoomLevel / oldZoom);
+      panY = cy - (cy - panY) * (zoomLevel / oldZoom);
+      updateTransform();
+    }
+
+    function resetZoom() {
+      centerMap();
+    }
+
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      zoomMap(delta);
+    });
+
+    viewport.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('map-pin')) return;
+      isDragging = true;
+      startX = e.clientX - panX;
+      startY = e.clientY - panY;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      panX = e.clientX - startX;
+      panY = e.clientY - startY;
+      updateTransform();
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    viewport.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        startX = e.touches[0].clientX - panX;
+        startY = e.touches[0].clientY - panY;
+      }
+    });
+    window.addEventListener('touchmove', (e) => {
+      if (!isDragging || e.touches.length !== 1) return;
+      panX = e.touches[0].clientX - startX;
+      panY = e.touches[0].clientY - startY;
+      updateTransform();
+    });
+    window.addEventListener('touchend', () => { isDragging = false; });
+
+    function toggleSidebar() {
+      const sb = document.getElementById('sidebar');
+      const btn = document.getElementById('sidebar-toggle-text');
+      if (sb.style.display === 'none') {
+        sb.style.display = 'flex';
+        btn.innerText = 'ซ่อนแถบสารบัญ ◀';
+      } else {
+        sb.style.display = 'none';
+        btn.innerText = 'แสดงสารบัญ ▶';
+      }
+      setTimeout(centerMap, 200);
+    }
+
+    // High-Resolution Print Swapping
+    window.addEventListener('beforeprint', () => {
+      if (currentMapMode === 'satellite-poster') {
+        mapImage.src = 'msu_satellite_poster_75x45cm_300dpi.jpg';
+      } else if (currentMapMode === 'satellite-bleed') {
+        mapImage.src = 'msu_satellite_full_district_75x45cm_300dpi.jpg';
+      } else if (currentMapMode === 'exact-view') {
+        mapImage.src = 'msu_exact_district_view.jpg';
+      } else if (currentMapMode === 'master') {
+        mapImage.src = 'msu_map_75x45cm_300dpi.jpg';
+      }
+    });
+
+    window.addEventListener('afterprint', () => {
+      if (currentMapMode === 'satellite-poster') {
+        mapImage.src = 'msu_satellite_poster_75x45cm_150dpi.jpg';
+      } else if (currentMapMode === 'satellite-bleed') {
+        mapImage.src = 'msu_satellite_full_district_75x45cm_150dpi.jpg';
+      } else if (currentMapMode === 'exact-view') {
+        mapImage.src = 'msu_exact_district_view.jpg';
+      } else if (currentMapMode === 'master') {
+        mapImage.src = 'msu_map_75x45cm_150dpi.jpg';
+      }
+    });
+
+    // MODAL CONTROLS
+    function openDownloadModal() { document.getElementById('download-modal').classList.add('open'); }
+    function openTilingModal() { document.getElementById('tiling-modal').classList.add('open'); }
+    function openGuideModal() { document.getElementById('guide-modal').classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    // Direct 1:1 Print Trigger
+    function directPrint() {
+      window.print();
+    }
+
+    window.addEventListener('resize', centerMap);
+  </script>
+</body>
+</html>

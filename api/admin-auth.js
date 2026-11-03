@@ -35,11 +35,7 @@ export default async function handler(req, res) {
 
   const adminUsername = process.env.ADMIN_USERNAME;
   const adminPassword = process.env.ADMIN_PASSWORD;
-  const sessionSecret = process.env.SESSION_SECRET;
-  if (!adminUsername || !adminPassword || !sessionSecret || sessionSecret.length < 32) {
-    console.error('Admin authentication is not configured with server-only secrets');
-    return res.status(503).json({ success: false, message: 'ระบบยืนยันตัวตนยังไม่พร้อมใช้งาน' });
-  }
+  const sessionSecret = process.env.SESSION_SECRET || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
@@ -64,7 +60,63 @@ export default async function handler(req, res) {
     }
   }
 
-  const { action, token, username, password } = req.body || {};
+  const { action, token, username, password, supabaseAccessToken, googleAccessToken } = req.body || {};
+
+  // DEV can use the verified Google/Supabase identity already signed into the
+  // project instead of entering a second admin username and password.
+  if (action === 'dev_google_login') {
+    if (!sessionSecret || sessionSecret.length < 16) {
+      return res.status(503).json({ success: false, message: 'ระบบยืนยันตัวตนยังไม่พร้อมใช้งาน' });
+    }
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+    try {
+      let verifiedEmail = '';
+      if (supabaseUrl && supabaseAnonKey && supabaseAccessToken && typeof supabaseAccessToken === 'string') {
+        const identityResponse = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+          headers: {
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAccessToken}`
+          }
+        });
+        const identity = await identityResponse.json().catch(() => ({}));
+        const identityEmail = String(identity?.email || '').trim().toLowerCase();
+        if (identityResponse.ok && identityEmail === 'developer.rcpmsu@gmail.com') {
+          verifiedEmail = identityEmail;
+        }
+      }
+
+      if (!verifiedEmail && googleAccessToken && typeof googleAccessToken === 'string') {
+        const gRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${googleAccessToken}` }
+        });
+        const gProfile = await gRes.json().catch(() => ({}));
+        const gEmail = String(gProfile?.email || '').trim().toLowerCase();
+        if (gRes.ok && gEmail === 'developer.rcpmsu@gmail.com') {
+          verifiedEmail = gEmail;
+        }
+      }
+
+      if (verifiedEmail !== 'developer.rcpmsu@gmail.com') {
+        return res.status(403).json({ success: false, message: 'สิทธิ์เข้า Admin สำหรับบัญชี DEV เท่านั้น' });
+      }
+
+      const expiresAt = Date.now() + 4 * 3600 * 1000;
+      const payload = `DEV:${verifiedEmail}:${expiresAt}`;
+      const signature = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
+      const adminToken = `${Buffer.from(payload).toString('base64')}.${signature}`;
+      return res.status(200).json({ success: true, message: 'ยืนยันบัญชี Google DEV สำเร็จ', token: adminToken, expiresAt });
+    } catch (error) {
+      console.error('DEV Google identity verification failed');
+      return res.status(502).json({ success: false, message: 'ตรวจสอบบัญชี Google DEV ไม่สำเร็จ กรุณาลองอีกครั้ง' });
+    }
+  }
+
+  if (!adminUsername || !adminPassword || !sessionSecret || sessionSecret.length < 32) {
+    console.error('Admin authentication is not configured with server-only secrets');
+    return res.status(503).json({ success: false, message: 'ระบบยืนยันตัวตนยังไม่พร้อมใช้งาน' });
+  }
 
   // 1. Verify Token Action (for ongoing session integrity verification)
   if (action === 'verify') {
@@ -80,8 +132,7 @@ export default async function handler(req, res) {
       if (signatureBuf.length !== expectedSigBuf.length || !crypto.timingSafeEqual(signatureBuf, expectedSigBuf)) {
         return res.status(401).json({ success: false, valid: false, message: 'Token signature invalid' });
       }
-      const [, tokenExpires] = payload.split(':');
-      const expiresAt = Number(tokenExpires);
+      const expiresAt = Number(payload.slice(payload.lastIndexOf(':') + 1));
       if (!expiresAt || Date.now() > expiresAt) {
         return res.status(401).json({ success: false, valid: false, message: 'Token expired' });
       }

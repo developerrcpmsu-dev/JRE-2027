@@ -36,6 +36,7 @@ import ModalPortal from '../components/ModalPortal';
 import { 
   getRegistrationFeeDetails, 
   isMsuInstitution,
+  isStaffRegistration,
   SHIRT_SIZE_OPTIONS,
   DEFAULT_MERCHANDISE_CONFIG
 } from '../data/defaultData';
@@ -111,7 +112,7 @@ export default function MerchandiseView({
   // Fee details for current registered applicant
   const applicantFeeInfo = useMemo(() => {
     if (!myRegistration) return null;
-    return getRegistrationFeeDetails(myRegistration.institution);
+    return getRegistrationFeeDetails(myRegistration);
   }, [myRegistration]);
 
   const msuFeeDetails = useMemo(() => getRegistrationFeeDetails('มหาวิทยาลัยมหาสารคาม (มมส)'), []);
@@ -122,10 +123,17 @@ export default function MerchandiseView({
     if (!myRegistration) return null;
     const fee = applicantFeeInfo || msuFeeDetails;
     const isMsu = fee.isMsu;
-    const isRound1Paid = myRegistration.installment_1_status === 'paid' || myRegistration.payment_status === 'paid';
-    const isRound2Paid = myRegistration.installment_2_status === 'paid' || myRegistration.payment_status === 'paid';
-    const isFullyPaid = (myRegistration.payment_plan === 'installment' && isRound1Paid && isRound2Paid) ||
-                        (myRegistration.payment_plan !== 'installment' && myRegistration.payment_status === 'paid');
+    const isStaff = Boolean(fee.isStaff || isStaffRegistration(myRegistration));
+    const isRound1Paid = myRegistration.installment_1_status === 'paid' || ['paid', 'full'].includes(myRegistration.payment_status);
+    const isRound2Paid = (myRegistration.installment_2_status === 'paid' && Boolean(myRegistration.installment_2_slip_url)) || ['paid', 'full'].includes(myRegistration.payment_status);
+    const isFullyPaid = isStaff
+      ? isRound1Paid
+      : ['paid', 'full'].includes(myRegistration.payment_status) || (isRound1Paid && isRound2Paid);
+    const registrationPaidAmount = isStaff
+      ? (isRound1Paid ? fee.round1Amount : 0)
+      : (['paid', 'full'].includes(myRegistration.payment_status)
+        ? fee.totalFee
+        : (isRound1Paid ? fee.round1Amount : 0) + (isRound2Paid ? fee.round2Amount : 0));
 
     const orderNumber = `JRE27-SHIRT-${(myRegistration.id || myRegistration.user_id || 'REG').slice(0, 6).toUpperCase()}`;
     const isShirtReceived = myRegistration.shirt_pickup_status === 'received' || myRegistration.shirt_received === true;
@@ -145,6 +153,11 @@ export default function MerchandiseView({
       pickup_contact_phone: pickupSettings?.contact_phone || '098-329-6762',
       pickup_note: pickupSettings?.note || 'แสดงบัตรนี้หรือบัตรประจำตัวประชาชนต่อเจ้าหน้าที่ ณ จุดลงทะเบียนรับเสื้อ',
       payment_status: isFullyPaid ? 'paid_verified' : (isRound1Paid ? 'paid_verified' : 'pending_verification'),
+      order_type: 'registration_shirt',
+      registration_type: isStaff ? 'staff' : 'participant',
+      is_staff: isStaff,
+      role_label: isStaff ? 'Staff โครงการ' : 'ผู้เข้าร่วมโครงการ',
+      registration_paid_amount: registrationPaidAmount,
       pickup_status: isShirtReceived ? 'received' : 'pending',
       pickup_at: myRegistration.shirt_received_date || myRegistration.shirt_pickup_at || null,
       total_amount: fee.totalFee,
@@ -164,7 +177,7 @@ export default function MerchandiseView({
           size: myRegistration.shirt_size || 'L',
           color: 'สีเทาตัดดำ (Official Tactical Gray-Black)',
           quantity: 1,
-          unit_price: 400
+          unit_price: fee.round1Amount
         }
       ],
       created_at: myRegistration.created_at || new Date().toISOString()
@@ -685,7 +698,7 @@ export default function MerchandiseView({
                     </span>
                   )}
                   <span className="text-[11px] text-slate-400">
-                    {applicantShirtOrder.is_msu ? '🎓 สังกัดนิสิต มมส (650 บ.)' : '🏨 ต่างมหาวิทยาลัย (850 บ.)'}
+                    {applicantShirtOrder.role_label} · {applicantShirtOrder.institution || 'ไม่ระบุสถาบัน/หน่วยงาน'}
                   </span>
                 </div>
               </div>
@@ -785,6 +798,9 @@ export default function MerchandiseView({
                         <p className="text-sm font-black text-white break-words leading-snug">
                           {applicantShirtOrder.customer_name}
                         </p>
+                        <p className="text-[11px] text-sky-300 mt-1 break-words">
+                          {applicantShirtOrder.role_label} · {applicantShirtOrder.institution || 'ไม่ระบุสถาบัน/หน่วยงาน'}
+                        </p>
                         {applicantShirtOrder.customer_phone && (
                           <p className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
                             <Phone className="w-3 h-3 text-slate-500" />
@@ -817,16 +833,21 @@ export default function MerchandiseView({
                     <div className="flex items-center justify-between font-bold">
                       <span className="text-slate-300 flex items-center gap-1.5">
                         <CreditCard className="w-4 h-4 text-rescue-400" />
-                        <span>การชำระเงินค่าสมัครและเสื้อ (2 งวด):</span>
+                        <span>ค่าสมัครรวมตามใบสมัคร:</span>
                       </span>
                       <span className="text-amber-400 font-mono">
-                        {applicantShirtOrder.total_amount} บาท (รวมทั้งสิ้น)
+                        {applicantShirtOrder.total_amount} บาท
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-950/30 border border-emerald-500/20 px-2.5 py-2">
+                      <span className="text-slate-300">ยอดที่ชำระแล้วจริง:</span>
+                      <strong className="text-emerald-300 font-mono">{applicantShirtOrder.registration_paid_amount} บาท</strong>
+                    </div>
+
+                    <div className={`grid ${applicantShirtOrder.is_staff ? 'grid-cols-1' : 'grid-cols-2'} gap-2 pt-1 text-[11px]`}>
                       <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800">
-                        <span className="text-slate-400">งวดที่ 1 (ค่าเสื้อ): 400 บ.</span>
+                        <span className="text-slate-400">{applicantShirtOrder.is_staff ? 'ค่าเสื้อ Staff' : 'งวดที่ 1 (ค่าเสื้อ)'}: {applicantShirtOrder.items[0].unit_price} บ.</span>
                         {applicantShirtOrder.installment_1_status === 'paid' ? (
                           <span className="text-emerald-400 font-bold">✓ ชำระแล้ว</span>
                         ) : (
@@ -834,7 +855,7 @@ export default function MerchandiseView({
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800">
+                      {!applicantShirtOrder.is_staff && <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800">
                         <span className="text-slate-400">
                           งวดที่ 2 ({applicantShirtOrder.is_msu ? 'มมส' : 'ต่างสถาบัน'}): {applicantShirtOrder.is_msu ? '250' : '450'} บ.
                         </span>
@@ -843,7 +864,7 @@ export default function MerchandiseView({
                         ) : (
                           <span className="text-amber-400 font-bold">⏳ รอตรวจ/ค้าง</span>
                         )}
-                      </div>
+                      </div>}
                     </div>
                   </div>
 
@@ -1183,6 +1204,7 @@ export default function MerchandiseView({
         <PickupQRModal
           order={activePickupOrder}
           pickupConfig={merchandiseConfig?.pickup || DEFAULT_MERCHANDISE_CONFIG.pickup}
+          registration={activePickupOrder?.order_type === 'registration_shirt' || (activePickupOrder?.user_email && activePickupOrder.user_email.toLowerCase() === myRegistration?.user_email?.toLowerCase()) ? myRegistration : null}
           onClose={() => setActivePickupOrder(null)}
         />
       )}

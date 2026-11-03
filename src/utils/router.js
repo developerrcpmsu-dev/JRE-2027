@@ -4,6 +4,7 @@
 // /schedule -> กำหนดการ (Schedule & Timeline)
 // /register -> รับสมัครเข้าร่วมโครงการ (Registration)
 // /dashboard -> แดชบอร์ดผู้สมัคร (Applicant Dashboard)
+// /chat -> แชทกลุ่มผู้เข้าร่วม (Registered Group Chat)
 // /announcements -> ประกาศทั้งหมด (All Announcements)
 // /announcements/pr -> ข่าวประชาสัมพันธ์รับสมัคร (Public PR)
 // /announcements/orders -> คำสั่งสำหรับสมาชิก (Member Directives)
@@ -29,6 +30,7 @@ export function parseCurrentRoute() {
     if (queryOrHash === 'schedule') return { mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' };
     if (queryOrHash === 'register' || queryOrHash === 'profile') return { mainTab: 'register', subRoute: null, canonicalPath: '/register' };
     if (queryOrHash === 'dashboard') return { mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' };
+    if (queryOrHash === 'chat') return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
     if (queryOrHash === 'id-card' || queryOrHash === 'badge') return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
     if (queryOrHash === 'pr') return { mainTab: 'announcements', subRoute: 'public', canonicalPath: '/announcements/pr' };
     if (queryOrHash === 'orders') return { mainTab: 'announcements', subRoute: 'members', canonicalPath: '/announcements/orders' };
@@ -70,6 +72,10 @@ export function parseCurrentRoute() {
   }
 
   // Registration & Dashboard
+  if (first === 'chat' || first === 'group-chat') {
+    return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
+  }
+
   if (first === 'id-card' || first === 'badge' || first === 'badge-card') {
     return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
   }
@@ -255,6 +261,9 @@ export function getPathForRoute(mainTab, subRoute) {
       return subRoute === 'dashboard' ? '/dashboard' : '/register';
     case 'dashboard':
       return '/dashboard';
+    case 'chat':
+    case 'group-chat':
+      return '/chat';
     case 'id-card':
     case 'badge':
       return '/id-card';

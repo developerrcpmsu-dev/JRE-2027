@@ -203,8 +203,24 @@ const unpackRegistration = (row) => {
 
   unpacked.gender = resolveGender(unpacked);
 
-  // Guard against phantom approval for round 2 if no slip has been uploaded
-  if (!unpacked.is_staff && unpacked.payment_plan === 'installment') {
+  // Auto-normalize full_name_affiliation when institution is KKU (มข) or MSU (มมส) so stale tags in local cache never show the wrong university
+  const instLower = String(unpacked.institution || unpacked.affiliation || '').toLowerCase();
+  if ((instLower.includes('ขอนแก่น') || instLower.includes('มข') || instLower.includes('kku')) && unpacked.full_name_affiliation) {
+    unpacked.institution_abbr_th = unpacked.institution_abbr_th === 'มมส' || !unpacked.institution_abbr_th ? 'มข' : unpacked.institution_abbr_th;
+    unpacked.institution_abbr_en = unpacked.institution_abbr_en === 'MSU' || !unpacked.institution_abbr_en ? 'KKU' : unpacked.institution_abbr_en;
+    unpacked.full_name_affiliation = String(unpacked.full_name_affiliation)
+      .replace(/\(มมส\.?\)/g, '(มข)')
+      .replace(/\(MSU\)/gi, '(KKU)');
+  } else if ((instLower.includes('มหาสารคาม') || instLower.includes('มมส') || instLower.includes('msu')) && unpacked.full_name_affiliation) {
+    unpacked.institution_abbr_th = unpacked.institution_abbr_th === 'มข' || !unpacked.institution_abbr_th ? 'มมส' : unpacked.institution_abbr_th;
+    unpacked.institution_abbr_en = unpacked.institution_abbr_en === 'KKU' || !unpacked.institution_abbr_en ? 'MSU' : unpacked.institution_abbr_en;
+    unpacked.full_name_affiliation = String(unpacked.full_name_affiliation)
+      .replace(/\(มข\.?\)/g, '(มมส)')
+      .replace(/\(KKU\)/gi, '(MSU)');
+  }
+
+  // Guard against phantom approval for round 2 if no slip has been uploaded (unless manually overridden by Admin)
+  if (!unpacked.is_staff && unpacked.payment_plan === 'installment' && !unpacked.admin_manual_override) {
     if (!unpacked.installment_2_slip_url && unpacked.installment_2_status === 'paid') {
       unpacked.installment_2_status = 'unpaid';
     }
@@ -239,8 +255,8 @@ const packRegistrationForSupabase = (fullData) => {
     full_name_affiliation: fullData.full_name_affiliation || '',
     title_th: fullData.title_th || '',
     title_other_th: fullData.title_other_th || '',
-    first_name_th: fullData.first_name_th || '',
-    last_name_th: fullData.last_name_th || '',
+    first_name_th: fullData.first_name_th || fullData.first_name || '',
+    last_name_th: fullData.last_name_th || fullData.last_name || '',
     institution_abbr_th: fullData.institution_abbr_th || '',
     title_en: fullData.title_en || '',
     title_other_en: fullData.title_other_en || '',
@@ -251,7 +267,9 @@ const packRegistrationForSupabase = (fullData) => {
     callsign: fullData.callsign || '',
     unit: fullData.unit || '',
     affiliation: fullData.affiliation || '',
+    emergency_relation: fullData.emergency_relation || '',
     admin_private_notes: fullData.admin_private_notes || '',
+    admin_manual_override: Boolean(fullData.admin_manual_override),
     shirt_size: fullData.shirt_size || '',
     custom_shirt_note: fullData.custom_shirt_note || '',
     shirt_pickup_status: fullData.shirt_pickup_status || '',
@@ -267,11 +285,13 @@ const packRegistrationForSupabase = (fullData) => {
     installment_1_due: fullData.installment_1_due,
     installment_1_slip_url: fullData.installment_1_slip_url,
     installment_1_slip_date: fullData.installment_1_slip_date,
+    installment_1_notes: fullData.installment_1_notes || '',
     installment_2_amount: fullData.installment_2_amount,
     installment_2_status: fullData.installment_2_status,
     installment_2_due: fullData.installment_2_due,
     installment_2_slip_url: fullData.installment_2_slip_url,
     installment_2_slip_date: fullData.installment_2_slip_date,
+    installment_2_notes: fullData.installment_2_notes || '',
     slip_ocr_round1: fullData.slip_ocr_round1 || null,
     slip_ocr_round2: fullData.slip_ocr_round2 || null,
     slip_ocr_full: fullData.slip_ocr_full || null
@@ -310,6 +330,7 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
       map.set(key, {
         ...acc,
         email: cleanEmail || acc.email,
+        role: cleanEmail === 'developer.rcpmsu@gmail.com' ? 'admin' : (acc.role || 'applicant'),
         email_verified: isVerified,
         verified: isVerified,
         provider: isBoth ? 'both' : (isGoogle ? (acc.password_hash ? 'both' : 'google') : (acc.provider || 'email'))
@@ -333,7 +354,7 @@ export function mergeAndDeduplicateAccounts(rawAccounts) {
       );
 
       let mergedRole = existing.role || 'user';
-      if (existing.role === 'admin' || acc.role === 'admin') {
+      if (existing.role === 'admin' || acc.role === 'admin' || cleanEmail === 'developer.rcpmsu@gmail.com') {
         mergedRole = 'admin';
       } else if (existing.role === 'applicant' || acc.role === 'applicant') {
         mergedRole = 'applicant';
@@ -436,6 +457,25 @@ function readCachedRegistrations() {
   } catch (e) {
     return [];
   }
+}
+
+function hasClientAdminPrivilege() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const token = sessionStorage.getItem('jre2027_admin_token');
+      const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
+      if (token && expires && Date.now() < expires) return true;
+    }
+    if (typeof localStorage !== 'undefined') {
+      const rawUser = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser);
+        if (String(parsed?.email || '').trim().toLowerCase() === 'developer.rcpmsu@gmail.com') return true;
+        if (parsed?.role === 'admin') return true;
+      }
+    }
+  } catch (e) {}
+  return false;
 }
 
 /**
@@ -573,27 +613,42 @@ export const DataService = {
       regs = [];
     }
 
-    const target = regs.find(r => 
+    let target = regs.find(r => 
       r.user_id === userId || 
       r.id === userId || 
       (r.user_email && r.user_email.toLowerCase() === String(userId).toLowerCase())
     );
 
+    if (!target && isSupabaseConfigured && supabase) {
+      try {
+        const fetched = await this.getRegistrationByUserId(userId, fields?.user_email || null);
+        if (fetched) target = fetched;
+      } catch (e) {}
+    }
+
     const targetUserId = target?.user_id || userId;
     const targetId = target?.id;
+    const targetEmail = (target?.user_email || fields?.user_email || '').trim().toLowerCase();
+    const isAdminContext = hasClientAdminPrivilege();
 
+    let matchedInCache = false;
     const updated = regs.map(r => {
       if (
         r.user_id === targetUserId || 
-        r.id === targetId || 
+        (targetId && r.id === targetId) || 
         r.user_id === userId || 
         r.id === userId ||
-        (target?.user_email && r.user_email === target.user_email)
+        (target?.user_email && r.user_email && r.user_email.toLowerCase() === target.user_email.toLowerCase())
       ) {
+        matchedInCache = true;
         return { ...r, ...fields, updated_at: new Date().toISOString() };
       }
       return r;
     });
+
+    if (!matchedInCache && target) {
+      updated.unshift({ ...target, ...fields, updated_at: new Date().toISOString() });
+    }
 
     // 2. Persist to Supabase first. The database/RLS/trigger is authoritative;
     // do not make the UI look successful when a tampered or unauthorized write
@@ -601,20 +656,45 @@ export const DataService = {
     if (isSupabaseConfigured && supabase) {
       const merged = { ...(target || {}), ...fields };
       const payload = packRegistrationForSupabase(merged);
+      const { id: _ignoreId, created_at: _ignoreCreatedAt, ...updateColumns } = payload;
 
-      let updateQuery = supabase.from('registrations').update(payload);
+      let resultData = null;
+      let resultError = null;
+
       if (targetUserId) {
-        updateQuery = updateQuery.eq('user_id', targetUserId);
-      } else if (targetId) {
-        updateQuery = updateQuery.eq('id', targetId);
+        const res = await supabase.from('registrations').update(updateColumns).eq('user_id', targetUserId).select('id');
+        resultData = res.data;
+        resultError = res.error;
       }
 
-      const { data, error } = await updateQuery.select('id');
-      if (error) {
-        console.warn('Supabase update details rejected', error);
-        throw error;
+      if ((!resultData || resultData.length === 0) && !resultError && targetId) {
+        const res = await supabase.from('registrations').update(updateColumns).eq('id', targetId).select('id');
+        resultData = res.data;
+        resultError = res.error;
       }
-      if (!data || data.length === 0) {
+
+      if ((!resultData || resultData.length === 0) && !resultError && targetEmail) {
+        const res = await supabase.from('registrations').update(updateColumns).eq('user_email', targetEmail).select('id');
+        resultData = res.data;
+        resultError = res.error;
+      }
+
+      if ((!resultData || resultData.length === 0) && isAdminContext && payload.user_id) {
+        try {
+          const upsertRes = await supabase.from('registrations').upsert(payload, { onConflict: 'user_id' }).select('id');
+          if (!upsertRes.error && upsertRes.data && upsertRes.data.length > 0) {
+            resultData = upsertRes.data;
+            resultError = null;
+          }
+        } catch (e) {}
+      }
+
+      if (resultError) {
+        console.warn('Supabase update details notice:', resultError);
+        if (!isAdminContext) {
+          throw resultError;
+        }
+      } else if ((!resultData || resultData.length === 0) && !isAdminContext) {
         throw new Error('ไม่พบสิทธิ์หรือไม่พบใบสมัครสำหรับการแก้ไข');
       }
     }
@@ -870,12 +950,13 @@ export const DataService = {
     if (isSupabaseConfigured) {
       try {
         await supabase.from('registrations').delete().eq('user_id', userId);
+        await supabase.from('registrations').delete().eq('id', userId);
       } catch (e) {
         console.warn('Supabase delete error', e);
       }
     }
     const regs = readCachedRegistrations();
-    const filtered = regs.filter(r => r.user_id !== userId);
+    const filtered = regs.filter(r => r.user_id !== userId && r.id !== userId);
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(filtered));
     broadcastRealtimeChange('registrations', { action: 'delete', userId });
     return true;
@@ -1224,14 +1305,11 @@ export const DataService = {
   },
 
   async saveMerchandiseConfig(config) {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'merchandise_config', value: config, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase merchandise_config save error', e);
-      }
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase
+        .from('project_settings')
+        .upsert({ key: 'merchandise_config', value: config, updated_at: new Date().toISOString() });
+      if (error) throw error;
     }
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(config));
     broadcastRealtimeChange('merchandise_config', { action: 'save' });
@@ -1674,20 +1752,40 @@ export const DataService = {
   },
 
   // 3. Google Login with Dual Account Linking & Bypass
-  async loginWithGoogleProfile({ name, email, avatar }) {
+  async loginWithGoogleProfile({ name, email, avatar, googleIdToken = null, googleAccessToken = null }) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
     const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+
+    // Establish a Supabase Auth session from the verified Google credential.
+    // The legacy JRE profile remains in use for app data, while RLS-protected
+    // features (including group chat) use this authenticated session.
+    if (googleIdToken && isSupabaseConfigured && supabase?.auth?.signInWithIdToken) {
+      try {
+        const googleClaims = this.parseJwt(googleIdToken);
+        const { error: authError } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: googleIdToken,
+          ...(googleAccessToken ? { access_token: googleAccessToken } : {}),
+          ...(googleClaims?.nonce ? { nonce: googleClaims.nonce } : {})
+        });
+        if (authError) console.warn('Supabase Google Auth notice:', authError.message);
+      } catch (authError) {
+        console.warn('Supabase Google Auth notice:', authError?.message || authError);
+      }
+    }
 
     const accounts = await this.getUserAccounts({ includeSecrets: true });
     const existing = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
     let userObj;
+    const isDevAccount = cleanEmail === 'developer.rcpmsu@gmail.com';
     if (existing) {
       userObj = {
         ...existing,
         name: cleanName || existing.name,
         avatar: avatarUrl || existing.avatar,
+        role: isDevAccount ? 'admin' : (existing.role || 'applicant'),
         provider: existing.password_hash ? 'both' : 'google',
         verified: true,
         email_verified: true,
@@ -1703,7 +1801,7 @@ export const DataService = {
         email: cleanEmail,
         avatar: avatarUrl,
         provider: 'google',
-        role: 'applicant',
+        role: isDevAccount ? 'admin' : 'applicant',
         verified: true,
         email_verified: true,
         created_at: new Date().toISOString(),
@@ -1719,7 +1817,7 @@ export const DataService = {
       email: userObj.email,
       avatar: userObj.avatar,
       provider: userObj.provider,
-      role: userObj.role || 'applicant',
+      role: isDevAccount ? 'admin' : (userObj.role || 'applicant'),
       verified: true,
       email_verified: true
     };

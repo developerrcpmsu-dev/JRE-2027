@@ -52,6 +52,7 @@ import {
   ArrowDown,
   GraduationCap,
   Lock,
+  Unlock,
   Key,
   Shield,
   EyeOff,
@@ -114,6 +115,15 @@ import {
 } from '../utils/registrationSchedule';
 import * as XLSX from 'xlsx';
 import { resolveUserExtraDetails } from '../utils/userUtils';
+import { calculateAgeDetailed } from '../utils/ageCalculator';
+import {
+  TITLE_THAI_OPTIONS,
+  TITLE_ENGLISH_OPTIONS,
+  TITLE_TH_TO_EN_MAP,
+  INSTITUTION_ABBR_MAP,
+  buildFullNameAffiliation,
+  parseFullNameAffiliationString
+} from './RegisterView';
 
 export default function AdminDashboardView({
   initialTab = 'applicants',
@@ -924,6 +934,14 @@ export default function AdminDashboardView({
   const [uniFilter, setUniFilter] = useState('all'); // 'all' or university shortTag
   const [genderFilter, setGenderFilter] = useState('all'); // 'all', 'ชาย', 'หญิง'
   const [roleFilter, setRoleFilter] = useState('all'); // 'all', 'participant', 'staff'
+  const [selectedBulkMessageIds, setSelectedBulkMessageIds] = useState(() => new Set());
+  const [isBulkMessageOpen, setIsBulkMessageOpen] = useState(false);
+  const [bulkMsgTitle, setBulkMsgTitle] = useState('');
+  const [bulkMsgText, setBulkMsgText] = useState('');
+  const [bulkMsgSenderKey, setBulkMsgSenderKey] = useState('admin_central');
+  const [bulkCustomSenderName, setBulkCustomSenderName] = useState('');
+  const [bulkCustomSystemName, setBulkCustomSystemName] = useState('');
+  const [isSendingBulkMessage, setIsSendingBulkMessage] = useState(false);
 
   // Inline Quick Edit Allocation State
   const [editingUserId, setEditingUserId] = useState(null);
@@ -942,6 +960,31 @@ export default function AdminDashboardView({
   const [profileModalTab, setProfileModalTab] = useState('info'); // 'info', 'payment', 'messages', 'docs'
   
   // Modal Fields
+  const [modalTitleTh, setModalTitleTh] = useState('');
+  const [modalFirstName, setModalFirstName] = useState('');
+  const [modalLastName, setModalLastName] = useState('');
+  const [modalInstitutionAbbrTh, setModalInstitutionAbbrTh] = useState('');
+  const [modalTitleEn, setModalTitleEn] = useState('');
+  const [modalFirstNameEn, setModalFirstNameEn] = useState('');
+  const [modalLastNameEn, setModalLastNameEn] = useState('');
+  const [modalInstitutionAbbrEn, setModalInstitutionAbbrEn] = useState('');
+  const [modalFullNameAffiliation, setModalFullNameAffiliation] = useState('');
+  const [modalNickname, setModalNickname] = useState('');
+  const [modalCallsign, setModalCallsign] = useState('');
+  const [modalEmail, setModalEmail] = useState('');
+  const [modalUnit, setModalUnit] = useState('');
+  const [modalAffiliation, setModalAffiliation] = useState('');
+  const [modalDob, setModalDob] = useState('');
+  const [modalAgeYears, setModalAgeYears] = useState(0);
+  const [modalAgeMonths, setModalAgeMonths] = useState(0);
+  const [modalAgeDays, setModalAgeDays] = useState(0);
+  const [modalBloodGroup, setModalBloodGroup] = useState('O');
+  const [modalEmergencyName, setModalEmergencyName] = useState('');
+  const [modalEmergencyPhone, setModalEmergencyPhone] = useState('');
+  const [modalIdCardPhoto, setModalIdCardPhoto] = useState('');
+  const [isUploadingModalIdPhoto, setIsUploadingModalIdPhoto] = useState(false);
+  const [modalRegStatus, setModalRegStatus] = useState('approved');
+  const [modalShirtPickupStatus, setModalShirtPickupStatus] = useState('pending');
   const [modalGroup, setModalGroup] = useState('');
   const [modalRoom, setModalRoom] = useState('');
   const [modalShirtSize, setModalShirtSize] = useState('L');
@@ -963,6 +1006,16 @@ export default function AdminDashboardView({
   const [modalPaymentAmount, setModalPaymentAmount] = useState(650);
   const [modalPaymentBank, setModalPaymentBank] = useState('');
   const [modalPaymentNotes, setModalPaymentNotes] = useState('');
+  const [modalPaymentSlipUrl, setModalPaymentSlipUrl] = useState('');
+  const [modalInstallment1Status, setModalInstallment1Status] = useState('unpaid');
+  const [modalInstallment1Amount, setModalInstallment1Amount] = useState(0);
+  const [modalInstallment1Notes, setModalInstallment1Notes] = useState('');
+  const [modalInstallment1SlipUrl, setModalInstallment1SlipUrl] = useState('');
+  const [modalInstallment2Status, setModalInstallment2Status] = useState('unpaid');
+  const [modalInstallment2Amount, setModalInstallment2Amount] = useState(0);
+  const [modalInstallment2Notes, setModalInstallment2Notes] = useState('');
+  const [modalInstallment2SlipUrl, setModalInstallment2SlipUrl] = useState('');
+  const [isUploadingModalSlip, setIsUploadingModalSlip] = useState(false);
 
   // Admin Direct Message State
   const [newMsgText, setNewMsgText] = useState('');
@@ -1953,11 +2006,55 @@ export default function AdminDashboardView({
     }
   };
 
-  // Open Full Profile & Remarks Modal (Locked / View-only by default)
-  const handleOpenProfileModal = (reg, initialTab = 'info') => {
-    setProfileModalReg(reg);
-    setIsEditingProfileModal(false);
-    setProfileModalTab(initialTab);
+  // Populate modal fields helper
+  const populateProfileModalFields = (reg) => {
+    const parsedName = parseFullNameAffiliationString(reg.full_name_affiliation || '');
+    const resolvedTitleTh = reg.title_th || parsedName.title_th || '';
+    const resolvedFirstTh = reg.first_name || reg.first_name_th || parsedName.first_name || '';
+    const resolvedLastTh = reg.last_name || reg.last_name_th || parsedName.last_name || '';
+    const instMeta = INSTITUTION_ABBR_MAP[reg.institution] || null;
+    const resolvedAbbrTh = reg.institution_abbr_th || parsedName.institution_abbr_th || instMeta?.abbr_th || '';
+    const resolvedTitleEn = reg.title_en || parsedName.title_en || TITLE_TH_TO_EN_MAP[resolvedTitleTh] || '';
+    const resolvedFirstEn = reg.first_name_en || parsedName.first_name_en || '';
+    const resolvedLastEn = reg.last_name_en || parsedName.last_name_en || '';
+    const resolvedAbbrEn = reg.institution_abbr_en || parsedName.institution_abbr_en || instMeta?.abbr_en || '';
+    const resolvedFullNameAff = reg.full_name_affiliation || buildFullNameAffiliation({
+      title_th: resolvedTitleTh,
+      first_name: resolvedFirstTh,
+      last_name: resolvedLastTh,
+      institution_abbr_th: resolvedAbbrTh,
+      title_en: resolvedTitleEn,
+      first_name_en: resolvedFirstEn,
+      last_name_en: resolvedLastEn,
+      institution_abbr_en: resolvedAbbrEn,
+      institution: reg.institution || ''
+    });
+
+    setModalTitleTh(resolvedTitleTh);
+    setModalFirstName(resolvedFirstTh);
+    setModalLastName(resolvedLastTh);
+    setModalInstitutionAbbrTh(resolvedAbbrTh);
+    setModalTitleEn(resolvedTitleEn);
+    setModalFirstNameEn(resolvedFirstEn);
+    setModalLastNameEn(resolvedLastEn);
+    setModalInstitutionAbbrEn(resolvedAbbrEn);
+    setModalFullNameAffiliation(resolvedFullNameAff);
+    setModalNickname(reg.nickname || '');
+    setModalCallsign(reg.callsign || '');
+    setModalEmail(reg.user_email || reg.email || '');
+    setModalUnit(reg.unit || '');
+    setModalAffiliation(reg.affiliation || resolvedAbbrTh || reg.institution || '');
+    setModalDob(reg.dob || '');
+    setModalAgeYears(Number(reg.age_years) || 0);
+    setModalAgeMonths(Number(reg.age_months) || 0);
+    setModalAgeDays(Number(reg.age_days) || 0);
+    setModalBloodGroup(reg.blood_group || 'O');
+    setModalEmergencyName(reg.emergency_name || '');
+    setModalEmergencyPhone(reg.emergency_phone || '');
+    setModalIdCardPhoto(reg.id_card_photo || '');
+    setModalRegStatus(reg.status || 'approved');
+    setModalShirtPickupStatus(reg.shirt_pickup_status || 'pending');
+
     setModalGroup(reg.group_assigned || '');
     setModalRoom(reg.room_assigned || '');
     setModalShirtSize(reg.shirt_size || 'L');
@@ -1973,19 +2070,20 @@ export default function AdminDashboardView({
     const isStaff = isStaffRegistration(reg);
     const resolvedGen = resolveGender(reg);
     setModalIsStaff(isStaff);
-    setModalGender(resolvedGen === 'หญิง' ? 'หญิง' : 'ชาย');
+    setModalGender(resolvedGen === 'หญิง' ? 'หญิง' : (resolvedGen === 'ไม่ระบุ' ? 'ไม่ระบุ' : 'ชาย'));
 
     const isMsu = isMsuInstitution(reg.institution);
     const totalFee = isStaff
       ? STAFF_SHIRT_FEE
       : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
+    const round1Fee = isMsu ? (paymentConfig?.installment_round1_amount_msu || 400) : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
     const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
     // Staff never has 2-round installment payment
     const isInstallment = !isStaff && (reg.payment_plan 
       ? (reg.payment_plan === 'installment') 
       : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
     const isR1Paid = reg.installment_1_status === 'paid';
-    const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
+    const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url || reg.admin_manual_override);
     const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid' || (isStaff && isR1Paid));
 
     let effStatus = reg.payment_status || 'unpaid';
@@ -2013,6 +2111,23 @@ export default function AdminDashboardView({
     setModalPaymentAmount(effAmount);
     setModalPaymentBank(reg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
     setModalPaymentNotes(reg.payment_notes || '');
+    setModalPaymentSlipUrl(reg.payment_slip_url || reg.slip_url || '');
+    setModalInstallment1Status(reg.installment_1_status || (effStatus === 'paid' ? 'paid' : 'unpaid'));
+    setModalInstallment1Amount(reg.installment_1_amount !== undefined ? reg.installment_1_amount : (isStaff ? STAFF_SHIRT_FEE : round1Fee));
+    setModalInstallment1Notes(reg.installment_1_notes || '');
+    setModalInstallment1SlipUrl(reg.installment_1_slip_url || '');
+    setModalInstallment2Status(reg.installment_2_status || 'unpaid');
+    setModalInstallment2Amount(reg.installment_2_amount !== undefined ? reg.installment_2_amount : (isStaff ? 0 : round2Fee));
+    setModalInstallment2Notes(reg.installment_2_notes || '');
+    setModalInstallment2SlipUrl(reg.installment_2_slip_url || '');
+  };
+
+  // Open Full Profile & Remarks Modal (Locked / View-only by default, or unlocked if startInEdit = true)
+  const handleOpenProfileModal = (reg, initialTab = 'info', startInEdit = false) => {
+    setProfileModalReg(reg);
+    setIsEditingProfileModal(Boolean(startInEdit));
+    setProfileModalTab(initialTab);
+    populateProfileModalFields(reg);
     setNewMsgText('');
   };
 
@@ -2025,60 +2140,7 @@ export default function AdminDashboardView({
       cancelText: 'แก้ไขต่อ',
       variant: 'warning',
       onConfirm: () => {
-        setModalGroup(profileModalReg.group_assigned || '');
-        setModalRoom(profileModalReg.room_assigned || '');
-        setModalShirtSize(profileModalReg.shirt_size || 'L');
-        setModalCustomShirtNote(profileModalReg.custom_shirt_note || '');
-        setModalSpecialCare(Boolean(profileModalReg.is_special_care));
-        setModalNotes(profileModalReg.special_notes || '');
-        setModalPhone(profileModalReg.phone || '');
-        setModalInstitution(profileModalReg.institution || '');
-        setModalMedical(getApplicantMedical(profileModalReg));
-        setModalAllergy(getApplicantAllergy(profileModalReg));
-        setModalTraining(profileModalReg.previous_training || '');
-
-        const isStaff = isStaffRegistration(profileModalReg);
-        const resolvedGen = resolveGender(profileModalReg);
-        setModalIsStaff(isStaff);
-        setModalGender(resolvedGen === 'หญิง' ? 'หญิง' : 'ชาย');
-        
-        const isMsu = isMsuInstitution(profileModalReg.institution);
-        const totalFee = isStaff
-          ? STAFF_SHIRT_FEE
-          : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
-        const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-        const isInstallment = !isStaff && (profileModalReg.payment_plan 
-          ? (profileModalReg.payment_plan === 'installment') 
-          : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url));
-        const isR1Paid = profileModalReg.installment_1_status === 'paid';
-        const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
-        const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (profileModalReg.payment_status === 'paid' || (isStaff && isR1Paid));
-
-        let effStatus = profileModalReg.payment_status || 'unpaid';
-        let effAmount = profileModalReg.payment_amount;
-
-        if (isInstallment) {
-          if (isBothPaid) {
-            effStatus = 'paid';
-            effAmount = 0;
-          } else if (isR1Paid) {
-            effStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
-            effAmount = round2Fee;
-          } else {
-            effStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
-            effAmount = totalFee;
-          }
-        } else {
-          if (isStaff && isR1Paid) effStatus = 'paid';
-          else if (isStaff && profileModalReg.installment_1_status === 'pending_review') effStatus = 'pending_review';
-          effAmount = (effStatus === 'paid') ? 0 : (isStaff ? STAFF_SHIRT_FEE : (profileModalReg.payment_amount !== undefined && profileModalReg.payment_amount !== null ? profileModalReg.payment_amount : totalFee));
-        }
-
-        setModalPaymentPlan(isInstallment ? 'installment' : 'full');
-        setModalPaymentStatus(effStatus);
-        setModalPaymentAmount(effAmount);
-        setModalPaymentBank(profileModalReg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
-        setModalPaymentNotes(profileModalReg.payment_notes || '');
+        populateProfileModalFields(profileModalReg);
         setIsEditingProfileModal(false);
         triggerToast('ยกเลิกการแก้ไขและคืนค่าเดิมของข้อมูลผู้สมัคร');
       }
@@ -2104,7 +2166,53 @@ export default function AdminDashboardView({
     setProfileModalReg(null);
   };
 
-  // Save Full Profile & Special Care Remarks
+  // Upload applicant ID card photo inside Admin Profile Modal
+  const handleUploadModalIdPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !profileModalReg) return;
+    setIsUploadingModalIdPhoto(true);
+    try {
+      const uploaded = await DataService.uploadFile(file, 'photos');
+      if (uploaded?.url) {
+        setModalIdCardPhoto(uploaded.url);
+        triggerToast('อัปโหลดรูปติดบัตรใหม่แล้ว (กด "บันทึกข้อมูล" เพื่อยืนยัน)');
+      }
+    } catch (err) {
+      triggerToast('อัปโหลดรูปติดบัตรไม่สำเร็จ กรุณาลองอีกครั้ง');
+    } finally {
+      setIsUploadingModalIdPhoto(false);
+    }
+  };
+
+  // Upload payment slip inside Admin Profile Modal
+  const handleUploadModalPaymentSlip = async (e, targetType = 'full') => {
+    const file = e.target.files?.[0];
+    if (!file || !profileModalReg) return;
+    setIsUploadingModalSlip(true);
+    try {
+      const uploaded = await DataService.uploadFile(file, 'slips');
+      if (uploaded?.url) {
+        if (targetType === 'r1') {
+          setModalInstallment1SlipUrl(uploaded.url);
+          if (modalInstallment1Status === 'unpaid') setModalInstallment1Status('paid');
+        } else if (targetType === 'r2') {
+          setModalInstallment2SlipUrl(uploaded.url);
+          if (modalInstallment2Status === 'unpaid') setModalInstallment2Status('paid');
+        } else {
+          setModalPaymentSlipUrl(uploaded.url);
+          setModalInstallment1SlipUrl(uploaded.url);
+          if (modalPaymentStatus === 'unpaid') setModalPaymentStatus('paid');
+        }
+        triggerToast('อัปโหลดสลิปใหม่แล้ว (กด "บันทึกข้อมูล" เพื่อยืนยัน)');
+      }
+    } catch (err) {
+      triggerToast('อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง');
+    } finally {
+      setIsUploadingModalSlip(false);
+    }
+  };
+
+  // Save Full Profile & Special Care Remarks (All Applicant Fields Editable by Admin / Developer)
   const handleSaveProfileModal = async (e) => {
     if (e) e.preventDefault();
     if (!profileModalReg) return;
@@ -2129,7 +2237,60 @@ export default function AdminDashboardView({
         }
       }
 
+      const cleanTitleTh = (modalTitleTh || '').trim();
+      const cleanFirstName = (modalFirstName || '').trim() || profileModalReg.first_name || '';
+      const cleanLastName = (modalLastName || '').trim() || profileModalReg.last_name || '';
+      const cleanAbbrTh = (modalInstitutionAbbrTh || '').trim();
+      const cleanTitleEn = (modalTitleEn || '').trim();
+      const cleanFirstNameEn = (modalFirstNameEn || '').trim();
+      const cleanLastNameEn = (modalLastNameEn || '').trim();
+      const cleanAbbrEn = (modalInstitutionAbbrEn || '').trim();
+      const cleanInstitution = (modalInstitution || '').trim();
+
+      const autoBuiltFullName = buildFullNameAffiliation({
+        title_th: cleanTitleTh,
+        first_name: cleanFirstName,
+        last_name: cleanLastName,
+        institution_abbr_th: cleanAbbrTh,
+        title_en: cleanTitleEn,
+        first_name_en: cleanFirstNameEn,
+        last_name_en: cleanLastNameEn,
+        institution_abbr_en: cleanAbbrEn,
+        institution: cleanInstitution
+      });
+      const currentStoredFullName = (profileModalReg.full_name_affiliation || '').trim();
+      const userTypedFullName = (modalFullNameAffiliation || '').trim();
+      const finalFullNameAffiliation = (userTypedFullName && userTypedFullName !== currentStoredFullName)
+        ? userTypedFullName
+        : (autoBuiltFullName || userTypedFullName);
+
       const updates = {
+        title_th: cleanTitleTh,
+        first_name: cleanFirstName,
+        last_name: cleanLastName,
+        first_name_th: cleanFirstName,
+        last_name_th: cleanLastName,
+        institution_abbr_th: cleanAbbrTh,
+        title_en: cleanTitleEn,
+        first_name_en: cleanFirstNameEn,
+        last_name_en: cleanLastNameEn,
+        institution_abbr_en: cleanAbbrEn,
+        full_name_affiliation: finalFullNameAffiliation,
+        nickname: (modalNickname || '').trim(),
+        callsign: (modalCallsign || '').trim(),
+        user_email: (modalEmail || '').trim(),
+        unit: (modalUnit || '').trim(),
+        affiliation: (modalAffiliation || cleanAbbrTh || cleanInstitution || '').trim(),
+        dob: modalDob || '',
+        age_years: Number(modalAgeYears) || 0,
+        age_months: Number(modalAgeMonths) || 0,
+        age_days: Number(modalAgeDays) || 0,
+        blood_group: modalBloodGroup || 'O',
+        emergency_name: (modalEmergencyName || '').trim(),
+        emergency_phone: (modalEmergencyPhone || '').trim(),
+        id_card_photo: modalIdCardPhoto || '',
+        status: modalRegStatus || 'approved',
+        shirt_pickup_status: modalShirtPickupStatus || 'pending',
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
         shirt_size: cleanModalSize,
@@ -2137,7 +2298,7 @@ export default function AdminDashboardView({
         is_special_care: modalSpecialCare,
         special_notes: modalNotes.trim(),
         phone: modalPhone.trim(),
-        institution: modalInstitution.trim(),
+        institution: cleanInstitution,
         medical_history: modalMedical.trim(),
         food_allergy: modalAllergy.trim(),
         previous_training: modalTraining.trim(),
@@ -2148,19 +2309,35 @@ export default function AdminDashboardView({
         payment_status: modalPaymentStatus,
         payment_amount: effectiveAmount,
         payment_bank_info: modalPaymentBank.trim(),
-        payment_notes: modalPaymentNotes.trim()
+        payment_notes: modalPaymentNotes.trim(),
+        payment_slip_url: modalPaymentSlipUrl || profileModalReg.payment_slip_url || null,
+        installment_1_status: modalInstallment1Status || 'unpaid',
+        installment_1_amount: Number(modalInstallment1Amount) || 0,
+        installment_1_notes: (modalInstallment1Notes || '').trim(),
+        installment_1_slip_url: modalInstallment1SlipUrl || profileModalReg.installment_1_slip_url || null,
+        installment_2_status: modalIsStaff ? 'unpaid' : (modalInstallment2Status || 'unpaid'),
+        installment_2_amount: modalIsStaff ? 0 : (Number(modalInstallment2Amount) || 0),
+        installment_2_notes: modalIsStaff ? '' : (modalInstallment2Notes || '').trim(),
+        installment_2_slip_url: modalIsStaff ? null : (modalInstallment2SlipUrl || profileModalReg.installment_2_slip_url || null),
+        admin_manual_override: true
       };
 
       if (modalIsStaff && modalPaymentStatus === 'paid') {
         updates.installment_1_status = 'paid';
+      } else if (effectivePlan === 'full' && modalPaymentStatus === 'paid') {
+        updates.installment_1_status = 'paid';
+      } else if (effectivePlan === 'installment' && modalPaymentStatus === 'paid') {
+        updates.installment_1_status = 'paid';
+        updates.installment_2_status = 'paid';
       }
 
-      await onUpdateAllocation(profileModalReg.user_id, updates);
+      const targetKey = profileModalReg.user_id || profileModalReg.id || profileModalReg.user_email;
+      await onUpdateAllocation(targetKey, updates);
       
       // Update local modal state copy
       setProfileModalReg(prev => ({ ...prev, ...updates }));
       setIsEditingProfileModal(false);
-      triggerToast(`บันทึกข้อมูลของ ${profileModalReg.first_name} เรียบร้อยแล้ว`);
+      triggerToast(`บันทึกข้อมูลของ ${cleanFirstName} ${cleanLastName} เรียบร้อยแล้ว`);
     } catch (err) {
       triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
@@ -2863,6 +3040,75 @@ export default function AdminDashboardView({
     return matchSearch && matchBlood && matchUni && matchGender && matchRole && matchFilter;
   });
 
+  const getBulkMessageRecipientId = (reg) => String(reg?.user_id || reg?.id || '');
+  const visibleBulkMessageIds = filteredRegs.map(getBulkMessageRecipientId).filter(Boolean);
+  const selectedBulkMessageRegs = registrations.filter(reg => selectedBulkMessageIds.has(getBulkMessageRecipientId(reg)));
+  const allVisibleBulkMessageSelected = visibleBulkMessageIds.length > 0 && visibleBulkMessageIds.every(id => selectedBulkMessageIds.has(id));
+
+  const toggleVisibleBulkMessageSelection = () => {
+    setSelectedBulkMessageIds(previous => {
+      const next = new Set(previous);
+      if (allVisibleBulkMessageSelected) visibleBulkMessageIds.forEach(id => next.delete(id));
+      else visibleBulkMessageIds.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const handleSendBulkMessage = async (e) => {
+    e.preventDefault();
+    const recipients = selectedBulkMessageRegs.filter(reg => getBulkMessageRecipientId(reg));
+    if (!bulkMsgText.trim() || recipients.length === 0) return;
+
+    const chosenSender = ADMIN_MESSAGE_SENDERS.find(sender => sender.key === bulkMsgSenderKey) || ADMIN_MESSAGE_SENDERS[0];
+    const senderName = bulkMsgSenderKey === 'custom'
+      ? (bulkCustomSenderName.trim() || 'ผู้ดูแลระบบ (Admin JRE 2027)')
+      : chosenSender.senderName;
+    const systemName = bulkMsgSenderKey === 'custom'
+      ? (bulkCustomSystemName.trim() || 'ระบบแจ้งเตือนโครงการ JRE 2027')
+      : chosenSender.systemName;
+
+    setIsSendingBulkMessage(true);
+    let sentCount = 0;
+    const failedRecipients = [];
+    try {
+      for (const recipient of recipients) {
+        try {
+          await DataService.sendAdminMessage(getBulkMessageRecipientId(recipient), bulkMsgText.trim(), {
+            sender_key: chosenSender.key,
+            sender_name: senderName,
+            sender_role: chosenSender.roleBadge,
+            system_name: systemName,
+            color_theme: chosenSender.colorTheme,
+            title: bulkMsgTitle.trim() || chosenSender.defaultTitle
+          });
+          sentCount += 1;
+        } catch (error) {
+          console.error('Bulk message failed for recipient:', getBulkMessageRecipientId(recipient), error);
+          failedRecipients.push(recipient);
+        }
+      }
+
+      if (sentCount > 0 && typeof onRefreshRegistrations === 'function') {
+        await onRefreshRegistrations();
+      }
+      if (failedRecipients.length === 0) {
+        setSelectedBulkMessageIds(new Set());
+        setIsBulkMessageOpen(false);
+        setBulkMsgTitle('');
+        setBulkMsgText('');
+        triggerToast(`ส่งข้อความสำเร็จ ${sentCount} คน`);
+      } else {
+        setSelectedBulkMessageIds(new Set(failedRecipients.map(getBulkMessageRecipientId)));
+        triggerToast(`ส่งสำเร็จ ${sentCount} คน • ไม่สำเร็จ ${failedRecipients.length} คน กรุณาตรวจสอบแล้วลองส่งซ้ำ`, 'warning');
+      }
+    } catch (error) {
+      console.error('Bulk message error:', error);
+      triggerToast('เกิดข้อผิดพลาดระหว่างส่งข้อความชุดนี้');
+    } finally {
+      setIsSendingBulkMessage(false);
+    }
+  };
+
   // Export Excel (.xlsx) with all fields, dates, statuses, slips, photos, and remarks (Embeds actual visible images into cells)
   const handleExportExcel = async () => {
     if (!registrations || registrations.length === 0) {
@@ -3484,7 +3730,7 @@ export default function AdminDashboardView({
 
       triggerToast('บันทึกการตั้งค่าสินค้า ไซต์ ราคา และซิงค์บัญชีธนาคารกลางเรียบร้อยแล้ว');
     } catch (err) {
-      triggerToast('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
+      triggerToast(`บันทึกไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่'}`);
     } finally {
       setIsSavingMerch(false);
     }
@@ -4837,11 +5083,47 @@ export default function AdminDashboardView({
             </div>
           </div>
 
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 px-4 py-3">
+            <div className="text-xs text-slate-300">
+              กรองรายชื่อด้านบน แล้วติ๊กเลือกผู้รับจากตาราง • เลือกอยู่ <span className="font-black text-indigo-200">{selectedBulkMessageRegs.length}</span> คน
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedBulkMessageIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedBulkMessageIds(new Set())}
+                  className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 hover:text-white text-xs font-bold"
+                >
+                  ล้างที่เลือก
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={selectedBulkMessageRegs.length === 0}
+                onClick={() => setIsBulkMessageOpen(true)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-black transition-colors"
+              >
+                ส่งข้อความถึงผู้ที่เลือก ({selectedBulkMessageRegs.length})
+              </button>
+            </div>
+          </div>
+
           {/* Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-800 scrollbar-none">
             <table className="w-full min-w-[800px] text-left text-xs text-slate-300">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
                 <tr>
+                  <th className="py-4 px-3 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="เลือกผู้สมัครที่แสดงทั้งหมด"
+                      checked={allVisibleBulkMessageSelected}
+                      onChange={toggleVisibleBulkMessageSelection}
+                      disabled={visibleBulkMessageIds.length === 0}
+                      className="h-4 w-4 accent-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                      title="เลือกหรือยกเลิกการเลือกผู้สมัครที่ผ่านตัวกรองทั้งหมด"
+                    />
+                  </th>
                   <th className="py-4 px-4">ผู้สมัคร & สังกัด</th>
                   <th className="py-4 px-3">สถานะชำระเงิน / สลิป</th>
                   <th className="py-4 px-3">เอกสารแนบ</th>
@@ -4858,7 +5140,7 @@ export default function AdminDashboardView({
               <tbody className="divide-y divide-slate-800/60">
                 {filteredRegs.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="py-12 text-center text-slate-500">
+                    <td colSpan="8" className="py-12 text-center text-slate-500">
                       ไม่พบข้อมูลผู้สมัครที่ตรงกับเงื่อนไขการค้นหา
                     </td>
                   </tr>
@@ -4882,6 +5164,24 @@ export default function AdminDashboardView({
                           reg.is_special_care ? 'bg-rose-950/10' : isStaff ? 'bg-purple-950/10' : ''
                         }`}
                       >
+                        <td className="py-4 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`เลือก ${resolvePersonFullNameWithTitle(reg).fullName} สำหรับส่งข้อความ`}
+                            checked={selectedBulkMessageIds.has(getBulkMessageRecipientId(reg))}
+                            onChange={() => {
+                              const recipientId = getBulkMessageRecipientId(reg);
+                              if (!recipientId) return;
+                              setSelectedBulkMessageIds(previous => {
+                                const next = new Set(previous);
+                                if (next.has(recipientId)) next.delete(recipientId);
+                                else next.add(recipientId);
+                                return next;
+                              });
+                            }}
+                            className="h-4 w-4 accent-indigo-500 cursor-pointer"
+                          />
+                        </td>
                         
                         {/* Name, Org, Email */}
                         <td className="py-4 px-4">
@@ -5271,16 +5571,26 @@ export default function AdminDashboardView({
                               {/* Open Profile Modal */}
                               <button
                                 onClick={() => handleOpenProfileModal(reg, 'info')}
-                                className="px-2.5 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700/60 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
+                                className="px-2.5 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700/60 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
                                 title="ดูประวัติเต็ม, สลิป, และส่งข้อความ"
                               >
                                 <Eye className="w-3.5 h-3.5 text-purple-300" />
                                 <span>ดูประวัติ</span>
                               </button>
 
+                              {/* Quick Open in Unlocked Full Edit Mode */}
+                              <button
+                                onClick={() => handleOpenProfileModal(reg, 'info', true)}
+                                className="px-2.5 py-1.5 bg-amber-600/25 hover:bg-amber-600/40 text-amber-200 border border-amber-500/50 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                title="แก้ไขข้อมูลผู้สมัครคนนี้ทุกช่อง (ปลดล็อกโหมดแก้ไขทันที)"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                                <span>แก้ไขข้อมูล</span>
+                              </button>
+
                               <button
                                 onClick={() => handleStartEditAllocation(reg)}
-                                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors"
+                                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors cursor-pointer"
                                 title="จัดกลุ่ม & ห้องนอนด่วน"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
@@ -5801,32 +6111,482 @@ export default function AdminDashboardView({
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[10px]">อายุที่คำนวณได้</span>
-                    <span className="font-bold text-rescue-400">
-                      {profileModalReg.age_years || 0} ปี {profileModalReg.age_months || 0} เดือน
-                    </span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">
-                      เกิด: {profileModalReg.dob || '-'}
-                    </span>
+                {/* Comprehensive Personal, Identity, Affiliation & Contact Editor (Editable for all fields when unlocked) */}
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-indigo-500/30 space-y-4 text-xs shadow-inner">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                    <div>
+                      <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                        <User className="w-4 h-4 text-indigo-400" />
+                        <span>ข้อมูลส่วนตัว ชื่อ-นามสกุล สังกัด และการติดต่อของผู้สมัคร (แก้ไขได้ทุกช่อง)</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        แอดมินและบัญชีนักพัฒนาสามารถแก้ไขชื่อ-สกุล ไทย/อังกฤษ สังกัด วันเกิด กรุ๊ปเลือด เบอร์โทร รูปติดบัตร และข้อมูลทุกช่องได้โดยตรงหากผู้สมัครกรอกข้อมูลผิด
+                      </p>
+                    </div>
+                    {!isEditingProfileModal ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfileModal(true)}
+                        className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer self-start sm:self-auto"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>ปลดล็อกแก้ไขข้อมูลผู้สมัคร</span>
+                      </button>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0 self-start sm:self-auto">
+                        🔓 ปลดล็อกแล้ว — แก้ไขได้ทุกช่อง
+                      </span>
+                    )}
                   </div>
 
-                  <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[10px]">กรุ๊ปเลือด</span>
-                    <span className="font-bold text-red-400 text-sm">
-                      {profileModalReg.blood_group}
-                    </span>
+                  {/* Row 1: Thai Title, First Name, Last Name, Thai Institution Abbr */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-indigo-300 mb-1">คำนำหน้า (ไทย)</label>
+                      <input
+                        type="text"
+                        list="admin-title-th-options"
+                        disabled={!isEditingProfileModal}
+                        value={modalTitleTh}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setModalTitleTh(val);
+                          if (TITLE_TH_TO_EN_MAP[val] && !modalTitleEn) {
+                            setModalTitleEn(TITLE_TH_TO_EN_MAP[val]);
+                          }
+                        }}
+                        placeholder="นาย / นางสาว"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500'
+                        }`}
+                      />
+                      <datalist id="admin-title-th-options">
+                        {TITLE_THAI_OPTIONS.map(opt => <option key={opt} value={opt} />)}
+                      </datalist>
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[11px] font-semibold text-indigo-300 mb-1">ชื่อจริง (ภาษาไทย) *</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalFirstName}
+                        onChange={e => setModalFirstName(e.target.value)}
+                        placeholder="ชื่อจริงภาษาไทย"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-semibold transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[11px] font-semibold text-indigo-300 mb-1">นามสกุล (ภาษาไทย) *</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalLastName}
+                        onChange={e => setModalLastName(e.target.value)}
+                        placeholder="นามสกุลภาษาไทย"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-semibold transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-indigo-300 mb-1">ตัวย่อสถาบัน (ไทย)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalInstitutionAbbrTh}
+                        onChange={e => setModalInstitutionAbbrTh(e.target.value)}
+                        placeholder="เช่น มมส / มข"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500'
+                        }`}
+                      />
+                    </div>
                   </div>
 
-                  <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 col-span-2">
-                    <span className="text-slate-400 block text-[10px]">ผู้ติดต่อฉุกเฉิน</span>
-                    <span className="font-bold text-white block truncate">
-                      {profileModalReg.emergency_name || '-'}
-                    </span>
-                    <span className="text-emerald-400 font-mono text-[10px]">
-                      โทร: {profileModalReg.emergency_phone || '-'}
-                    </span>
+                  {/* Row 2: English Title, First Name, Last Name, English Institution Abbr */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">Title (EN)</label>
+                      <input
+                        type="text"
+                        list="admin-title-en-options"
+                        disabled={!isEditingProfileModal}
+                        value={modalTitleEn}
+                        onChange={e => setModalTitleEn(e.target.value)}
+                        placeholder="Mr. / Ms."
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                      <datalist id="admin-title-en-options">
+                        {TITLE_ENGLISH_OPTIONS.map(opt => <option key={opt} value={opt} />)}
+                      </datalist>
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">First Name (EN)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalFirstNameEn}
+                        onChange={e => setModalFirstNameEn(e.target.value)}
+                        placeholder="First Name"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">Last Name (EN)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalLastNameEn}
+                        onChange={e => setModalLastNameEn(e.target.value)}
+                        placeholder="Last Name"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">Abbr. (EN)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalInstitutionAbbrEn}
+                        onChange={e => setModalInstitutionAbbrEn(e.target.value)}
+                        placeholder="MSU / KKU"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Full Name Affiliation String (with Auto-rebuild button) */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="text-[11px] font-semibold text-purple-300">
+                        ชื่อ-สกุลและสังกัดเต็มสำหรับบัตร ID Card & เกียรติบัตร (Full Name & Affiliation):
+                      </label>
+                      {isEditingProfileModal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const rebuilt = buildFullNameAffiliation({
+                              title_th: modalTitleTh,
+                              first_name: modalFirstName,
+                              last_name: modalLastName,
+                              institution_abbr_th: modalInstitutionAbbrTh,
+                              title_en: modalTitleEn,
+                              first_name_en: modalFirstNameEn,
+                              last_name_en: modalLastNameEn,
+                              institution_abbr_en: modalInstitutionAbbrEn,
+                              institution: modalInstitution
+                            });
+                            setModalFullNameAffiliation(rebuilt);
+                            triggerToast('สร้างข้อความชื่อ-สกุลและสังกัดเต็มอัตโนมัติแล้ว');
+                          }}
+                          className="px-2.5 py-0.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[10px] font-bold cursor-pointer"
+                        >
+                          ⚡ คำนวณจากชื่อไทย/อังกฤษด้านบนอัตโนมัติ
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfileModal}
+                      value={modalFullNameAffiliation}
+                      onChange={e => setModalFullNameAffiliation(e.target.value)}
+                      placeholder="เช่น นายสมชาย ใจดี (มมส) / Mr. Somchai Jaidee (MSU)"
+                      className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                        !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Row 4: Nickname, Callsign, Phone, Email */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-amber-300 mb-1">ชื่อเล่น (Nickname)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalNickname}
+                        onChange={e => setModalNickname(e.target.value)}
+                        placeholder="ชื่อเล่น"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-semibold transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-amber-300 mb-1">นามเรียกขาน (Callsign)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalCallsign}
+                        onChange={e => setModalCallsign(e.target.value)}
+                        placeholder="เช่น กู้ภัย 01 / ไม่มี"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-mono transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-emerald-300 mb-1">เบอร์โทรศัพท์ติดต่อ</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalPhone}
+                        onChange={e => setModalPhone(e.target.value)}
+                        placeholder="08X-XXX-XXXX"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-mono transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-emerald-300 mb-1">อีเมลผู้สมัคร (Email)</label>
+                      <input
+                        type="email"
+                        disabled={!isEditingProfileModal}
+                        value={modalEmail}
+                        onChange={e => setModalEmail(e.target.value)}
+                        placeholder="example@email.com"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-mono transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 5: Institution, Unit/Club, Affiliation */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">มหาวิทยาลัย / สถาบันการศึกษา</label>
+                      <input
+                        type="text"
+                        list="admin-institution-options"
+                        disabled={!isEditingProfileModal}
+                        value={modalInstitution}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setModalInstitution(val);
+                          const meta = INSTITUTION_ABBR_MAP[val];
+                          if (meta) {
+                            setModalInstitutionAbbrTh(meta.abbr_th);
+                            setModalInstitutionAbbrEn(meta.abbr_en);
+                            if (meta.default_unit && !modalUnit) setModalUnit(meta.default_unit);
+                          }
+                        }}
+                        placeholder="เช่น มหาวิทยาลัยมหาสารคาม"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                      <datalist id="admin-institution-options">
+                        {OFFICIAL_NETWORK_INSTITUTIONS.map(inst => (
+                          <option key={inst.name} value={inst.name} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">สังกัดหน่วยกู้ชีพ / ชมรม (Unit)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalUnit}
+                        onChange={e => setModalUnit(e.target.value)}
+                        placeholder="เช่น หน่วยกู้ชีพนิสิต มมส (RCP-MSU)"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-sky-300 mb-1">ชื่อย่อสังกัดบนบัตร (Affiliation)</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalAffiliation}
+                        onChange={e => setModalAffiliation(e.target.value)}
+                        placeholder="เช่น มมส / มข / มทส"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-sky-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 6: DOB, Calculated Age (Years/Months), Blood Group, Emergency Contact */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-3">
+                      <label className="block text-[11px] font-semibold text-rescue-300 mb-1">วันเดือนปีเกิด (ค.ศ.)</label>
+                      <input
+                        type="date"
+                        disabled={!isEditingProfileModal}
+                        value={modalDob}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setModalDob(val);
+                          if (val) {
+                            const age = calculateAgeDetailed(val);
+                            if (age) {
+                              setModalAgeYears(age.years || 0);
+                              setModalAgeMonths(age.months || 0);
+                              setModalAgeDays(age.days || 0);
+                            }
+                          }
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-mono transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-rescue-300 mb-1">อายุ (ปี / เดือน)</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          disabled={!isEditingProfileModal}
+                          value={modalAgeYears}
+                          onChange={e => setModalAgeYears(e.target.value)}
+                          placeholder="ปี"
+                          title="อายุ (ปี)"
+                          className={`w-full px-2 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
+                            !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                          }`}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="11"
+                          disabled={!isEditingProfileModal}
+                          value={modalAgeMonths}
+                          onChange={e => setModalAgeMonths(e.target.value)}
+                          placeholder="เดือน"
+                          title="อายุ (เดือน)"
+                          className={`w-full px-2 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
+                            !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-rose-300 mb-1">กรุ๊ปเลือด</label>
+                      <select
+                        disabled={!isEditingProfileModal}
+                        value={modalBloodGroup}
+                        onChange={e => setModalBloodGroup(e.target.value)}
+                        className={`w-full px-2.5 py-2 rounded-xl text-xs font-bold text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                        }`}
+                      >
+                        {['O', 'A', 'B', 'AB', 'O Rh-', 'A Rh-', 'B Rh-', 'AB Rh-', 'ไม่ทราบ'].map(bg => (
+                          <option key={bg} value={bg}>{bg}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[11px] font-semibold text-amber-300 mb-1">ชื่อผู้ติดต่อฉุกเฉิน</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalEmergencyName}
+                        onChange={e => setModalEmergencyName(e.target.value)}
+                        placeholder="ชื่อ-นามสกุล (ความสัมพันธ์)"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-amber-300 mb-1">เบอร์โทรฉุกเฉิน</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfileModal}
+                        value={modalEmergencyPhone}
+                        onChange={e => setModalEmergencyPhone(e.target.value)}
+                        placeholder="08X-XXX-XXXX"
+                        className={`w-full px-3 py-2 rounded-xl text-xs text-white font-mono transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 7: ID Card Photo Upload/URL, Registration Status, Shirt Pickup Status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1 border-t border-slate-800/80">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[11px] font-semibold text-purple-300 mb-1">
+                        รูปถ่ายติดบัตร ID Card (อัปโหลดรูปใหม่แทนผู้สมัคร หรือวางลิงก์ URL)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {modalIdCardPhoto && (
+                          <img
+                            src={modalIdCardPhoto}
+                            alt="ID Photo"
+                            onClick={() => openDocPreview(modalIdCardPhoto, `รูปติดบัตร - ${modalFirstName}`)}
+                            className="w-10 h-10 rounded-lg object-cover border border-purple-500/40 shrink-0 cursor-pointer hover:opacity-80"
+                          />
+                        )}
+                        <input
+                          type="text"
+                          disabled={!isEditingProfileModal}
+                          value={modalIdCardPhoto}
+                          onChange={e => setModalIdCardPhoto(e.target.value)}
+                          placeholder="URL รูปถ่ายติดบัตร..."
+                          className={`flex-1 px-3 py-2 rounded-xl text-xs text-white font-mono transition-all ${
+                            !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                          }`}
+                        />
+                        {isEditingProfileModal && (
+                          <label className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-xs font-bold cursor-pointer shrink-0 flex items-center gap-1">
+                            {isUploadingModalIdPhoto ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                            <span>อัปโหลดรูป</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleUploadModalIdPhoto}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[11px] font-semibold text-emerald-300 mb-1">สถานะใบสมัคร</label>
+                      <select
+                        disabled={!isEditingProfileModal}
+                        value={modalRegStatus}
+                        onChange={e => setModalRegStatus(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl text-xs font-bold text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                        }`}
+                      >
+                        <option value="approved">✅ อนุมัติแล้ว (Approved)</option>
+                        <option value="pending">⏳ รอตรวจสอบ (Pending)</option>
+                        <option value="rejected">❌ ไม่ผ่าน/ยกเลิก (Rejected)</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[11px] font-semibold text-amber-300 mb-1">สถานะการรับเสื้อ</label>
+                      <select
+                        disabled={!isEditingProfileModal}
+                        value={modalShirtPickupStatus}
+                        onChange={e => setModalShirtPickupStatus(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl text-xs font-bold text-white transition-all ${
+                          !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                        }`}
+                      >
+                        <option value="pending">📦 ยังไม่รับเสื้อ (Pending)</option>
+                        <option value="picked_up">👕 รับเสื้อแล้ว (Picked Up)</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -6431,6 +7191,124 @@ export default function AdminDashboardView({
                           : 'bg-slate-900 border border-slate-700'
                       }`}
                     />
+                  </div>
+
+                  {/* Detailed Installment R1 / R2 & Slip URL Override Controls (Editable when unlocked) */}
+                  <div className="p-3.5 bg-slate-900/70 border border-slate-800 rounded-xl space-y-3">
+                    <div className="text-[11px] font-bold text-amber-300 flex items-center justify-between">
+                      <span>💳 ตั้งค่ารายละเอียดงวดที่ 1 / งวดที่ 2 และอัปโหลดสลิปแทนผู้สมัคร</span>
+                      {isUploadingModalSlip && (
+                        <span className="text-purple-300 flex items-center gap-1">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> กำลังอัปโหลดสลิป...
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สถานะงวดที่ 1 / เต็มจำนวน:</label>
+                        <select
+                          disabled={!isEditingProfileModal}
+                          value={modalInstallment1Status}
+                          onChange={e => setModalInstallment1Status(e.target.value)}
+                          className={`w-full px-3 py-1.5 rounded-lg text-white font-bold text-xs ${
+                            !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
+                          }`}
+                        >
+                          <option value="unpaid">🔴 ค้างชำระ (Unpaid)</option>
+                          <option value="pending_review">🟡 รอตรวจสลิป (Pending Review)</option>
+                          <option value="paid">🟢 ชำระแล้ว (Paid)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">ยอดงวดที่ 1 (บาท):</label>
+                        <input
+                          type="number"
+                          disabled={!isEditingProfileModal}
+                          value={modalInstallment1Amount}
+                          onChange={e => setModalInstallment1Amount(e.target.value)}
+                          className={`w-full px-3 py-1.5 rounded-lg text-white font-mono text-xs ${
+                            !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สลิปงวดที่ 1 / เต็มจำนวน:</label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            disabled={!isEditingProfileModal}
+                            value={modalInstallment1SlipUrl || modalPaymentSlipUrl}
+                            onChange={e => {
+                              setModalInstallment1SlipUrl(e.target.value);
+                              setModalPaymentSlipUrl(e.target.value);
+                            }}
+                            placeholder="URL สลิป..."
+                            className={`flex-1 px-2.5 py-1.5 rounded-lg text-white font-mono text-[11px] ${
+                              !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
+                            }`}
+                          />
+                          {isEditingProfileModal && (
+                            <label className="px-2.5 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 text-[11px] font-bold cursor-pointer shrink-0">
+                              อัปโหลด
+                              <input type="file" accept="image/*" onChange={e => handleUploadModalPaymentSlip(e, 'r1')} className="hidden" />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {!modalIsStaff && modalPaymentPlan === 'installment' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80">
+                        <div>
+                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สถานะงวดที่ 2:</label>
+                          <select
+                            disabled={!isEditingProfileModal}
+                            value={modalInstallment2Status}
+                            onChange={e => setModalInstallment2Status(e.target.value)}
+                            className={`w-full px-3 py-1.5 rounded-lg text-white font-bold text-xs ${
+                              !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
+                            }`}
+                          >
+                            <option value="unpaid">🔴 ค้างชำระ (Unpaid)</option>
+                            <option value="pending_review">🟡 รอตรวจสลิป (Pending Review)</option>
+                            <option value="paid">🟢 ชำระแล้ว (Paid)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">ยอดงวดที่ 2 (บาท):</label>
+                          <input
+                            type="number"
+                            disabled={!isEditingProfileModal}
+                            value={modalInstallment2Amount}
+                            onChange={e => setModalInstallment2Amount(e.target.value)}
+                            className={`w-full px-3 py-1.5 rounded-lg text-white font-mono text-xs ${
+                              !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สลิปงวดที่ 2:</label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              disabled={!isEditingProfileModal}
+                              value={modalInstallment2SlipUrl}
+                              onChange={e => setModalInstallment2SlipUrl(e.target.value)}
+                              placeholder="URL สลิปงวด 2..."
+                              className={`flex-1 px-2.5 py-1.5 rounded-lg text-white font-mono text-[11px] ${
+                                !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
+                              }`}
+                            />
+                            {isEditingProfileModal && (
+                              <label className="px-2.5 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-[11px] font-bold cursor-pointer shrink-0">
+                                อัปโหลด
+                                <input type="file" accept="image/*" onChange={e => handleUploadModalPaymentSlip(e, 'r2')} className="hidden" />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-end gap-3 pt-2">
@@ -9715,8 +10593,8 @@ export default function AdminDashboardView({
                     : 'bg-slate-900/60 border-slate-800'
                 }`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-start sm:items-center gap-2.5">
-                      <span className={`px-2.5 py-1 rounded-xl text-xs font-black font-mono shrink-0 ${
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 min-w-0">
+                      <span className={`inline-flex max-w-full px-2.5 py-1 rounded-xl text-xs font-black font-mono shrink-0 ${
                         unspecItemsCount > 0
                           ? 'bg-rose-500 text-white animate-pulse'
                           : customSizeItems.length > 0
@@ -9729,7 +10607,7 @@ export default function AdminDashboardView({
                           ? `✓ ระบุไซส์พิเศษครบแล้ว ${specItemsCount} คน (${sizeStats.otherSpecifiedLabels?.join(', ')})`
                           : '✓ ระบุไซส์ครบทุกคนแล้ว'}
                       </span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <h4 className="text-xs sm:text-sm font-black text-white">
                           จัดการผู้เลือกไซส์ &ldquo;อื่นๆ (ขนาดสั่งตัดพิเศษ)&rdquo; — ให้ Admin ระบุไซส์จริงรายคนหลังติดต่อแล้ว
                         </h4>
@@ -12758,18 +13636,31 @@ export default function AdminDashboardView({
                         </button>
 
                         {reg && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedUserDetail(null);
-                              handleTabChange('applicants');
-                              setSearchQuery(acc.email || acc.name || '');
-                            }}
-                            className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <Users className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>ไปยังตารางผู้สมัคร</span>
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedUserDetail(null);
+                                handleOpenProfileModal(reg, 'info', true);
+                              }}
+                              className="px-2.5 py-1.5 bg-purple-600/25 hover:bg-purple-600/35 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-purple-300" />
+                              <span>แก้ไขใบสมัครเต็มรูปแบบ</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedUserDetail(null);
+                                handleTabChange('applicants');
+                                setSearchTerm(acc.email || acc.name || '');
+                              }}
+                              className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Users className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>ไปยังตารางผู้สมัคร</span>
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -14106,6 +14997,110 @@ export default function AdminDashboardView({
         onClose={() => setPreviewDoc(null)}
         doc={previewDoc}
       />
+
+      {isBulkMessageOpen && (
+        <ModalPortal isOpen={isBulkMessageOpen} onClose={() => !isSendingBulkMessage && setIsBulkMessageOpen(false)}>
+          <div
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !isSendingBulkMessage && setIsBulkMessageOpen(false)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="bulk-message-title"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700 bg-slate-900 p-5 sm:p-7 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <h2 id="bulk-message-title" className="text-lg sm:text-xl font-black text-white">ส่งข้อความแบบกลุ่ม</h2>
+                  <p className="mt-1 text-sm text-indigo-200">ผู้รับที่เลือกไว้ {selectedBulkMessageRegs.length} คน</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="ปิดหน้าต่างส่งข้อความ"
+                  disabled={isSendingBulkMessage}
+                  onClick={() => setIsBulkMessageOpen(false)}
+                  className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="mb-4 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                ข้อความเดียวกันจะถูกส่งเป็นข้อความส่วนตัวให้ผู้รับแต่ละคนที่เลือกไว้ ใช้ตัวกรองและช่องติ๊กในตารางเพื่อจัดกลุ่มผู้รับ
+              </p>
+
+              <form onSubmit={handleSendBulkMessage} className="space-y-4">
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-300">ส่งในนาม</span>
+                  <select
+                    value={bulkMsgSenderKey}
+                    onChange={e => setBulkMsgSenderKey(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {ADMIN_MESSAGE_SENDERS.map(sender => (
+                      <option key={sender.key} value={sender.key}>{sender.senderName}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {bulkMsgSenderKey === 'custom' && (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-300">ชื่อผู้ส่ง</span>
+                      <input value={bulkCustomSenderName} onChange={e => setBulkCustomSenderName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="ผู้ดูแลระบบ" />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-300">ชื่อระบบ</span>
+                      <input value={bulkCustomSystemName} onChange={e => setBulkCustomSystemName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="ระบบแจ้งเตือนโครงการ JRE 2027" />
+                    </label>
+                  </div>
+                )}
+
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-300">หัวข้อ</span>
+                  <input
+                    value={bulkMsgTitle}
+                    onChange={e => setBulkMsgTitle(e.target.value)}
+                    maxLength={160}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder={(ADMIN_MESSAGE_SENDERS.find(sender => sender.key === bulkMsgSenderKey) || ADMIN_MESSAGE_SENDERS[0]).defaultTitle}
+                  />
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-300">ข้อความ</span>
+                  <textarea
+                    value={bulkMsgText}
+                    onChange={e => setBulkMsgText(e.target.value)}
+                    required
+                    rows={7}
+                    maxLength={5000}
+                    className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm leading-relaxed text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="เขียนข้อความที่จะส่งให้ผู้รับที่เลือก..."
+                  />
+                  <span className="block text-right text-[10px] text-slate-500">{bulkMsgText.length}/5000</span>
+                </label>
+
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={isSendingBulkMessage}
+                    onClick={() => setIsBulkMessageOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 hover:text-white disabled:opacity-50 text-sm font-bold"
+                  >ยกเลิก</button>
+                  <button
+                    type="submit"
+                    disabled={isSendingBulkMessage || !bulkMsgText.trim() || selectedBulkMessageRegs.length === 0}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-black"
+                  >{isSendingBulkMessage ? 'กำลังส่ง...' : `ส่งข้อความให้ ${selectedBulkMessageRegs.length} คน`}</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </ModalPortal>
+      )}
 
       {/* IN-APP SYSTEM POPUP DIALOG FOR CONFIRMATIONS & ALERTS */}
       <ConfirmModal {...confirmModalProps} />

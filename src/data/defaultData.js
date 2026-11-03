@@ -1005,110 +1005,128 @@ export const resolveUniversityInfo = (regOrStr) => {
     });
   }
 
-  const rawText = typeof regOrStr === 'object'
-    ? `${regOrStr.institution || ''} ${regOrStr.affiliation || ''} ${regOrStr.institution_abbr_th || ''} ${regOrStr.institution_abbr_en || ''} ${regOrStr.full_name_affiliation || ''} ${regOrStr.unit || ''} ${regOrStr.customer_affiliation || ''}`
-    : String(regOrStr);
+  const matchTextToInstitution = (str) => {
+    const textLower = String(str || '').toLowerCase().trim();
+    if (!textLower) return null;
 
-  const textLower = rawText.toLowerCase().trim();
+    // 1. มมส (MSU)
+    if (
+      textLower.includes('มหาสารคาม') ||
+      textLower.includes('มมส') ||
+      textLower.includes('msu') ||
+      textLower.includes('ราชพฤกษ์') ||
+      textLower.includes('rcpmsu') ||
+      textLower.includes('mahasarakham')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[0];
+      return withAliases({ ...inst, isMsu: true, orderIndex: 1 });
+    }
 
-  // 1. มมส (MSU)
-  if (
-    textLower.includes('มหาสารคาม') ||
-    textLower.includes('มมส') ||
-    textLower.includes('msu') ||
-    textLower.includes('ราชพฤกษ์') ||
-    textLower.includes('rcpmsu') ||
-    textLower.includes('mahasarakham')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[0];
-    return withAliases({ ...inst, isMsu: true, orderIndex: 1 });
-  }
+    // 2. มข (KKU)
+    if (
+      textLower.includes('ขอนแก่น') ||
+      textLower.includes('มข') ||
+      textLower.includes('kku') ||
+      textLower.includes('tactic of special') ||
+      /\btsi\b/.test(textLower) ||
+      textLower.includes('khon kaen')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[1];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 2 });
+    }
 
-  // 2. มข (KKU)
-  if (
-    textLower.includes('ขอนแก่น') ||
-    textLower.includes('มข') ||
-    textLower.includes('kku') ||
-    textLower.includes('tactic of special') ||
-    /\btsi\b/.test(textLower) ||
-    textLower.includes('khon kaen')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[1];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 2 });
-  }
+    // 3. มทส (SUT)
+    if (
+      textLower.includes('สุรนารี') ||
+      textLower.includes('มทส') ||
+      textLower.includes('sut') ||
+      textLower.includes('suranaree')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[2];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 3 });
+    }
 
-  // 3. มทส (SUT)
-  if (
-    textLower.includes('สุรนารี') ||
-    textLower.includes('มทส') ||
-    textLower.includes('sut') ||
-    textLower.includes('suranaree')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[2];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 3 });
-  }
+    // 4. มช (CMU)
+    if (
+      textLower.includes('เชียงใหม่') ||
+      textLower.includes('มช') ||
+      textLower.includes('cmu') ||
+      textLower.includes('พิงคนคร') ||
+      textLower.includes('chiang mai')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[3];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 4 });
+    }
 
-  // 4. มช (CMU)
-  if (
-    textLower.includes('เชียงใหม่') ||
-    textLower.includes('มช') ||
-    textLower.includes('cmu') ||
-    textLower.includes('พิงคนคร') ||
-    textLower.includes('chiang mai')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[3];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 4 });
-  }
+    // 5. มกส (KSU - กาฬสินธุ์)
+    if (
+      textLower.includes('กาฬสินธุ์') ||
+      textLower.includes('มกส') ||
+      textLower.includes('ksu') ||
+      textLower.includes('ลูกพระยาโสม') ||
+      textLower.includes('kalasin')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[4];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 5 });
+    }
 
-  // 5. มกส (KSU - กาฬสินธุ์)
-  if (
-    textLower.includes('กาฬสินธุ์') ||
-    textLower.includes('มกส') ||
-    textLower.includes('ksu') ||
-    textLower.includes('ลูกพระยาโสม') ||
-    textLower.includes('kalasin')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[4];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 5 });
-  }
+    // 6. มรภ.อุดรธานี (UDRU)
+    if (
+      textLower.includes('อุดรธานี') ||
+      textLower.includes('มรภ.อุดร') ||
+      textLower.includes('udru') ||
+      textLower.includes('삼พร้าว') ||
+      textLower.includes('สามพร้าว') ||
+      textLower.includes('udon')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[5];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 6 });
+    }
 
-  // 6. มรภ.อุดรธานี (UDRU)
-  if (
-    textLower.includes('อุดรธานี') ||
-    textLower.includes('มรภ.อุดร') ||
-    textLower.includes('udru') ||
-    textLower.includes('삼พร้าว') ||
-    textLower.includes('สามพร้าว') ||
-    textLower.includes('udon')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[5];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 6 });
-  }
+    // 7. มวล. (WU - วลัยลักษณ์)
+    if (
+      textLower.includes('วลัยลักษณ์') ||
+      textLower.includes('มวล') ||
+      /\bwu\b/.test(textLower) ||
+      textLower.includes('ตุมปัง') ||
+      textLower.includes('walailak')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[6];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 7 });
+    }
 
-  // 7. มวล. (WU - วลัยลักษณ์)
-  if (
-    textLower.includes('วลัยลักษณ์') ||
-    textLower.includes('มวล') ||
-    /\bwu\b/.test(textLower) ||
-    textLower.includes('ตุมปัง') ||
-    textLower.includes('walailak')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[6];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 7 });
-  }
+    // 8. มก.ฉกส (KU CSC - สกลนคร)
+    if (
+      textLower.includes('สกลนคร') ||
+      textLower.includes('ฉกส') ||
+      textLower.includes('เกษตรศาสตร์') ||
+      textLower.includes('อินทนิล') ||
+      textLower.includes('kucsc') ||
+      textLower.includes('ku.csc') ||
+      textLower.includes('kasetsart')
+    ) {
+      const inst = OFFICIAL_NETWORK_INSTITUTIONS[7];
+      return withAliases({ ...inst, isMsu: false, orderIndex: 8 });
+    }
 
-  // 8. มก.ฉกส (KU CSC - สกลนคร)
-  if (
-    textLower.includes('สกลนคร') ||
-    textLower.includes('ฉกส') ||
-    textLower.includes('เกษตรศาสตร์') ||
-    textLower.includes('อินทนิล') ||
-    textLower.includes('kucsc') ||
-    textLower.includes('ku.csc') ||
-    textLower.includes('kasetsart')
-  ) {
-    const inst = OFFICIAL_NETWORK_INSTITUTIONS[7];
-    return withAliases({ ...inst, isMsu: false, orderIndex: 8 });
+    return null;
+  };
+
+  if (typeof regOrStr === 'object') {
+    // ตรวจสอบจากฟิลด์หลักของสถาบัน (institution, affiliation, unit, ตัวย่อสถาบัน) ก่อนเสมอ
+    // เพื่อไม่ให้ข้อความเก่าใน full_name_affiliation มาทับสถาบันจริงที่เลือกไว้
+    const primaryMatch =
+      matchTextToInstitution(regOrStr.institution) ||
+      matchTextToInstitution(regOrStr.affiliation) ||
+      matchTextToInstitution(`${regOrStr.institution_abbr_th || ''} ${regOrStr.institution_abbr_en || ''}`) ||
+      matchTextToInstitution(regOrStr.unit) ||
+      matchTextToInstitution(regOrStr.customer_affiliation) ||
+      matchTextToInstitution(regOrStr.full_name_affiliation);
+
+    if (primaryMatch) return primaryMatch;
+  } else {
+    const directMatch = matchTextToInstitution(regOrStr);
+    if (directMatch) return directMatch;
   }
 
   // กรณีระบุชื่อสถาบันอื่น

@@ -28,7 +28,7 @@ CREATE POLICY "Registrations Owner Read"
   USING (
     auth.uid() = user_id 
     OR auth.jwt() ->> 'email' = user_email
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 -- อนุญาตให้ลงทะเบียนใหม่ (INSERT) ได้
@@ -44,19 +44,19 @@ CREATE POLICY "Registrations Owner Update"
   USING (
     auth.uid() = user_id 
     OR auth.jwt() ->> 'email' = user_email
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   )
   WITH CHECK (
     auth.uid() = user_id 
     OR auth.jwt() ->> 'email' = user_email
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 -- ผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถลบข้อมูลผู้สมัครได้
 CREATE POLICY "Registrations Admin Delete"
   ON registrations
   FOR DELETE
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- ==============================================================================
 -- 4. ตาราง user_accounts: ป้องกันการรั่วไหลของรหัสผ่าน
@@ -68,7 +68,7 @@ CREATE POLICY "User Accounts Owner Access"
   USING (
     auth.uid()::text = id 
     OR auth.jwt() ->> 'email' = email
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 -- ==============================================================================
@@ -84,8 +84,8 @@ CREATE POLICY "Project Settings Public Read"
 CREATE POLICY "Project Settings Admin Write"
   ON project_settings
   FOR ALL
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'))
+  WITH CHECK (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- ==============================================================================
 -- 6. ตาราง announcements: ประชาสัมพันธ์โครงการ
@@ -94,13 +94,13 @@ CREATE POLICY "Project Settings Admin Write"
 CREATE POLICY "Announcements Public Read"
   ON announcements
   FOR SELECT
-  USING (is_published = true OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (is_published = true OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- เฉพาะ Admin เท่านั้นที่สามารถสร้าง/แก้ไข/ลบข่าวสารได้
 CREATE POLICY "Announcements Admin Manage"
   ON announcements
   FOR ALL
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- ==============================================================================
 -- 7. Trigger ป้องกันผู้ใช้ทั่วไปแก้ไขสถานะการเงิน (Prevent Payment Status Tampering)

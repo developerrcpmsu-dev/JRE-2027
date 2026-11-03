@@ -45,7 +45,7 @@ CREATE POLICY "jre_staging_registrations_owner_select"
   USING (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "jre_staging_registrations_owner_insert"
@@ -53,7 +53,7 @@ CREATE POLICY "jre_staging_registrations_owner_insert"
   WITH CHECK (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "jre_staging_registrations_owner_update"
@@ -61,12 +61,12 @@ CREATE POLICY "jre_staging_registrations_owner_update"
   USING (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   )
   WITH CHECK (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "jre_staging_registrations_owner_delete"
@@ -74,7 +74,7 @@ CREATE POLICY "jre_staging_registrations_owner_delete"
   USING (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 -- Only the known public form configuration remains readable anonymously.
@@ -84,8 +84,8 @@ CREATE POLICY "jre_staging_project_settings_public_select"
 
 CREATE POLICY "jre_staging_project_settings_admin_write"
   ON public.project_settings FOR ALL TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'))
+  WITH CHECK (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- Announcements are public content; only admins may mutate them.
 CREATE POLICY "jre_staging_announcements_public_select"
@@ -94,8 +94,8 @@ CREATE POLICY "jre_staging_announcements_public_select"
 
 CREATE POLICY "jre_staging_announcements_admin_write"
   ON public.announcements FOR ALL TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'))
+  WITH CHECK (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 COMMIT;
 

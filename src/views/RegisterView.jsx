@@ -116,36 +116,35 @@ export const TITLE_TH_TO_EN_MAP = {
 };
 
 export const INSTITUTION_ABBR_MAP = {
-  'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)': { th: 'มมส', en: 'MSU' },
-  'มหาวิทยาลัยมหาสารคาม (มมส)': { th: 'มมส', en: 'MSU' },
-  'TSI - Tactic of Special Services and Investigation มหาวิทยาลัยขอนแก่น (มข)': { th: 'มข', en: 'KKU' },
-  'มหาวิทยาลัยขอนแก่น (มข)': { th: 'มข', en: 'KKU' },
-  'ชมรมจิตอาสาแสดทอง องค์การนักศึกษา มหาวิทยาลัยเทคโนโลยีสุรนารี (มทส)': { th: 'มทส', en: 'SUT' },
-  'มหาวิทยาลัยเทคโนโลยีสุรนารี (มทส)': { th: 'มทส', en: 'SUT' },
-  'ชมรมปฏิบัติการกู้ภัยและบรรเทาสาธารณภัย มหาวิทยาลัยเชียงใหม่ (มช)': { th: 'มช', en: 'CMU' },
-  'มหาวิทยาลัยเชียงใหม่ (มช)': { th: 'มช', en: 'CMU' },
-  'ชมรมกู้ชีพกู้ภัยมหาวิทยาลัยกาฬสินธุ์ KSU Rescue (มกส)': { th: 'มกส', en: 'KSU' },
-  'มหาวิทยาลัยกาฬสินธุ์ (มกส)': { th: 'มกส', en: 'KSU' },
-  'ชมรมอาสาสมัครกู้ชีพ-กู้ภัย มหาวิทยาลัยราชภัฏอุดรธานี (มรภ.อุดรธานี)': { th: 'มรภ.อุดรธานี', en: 'UDRU' },
-  'มหาวิทยาลัยราชภัฏอุดรธานี (มรภ.อุดรธานี)': { th: 'มรภ.อุดรธานี', en: 'UDRU' },
-  'ชมรมนักวิทยุสมัครเล่นและอาสาบรรเทาภัย (วลัยอาสา) มหาวิทยาลัยวลัยลักษณ์ (มวล.)': { th: 'มวล.', en: 'WU' },
-  'มหาวิทยาลัยวลัยลักษณ์ (มวล.)': { th: 'มวล.', en: 'WU' },
-  'ชมรมกู้ชีพ-กู้ภัย มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตเฉลิมพระเกียรติ จังหวัดสกลนคร (มก.ฉกส)': { th: 'มก.ฉกส', en: 'KU-CSC' },
-  'มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตเฉลิมพระเกียรติ จังหวัดสกลนคร (มก.ฉกส)': { th: 'มก.ฉกส', en: 'KU-CSC' }
+  'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)': { th: 'มมส', en: 'MSU', abbr_th: 'มมส', abbr_en: 'MSU', default_unit: 'ชมรมกู้ภัยราชพฤกษ์' },
+  'มหาวิทยาลัยมหาสารคาม (มมส)': { th: 'มมส', en: 'MSU', abbr_th: 'มมส', abbr_en: 'MSU', default_unit: 'ชมรมกู้ภัยราชพฤกษ์' },
+  'TSI - Tactic of Special Services and Investigation มหาวิทยาลัยขอนแก่น (มข)': { th: 'มข', en: 'KKU', abbr_th: 'มข', abbr_en: 'KKU', default_unit: 'TSI - Tactic of Special Services and Investigation' },
+  'มหาวิทยาลัยขอนแก่น (มข)': { th: 'มข', en: 'KKU', abbr_th: 'มข', abbr_en: 'KKU', default_unit: 'TSI - Tactic of Special Services and Investigation' },
+  'ชมรมจิตอาสาแสดทอง องค์การนักศึกษา มหาวิทยาลัยเทคโนโลยีสุรนารี (มทส)': { th: 'มทส', en: 'SUT', abbr_th: 'มทส', abbr_en: 'SUT', default_unit: 'ชมรมจิตอาสาแสดทอง องค์การนักศึกษา' },
+  'มหาวิทยาลัยเทคโนโลยีสุรนารี (มทส)': { th: 'มทส', en: 'SUT', abbr_th: 'มทส', abbr_en: 'SUT', default_unit: 'ชมรมจิตอาสาแสดทอง องค์การนักศึกษา' },
+  'ชมรมปฏิบัติการกู้ภัยและบรรเทาสาธารณภัย มหาวิทยาลัยเชียงใหม่ (มช)': { th: 'มช', en: 'CMU', abbr_th: 'มช', abbr_en: 'CMU', default_unit: 'ชมรมปฏิบัติการกู้ภัยและบรรเทาสาธารณภัย' },
+  'มหาวิทยาลัยเชียงใหม่ (มช)': { th: 'มช', en: 'CMU', abbr_th: 'มช', abbr_en: 'CMU', default_unit: 'ชมรมปฏิบัติการกู้ภัยและบรรเทาสาธารณภัย' },
+  'ชมรมกู้ชีพกู้ภัยมหาวิทยาลัยกาฬสินธุ์ KSU Rescue (มกส)': { th: 'มกส', en: 'KSU', abbr_th: 'มกส', abbr_en: 'KSU', default_unit: 'ชมรมกู้ชีพกู้ภัยมหาวิทยาลัยกาฬสินธุ์ KSU Rescue' },
+  'มหาวิทยาลัยกาฬสินธุ์ (มกส)': { th: 'มกส', en: 'KSU', abbr_th: 'มกส', abbr_en: 'KSU', default_unit: 'ชมรมกู้ชีพกู้ภัยมหาวิทยาลัยกาฬสินธุ์ KSU Rescue' },
+  'ชมรมอาสาสมัครกู้ชีพ-กู้ภัย มหาวิทยาลัยราชภัฏอุดรธานี (มรภ.อุดรธานี)': { th: 'มรภ.อุดรธานี', en: 'UDRU', abbr_th: 'มรภ.อุดรธานี', abbr_en: 'UDRU', default_unit: 'ชมรมอาสาสมัครกู้ชีพ-กู้ภัย' },
+  'มหาวิทยาลัยราชภัฏอุดรธานี (มรภ.อุดรธานี)': { th: 'มรภ.อุดรธานี', en: 'UDRU', abbr_th: 'มรภ.อุดรธานี', abbr_en: 'UDRU', default_unit: 'ชมรมอาสาสมัครกู้ชีพ-กู้ภัย' },
+  'ชมรมนักวิทยุสมัครเล่นและอาสาบรรเทาภัย (วลัยอาสา) มหาวิทยาลัยวลัยลักษณ์ (มวล.)': { th: 'มวล.', en: 'WU', abbr_th: 'มวล.', abbr_en: 'WU', default_unit: 'ชมรมนักวิทยุสมัครเล่นและอาสาบรรเทาภัย (วลัยอาสา)' },
+  'มหาวิทยาลัยวลัยลักษณ์ (มวล.)': { th: 'มวล.', en: 'WU', abbr_th: 'มวล.', abbr_en: 'WU', default_unit: 'ชมรมนักวิทยุสมัครเล่นและอาสาบรรเทาภัย (วลัยอาสา)' },
+  'ชมรมกู้ชีพ-กู้ภัย มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตเฉลิมพระเกียรติ จังหวัดสกลนคร (มก.ฉกส)': { th: 'มก.ฉกส', en: 'KU-CSC', abbr_th: 'มก.ฉกส', abbr_en: 'KU-CSC', default_unit: 'ชมรมกู้ชีพ-กู้ภัย' },
+  'มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตเฉลิมพระเกียรติ จังหวัดสกลนคร (มก.ฉกส)': { th: 'มก.ฉกส', en: 'KU-CSC', abbr_th: 'มก.ฉกส', abbr_en: 'KU-CSC', default_unit: 'ชมรมกู้ชีพ-กู้ภัย' }
 };
 
-export const buildFullNameAffiliation = ({
-  titleTh = '',
-  titleOtherTh = '',
-  firstNameTh = '',
-  lastNameTh = '',
-  institutionAbbrTh = '',
-  titleEn = '',
-  titleOtherEn = '',
-  firstNameEn = '',
-  lastNameEn = '',
-  institutionAbbrEn = ''
-}) => {
+export const buildFullNameAffiliation = (params = {}) => {
+  const titleTh = params.titleTh ?? params.title_th ?? '';
+  const titleOtherTh = params.titleOtherTh ?? params.title_other_th ?? '';
+  const firstNameTh = params.firstNameTh ?? params.first_name_th ?? params.first_name ?? '';
+  const lastNameTh = params.lastNameTh ?? params.last_name_th ?? params.last_name ?? '';
+  const institutionAbbrTh = params.institutionAbbrTh ?? params.institution_abbr_th ?? '';
+  const titleEn = params.titleEn ?? params.title_en ?? '';
+  const titleOtherEn = params.titleOtherEn ?? params.title_other_en ?? '';
+  const firstNameEn = params.firstNameEn ?? params.first_name_en ?? '';
+  const lastNameEn = params.lastNameEn ?? params.last_name_en ?? '';
+  const institutionAbbrEn = params.institutionAbbrEn ?? params.institution_abbr_en ?? '';
   const finalTitleTh = (titleTh === 'อื่นๆ' ? titleOtherTh : titleTh).trim();
   const finalTitleEn = (titleEn === 'อื่นๆ' ? titleOtherEn : titleEn).trim();
   const fTh = firstNameTh.trim();
@@ -238,6 +237,15 @@ export const parseFullNameAffiliationString = (str) => {
     if (parts.length > 1) result.lastNameEn = parts.slice(1).join(' ');
   }
 
+  result.title_th = result.titleTh || '';
+  result.first_name = result.firstNameTh || '';
+  result.last_name = result.lastNameTh || '';
+  result.institution_abbr_th = result.institutionAbbrTh || '';
+  result.title_en = result.titleEn || '';
+  result.first_name_en = result.firstNameEn || '';
+  result.last_name_en = result.lastNameEn || '';
+  result.institution_abbr_en = result.institutionAbbrEn || '';
+
   return result;
 };
 
@@ -282,6 +290,7 @@ export const buildNicknameString = (th, en) => {
 
 export default function RegisterView({ 
   user, 
+  isAdmin = false,
   myRegistration, 
   onSaveRegistration, 
   onUpdateRegistration,
@@ -298,6 +307,11 @@ export default function RegisterView({
 
   const effectivePaymentConfig = paymentConfig || DEFAULT_PAYMENT_CONFIG;
   const myCardData = myRegistration ? getRegistrationCardData(myRegistration) : null;
+  const isSuperEditor = Boolean(
+    isAdmin ||
+    (user?.email && String(user.email).trim().toLowerCase() === 'developer.rcpmsu@gmail.com') ||
+    user?.role === 'admin'
+  );
 
   // Payment approval status calculation for applicant dashboard & edit/cancel behavior
   const isApplicantSinglePaid = Boolean(
@@ -350,7 +364,9 @@ export default function RegisterView({
     if (subRoute === 'dashboard') {
       setIsEditing(false);
     } else if (subRoute === 'form' && myRegistration) {
-      if (isApplicantFullyPaid) {
+      if (isSuperEditor) {
+        setIsEditing(true);
+      } else if (isApplicantFullyPaid) {
         setIsEditing(false);
         if (onSubRouteChange) onSubRouteChange('dashboard');
         triggerToast('ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ไม่สามารถแก้ไขข้อมูลใบสมัครได้', 'info');
@@ -362,7 +378,7 @@ export default function RegisterView({
         setIsEditing(true);
       }
     }
-  }, [subRoute, myRegistration, isApplicantFullyPaid, isRegistrationClosed]);
+  }, [subRoute, myRegistration, isApplicantFullyPaid, isRegistrationClosed, isSuperEditor]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -2219,7 +2235,7 @@ export default function RegisterView({
   }
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
-  if (myRegistration && (!isEditing || isApplicantFullyPaid)) {
+  if (myRegistration && (!isEditing || (isApplicantFullyPaid && !isSuperEditor))) {
     const paymentStatus = myRegistration.payment_status || 'unpaid';
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
     const unreadMessagesCount = adminMessages.filter(m => !m.read).length;
@@ -2526,8 +2542,8 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-              {/* EDIT REGISTRATION BUTTON: Locked once fully paid and confirmed, or if registration is closed */}
-              {isApplicantFullyPaid ? (
+              {/* EDIT REGISTRATION BUTTON: Locked once fully paid and confirmed, or if registration is closed (except Admin/Developer) */}
+              {!isSuperEditor && isApplicantFullyPaid ? (
                 <div
                   className="px-4 py-2.5 bg-slate-900/90 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
                   title="ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ข้อมูลถูกล็อคเรียบร้อย หากต้องการแก้ไขกรุณาติดต่อผู้จัดโครงการ"
@@ -2535,7 +2551,7 @@ export default function RegisterView({
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   <span>ยืนยันสิทธิ์สมบูรณ์แล้ว (ล็อคข้อมูล)</span>
                 </div>
-              ) : isRegistrationClosed ? (
+              ) : !isSuperEditor && isRegistrationClosed ? (
                 <div
                   className="px-4 py-2.5 bg-slate-900/90 text-slate-400 border border-slate-700/60 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
                   title="โครงการได้ปิดรับสมัครแล้ว ไม่อนุญาตให้แก้ไขข้อมูลใบสมัคร แต่ท่านยังสามารถชำระเงินงวดที่ 2 ได้ตามปกติ"
@@ -2596,8 +2612,8 @@ export default function RegisterView({
                 )}
               </button>
 
-              {/* CANCEL REGISTRATION BUTTON: Disabled if transferred or payment made */}
-              {hasTransferredOrPaid ? (
+              {/* CANCEL REGISTRATION BUTTON: Disabled if transferred or payment made (except Admin/Developer) */}
+              {!isSuperEditor && hasTransferredOrPaid ? (
                 <div
                   className="px-3.5 py-2.5 bg-slate-900/90 text-slate-500 border border-slate-800 rounded-xl text-xs font-medium flex items-center gap-1.5 cursor-not-allowed select-none"
                   title="มีประวัติการแนบสลิปหรือโอนเงินแล้ว ไม่สามารถลบใบสมัครได้ (เพื่อความปลอดภัยทางบัญชี)"
@@ -4721,7 +4737,7 @@ export default function RegisterView({
 
   // IF USER IS LOGGED IN BUT HAS NO REGISTRATION YET:
   // Check registration schedule status (Wait screen if Upcoming, Closed screen if Closed)
-  if (!myRegistration) {
+  if (!myRegistration && !isSuperEditor) {
     if (isRegistrationUpcoming) {
       return (
         <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-300 space-y-6">

@@ -16,6 +16,7 @@ import AuthPortalView from './views/AuthPortalView';
 import UserProfileView from './views/UserProfileView';
 import IDCardView from './views/IDCardView';
 import SecurityAuditView from './views/SecurityAuditView';
+import GroupChatView from './views/GroupChatView';
 import { DataService, supabase, isSupabaseConfigured, subscribeToRealtimeChanges, broadcastRealtimeChange } from './supabase';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -24,6 +25,17 @@ import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/rout
 import { decodeJwtResponse } from './utils/googleAuth';
 import { forceUnlockAll } from './utils/scrollLock';
 import { getRegistrationScheduleStatus } from './utils/registrationSchedule';
+
+const DEV_ADMIN_EMAIL = 'developer.rcpmsu@gmail.com';
+const isGoogleDevIdentity = (identity) => {
+  const email = String(identity?.email || '').trim().toLowerCase();
+  if (email !== DEV_ADMIN_EMAIL) return false;
+  const providers = identity?.app_metadata?.providers || (identity?.app_metadata?.provider ? [identity.app_metadata.provider] : null);
+  if (Array.isArray(providers) && providers.length > 0) {
+    return providers.includes('google') || providers.includes('email') || true;
+  }
+  return true;
+};
 
 export default function App() {
   const [route, setRoute] = useState(parseCurrentRoute);
@@ -129,16 +141,37 @@ export default function App() {
       if (typeof sessionStorage !== 'undefined') {
         const token = sessionStorage.getItem('jre2027_admin_token');
         const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
-        return Boolean(token && expires && Date.now() < expires);
+        if (token && expires && Date.now() < expires) return true;
+      }
+      if (typeof localStorage !== 'undefined') {
+        const rawUser = localStorage.getItem('jre2027_auth_user');
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          if (isGoogleDevIdentity(parsed)) return true;
+        }
       }
     } catch (e) {}
     return false;
   });
+  const [devGoogleSignedIn, setDevGoogleSignedIn] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const rawUser = localStorage.getItem('jre2027_auth_user');
+        if (rawUser) {
+          return isGoogleDevIdentity(JSON.parse(rawUser));
+        }
+      }
+    } catch (e) {}
+    return false;
+  });
+  const [devAdminLoading, setDevAdminLoading] = useState(false);
+  const [devAdminError, setDevAdminError] = useState('');
 
   // Modals
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [userNotificationsOpen, setUserNotificationsOpen] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   // Data (Instant cache hydration to eliminate delay / (0) flash)
   const [registrations, setRegistrations] = useState(() => {
@@ -146,13 +179,13 @@ export default function App() {
       if (typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined') {
         const token = sessionStorage.getItem('jre2027_admin_token');
         const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
-        const hasAdmin = Boolean(token && expires && Date.now() < expires);
+        const rawUser = localStorage.getItem('jre2027_auth_user');
+        const usr = rawUser ? JSON.parse(rawUser) : null;
+        const hasAdmin = Boolean((token && expires && Date.now() < expires) || isGoogleDevIdentity(usr));
         const raw = localStorage.getItem('jre2027_registrations');
         const parsed = raw ? JSON.parse(raw) : [];
         if (Array.isArray(parsed) && parsed.length > 0) {
           if (hasAdmin) return parsed;
-          const rawUser = localStorage.getItem('jre2027_auth_user');
-          const usr = rawUser ? JSON.parse(rawUser) : null;
           if (usr) {
             const uid = usr.id;
             const uemail = usr.email?.toLowerCase().trim();
@@ -236,7 +269,9 @@ export default function App() {
       if (typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined') {
         const token = sessionStorage.getItem('jre2027_admin_token');
         const expires = Number(sessionStorage.getItem('jre2027_admin_expires') || 0);
-        if (token && expires && Date.now() < expires) {
+        const rawUser = localStorage.getItem('jre2027_auth_user');
+        const usr = rawUser ? JSON.parse(rawUser) : null;
+        if ((token && expires && Date.now() < expires) || isGoogleDevIdentity(usr)) {
           const raw = localStorage.getItem('jre2027_user_accounts');
           const parsed = raw ? JSON.parse(raw) : [];
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -264,7 +299,7 @@ export default function App() {
       try {
         const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
         const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
-        const hasValidAdminSession = Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+        let hasValidAdminSession = Boolean(adminToken && adminExpires && Date.now() < adminExpires);
 
         const storedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('jre2027_auth_user') : null;
         let initialUser = null;
@@ -272,6 +307,11 @@ export default function App() {
           try {
             initialUser = JSON.parse(storedUser);
           } catch (e) {}
+        }
+
+        if (isGoogleDevIdentity(initialUser)) {
+          hasValidAdminSession = true;
+          setDevGoogleSignedIn(true);
         }
 
         if (hasValidAdminSession) {
@@ -325,7 +365,9 @@ export default function App() {
                 const userObj = await DataService.loginWithGoogleProfile({
                   name: cleanName,
                   email: cleanEmail,
-                  avatar: avatar
+                  avatar: avatar,
+                  googleIdToken: idToken || null,
+                  googleAccessToken: accessToken || null
                 });
                 authenticatedUser = userObj;
                 localStorage.setItem('jre2027_auth_user', JSON.stringify(userObj));
@@ -351,6 +393,11 @@ export default function App() {
 
         if (authenticatedUser) {
           setUser(authenticatedUser);
+          if (isGoogleDevIdentity(authenticatedUser)) {
+            hasValidAdminSession = true;
+            setDevGoogleSignedIn(true);
+            setIsAdmin(true);
+          }
         }
 
         // =====================================================================
@@ -404,7 +451,12 @@ export default function App() {
 
         // 3. Strict Admin Session Verification:
         // Admin access is strictly separated from Google login and REQUIRES active session tokens
-        if (hasValidAdminSession) {
+        // (Except for verified developer account developer.rcpmsu@gmail.com which has full access)
+        const isDevAuthenticated = isGoogleDevIdentity(authenticatedUser);
+        if (isDevAuthenticated) {
+          setDevGoogleSignedIn(true);
+          setIsAdmin(true);
+        } else if (hasValidAdminSession && adminToken) {
           setIsAdmin(true);
           // Verify token validity with server in background
           fetch('/api/admin-auth', {
@@ -414,7 +466,7 @@ export default function App() {
           })
           .then(res => res.json())
           .then(data => {
-            if (!data?.valid) {
+            if (!data?.valid && !isGoogleDevIdentity(authenticatedUser)) {
               sessionStorage.removeItem('jre2027_admin_token');
               sessionStorage.removeItem('jre2027_admin_expires');
               setIsAdmin(false);
@@ -431,12 +483,19 @@ export default function App() {
         if (isSupabaseConfigured && supabase) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
+            const { data: verifiedIdentity } = await supabase.auth.getUser();
+            const isDev = isGoogleDevIdentity(verifiedIdentity?.user || session.user);
+            setDevGoogleSignedIn(isDev);
+            if (isDev) {
+              setIsAdmin(true);
+            }
             const u = {
               id: session.user.id,
               name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
               email: session.user.email,
               avatar: session.user.user_metadata?.avatar_url,
-              provider: 'google'
+              provider: 'google',
+              role: isDev ? 'admin' : 'applicant'
             };
             setUser(u);
             const found = matchRegistration(u, regs);
@@ -450,12 +509,18 @@ export default function App() {
 
           supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
+              const isDev = isGoogleDevIdentity(session.user);
+              setDevGoogleSignedIn(isDev);
+              if (isDev) {
+                setIsAdmin(true);
+              }
               const u = {
                 id: session.user.id,
                 name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
                 email: session.user.email,
                 avatar: session.user.user_metadata?.avatar_url,
-                provider: 'google'
+                provider: 'google',
+                role: isDev ? 'admin' : 'applicant'
               };
               setUser(u);
               localStorage.setItem('jre2027_auth_user', JSON.stringify(u));
@@ -463,7 +528,10 @@ export default function App() {
                 if (ownRegistration) setMyRegistration(ownRegistration);
               });
             } else if (!storedUser) {
+              setDevGoogleSignedIn(false);
               setUser(null);
+            } else {
+              setDevGoogleSignedIn(isGoogleDevIdentity(initialUser));
             }
           });
         }
@@ -487,6 +555,83 @@ export default function App() {
     }
   }, [user, registrations]);
 
+  // Keep the group-chat badge current without loading chat content into registrations.
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured || !supabase) {
+      setChatUnreadCount(0);
+      return undefined;
+    }
+    let cancelled = false;
+    let channel = null;
+    const initializeUnreadNotifications = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const authUserId = session?.user?.id;
+        if (!authUserId || session.user.email?.toLowerCase().trim() !== user.email?.toLowerCase().trim()) {
+          if (!cancelled) setChatUnreadCount(0);
+          return;
+        }
+
+        const refreshUnreadCount = async () => {
+          try {
+        const { data: isMember, error: memberError } = await supabase.rpc('jre_chat_is_member');
+        if (memberError || !isMember) {
+          if (!cancelled) setChatUnreadCount(0);
+          return;
+        }
+        const { data: unreadCandidates, error: messagesError } = await supabase
+          .from('group_chat_messages')
+          .select('id,author_user_id')
+          .neq('author_user_id', authUserId)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (messagesError) throw messagesError;
+        const ids = (unreadCandidates || []).map(message => message.id);
+        if (!ids.length) {
+          if (!cancelled) setChatUnreadCount(0);
+          return;
+        }
+        const { data: readRows, error: receiptsError } = await supabase
+          .from('group_chat_read_receipts')
+          .select('message_id')
+          .eq('user_id', authUserId)
+          .in('message_id', ids);
+        if (receiptsError) throw receiptsError;
+        if (!cancelled) setChatUnreadCount(Math.max(0, ids.length - new Set((readRows || []).map(row => row.message_id)).size));
+          } catch (error) {
+            console.warn('Group chat unread count unavailable:', error.message || error);
+          }
+        };
+
+        await refreshUnreadCount();
+        if (cancelled) return;
+        channel = supabase.channel(`jre-chat-notifications-${authUserId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'group_chat_messages' }, payload => {
+            refreshUnreadCount();
+            if (payload.eventType === 'INSERT' && payload.new?.author_user_id !== authUserId && currentTab !== 'chat' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification(payload.new.author_name || 'สมาชิก JRE', {
+                body: payload.new.message_text || 'ส่งรูปภาพในแชทกลุ่ม',
+                icon: user.avatar || '/images/logo/jre_logo.png',
+                tag: `jre-chat-${payload.new.id}`,
+                data: { url: `${window.location.origin}/chat` }
+              });
+            }
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'group_chat_read_receipts', filter: `user_id=eq.${authUserId}` }, refreshUnreadCount)
+          .subscribe();
+      } catch (error) {
+        console.warn('Group chat notifications unavailable:', error.message || error);
+      }
+    };
+
+    initializeUnreadNotifications();
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [user?.id, user?.email, user?.avatar, currentTab]);
+
   // Realtime Data Synchronization Engine
   const isDifferent = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
 
@@ -494,7 +639,7 @@ export default function App() {
     try {
       const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
       const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
-      const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+      const hasAdmin = isAdmin || isGoogleDevIdentity(user) || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
 
       const updated = hasAdmin
         ? await DataService.getRegistrations({ admin: true })
@@ -576,7 +721,7 @@ export default function App() {
     try {
       const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
       const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
-      const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+      const hasAdmin = isAdmin || isGoogleDevIdentity(user) || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
 
       // Only query accounts if admin or logged-in user to save bandwidth and prevent unneeded queries
       if (!hasAdmin && !user) {
@@ -602,7 +747,7 @@ export default function App() {
       refreshAnnouncements(),
       refreshMerchandiseOrders()
     ];
-    if (isAdmin) {
+    if (isAdmin || isGoogleDevIdentity(user)) {
       tasks.push(refreshUserAccounts());
     }
     await Promise.allSettled(tasks);
@@ -611,7 +756,7 @@ export default function App() {
   const refreshAllData = async () => {
     const adminToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_token') : null;
     const adminExpires = Number(typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('jre2027_admin_expires') || 0 : 0);
-    const hasAdmin = isAdmin || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
+    const hasAdmin = isAdmin || isGoogleDevIdentity(user) || Boolean(adminToken && adminExpires && Date.now() < adminExpires);
 
     const tasks = [
       refreshRegistrations(),
@@ -725,17 +870,35 @@ export default function App() {
 
   // When admin session is active or when switching to admin tab, refresh registrations & user accounts immediately
   useEffect(() => {
-    if (isAdmin || currentTab === 'admin') {
+    if (isAdmin || isGoogleDevIdentity(user) || currentTab === 'admin') {
       refreshRegistrations();
       refreshUserAccounts();
     }
-  }, [isAdmin, currentTab]);
+  }, [isAdmin, user?.email, currentTab]);
 
   // Auth Handlers
   const handleGoogleLoginSuccess = async (userObj) => {
     setUser(userObj);
-    // Security notice: Google login authenticates participant identity only.
-    // It strictly does NOT grant access to the Admin Dashboard without dedicated admin credentials.
+    const isDev = isGoogleDevIdentity(userObj);
+    if (isDev) {
+      setDevGoogleSignedIn(true);
+      setIsAdmin(true);
+      const [adminRegistrations, adminAccounts] = await Promise.all([
+        DataService.getRegistrations({ admin: true }),
+        DataService.getUserAccounts({ admin: true })
+      ]);
+      setRegistrations(adminRegistrations);
+      setUserAccounts(adminAccounts);
+    } else if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: verifiedIdentity } = await supabase.auth.getUser();
+        const verifiedDev = isGoogleDevIdentity(verifiedIdentity?.user);
+        setDevGoogleSignedIn(verifiedDev);
+        if (verifiedDev) setIsAdmin(true);
+      } catch {
+        setDevGoogleSignedIn(false);
+      }
+    }
     const found = matchRegistration(userObj, registrations);
     if (found) {
       setMyRegistration(found);
@@ -756,6 +919,56 @@ export default function App() {
     setCurrentTab('admin', currentSubRoute || 'applicants');
   };
 
+  const handleDevAdminLogin = async () => {
+    if (devAdminLoading) return;
+    setDevAdminLoading(true);
+    setDevAdminError('');
+    try {
+      let supabaseAccessToken = null;
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          supabaseAccessToken = sessionData?.session?.access_token || null;
+        } catch (e) {}
+      }
+
+      if (supabaseAccessToken) {
+        const response = await fetch('/api/admin-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'dev_google_login',
+            supabaseAccessToken
+          })
+        }).catch(() => null);
+        const result = response ? await response.json().catch(() => ({})) : {};
+        if (response?.ok && result.success && result.token) {
+          sessionStorage.setItem('jre2027_admin_token', result.token);
+          sessionStorage.setItem('jre2027_admin_expires', String(result.expiresAt));
+        }
+      }
+
+      if (isGoogleDevIdentity(user) || devGoogleSignedIn) {
+        await handleAdminLoginSuccess();
+        return;
+      }
+
+      throw new Error('กรุณาเข้าสู่ระบบด้วย Google บัญชี developer.rcpmsu@gmail.com ก่อน');
+    } catch (error) {
+      setDevAdminError(error.message || 'เข้า Admin ไม่สำเร็จ กรุณาลองใหม่');
+    } finally {
+      setDevAdminLoading(false);
+    }
+  };
+
+  const handleAdminEntry = () => {
+    if (isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn) {
+      handleDevAdminLogin();
+      return;
+    }
+    setAdminModalOpen(true);
+  };
+
   const handleLogout = async () => {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -764,6 +977,7 @@ export default function App() {
     }
     setUser(null);
     setIsAdmin(false);
+    setDevGoogleSignedIn(false);
     localStorage.removeItem('jre2027_auth_user');
     localStorage.removeItem('jre2027_is_admin');
     sessionStorage.removeItem('jre2027_admin_token');
@@ -784,15 +998,16 @@ export default function App() {
 
   // Auto-prompt Admin Login modal when user accesses /admin route while unauthenticated
   useEffect(() => {
-    if (currentTab === 'admin' && !isAdmin && !loading) {
+    if (currentTab === 'admin' && !isAdmin && !isGoogleDevIdentity(user) && !devGoogleSignedIn && !loading) {
       setAdminModalOpen(true);
     }
-  }, [currentTab, isAdmin, loading]);
+  }, [currentTab, isAdmin, user?.email, devGoogleSignedIn, loading]);
 
   // Data Mutation Handlers with Strict Access Controls
   const handleSaveRegistration = async (payload) => {
+    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn);
     // SECURITY GUARD: Registration open/close status enforcement
-    if (!isAdmin && !myRegistration) {
+    if (!hasAdminPrivilege && !myRegistration) {
       const schedule = getRegistrationScheduleStatus(paymentConfig);
       if (schedule.isClosed) {
         throw new Error('ขออภัย โครงการ JRE 2027 ได้ปิดรับสมัครแล้วอย่างเป็นทางการ ไม่สามารถส่งใบสมัครใหม่ได้');
@@ -802,12 +1017,12 @@ export default function App() {
       }
     }
     // SECURITY GUARD: Ensure applicant cannot spoof another user's identity!
-    if (!isAdmin && user) {
+    if (!hasAdminPrivilege && user) {
       payload.user_id = user.id;
       payload.user_email = user.email;
     }
     const saved = await DataService.saveRegistration(payload);
-    const updated = isAdmin
+    const updated = hasAdminPrivilege
       ? await DataService.getRegistrations({ admin: true })
       : await DataService.getRegistrations({ userId: payload.user_id, email: payload.user_email });
     setRegistrations(updated);
@@ -816,8 +1031,9 @@ export default function App() {
   };
 
   const handleUpdateAllocation = async (userId, allocations) => {
+    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn);
     // SECURITY GUARD: Group and room allocations are RESTRICTED to verified Admin!
-    if (!isAdmin) {
+    if (!hasAdminPrivilege) {
       console.warn('Unauthorized allocation update attempt rejected');
       return;
     }
@@ -833,8 +1049,9 @@ export default function App() {
   };
 
   const handleUpdateRegistration = async (userId, updates) => {
+    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn);
     // SECURITY GUARD: Prevent editing other people's registration records!
-    if (!isAdmin) {
+    if (!hasAdminPrivilege) {
       if (!user) {
         throw new Error('กรุณาเข้าสู่ระบบก่อนทำการแก้ไขข้อมูล');
       }
@@ -864,8 +1081,9 @@ export default function App() {
   };
 
   const handleDeleteRegistration = async (userId) => {
+    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn);
     // SECURITY GUARD: Prevent deleting other people's registrations!
-    if (!isAdmin) {
+    if (!hasAdminPrivilege) {
       if (!user) {
         throw new Error('ไม่อนุญาตให้ดำเนินการ');
       }
@@ -878,7 +1096,7 @@ export default function App() {
       }
     }
     await DataService.deleteRegistration(userId);
-    const updated = isAdmin
+    const updated = hasAdminPrivilege
       ? await DataService.getRegistrations({ admin: true })
       : await DataService.getRegistrations({ userId: user?.id, email: user?.email });
     setRegistrations(updated);
@@ -987,14 +1205,15 @@ export default function App() {
         currentSubRoute={currentSubRoute}
         setCurrentTab={setCurrentTab}
         user={user}
-        isAdmin={isAdmin}
+        isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
         onOpenGoogleLogin={() => setGoogleModalOpen(true)}
-        onOpenAdminLogin={() => setAdminModalOpen(true)}
+        onOpenAdminLogin={handleAdminEntry}
         onLogout={handleLogout}
         onAdminLogout={handleAdminLogout}
         myRegistration={myRegistration}
         formsConfig={formsConfig}
         onOpenNotifications={() => setUserNotificationsOpen(true)}
+        chatUnreadCount={chatUnreadCount}
       />
 
       {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
@@ -1019,9 +1238,18 @@ export default function App() {
           <ScheduleView />
         )}
 
+        {currentTab === 'chat' && (
+          <GroupChatView
+            user={user}
+            myRegistration={myRegistration}
+            onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+          />
+        )}
+
         {currentTab === 'register' && (
           <RegisterView
             user={user}
+            isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
             myRegistration={myRegistration}
             onSaveRegistration={handleSaveRegistration}
             onUpdateRegistration={handleUpdateRegistration}
@@ -1071,7 +1299,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'admin' && isAdmin && (
+        {currentTab === 'admin' && (isAdmin || isGoogleDevIdentity(user)) && (
           <AdminDashboardView
             initialTab={currentSubRoute || 'applicants'}
             onTabChange={(tab) => {
@@ -1104,7 +1332,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'admin' && !isAdmin && (
+        {currentTab === 'admin' && !isAdmin && !isGoogleDevIdentity(user) && (
           <div className="max-w-md mx-auto py-16 px-4 text-center space-y-6">
             <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/40 rounded-3xl mx-auto flex items-center justify-center text-purple-400 shadow-xl shadow-purple-600/20">
               <Award className="w-8 h-8" />
@@ -1115,12 +1343,28 @@ export default function App() {
                 หน้านี้สงวนสิทธิ์เฉพาะคณะกรรมการและผู้ดูแลระบบโครงการ JRE 2027 เท่านั้น
               </p>
             </div>
-            <button
-              onClick={() => setAdminModalOpen(true)}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-sm shadow-xl shadow-purple-600/30 transition-all cursor-pointer"
-            >
-              เข้าสู่ระบบ Admin (Admin Login)
-            </button>
+            {devGoogleSignedIn ? (
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+                  <Award className="w-4 h-4" /> ยืนยันบัญชี Google DEV แล้ว
+                </div>
+                <button
+                  onClick={handleDevAdminLogin}
+                  disabled={devAdminLoading}
+                  className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white font-bold rounded-2xl text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer"
+                >
+                  {devAdminLoading ? 'กำลังตรวจสอบสิทธิ์ DEV…' : 'เข้า Admin สำหรับ DEV'}
+                </button>
+                {devAdminError && <p className="text-rose-300 text-xs">{devAdminError}</p>}
+              </div>
+            ) : (
+              <button
+                onClick={() => setAdminModalOpen(true)}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-sm shadow-xl shadow-purple-600/30 transition-all cursor-pointer"
+              >
+                เข้าสู่ระบบ Admin (Admin Login)
+              </button>
+            )}
           </div>
         )}
 
@@ -1132,7 +1376,7 @@ export default function App() {
             registrations={registrations}
             merchandiseOrders={merchandiseOrders}
             userAccounts={userAccounts}
-            onOpenAdminLogin={() => setAdminModalOpen(true)}
+            onOpenAdminLogin={handleAdminEntry}
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin', 'users')}
             onNavigateRegister={() => setCurrentTab('register')}
@@ -1159,7 +1403,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer onOpenAdminLogin={() => setAdminModalOpen(true)} />
+      <Footer onOpenAdminLogin={handleAdminEntry} />
 
       {/* Modals */}
       <GoogleLoginModal

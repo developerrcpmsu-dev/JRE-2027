@@ -17,7 +17,8 @@ import {
   Megaphone,
   Shirt,
   Sparkles,
-  QrCode
+  QrCode,
+  MessageCircle
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -32,12 +33,20 @@ export default function Navbar({
   onAdminLogout,
   myRegistration,
   formsConfig,
-  onOpenNotifications
+  onOpenNotifications,
+  chatUnreadCount = 0
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const adminMessages = Array.isArray(myRegistration?.admin_messages) ? myRegistration.admin_messages : [];
   const unreadNotificationsCount = adminMessages.filter(m => !m.read).length;
+  // The Dev account is a chat administrator even when it has no participant registration.
+  // Actual chat access remains enforced by Supabase Auth and RLS.
+  const canSeeGroupChat = Boolean(
+    myRegistration ||
+    isAdmin ||
+    user?.email?.trim().toLowerCase() === 'developer.rcpmsu@gmail.com'
+  );
 
   // Check if any Google Form is active
   const hasActiveForms = formsConfig && Object.values(formsConfig).some(f => f.enabled);
@@ -128,6 +137,20 @@ export default function Navbar({
                 <Bell className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-400 shrink-0" />
                 <span>คำสั่งสมาชิก</span>
                 <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
+              </button>
+            )}
+
+            {canSeeGroupChat && (
+              <button
+                onClick={() => handleNav('chat')}
+                className={`relative px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  currentTab === 'chat' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-900'
+                }`}
+                title={`แชทกลุ่มผู้เข้าร่วม${chatUnreadCount ? ` (${chatUnreadCount} ข้อความยังไม่อ่าน)` : ''}`}
+              >
+                <MessageCircle className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-300 shrink-0" />
+                <span>แชทกลุ่ม</span>
+                {chatUnreadCount > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-black text-white flex items-center justify-center">{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
               </button>
             )}
 
@@ -437,6 +460,16 @@ export default function Navbar({
                   {adminMessages.length} ข้อความ
                 </span>
               )}
+            </button>
+          )}
+
+          {canSeeGroupChat && (
+            <button
+              onClick={() => handleNav('chat')}
+              className={`w-full text-left px-4 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${currentTab === 'chat' ? 'bg-indigo-600 text-white' : 'bg-slate-850/60 text-slate-300 hover:bg-slate-800'}`}
+            >
+              <span className="flex items-center gap-3"><MessageCircle className="w-5 h-5 text-indigo-300" />แชทกลุ่มผู้เข้าร่วม</span>
+              {chatUnreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-black text-white">{chatUnreadCount > 99 ? '99+' : chatUnreadCount} ใหม่</span>}
             </button>
           )}
 

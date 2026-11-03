@@ -56,7 +56,7 @@ CREATE POLICY "registrations_owner_select"
   USING (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "registrations_owner_insert"
@@ -64,7 +64,7 @@ CREATE POLICY "registrations_owner_insert"
   WITH CHECK (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "registrations_owner_update"
@@ -72,12 +72,12 @@ CREATE POLICY "registrations_owner_update"
   USING (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   )
   WITH CHECK (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "registrations_owner_delete"
@@ -85,7 +85,7 @@ CREATE POLICY "registrations_owner_delete"
   USING (
     auth.uid()::text = user_id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(user_email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 -- 4) The legacy public.user_accounts table has no reason to be public. It is
@@ -96,7 +96,7 @@ CREATE POLICY "user_accounts_owner_select"
   USING (
     auth.uid()::text = id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "user_accounts_owner_insert"
@@ -104,7 +104,7 @@ CREATE POLICY "user_accounts_owner_insert"
   WITH CHECK (
     auth.uid()::text = id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "user_accounts_owner_update"
@@ -112,17 +112,17 @@ CREATE POLICY "user_accounts_owner_update"
   USING (
     auth.uid()::text = id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   )
   WITH CHECK (
     auth.uid()::text = id
     OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(email, ''))
-    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
   );
 
 CREATE POLICY "user_accounts_admin_delete"
   ON public.user_accounts FOR DELETE TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- 5) Only an allow-list of genuinely public configuration keys is readable
 -- through the anon client. This deliberately excludes user_accounts,
@@ -139,8 +139,8 @@ CREATE POLICY "project_settings_public_allowlist"
 
 CREATE POLICY "project_settings_admin_write"
   ON public.project_settings FOR ALL TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'))
+  WITH CHECK (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- 6) Announcements are public content; only an admin claim may mutate them.
 CREATE POLICY "announcements_public_select"
@@ -149,8 +149,8 @@ CREATE POLICY "announcements_public_select"
 
 CREATE POLICY "announcements_admin_write"
   ON public.announcements FOR ALL TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'))
+  WITH CHECK (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'));
 
 -- 7) If the dedicated merchandise_orders table exists, protect it by owner
 -- or admin. The app must migrate away from the legacy JSON key first.
@@ -167,7 +167,7 @@ BEGIN
         USING (
           auth.uid()::text = user_id
           OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(customer_email, ''))
-          OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+          OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
         )
     $sql$;
     EXECUTE $sql$
@@ -176,7 +176,7 @@ BEGIN
         WITH CHECK (
           auth.uid()::text = user_id
           OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(customer_email, ''))
-          OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+          OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
         )
     $sql$;
     EXECUTE $sql$
@@ -185,18 +185,18 @@ BEGIN
         USING (
           auth.uid()::text = user_id
           OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(customer_email, ''))
-          OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+          OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
         )
         WITH CHECK (
           auth.uid()::text = user_id
           OR lower(coalesce(auth.jwt() ->> 'email', '')) = lower(coalesce(customer_email, ''))
-          OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+          OR ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com')
         )
     $sql$;
     EXECUTE $sql$
       CREATE POLICY "merchandise_orders_admin_delete"
         ON public.merchandise_orders FOR DELETE TO authenticated
-        USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+        USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'developer.rcpmsu@gmail.com'))
     $sql$;
   END IF;
 END $$;

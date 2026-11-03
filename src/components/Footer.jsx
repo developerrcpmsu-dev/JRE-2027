@@ -10,8 +10,7 @@ import {
   ExternalLink,
   Code2,
   Database,
-  ShieldAlert,
-  Sparkles
+  ShieldAlert
 } from 'lucide-react';
 import PDPAModal from './PDPAModal';
 
@@ -76,11 +75,11 @@ export default function Footer({ onOpenAdminLogin }) {
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-rescue-500 shrink-0" />
                 <a 
-                  href="mailto:rescue.rajapruek@msu.ac.th" 
+                  href="mailto:developer.rcpmsu@gmail.com" 
                   className="text-slate-200 hover:text-rescue-400 font-medium transition-colors break-all cursor-pointer"
-                  title="คลิกเพื่อส่งอีเมล"
+                  title="คลิกเพื่อส่งอีเมลติดต่อผู้ดูแลระบบ"
                 >
-                  rescue.rajapruek@msu.ac.th
+                  developer.rcpmsu@gmail.com
                 </a>
               </div>
             </div>
@@ -126,16 +125,6 @@ export default function Footer({ onOpenAdminLogin }) {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                  <a 
-                    href="mailto:developer.rcpmsu@gmail.com" 
-                    className="text-sky-300 hover:text-sky-200 font-mono hover:underline break-all cursor-pointer"
-                    title="คลิกเพื่อส่งอีเมลติดต่อผู้ดูแลระบบ"
-                  >
-                    developer.rcpmsu@gmail.com
-                  </a>
-                </div>
               </div>
             </div>
           </div>
@@ -206,26 +195,6 @@ export default function Footer({ onOpenAdminLogin }) {
                   <Shield className="w-3.5 h-3.5 text-purple-400" />
                   <span>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</span>
                 </button>
-              </li>
-              <li className="pt-1">
-                <a
-                  href="/presentation"
-                  className="text-indigo-300 hover:text-white text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-indigo-950/40 hover:bg-indigo-950/70 border border-indigo-500/40 hover:border-indigo-400 rounded-xl cursor-pointer inline-flex font-bold shadow-sm"
-                  title="ดูหน้าสไลด์และผลการวิจัย AI & MCP สำหรับนำเสนออาจารย์"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>🎓 นำเสนอวิจัย AI & MCP (Presentation)</span>
-                </a>
-              </li>
-              <li className="pt-0.5">
-                <a
-                  href="/security"
-                  className="text-slate-300 hover:text-emerald-300 text-xs flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl cursor-pointer inline-flex font-semibold"
-                  title="ดูรายงานความมั่นคงปลอดภัยและการแก้ไขช่องโหว่ (Security Center)"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>รายงานความมั่นคงปลอดภัย (Security) 🟢</span>
-                </a>
               </li>
               <li className="pt-2 border-t border-slate-900 mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 font-mono">
                 <a href="/robots.txt" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 hover:underline">robots.txt</a>

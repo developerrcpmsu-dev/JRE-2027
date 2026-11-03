@@ -15,12 +15,13 @@ import {
   Copy,
   Check,
   ShieldCheck,
-  Award
+  Award,
+  Building
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
-import { DEFAULT_MERCHANDISE_CONFIG } from '../data/defaultData';
+import { DEFAULT_MERCHANDISE_CONFIG, isStaffRegistration } from '../data/defaultData';
 
-export default function PickupQRModal({ order, pickupConfig, onClose }) {
+export default function PickupQRModal({ order, pickupConfig, registration, onClose }) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -31,6 +32,7 @@ export default function PickupQRModal({ order, pickupConfig, onClose }) {
       order_number: order.order_number,
       customer_name: order.customer_name,
       total_amount: order.total_amount,
+      paid_amount: order.registration_paid_amount ?? order.total_amount,
       app: 'JRE2027_MERCHANDISE'
     });
 
@@ -48,10 +50,16 @@ export default function PickupQRModal({ order, pickupConfig, onClose }) {
 
   if (!order) return null;
 
-  const effectiveLocation = order.pickup_location || pickupConfig?.location || DEFAULT_MERCHANDISE_CONFIG.pickup.location;
-  const effectiveShortLocation = order.pickup_short_location || pickupConfig?.short_location || DEFAULT_MERCHANDISE_CONFIG.pickup.short_location;
-  const effectiveSchedule = order.pickup_schedule || pickupConfig?.schedule || DEFAULT_MERCHANDISE_CONFIG.pickup.schedule;
-  const effectiveNote = order.pickup_note || pickupConfig?.note || DEFAULT_MERCHANDISE_CONFIG.pickup.note;
+  // Current Admin settings override the location/date snapshot on old orders.
+  const effectiveLocation = pickupConfig?.location || order.pickup_location || DEFAULT_MERCHANDISE_CONFIG.pickup.location;
+  const effectiveShortLocation = pickupConfig?.short_location || order.pickup_short_location || DEFAULT_MERCHANDISE_CONFIG.pickup.short_location;
+  const effectiveSchedule = pickupConfig?.schedule || order.pickup_schedule || DEFAULT_MERCHANDISE_CONFIG.pickup.schedule;
+  const effectiveNote = pickupConfig?.note || order.pickup_note || DEFAULT_MERCHANDISE_CONFIG.pickup.note;
+  const isStaff = Boolean(order.is_staff || order.registration_type === 'staff' || (registration && isStaffRegistration(registration)));
+  const roleLabel = order.role_label || (isStaff ? 'Staff โครงการ' : registration ? 'ผู้เข้าร่วมโครงการ' : '');
+  const institution = registration?.institution || registration?.affiliation || order.institution || order.affiliation || order.customer_affiliation || '';
+  const itemSubtotal = (order.items || []).reduce((sum, item) => sum + ((Number(item.unit_price) || 0) + (Number(item.extra_price) || 0)) * (Number(item.quantity) || 0), 0);
+  const isRegistrationShirt = order.order_type === 'registration_shirt';
 
   const handleCopyOrderNumber = () => {
     navigator.clipboard.writeText(order.order_number);
@@ -253,6 +261,24 @@ export default function PickupQRModal({ order, pickupConfig, onClose }) {
                 </span>
               </div>
 
+              {institution && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-slate-300 pb-2 border-b border-slate-800/60">
+                  <span className="flex items-center gap-1.5 text-slate-400 shrink-0 font-medium">
+                    <Building className="w-3.5 h-3.5 text-sky-400" /> สถาบัน / หน่วยงาน:
+                  </span>
+                  <span className="font-semibold text-sky-200 text-left sm:text-right break-words">{institution}</span>
+                </div>
+              )}
+
+              {roleLabel && (
+                <div className="flex justify-between items-center text-slate-300 pb-2 border-b border-slate-800/60">
+                  <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <Award className="w-3.5 h-3.5 text-indigo-400" /> ประเภทผู้รับ:
+                  </span>
+                  <span className="font-bold text-indigo-200">{roleLabel}</span>
+                </div>
+              )}
+
               {order.callsign && order.callsign !== '-' && (
                 <div className="flex justify-between items-center text-slate-300 pb-2 border-b border-slate-800/60">
                   <span className="flex items-center gap-1.5 text-slate-400 font-medium">
@@ -314,15 +340,27 @@ export default function PickupQRModal({ order, pickupConfig, onClose }) {
                       </div>
                       <div className="text-right shrink-0 ml-2">
                         <p className="font-bold text-white">x{item.quantity}</p>
-                        <p className="text-rescue-400 font-bold">{item.unit_price * item.quantity} บ.</p>
+                        <p className="text-rescue-400 font-bold">{((Number(item.unit_price) || 0) + (Number(item.extra_price) || 0)) * (Number(item.quantity) || 0)} บ.</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
+              <div className="flex justify-between items-center pt-2 border-t border-slate-800 text-xs font-bold">
+                <span className="text-slate-300">มูลค่าสินค้าตามรายการ:</span>
+                <span className="text-rescue-300">{itemSubtotal} บาท</span>
+              </div>
+
+              {isRegistrationShirt && (
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span className="text-slate-300">ยอดชำระแล้วจริงตามใบสมัคร:</span>
+                  <span className="text-emerald-300">{Number(order.registration_paid_amount) || 0} บาท</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pt-2 border-t border-slate-800 font-bold text-sm">
-                <span className="text-slate-300">ยอดชำระสุทธิ:</span>
+                <span className="text-slate-300">{isRegistrationShirt ? 'ยอดค่าสมัครรวมตามใบสมัคร:' : 'ยอดชำระสุทธิ:'}</span>
                 <span className="text-rescue-400 text-base font-black">{order.total_amount} บาท</span>
               </div>
             </div>

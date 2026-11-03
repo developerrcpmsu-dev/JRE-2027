@@ -199,6 +199,36 @@ export default function UniversalScannerModal({
       if (parsed.app === 'JRE2027_MERCHANDISE' || parsed.order_number) {
         const orderNum = cleanStr(parsed.order_number).toLowerCase();
         matchedOrder = orderList.find(o => cleanStr(o.order_number).toLowerCase() === orderNum);
+
+        // Applicant shirt passes are generated from the registration record and
+        // are intentionally not stored in the merchandise_orders collection.
+        // Resolve their stable JRE27-SHIRT-{first six chars of registration id}
+        // code directly against registrations so the universal scanner can find them.
+        if (!matchedOrder && /^jre27-shirt-[a-z0-9]{1,12}$/i.test(orderNum)) {
+          const registrationCode = orderNum.slice('jre27-shirt-'.length).toUpperCase();
+          const shirtRegistration = regList.find(r =>
+            cleanStr(r.id || r.user_id).slice(0, registrationCode.length).toUpperCase() === registrationCode
+          );
+          if (shirtRegistration) {
+            const registrationId = cleanStr(shirtRegistration.id || shirtRegistration.user_id);
+            const paidAmount = Number(parsed.paid_amount ?? parsed.registration_paid_amount ?? 0) || 0;
+            matchedOrder = {
+              ...shirtRegistration,
+              id: `reg_shirt_${registrationId}`,
+              registration_id: registrationId,
+              order_number: parsed.order_number,
+              customer_name: parsed.customer_name || shirtRegistration.full_name_affiliation || `${shirtRegistration.first_name || ''} ${shirtRegistration.last_name || ''}`.trim(),
+              customer_phone: shirtRegistration.phone || '',
+              total_amount: Number(parsed.total_amount ?? 0) || 0,
+              registration_paid_amount: paidAmount,
+              order_type: 'registration_shirt',
+              pickup_status: shirtRegistration.shirt_pickup_status === 'received' || shirtRegistration.shirt_received ? 'received' : 'pending',
+              payment_status: ['paid', 'full'].includes(shirtRegistration.payment_status) || shirtRegistration.installment_1_status === 'paid' ? 'paid_verified' : 'pending_verification',
+              items: [{ product_name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027', size: shirtRegistration.shirt_size || 'L', quantity: 1, unit_price: paidAmount }]
+            };
+            matchedParticipant = shirtRegistration;
+          }
+        }
       }
 
       // C) Generic ID / user_id in JSON
@@ -344,10 +374,10 @@ export default function UniversalScannerModal({
       setScanError('');
 
       // Auto-select tab
-      if (result.participant) {
-        setSelectedResultType('participant');
-      } else if (result.order) {
+      if (result.order) {
         setSelectedResultType('order');
+      } else if (result.participant) {
+        setSelectedResultType('participant');
       }
 
       // Add to recent scans strip
@@ -580,7 +610,9 @@ export default function UniversalScannerModal({
 
     setIsActionLoading(true);
     try {
-      if (onMarkOrderReceived) {
+      if (order.order_type === 'registration_shirt' && onMarkRegistrationShirtReceived) {
+        await onMarkRegistrationShirtReceived(order.registration_id || order.id?.replace(/^reg_shirt_/, ''), nextReceived);
+      } else if (onMarkOrderReceived) {
         await onMarkOrderReceived(order.id, nextReceived);
       }
 
@@ -590,7 +622,13 @@ export default function UniversalScannerModal({
         pickup_at: nextReceived ? new Date().toISOString() : null
       };
 
-      setMatchResult(prev => prev ? { ...prev, order: updatedOrder } : prev);
+      setMatchResult(prev => prev ? {
+        ...prev,
+        order: updatedOrder,
+        participant: order.order_type === 'registration_shirt' && prev.participant
+          ? { ...prev.participant, shirt_pickup_status: nextReceived ? 'received' : 'pending', shirt_received: nextReceived }
+          : prev.participant
+      } : prev);
       playAudioChime(true);
       triggerHaptic(true);
       setActionSuccessMsg(
@@ -1451,7 +1489,7 @@ export default function UniversalScannerModal({
                           )}
                         </button>
 
-                        {matchResult.order.payment_status !== 'paid_verified' && (
+                        {matchResult.order.order_type !== 'registration_shirt' && matchResult.order.payment_status !== 'paid_verified' && (
                           <button
                             type="button"
                             onClick={() => handleVerifyOrderPayment(matchResult.order)}

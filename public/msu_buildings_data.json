@@ -1,0 +1,523 @@
+{
+  "buildings": [
+    {
+      "id": 1,
+      "name_th": "สำนักงานอธิการบดี (อาคารบรมราชกุมารี)",
+      "name_en": "President's Office (Borommaratchakumari)",
+      "cat": "admin",
+      "color": "#D32F2F"
+    },
+    {
+      "id": 2,
+      "name_th": "สโมสรบุคลากรมหาวิทยาลัยมหาสารคาม",
+      "name_en": "Staff Club",
+      "cat": "admin",
+      "color": "#1976D2"
+    },
+    {
+      "id": 3,
+      "name_th": "เส้นทางศึกษาธรรมชาติ (โซนใต้)",
+      "name_en": "Nature Study Trail (South Zone)",
+      "cat": "life",
+      "color": "#2E7D32"
+    },
+    {
+      "id": 4,
+      "name_th": "สวนสัตว์มหาวิทยาลัยมหาสารคาม",
+      "name_en": "MSU Mini Zoo / Animal Park",
+      "cat": "life",
+      "color": "#2E7D32"
+    },
+    {
+      "id": 5,
+      "name_th": "อาคารแสดงสินค้า (MSU Outlet)",
+      "name_en": "MSU Outlet Center",
+      "cat": "life",
+      "color": "#E65100"
+    },
+    {
+      "id": 6,
+      "name_th": "คณะเภสัชศาสตร์",
+      "name_en": "Faculty of Pharmacy",
+      "cat": "health",
+      "color": "#0288D1"
+    },
+    {
+      "id": 7,
+      "name_th": "คณะสิ่งแวดล้อมและทรัพยากรศาสตร์",
+      "name_en": "Faculty of Environment & Resource Studies",
+      "cat": "sci",
+      "color": "#388E3C"
+    },
+    {
+      "id": 8,
+      "name_th": "คณะพยาบาลศาสตร์",
+      "name_en": "Faculty of Nursing",
+      "cat": "health",
+      "color": "#0288D1"
+    },
+    {
+      "id": 9,
+      "name_th": "คณะวิทยาการสารสนเทศ",
+      "name_en": "Faculty of Informatics",
+      "cat": "sci",
+      "color": "#7B1FA2"
+    },
+    {
+      "id": 10,
+      "name_th": "คณะวิศวกรรมศาสตร์",
+      "name_en": "Faculty of Engineering",
+      "cat": "sci",
+      "color": "#D84315"
+    },
+    {
+      "id": 11,
+      "name_th": "คณะสาธารณสุขศาสตร์",
+      "name_en": "Faculty of Public Health",
+      "cat": "health",
+      "color": "#0288D1"
+    },
+    {
+      "id": 12,
+      "name_th": "กองส่งเสริมการวิจัยและบริการวิชาการ (ไหม)",
+      "name_en": "Research & Academic Promotion Division",
+      "cat": "admin",
+      "color": "#1976D2"
+    },
+    {
+      "id": 13,
+      "name_th": "ศูนย์ความร่วมมือกับภาคอุตสาหกรรม (UIC)",
+      "name_en": "University-Industry Cooperation Center",
+      "cat": "sci",
+      "color": "#1976D2"
+    },
+    {
+      "id": 14,
+      "name_th": "ศูนย์วิจัยและการศึกษาบรรพชีวินวิทยา (PRC)",
+      "name_en": "Palaeontological Research & Education Center",
+      "cat": "sci",
+      "color": "#5D4037"
+    },
+    {
+      "id": 15,
+      "name_th": "อาคารชุดอาศัยบุคลากรมหาวิทยาลัย",
+      "name_en": "Staff Residence Complex",
+      "cat": "life",
+      "color": "#546E7A"
+    },
+    {
+      "id": 16,
+      "name_th": "โรงงานฟาร์มแคร์ ฟาร์มาซูติคอล",
+      "name_en": "PharmCare Pharmaceutical Factory",
+      "cat": "health",
+      "color": "#00897B"
+    },
+    {
+      "id": 17,
+      "name_th": "คณะเทคโนโลยี",
+      "name_en": "Faculty of Technology",
+      "cat": "sci",
+      "color": "#00796B"
+    },
+    {
+      "id": 18,
+      "name_th": "คณะวิทยาศาสตร์ (อาคารเรียน)",
+      "name_en": "Faculty of Science (Main Building)",
+      "cat": "sci",
+      "color": "#F57C00"
+    },
+    {
+      "id": 19,
+      "name_th": "คณะวิทยาศาสตร์ (อาคารเรียนรวม)",
+      "name_en": "Faculty of Science (Lecture Hall)",
+      "cat": "sci",
+      "color": "#F57C00"
+    },
+    {
+      "id": 20,
+      "name_th": "ตึก A สำนักวิทยบริการ (หอสมุดกลาง)",
+      "name_en": "Building A - Academic Resource Center (Library)",
+      "cat": "learn",
+      "color": "#1565C0"
+    },
+    {
+      "id": 21,
+      "name_th": "ตึก B สำนักคอมพิวเตอร์",
+      "name_en": "Building B - Computer Center",
+      "cat": "learn",
+      "color": "#0277BD"
+    },
+    {
+      "id": 22,
+      "name_th": "ตึก C วิทยาลัยดุริยางคศิลป์",
+      "name_en": "Building C - College of Music",
+      "cat": "hum",
+      "color": "#AD1457"
+    },
+    {
+      "id": 23,
+      "name_th": "ตึก D วิทยาลัยการเมืองการปกครอง",
+      "name_en": "Building D - College of Politics & Governance",
+      "cat": "hum",
+      "color": "#C2185B"
+    },
+    {
+      "id": 24,
+      "name_th": "ลานอัฐศิลป์ (ลานแปดเหลี่ยม)",
+      "name_en": "Attasin Court (Octagon Pavilion)",
+      "cat": "learn",
+      "color": "#D32F2F"
+    },
+    {
+      "id": 25,
+      "name_th": "คณะสถาปัตยกรรมศาสตร์ฯ",
+      "name_en": "Faculty of Architecture, Urban Design & Creative Arts",
+      "cat": "hum",
+      "color": "#6A1B9A"
+    },
+    {
+      "id": 26,
+      "name_th": "คณะศิลปกรรมศาสตร์และวัฒนธรรมศาสตร์",
+      "name_en": "Faculty of Fine & Applied Arts",
+      "cat": "hum",
+      "color": "#8E24AA"
+    },
+    {
+      "id": 27,
+      "name_th": "คณะการบัญชีและการจัดการ (MBS)",
+      "name_en": "Mahasarakham Business School (MBS)",
+      "cat": "hum",
+      "color": "#E65100"
+    },
+    {
+      "id": 28,
+      "name_th": "ศูนย์หนังสือ มหาวิทยาลัยมหาสารคาม",
+      "name_en": "MSU Book Center",
+      "cat": "life",
+      "color": "#1976D2"
+    },
+    {
+      "id": 29,
+      "name_th": "กองทะเบียนและประมวลผล",
+      "name_en": "Division of Registrar",
+      "cat": "admin",
+      "color": "#1976D2"
+    },
+    {
+      "id": 30,
+      "name_th": "คณะวิทยาศาสตร์ (อาคารปฏิบัติการ)",
+      "name_en": "Faculty of Science (Lab Complex)",
+      "cat": "sci",
+      "color": "#F57C00"
+    },
+    {
+      "id": 31,
+      "name_th": "ตลาดน้อย (ศูนย์อาหารและบริการนิสิต)",
+      "name_en": "Talat Noi (Student Food & Services)",
+      "cat": "life",
+      "color": "#E65100"
+    },
+    {
+      "id": 32,
+      "name_th": "กองกิจการนิสิต",
+      "name_en": "Division of Student Affairs",
+      "cat": "admin",
+      "color": "#1976D2"
+    },
+    {
+      "id": 33,
+      "name_th": "หอพักนิสิตมหาวิทยาลัยมหาสารคาม",
+      "name_en": "Student Dormitory Complex",
+      "cat": "life",
+      "color": "#303F9F"
+    },
+    {
+      "id": 34,
+      "name_th": "MSU Plaza (เอ็มเอสยู พลาซ่า)",
+      "name_en": "MSU Plaza Shopping & Service Center",
+      "cat": "life",
+      "color": "#F57C00"
+    },
+    {
+      "id": 35,
+      "name_th": "สระว่ายน้ำ มหาวิทยาลัยมหาสารคาม",
+      "name_en": "MSU Swimming Pool",
+      "cat": "life",
+      "color": "#0288D1"
+    },
+    {
+      "id": 36,
+      "name_th": "สนามฟุตบอล มหาวิทยาลัยมหาสารคาม",
+      "name_en": "MSU Main Football Stadium",
+      "cat": "life",
+      "color": "#2E7D32"
+    },
+    {
+      "id": 37,
+      "name_th": "อาคารพลศึกษาและกีฬา",
+      "name_en": "Gymnasium & Sports Complex",
+      "cat": "life",
+      "color": "#F57C00"
+    },
+    {
+      "id": 38,
+      "name_th": "สำนักศึกษาทั่วไป",
+      "name_en": "General Education Building",
+      "cat": "learn",
+      "color": "#1565C0"
+    },
+    {
+      "id": 39,
+      "name_th": "คณะมนุษยศาสตร์และสังคมศาสตร์ (HUSOC)",
+      "name_en": "Faculty of Humanities & Social Sciences",
+      "cat": "hum",
+      "color": "#D81B60"
+    },
+    {
+      "id": 40,
+      "name_th": "เส้นทางศึกษาธรรมชาติ (โซนตะวันตก)",
+      "name_en": "Nature Trail & Conservation Area",
+      "cat": "life",
+      "color": "#2E7D32"
+    },
+    {
+      "id": 41,
+      "name_th": "โรงเรียนสาธิตมหาวิทยาลัยมหาสารคาม (ฝ่ายมัธยม)",
+      "name_en": "MSU Demonstration School (Secondary)",
+      "cat": "learn",
+      "color": "#E65100"
+    },
+    {
+      "id": 42,
+      "name_th": "กองอาคารสถานที่",
+      "name_en": "Division of Buildings & Grounds",
+      "cat": "admin",
+      "color": "#455A64"
+    },
+    {
+      "id": 43,
+      "name_th": "งานยานยนต์และขนส่ง",
+      "name_en": "Vehicle & Transportation Section",
+      "cat": "admin",
+      "color": "#455A64"
+    }
+  ],
+  "coords": {
+    "1": [
+      852,
+      1161
+    ],
+    "2": [
+      951,
+      1278
+    ],
+    "3": [
+      967,
+      1390
+    ],
+    "4": [
+      1136,
+      1385
+    ],
+    "5": [
+      1271,
+      1415
+    ],
+    "6": [
+      1078,
+      1174
+    ],
+    "7": [
+      1156,
+      1235
+    ],
+    "8": [
+      1142,
+      1064
+    ],
+    "9": [
+      1122,
+      928
+    ],
+    "10": [
+      1191,
+      852
+    ],
+    "11": [
+      1254,
+      779
+    ],
+    "12": [
+      1276,
+      881
+    ],
+    "13": [
+      1275,
+      845
+    ],
+    "14": [
+      1354,
+      831
+    ],
+    "15": [
+      1472,
+      824
+    ],
+    "16": [
+      1279,
+      1085
+    ],
+    "17": [
+      1155,
+      712
+    ],
+    "18": [
+      1096,
+      785
+    ],
+    "19": [
+      1037,
+      843
+    ],
+    "20": [
+      987,
+      947
+    ],
+    "21": [
+      1071,
+      997
+    ],
+    "22": [
+      992,
+      1121
+    ],
+    "23": [
+      887,
+      1044
+    ],
+    "24": [
+      981,
+      1033
+    ],
+    "25": [
+      884,
+      863
+    ],
+    "26": [
+      802,
+      819
+    ],
+    "27": [
+      735,
+      747
+    ],
+    "28": [
+      869,
+      635
+    ],
+    "29": [
+      937,
+      656
+    ],
+    "30": [
+      1021,
+      684
+    ],
+    "31": [
+      937,
+      490
+    ],
+    "32": [
+      768,
+      373
+    ],
+    "33": [
+      688,
+      490
+    ],
+    "34": [
+      755,
+      565
+    ],
+    "35": [
+      517,
+      440
+    ],
+    "36": [
+      373,
+      538
+    ],
+    "37": [
+      523,
+      697
+    ],
+    "38": [
+      730,
+      912
+    ],
+    "39": [
+      802,
+      943
+    ],
+    "40": [
+      456,
+      934
+    ],
+    "41": [
+      583,
+      1084
+    ],
+    "42": [
+      774,
+      1218
+    ],
+    "43": [
+      735,
+      1279
+    ]
+  },
+  "categories": [
+    {
+      "key": "admin",
+      "name_th": "อาคารบริหารและบริการกลาง",
+      "name_en": "Administration & Central Services",
+      "color": "#1565C0",
+      "icon": "🏛️"
+    },
+    {
+      "key": "sci",
+      "name_th": "วิทยาศาสตร์ เทคโนโลยี และวิศวกรรม",
+      "name_en": "Science, Technology & Engineering",
+      "color": "#E65100",
+      "icon": "🔬"
+    },
+    {
+      "key": "health",
+      "name_th": "วิทยาศาสตร์สุขภาพและการแพทย์",
+      "name_en": "Health Sciences & Medicine",
+      "color": "#00897B",
+      "icon": "🩺"
+    },
+    {
+      "key": "hum",
+      "name_th": "มนุษยศาสตร์ สังคมศาสตร์ และศิลปะ",
+      "name_en": "Humanities, Social Sciences & Arts",
+      "color": "#C2185B",
+      "icon": "📚"
+    },
+    {
+      "key": "learn",
+      "name_th": "ศูนย์วิทยบริการ คอมพิวเตอร์ และการเรียนรู้",
+      "name_en": "Academic Resources, IT & Learning",
+      "color": "#283593",
+      "icon": "📖"
+    },
+    {
+      "key": "life",
+      "name_th": "กีฬา สันทนาการ หอพัก และชีวิตนิสิต",
+      "name_en": "Sports, Recreation, Housing & Life",
+      "color": "#2E7D32",
+      "icon": "⚽"
+    }
+  ]
+}
