@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDown, Bell, CheckCheck, ImagePlus, LoaderCircle, MessageCircle, Pencil, Reply, Send, Shield, Trash2, X } from 'lucide-react';
+import { ArrowDown, Bell, CheckCheck, ExternalLink, ImagePlus, LoaderCircle, MessageCircle, Pencil, Reply, Send, Shield, Trash2, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../supabase';
+import { OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
 
 const CHAT_BUCKET = 'jre-group-chat';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -338,27 +339,99 @@ export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin 
 
   if (!currentUserId) {
     return (
-      <div className="max-w-2xl mx-auto py-20 px-4 text-center">
-        <MessageCircle className="w-12 h-12 mx-auto mb-4 text-indigo-300" />
-        <h1 className="text-2xl font-black text-white">แชทกลุ่มผู้เข้าร่วม JRE 2027</h1>
-        <p className="my-3 text-slate-400">{connectingAuth ? 'กำลังเชื่อมบัญชี Google ที่เข้าสู่ระบบอยู่กับห้องแชท…' : error || (user ? 'กำลังเชื่อมบัญชี Google ที่ใช้งานอยู่กับระบบแชท' : 'เข้าสู่ระบบด้วยบัญชี Google ที่ใช้สมัคร เพื่อยืนยันสิทธิ์เข้าห้องแชท')}</p>
-        {!connectingAuth && <button onClick={onOpenGoogleLogin} className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold">เข้าสู่ระบบ Google</button>}
+      <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
+        <div className="p-6 rounded-3xl border-2 border-blue-500/60 bg-gradient-to-br from-blue-950/90 via-indigo-950/90 to-slate-900 shadow-2xl space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
+            <MessageCircle className="w-7 h-7" />
+          </div>
+          <div className="space-y-1.5">
+            <span className="px-3 py-1 rounded-full bg-red-500/25 text-red-200 border border-red-400/50 text-[11px] font-black uppercase tracking-wider">
+              📢 ประกาศด่วน! ขอให้ผู้เข้าร่วมโครงการทุกคนกดเข้าร่วมกลุ่ม
+            </span>
+            <h1 className="text-2xl font-black text-white pt-1">แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (Messenger)</h1>
+            <p className="text-xs sm:text-sm text-blue-100/90 max-w-lg mx-auto leading-relaxed">
+              กดปุ่มด้านล่างเพื่อเข้าร่วมกลุ่มแชทหลักบน Facebook Messenger สำหรับรับข่าวสารด่วน การนัดหมายจุดรวมพล และประสานงานตลอดโครงการ
+            </p>
+          </div>
+          <div className="pt-1">
+            <a
+              href={OFFICIAL_GROUP_CHAT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm sm:text-base shadow-xl shadow-blue-600/30 hover:scale-[1.02] transition-all"
+            >
+              <MessageCircle className="w-5 h-5" />
+              <span>กดเข้าร่วมแชทกลุ่ม JRE 2027 (Messenger)</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+
+        <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60">
+          <p className="mb-3 text-xs sm:text-sm text-slate-400">{connectingAuth ? 'กำลังเชื่อมบัญชี Google ที่เข้าสู่ระบบอยู่กับห้องแชทบนเว็บ…' : error || (user ? 'กำลังเชื่อมบัญชี Google ที่ใช้งานอยู่กับระบบแชทบนเว็บ' : 'หรือเข้าสู่ระบบด้วยบัญชี Google ที่ใช้สมัคร เพื่อใช้งานห้องแชทสำรองบนหน้าเว็บไซต์')}</p>
+          {!connectingAuth && <button onClick={onOpenGoogleLogin} className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs sm:text-sm font-bold">เข้าสู่ระบบ Google</button>}
+        </div>
       </div>
     );
   }
 
   if (!loading && !memberAccess) {
     return (
-      <div className="max-w-2xl mx-auto py-20 px-4 text-center">
-        <Shield className="w-12 h-12 mx-auto mb-4 text-amber-300" />
-        <h1 className="text-2xl font-black text-white">ห้องแชทสำหรับผู้สมัครที่ลงทะเบียนแล้ว</h1>
-        <p className="mt-3 text-slate-400">บัญชีนี้ยังไม่พบรายการสมัครที่ยืนยันสิทธิ์เข้าห้องแชท</p>
+      <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
+        <div className="p-6 rounded-3xl border-2 border-blue-500/60 bg-gradient-to-br from-blue-950/90 via-indigo-950/90 to-slate-900 shadow-2xl space-y-4">
+          <MessageCircle className="w-12 h-12 mx-auto text-blue-300" />
+          <h1 className="text-xl sm:text-2xl font-black text-white">แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (Messenger)</h1>
+          <p className="text-xs sm:text-sm text-blue-100/90">ขอให้ผู้เข้าร่วมโครงการ JRE 2027 ทุกคนกดเข้าร่วมแชทกลุ่มผ่านลิงก์ทางการด้านล่าง</p>
+          <a
+            href={OFFICIAL_GROUP_CHAT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm shadow-xl"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>กดเข้าร่วมแชทกลุ่ม JRE 2027 (Messenger)</span>
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        </div>
+        <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60">
+          <Shield className="w-8 h-8 mx-auto mb-2 text-amber-300" />
+          <h2 className="text-base font-bold text-white">ห้องแชทบนเว็บไซต์สำหรับผู้สมัครที่ลงทะเบียนแล้ว</h2>
+          <p className="mt-1 text-xs text-slate-400">บัญชีนี้ยังไม่พบรายการสมัครที่ยืนยันสิทธิ์เข้าห้องแชทบนเว็บ</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <section className="max-w-5xl mx-auto h-[calc(100dvh-180px)] min-h-[520px] max-h-[900px] flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl">
+    <div className="max-w-5xl mx-auto space-y-4">
+      {/* Official Messenger Group Chat Banner */}
+      <div className="p-4 sm:p-5 rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-purple-950/90 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/50 text-[10px] font-black uppercase tracking-wider animate-pulse">
+              📢 ประกาศด่วนถึงทุกคน
+            </span>
+            <span className="text-xs sm:text-sm font-black text-white">
+              แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (Facebook Messenger)
+            </span>
+          </div>
+          <p className="text-xs text-blue-100/90">
+            ขอให้ผู้เข้าร่วมโครงการและคณะดำเนินงานทุกคนกดเข้าร่วมแชทกลุ่ม Messenger เพื่อรับการแจ้งเตือนและประสานงานหลัก
+          </p>
+        </div>
+        <a
+          href={OFFICIAL_GROUP_CHAT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02]"
+        >
+          <MessageCircle className="w-4 h-4" />
+          <span>กดเข้าแชทกลุ่ม Messenger</span>
+          <ExternalLink className="w-4 h-4" />
+        </a>
+      </div>
+
+      <section className="h-[calc(100dvh-260px)] min-h-[500px] max-h-[850px] flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl">
       <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-800 bg-slate-950/70">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg"><MessageCircle className="w-5 h-5 text-white" /></div>
@@ -421,6 +494,7 @@ export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin 
         </div>
         <p className="mt-2 text-center text-[9px] text-slate-600">แชทนี้สำหรับสมาชิกที่ลงทะเบียน • หลีกเลี่ยงการโพสต์ข้อมูลส่วนตัวหรือข้อมูลสุขภาพ</p>
       </form>
-    </section>
+      </section>
+    </div>
   );
 }

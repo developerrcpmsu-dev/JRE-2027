@@ -82,7 +82,8 @@ import {
   resolveGender,
   resolveUniversityInfo,
   resolveApplicantMemberType,
-  resolveMessageSenderInfo
+  resolveMessageSenderInfo,
+  OFFICIAL_GROUP_CHAT_URL
 } from '../data/defaultData';
 import RegistrationCountdown from '../components/RegistrationCountdown';
 import { 
@@ -2335,6 +2336,46 @@ export default function RegisterView({
           <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" />
         )}
 
+        {/* Official JRE 2027 Participant Group Chat Banner (Mandatory Join) */}
+        <section className="rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-purple-950/90 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 relative overflow-hidden">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/30 shrink-0">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/50 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                    📢 ประกาศด่วน! ทุกคนต้องกดเข้ากลุ่ม
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/40 text-[10px] font-bold">
+                    Facebook Messenger Group
+                  </span>
+                </div>
+                <h2 className="text-base sm:text-lg font-black text-white">
+                  💬 แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (ทางการ)
+                </h2>
+                <p className="text-xs text-blue-100/90 leading-relaxed">
+                  ขอให้ผู้เข้าร่วมโครงการ JRE 2027 และคณะดำเนินงานทุกคน <strong>กดเข้าร่วมแชทกลุ่มทันที</strong> เพื่อรับแจ้งข่าวสารด่วน การนัดหมายจุดรวมพล ตารางกลุ่มฝึก และการประสานงานตลอดโครงการ
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0">
+              <a
+                href={OFFICIAL_GROUP_CHAT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-3 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>กดเข้าร่วมแชทกลุ่ม JRE 2027</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* Digital ID Card generated directly from the applicant record */}
         <section className="rounded-3xl border border-orange-500/25 bg-gradient-to-br from-slate-900 via-[#0b1f3a] to-slate-950 p-4 shadow-2xl sm:p-6">
           <div className="mb-4 flex flex-col gap-2 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -4086,6 +4127,26 @@ export default function RegisterView({
                       <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line select-text">
                         {msg.text}
                       </div>
+
+                      {(msg.action_url || (typeof msg.text === 'string' && msg.text.includes('https://m.me/'))) && (
+                        <div className="p-3 bg-blue-950/60 border border-blue-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                          <div className="flex items-center gap-2 min-w-0 text-blue-200 font-bold">
+                            <MessageSquare className="w-4 h-4 text-blue-400 shrink-0" />
+                            <span className="truncate">
+                              แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (ทุกคนต้องกดเข้ากลุ่ม)
+                            </span>
+                          </div>
+                          <a
+                            href={msg.action_url || OFFICIAL_GROUP_CHAT_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow-md transition-all"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>{msg.action_label || '💬 กดเข้าร่วมแชทกลุ่ม JRE 2027 ที่นี่'}</span>
+                          </a>
+                        </div>
+                      )}
 
                       {msg.attachment_url && (
                         <div className="p-2.5 bg-slate-950/90 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-2 text-xs">

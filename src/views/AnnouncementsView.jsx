@@ -26,6 +26,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import ModalPortal from '../components/ModalPortal';
+import { OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
 
 export default function AnnouncementsView({ 
   announcements = [], 
@@ -279,7 +280,7 @@ export default function AnnouncementsView({
     { id: 'all', label: 'ทั้งหมด' },
     { id: 'pr', label: 'ประชาสัมพันธ์' },
     { id: 'payment', label: 'ชำระค่าสมัคร' },
-    { id: 'line_group', label: 'เข้ากลุ่มไลน์' },
+    { id: 'line_group', label: 'แชทกลุ่ม JRE 2027' },
     { id: 'order', label: 'คำสั่งโครงการ' },
     { id: 'training', label: 'หลักสูตรการฝึก' },
     { id: 'activity', label: 'ที่พัก & กิจกรรม' },
@@ -329,7 +330,7 @@ export default function AnnouncementsView({
       case 'payment':
         return <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">ค่าลงทะเบียน</span>;
       case 'line_group':
-        return <span className="px-2.5 py-0.5 bg-green-500/20 text-green-300 border border-green-500/30 rounded-full text-[10px] font-bold">กลุ่ม Line</span>;
+        return <span className="px-2.5 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-[10px] font-bold">แชทกลุ่ม JRE 2027</span>;
       case 'order':
         return <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">คำสั่ง / ข้อปฏิบัติ</span>;
       case 'training':
@@ -1134,6 +1135,32 @@ export default function AnnouncementsView({
           {copiedPageUrl ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
           <span>{copiedPageUrl ? 'คัดลอก URL สำเร็จ!' : shareButtonText}</span>
         </button>
+      </div>
+
+      {/* Official Messenger Group Chat Banner */}
+      <div className="p-4 sm:p-5 rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/90 via-indigo-950/90 to-purple-950/85 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/50 text-[10px] font-black uppercase tracking-wider animate-pulse">
+              📢 ประกาศด่วน! ขอให้ทุกคนกดเข้ากลุ่ม
+            </span>
+            <span className="text-xs sm:text-sm font-black text-white">
+              💬 แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (Facebook Messenger)
+            </span>
+          </div>
+          <p className="text-xs text-blue-100/90 leading-relaxed">
+            ขอให้ผู้เข้าร่วมโครงการ JRE 2027 และคณะดำเนินงานทุกคน กดเข้าร่วมแชทกลุ่มเพื่อรับข่าวสารด่วน การนัดหมายจุดรวมพล และประสานงานตลอดโครงการ
+          </p>
+        </div>
+        <a
+          href={OFFICIAL_GROUP_CHAT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02]"
+        >
+          <ExternalLink className="w-4 h-4" />
+          <span>กดเข้าร่วมแชทกลุ่ม JRE 2027</span>
+        </a>
       </div>
 
       {/* Filter & Search Bar */}

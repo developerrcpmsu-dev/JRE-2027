@@ -15,13 +15,15 @@ import {
   Shirt,
   Play,
   Crown,
-  ShieldCheck
+  ShieldCheck,
+  MessageCircle,
+  ExternalLink
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
 import RegistrationCountdown from '../components/RegistrationCountdown';
 import { getRegistrationScheduleStatus } from '../utils/registrationSchedule';
-import { DEFAULT_SPEAKERS, getSpeakerCategory } from '../data/defaultData';
+import { DEFAULT_SPEAKERS, getSpeakerCategory, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
 
 export default function HomeView({ 
   teamMembers, 
@@ -211,10 +213,56 @@ export default function HomeView({
               <Shirt className="w-4 h-4 text-orange-400" />
               <span>สั่งซื้อเสื้อ & กางเกงกู้ภัย</span>
             </button>
+
+            <a
+              href={OFFICIAL_GROUP_CHAT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold rounded-2xl border border-blue-400/50 flex items-center justify-center gap-2 text-sm transition-all duration-200 shadow-xl shadow-blue-600/30 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>💬 เข้าแชทกลุ่มผู้เข้าร่วม JRE 2027</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
             </div>
           </div>
 
         </div>
+      </section>
+
+      {/* Mandatory Participant Group Chat Announcement Banner */}
+      <section className="rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/90 via-indigo-950/90 to-purple-950/85 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shrink-0">
+            <MessageCircle className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/50 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                📢 ประกาศสำคัญถึงผู้เข้าร่วมโครงการทุกคน
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/40 text-[10px] font-bold">
+                Facebook Messenger Group
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-white">
+              💬 แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (ขอให้ทุกคนกดเข้ากลุ่ม)
+            </h3>
+            <p className="text-xs text-blue-100/90 leading-relaxed">
+              ขอให้ผู้เข้าร่วมโครงการ JRE 2027 และคณะดำเนินงานทุกคน กดเข้าร่วมแชทกลุ่มเพื่อรับข่าวสารด่วน การนัดหมายจุดรวมพล ตารางกลุ่มฝึก และประสานงานตลอดโครงการ
+            </p>
+          </div>
+        </div>
+        <a
+          href={OFFICIAL_GROUP_CHAT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shrink-0 shadow-xl shadow-blue-600/30 hover:scale-[1.02] transition-all"
+        >
+          <MessageCircle className="w-4 h-4" />
+          <span>กดเข้าร่วมแชทกลุ่ม JRE 2027 ที่นี่</span>
+          <ExternalLink className="w-4 h-4" />
+        </a>
       </section>
 
       {/* JRE 2026 Video Spotlight & Philosophy Card */}

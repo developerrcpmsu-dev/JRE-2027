@@ -16,7 +16,7 @@ import {
   FileText
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
-import { ADMIN_MESSAGE_SENDERS, resolveMessageSenderInfo } from '../data/defaultData';
+import { ADMIN_MESSAGE_SENDERS, resolveMessageSenderInfo, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
 
 /**
  * UserNotificationsModal
@@ -303,6 +303,33 @@ export default function UserNotificationsModal({
 
           {/* MESSAGES LIST (SCROLLABLE BODY) */}
           <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3.5 max-h-[60vh]">
+            {/* Pinned Official Group Chat Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/90 via-indigo-950/90 to-purple-950/90 border border-blue-500/50 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/40 text-[10px] font-black uppercase tracking-wider">
+                    📢 ประกาศด่วนถึงทุกคน
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-white">
+                    แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (Messenger)
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-blue-200/90 leading-relaxed">
+                  ขอให้ผู้เข้าร่วมโครงการและคณะดำเนินงานทุกคนกดเข้าร่วมแชทกลุ่ม เพื่อรับข่าวสารและการประสานงานตลอดโครงการ
+                </p>
+              </div>
+              <a
+                href={OFFICIAL_GROUP_CHAT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40 shrink-0 transition-all hover:scale-[1.02] cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>กดเข้าแชทกลุ่ม JRE 2027</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
             {displayedMessages.length > 0 ? (
               displayedMessages.map((msg, idx) => {
                 const isUnread = !msg.read;
@@ -369,6 +396,27 @@ export default function UserNotificationsModal({
                     <div className="p-3.5 bg-slate-900/90 border border-slate-800/80 rounded-xl text-slate-100 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line select-text">
                       {msg.text}
                     </div>
+
+                    {/* Optional Action Link Button inside Message */}
+                    {(msg.action_url || (typeof msg.text === 'string' && msg.text.includes('https://m.me/'))) && (
+                      <div className="p-3 bg-blue-950/60 border border-blue-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                        <div className="flex items-center gap-2 min-w-0 text-blue-200 font-bold">
+                          <MessageSquare className="w-4 h-4 text-blue-400 shrink-0" />
+                          <span className="truncate">
+                            ลิงก์แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (ทุกคนต้องกดเข้าร่วม)
+                          </span>
+                        </div>
+                        <a
+                          href={msg.action_url || OFFICIAL_GROUP_CHAT_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow-md transition-all"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>{msg.action_label || '💬 กดเข้าร่วมแชทกลุ่ม JRE 2027 ที่นี่'}</span>
+                        </a>
+                      </div>
+                    )}
 
                     {/* Optional Attachment inside Message */}
                     {msg.attachment_url && (

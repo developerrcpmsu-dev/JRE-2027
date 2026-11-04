@@ -2,6 +2,8 @@
  * Default Data for JRE-2027
  */
 
+export const OFFICIAL_GROUP_CHAT_URL = 'https://m.me/j/VBFaqYh9Wv_sSkkV/?send_source=gc%3Acopy_invite_link_t';
+
 export const DEFAULT_TEAM_MEMBERS = [
   // === มหาวิทยาลัยมหาสารคาม (มมส) — ชมรมกู้ภัยราชพฤกษ์ ===
   {
@@ -694,13 +696,13 @@ export const DEFAULT_ANNOUNCEMENTS = [
     id: 'ann-2',
     slug: 'line-group',
     short_id: 'n5',
-    title: '💬 ประกาศลิงก์เข้าร่วม Line OpenChat ประจำรุ่น JRE 2027',
-    content: 'สำหรับผู้สมัครทุกคน โปรดเข้าร่วมกลุ่ม Line OpenChat "JRE 2027 เครือข่ายกู้ภัยนักศึกษาทั่วประเทศ (ทุกภูมิภาค)" เพื่อรับการแจ้งเตือนด่วน สรุปเอกสารการฝึก และประสานงานเรื่องการเดินทางและที่พัก',
+    title: '💬 ประกาศสำคัญ! ลิงก์เข้าร่วมแชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (ทุกคนต้องกดเข้ากลุ่ม)',
+    content: 'ขอให้ผู้เข้าร่วมโครงการ JRE 2027 และคณะดำเนินงานทุกคน กดเข้าร่วมแชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (Facebook Messenger) เพื่อรับข่าวสารด่วน การนัดหมายจุดรวมพล การจัดกลุ่มฝึก และประสานงานตลอดโครงการ\n\n🔗 ลิงก์เข้ากลุ่ม: https://m.me/j/VBFaqYh9Wv_sSkkV/?send_source=gc%3Acopy_invite_link_t',
     category: 'line_group',
     pinned: true,
-    action_url: 'https://line.me',
-    action_label: 'กดเพื่อเข้าร่วมกลุ่ม Line',
-    created_at: '2026-10-01T11:00:00Z'
+    action_url: 'https://m.me/j/VBFaqYh9Wv_sSkkV/?send_source=gc%3Acopy_invite_link_t',
+    action_label: '💬 กดเข้าร่วมแชทกลุ่ม JRE 2027 (Messenger)',
+    created_at: '2026-10-03T12:00:00Z'
   },
   {
     id: 'ann-3',
