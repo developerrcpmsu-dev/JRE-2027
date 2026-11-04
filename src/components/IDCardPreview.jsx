@@ -18,15 +18,389 @@ const BASE_HEIGHT = 428;
 
 function CardField({ label, value, className = '' }) {
   return (
-    <div className={`min-w-0 rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-1.5 flex flex-col justify-center ${className}`}>
-      <span className="block text-[9px] font-semibold uppercase tracking-wider text-slate-400 leading-tight truncate">
+    <div className={`min-w-0 rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-1.5 flex flex-col justify-center overflow-hidden ${className}`}>
+      <span className="block text-[9px] font-semibold uppercase tracking-wider text-slate-400 leading-normal whitespace-nowrap">
         {label}
       </span>
-      <span className="mt-0.5 block truncate text-[11.5px] font-bold leading-tight text-white" title={value}>
+      <span className="mt-0.5 block text-[11.5px] font-bold leading-normal text-white whitespace-nowrap" title={value}>
         {value || '-'}
       </span>
     </div>
   );
+}
+
+function loadCanvasImage(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve(null);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function drawRoundedRectPath(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function drawImageContain(ctx, img, x, y, w, h) {
+  if (!img || !img.width || !img.height) return;
+  const scale = Math.min(w / img.width, h / img.height);
+  const drawW = img.width * scale;
+  const drawH = img.height * scale;
+  const drawX = x + (w - drawW) / 2;
+  const drawY = y + (h - drawH) / 2;
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
+}
+
+function drawImageCover(ctx, img, x, y, w, h) {
+  if (!img || !img.width || !img.height) return;
+  const scale = Math.max(w / img.width, h / img.height);
+  const drawW = img.width * scale;
+  const drawH = img.height * scale;
+  const drawX = x + (w - drawW) / 2;
+  const drawY = y + (h - drawH) / 2;
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
+}
+
+function fitTextWithEllipsis(ctx, text, maxWidth) {
+  const str = String(text || '-');
+  if (ctx.measureText(str).width <= maxWidth) return str;
+  let cut = str;
+  while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  return `${cut}…`;
+}
+
+async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl }) {
+  const scale = 3;
+  const W = BASE_WIDTH;
+  const H = BASE_HEIGHT;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * scale;
+  canvas.height = H * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+
+  const [bannerImg, logoImg, userImg, fallbackImg, qrImg] = await Promise.all([
+    loadCanvasImage('/images/logo/jre_header_banner.png'),
+    loadCanvasImage('/images/logo/jre_logo_square.png'),
+    loadCanvasImage(photo),
+    loadCanvasImage(FALLBACK_PHOTO),
+    loadCanvasImage(qrDataUrl)
+  ]);
+
+  const portraitImg = userImg || fallbackImg || logoImg;
+  const fontStack = '"Prompt", "Kanit", "Sarabun", "Noto Sans Thai", system-ui, -apple-system, sans-serif';
+  const monoStack = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+
+  // 1. Card Outer Clip & Navy Background
+  ctx.save();
+  drawRoundedRectPath(ctx, 0, 0, W, H, 20);
+  ctx.clip();
+
+  ctx.fillStyle = '#07172f';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle Ambient Glows
+  const topGlow = ctx.createRadialGradient(W - 40, 20, 10, W - 40, 20, 180);
+  topGlow.addColorStop(0, 'rgba(249, 115, 22, 0.14)');
+  topGlow.addColorStop(1, 'rgba(249, 115, 22, 0)');
+  ctx.fillStyle = topGlow;
+  ctx.fillRect(0, 0, W, H);
+
+  const bottomGlow = ctx.createRadialGradient(40, H - 20, 10, 40, H - 20, 180);
+  bottomGlow.addColorStop(0, 'rgba(14, 165, 233, 0.14)');
+  bottomGlow.addColorStop(1, 'rgba(14, 165, 233, 0)');
+  ctx.fillStyle = bottomGlow;
+  ctx.fillRect(0, 0, W, H);
+
+  // 2. Top White Header Banner (Height 68px) with Aspect-Ratio Contain
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, 68);
+  if (bannerImg) {
+    drawImageContain(ctx, bannerImg, 16, 6, W - 32, 54);
+  }
+  const headerLineGrad = ctx.createLinearGradient(0, 64, W, 64);
+  headerLineGrad.addColorStop(0, '#f97316');
+  headerLineGrad.addColorStop(0.5, '#fbbf24');
+  headerLineGrad.addColorStop(1, '#f97316');
+  ctx.fillStyle = headerLineGrad;
+  ctx.fillRect(0, 64, W, 4);
+
+  // 3. Participant Portrait Photo (x=24, y=82, w=110, h=138)
+  const px = 24;
+  const py = 82;
+  const pw = 110;
+  const ph = 138;
+  ctx.save();
+  drawRoundedRectPath(ctx, px, py, pw, ph, 12);
+  ctx.fillStyle = '#0f172a';
+  ctx.fill();
+  ctx.clip();
+  if (portraitImg) {
+    drawImageCover(ctx, portraitImg, px, py, pw, ph);
+  }
+  // Bottom Role Label Bar inside Photo
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+  ctx.fillRect(px, py + ph - 22, pw, 22);
+  ctx.fillStyle = cardData.isStaff ? '#fde047' : '#fdba74';
+  ctx.font = `900 8px ${fontStack}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(cardData.roleBadge || 'PARTICIPANT', px + pw / 2, py + ph - 11);
+  ctx.restore();
+
+  ctx.save();
+  drawRoundedRectPath(ctx, px, py, pw, ph, 12);
+  ctx.strokeStyle = cardData.isStaff ? 'rgba(250, 204, 21, 0.85)' : 'rgba(251, 146, 60, 0.85)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // 4. Middle Profile Info & Names (x=150, y=82, maxW=375)
+  const mx = 150;
+  const maxMiddleW = 375;
+
+  // Small USIVN Square Logo
+  ctx.save();
+  drawRoundedRectPath(ctx, mx, 82, 32, 32, 8);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(251, 146, 60, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  if (logoImg) {
+    drawImageContain(ctx, logoImg, mx + 2, 84, 28, 28);
+  }
+  ctx.restore();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fdba74';
+  ctx.font = `900 9.5px ${fontStack}`;
+  ctx.fillText('USIVN • JRE 2027', mx + 40, 92);
+
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = `600 8px ${fontStack}`;
+  ctx.fillText('JOINT RESPONSE EXERCISE', mx + 40, 105);
+
+  // Label: ชื่อ–สกุล / FULL NAME
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = `700 8.5px ${fontStack}`;
+  ctx.fillText('ชื่อ–สกุล / FULL NAME', mx, 127);
+
+  // Thai Full Name (auto-fit font size)
+  let thaiFontSize = 19;
+  ctx.font = `900 ${thaiFontSize}px ${fontStack}`;
+  while (thaiFontSize > 13 && ctx.measureText(cardData.thaiName || '').width > maxMiddleW) {
+    thaiFontSize -= 1;
+    ctx.font = `900 ${thaiFontSize}px ${fontStack}`;
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(fitTextWithEllipsis(ctx, cardData.thaiName, maxMiddleW), mx, 148);
+
+  // English Full Name
+  let enFontSize = 12.5;
+  ctx.font = `600 ${enFontSize}px ${fontStack}`;
+  while (enFontSize > 10 && ctx.measureText(cardData.englishName || '').width > maxMiddleW) {
+    enFontSize -= 0.5;
+    ctx.font = `600 ${enFontSize}px ${fontStack}`;
+  }
+  ctx.fillStyle = '#fdba74';
+  ctx.fillText(fitTextWithEllipsis(ctx, cardData.englishName, maxMiddleW), mx, 170);
+
+  // Callsign & Nickname Pills (y=194, height=24)
+  let pillX = mx;
+  const pillY = 194;
+  const pillH = 24;
+  if (cardData.callsign && cardData.callsign !== '-') {
+    const csText = `📡 ${cardData.callsign}`;
+    ctx.font = `900 9.5px ${monoStack}`;
+    const csW = Math.ceil(ctx.measureText(csText).width) + 18;
+    ctx.save();
+    drawRoundedRectPath(ctx, pillX, pillY, csW, pillH, 6);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#bae6fd';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(csText, pillX + 9, pillY + pillH / 2);
+    ctx.restore();
+    pillX += csW + 8;
+  }
+
+  if (cardData.nickname && cardData.nickname !== '-') {
+    const nnText = `Nickname: ${cardData.nickname}`;
+    ctx.font = `700 9.5px ${fontStack}`;
+    const maxNnW = Math.max(90, maxMiddleW - (pillX - mx));
+    const fittedNn = fitTextWithEllipsis(ctx, nnText, maxNnW - 18);
+    const nnW = Math.ceil(ctx.measureText(fittedNn).width) + 18;
+    ctx.save();
+    drawRoundedRectPath(ctx, pillX, pillY, nnW, pillH, 6);
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.12)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#fde68a';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fittedNn, pillX + 9, pillY + pillH / 2);
+    ctx.restore();
+  }
+
+  // 5. Right Column: OFFICIAL Badge & Badge ID
+  const rx = W - 24;
+  ctx.save();
+  const offW = 72;
+  const offH = 24;
+  drawRoundedRectPath(ctx, rx - offW, 82, offW, offH, 12);
+  ctx.fillStyle = 'rgba(251, 146, 60, 0.12)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(251, 146, 60, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = '#fdba74';
+  ctx.font = `900 8.5px ${fontStack}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('OFFICIAL', rx - offW / 2, 82 + offH / 2);
+  ctx.restore();
+
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = `700 8px ${fontStack}`;
+  ctx.fillText('BADGE ID', rx, 196);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 11px ${monoStack}`;
+  ctx.fillText(cardData.cardCode || '-', rx, 212);
+
+  // 6. Divider Line (y=234)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(24, 234);
+  ctx.lineTo(W - 24, 234);
+  ctx.stroke();
+
+  // 7. Lower 5-Field Grid (x=24, y=246, w=444, h=158)
+  const gx = 24;
+  const gy = 246;
+  const colGap = 8;
+  const rowGap = 8;
+  const colW = (444 - colGap) / 2; // 218px
+  const rowH = 47;
+
+  const drawFieldBox = (bx, by, bw, bh, label, value) => {
+    ctx.save();
+    drawRoundedRectPath(ctx, bx, by, bw, bh, 8);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.055)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.11)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = `600 8.5px ${fontStack}`;
+    ctx.fillText(label.toUpperCase(), bx + 10, by + 15);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 11.5px ${fontStack}`;
+    ctx.fillText(fitTextWithEllipsis(ctx, value || '-', bw - 20), bx + 10, by + 33);
+    ctx.restore();
+  };
+
+  drawFieldBox(gx, gy, colW, rowH, 'คำนำหน้า / Prefix', cardData.prefix);
+  drawFieldBox(gx + colW + colGap, gy, colW, rowH, 'ชื่อ / First name', cardData.firstName);
+  drawFieldBox(gx, gy + rowH + rowGap, colW, rowH, 'สกุล / Last name', cardData.lastName);
+  drawFieldBox(gx + colW + colGap, gy + rowH + rowGap, colW, rowH, 'หน่วย / Unit', cardData.unit);
+  drawFieldBox(gx, gy + (rowH + rowGap) * 2, 444, rowH, 'สังกัด / Affiliation', cardData.affiliation);
+
+  // 8. QR Code Column (x=480, y=246, w=88)
+  const qx = 480;
+  const qy = 246;
+  const qw = 88;
+  ctx.save();
+  drawRoundedRectPath(ctx, qx, qy, qw, qw, 12);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  if (qrImg) {
+    drawImageContain(ctx, qrImg, qx + 5, qy + 5, qw - 10, qw - 10);
+  }
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fdba74';
+  ctx.font = `900 8px ${fontStack}`;
+  ctx.fillText('ADMIN QR SCAN', qx + qw / 2, gy + 148);
+
+  // 9. Blood Type & Verified Column (x=580, y=246, w=76)
+  const bx = 580;
+  const by = 246;
+  const bw = 76;
+  const bh = 132;
+  ctx.save();
+  drawRoundedRectPath(ctx, bx, by, bw, bh, 12);
+  ctx.fillStyle = 'rgba(251, 113, 133, 0.1)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(251, 113, 133, 0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fecdd3';
+  ctx.font = `700 8px ${fontStack}`;
+  ctx.fillText('BLOOD TYPE', bx + bw / 2, by + 46);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 24px ${fontStack}`;
+  ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, by + 76);
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#6ee7b7';
+  ctx.font = `700 8.5px ${fontStack}`;
+  ctx.fillText('✓ VERIFIED', bx + bw / 2, gy + 148);
+
+  // 10. Bottom Accent Gradient Line & Outer Border
+  const bottomLineGrad = ctx.createLinearGradient(0, H - 4, W, H - 4);
+  bottomLineGrad.addColorStop(0, '#f97316');
+  bottomLineGrad.addColorStop(0.5, '#fbbf24');
+  bottomLineGrad.addColorStop(1, '#ea580c');
+  ctx.fillStyle = bottomLineGrad;
+  ctx.fillRect(0, H - 4, W, 4);
+
+  ctx.restore();
+
+  ctx.save();
+  drawRoundedRectPath(ctx, 0.5, 0.5, W - 1, H - 1, 20);
+  ctx.strokeStyle = 'rgba(100, 116, 139, 0.8)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+
+  return canvas;
 }
 
 export default function IDCardPreview({
@@ -164,34 +538,14 @@ export default function IDCardPreview({
   };
 
   const handleDownloadCard = async () => {
-    if (!cardRef.current || isDownloadingCard) return;
+    if (isDownloadingCard) return;
 
     setIsDownloadingCard(true);
     try {
-      const { default: html2canvas } = await import('html2canvas');
-      const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: '#07172f',
-        scale: 3, // Ultra HD 3x resolution for crisp physical badge printing
-        useCORS: true,
-        allowTaint: false,
-        imageTimeout: 15000,
-        logging: false,
-        onclone: (clonedDoc, clonedElement) => {
-          // Reset transform in the cloned DOM snapshot so it renders at pristine 680x428
-          clonedElement.style.transform = 'none';
-          clonedElement.style.position = 'static';
-          clonedElement.style.width = `${effectiveBaseWidth}px`;
-          clonedElement.style.height = `${effectiveBaseHeight}px`;
-          clonedElement.style.margin = '0';
-          // Ensure parent wrapper does not clip html2canvas bounding box on mobile devices
-          if (clonedElement.parentElement) {
-            clonedElement.parentElement.style.width = `${effectiveBaseWidth}px`;
-            clonedElement.parentElement.style.height = `${effectiveBaseHeight}px`;
-            clonedElement.parentElement.style.overflow = 'visible';
-            clonedElement.parentElement.style.maxWidth = 'none';
-            clonedElement.parentElement.style.maxHeight = 'none';
-          }
-        }
+      const canvas = await renderNativeIdCardCanvas({
+        photo,
+        cardData,
+        qrDataUrl
       });
 
       const blob = await new Promise((resolve, reject) => {
@@ -209,7 +563,7 @@ export default function IDCardPreview({
       URL.revokeObjectURL(link.href);
     } catch (error) {
       console.error('JRE full ID card PNG export failed:', error);
-      window.alert('บันทึกภาพบัตรไม่สำเร็จ กรุณารอให้รูปและ QR โหลดเสร็จ แล้วลองใหม่อีกครั้ง');
+      window.alert('บันทึกภาพบัตรไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsDownloadingCard(false);
     }
@@ -452,13 +806,13 @@ function CardInnerContent({
                   event.currentTarget.src = FALLBACK_PHOTO;
                 }}
               />
-              <div className="absolute inset-x-0 bottom-0 bg-slate-950/85 px-1 py-1 text-center text-[8.5px] font-black tracking-[0.14em] text-orange-300">
-                PARTICIPANT
+              <div className={`absolute inset-x-0 bottom-0 bg-slate-950/90 px-1 py-1 text-center text-[8px] font-black tracking-[0.1em] ${cardData.isStaff ? 'text-yellow-300' : 'text-orange-300'}`}>
+                {cardData.roleBadge || 'PARTICIPANT'}
               </div>
             </div>
 
             {/* Profile Info & Names */}
-            <div className="min-w-0 flex-1 flex flex-col justify-between h-[138px]">
+            <div className="min-w-0 flex-1 flex flex-col justify-between h-[138px] overflow-hidden">
               <div>
                 {/* Organization & Project Header */}
                 <div className="flex items-center gap-2">
@@ -468,28 +822,28 @@ function CardInnerContent({
                     className="h-8 w-8 shrink-0 rounded-lg border border-orange-400/40 bg-white object-contain p-0.5"
                   />
                   <div className="min-w-0">
-                    <p className="truncate text-[9px] font-black uppercase tracking-[0.2em] text-orange-300">
+                    <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.2em] text-orange-300 leading-normal">
                       USIVN • JRE 2027
                     </p>
-                    <p className="truncate text-[8px] font-medium text-slate-400">
+                    <p className="whitespace-nowrap text-[8px] font-medium text-slate-400 leading-normal">
                       JOINT RESPONSE EXERCISE
                     </p>
                   </div>
                 </div>
 
                 {/* Trainee Full Name Header */}
-                <div className="mt-1.5 min-w-0">
-                  <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                <div className="mt-1 min-w-0">
+                  <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-slate-400 leading-normal">
                     ชื่อ–สกุล / Full name
                   </p>
                   <h2
-                    className={`mt-0.5 font-black leading-tight text-white truncate ${thaiNameClass}`}
+                    className={`mt-0.5 font-black leading-normal text-white whitespace-nowrap ${thaiNameClass}`}
                     title={cardData.thaiName}
                   >
                     {cardData.thaiName}
                   </h2>
                   <p
-                    className={`mt-0.5 font-semibold leading-tight text-orange-300 truncate ${enNameClass}`}
+                    className={`mt-0.5 font-semibold leading-normal text-orange-300 whitespace-nowrap ${enNameClass}`}
                     title={cardData.englishName}
                   >
                     {cardData.englishName}
@@ -500,12 +854,12 @@ function CardInnerContent({
               {/* Callsign & Nickname Badges */}
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                 {hasCallsign && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[9.5px] font-black font-mono text-sky-200">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[9.5px] font-black font-mono text-sky-200 leading-normal">
                     📡 {cardData.callsign}
                   </span>
                 )}
                 {hasNickname && (
-                  <span className="inline-flex items-center rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9.5px] font-bold text-amber-200 truncate max-w-[200px]" title={cardData.nickname}>
+                  <span className="inline-flex items-center rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9.5px] font-bold text-amber-200 whitespace-nowrap leading-normal" title={cardData.nickname}>
                     Nickname: {cardData.nickname}
                   </span>
                 )}

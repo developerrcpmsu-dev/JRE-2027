@@ -1,4 +1,4 @@
-import { OFFICIAL_NETWORK_INSTITUTIONS, resolvePersonFullNameWithTitle, resolveApplicantMemberType } from '../data/defaultData';
+import { OFFICIAL_NETWORK_INSTITUTIONS, resolvePersonFullNameWithTitle, resolveApplicantMemberType, isStaffRegistration } from '../data/defaultData';
 
 export const ID_CARD_PAYLOAD_TYPE = 'JRE27_ID_CARD';
 
@@ -173,6 +173,11 @@ export function getRegistrationCardData(registration) {
   const affiliationAbbrEn = clean(r.institution_abbr_en || legacyName.institutionAbbrEn || ENGLISH_ABBR_BY_THAI[affiliationAbbrTh]);
   const thaiName = formatThaiFullName(titleTh, firstNameTh, lastNameTh, affiliationAbbrTh);
   const englishName = formatEnglishFullName(titleEn, firstNameEn, lastNameEn, affiliationAbbrEn);
+  const isStaff = isStaffRegistration(r);
+  const rawRoleText = `${r.staff_role || ''} ${r.admin_note || ''} ${r.callsign || ''}`.toLowerCase();
+  const roleBadge = isStaff
+    ? (rawRoleText.includes('dev') || rawRoleText.includes('ผู้พัฒนาระบบ') ? 'STAFF • DEV' : 'ORGANIZING STAFF')
+    : 'PARTICIPANT';
 
   return {
     prefix: [titleTh, titleEn].filter(Boolean).join(' / ') || '-',
@@ -185,6 +190,8 @@ export function getRegistrationCardData(registration) {
     unit: memberTypeInfo.isVolunteer ? memberTypeInfo.unitDisplay : (organization.unit || memberTypeInfo.unitDisplay || r.group_assigned || '-'),
     memberType: memberTypeInfo.type,
     memberTypeLabel: memberTypeInfo.shortLabel,
+    isStaff,
+    roleBadge,
     affiliation: organization.affiliation || affiliationAbbrTh || '-',
     affiliationAbbrTh: affiliationAbbrTh || '-',
     affiliationAbbrEn: affiliationAbbrEn || '-',
