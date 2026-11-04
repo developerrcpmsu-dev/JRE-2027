@@ -281,9 +281,21 @@ const packRegistrationForSupabase = (fullData) => {
     shirt_received_date: fullData.shirt_received_date || '',
     id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
     is_staff: Boolean(isStaff),
+    staff_role_type: fullData.staff_role_type || (isStaff ? 'committee' : 'participant'),
     registration_type: isStaff ? 'staff' : (fullData.registration_type || 'participant'),
     gender: fullData.gender || resolveGender(fullData),
     payment_plan: isStaff ? 'full' : (fullData.payment_plan || 'full'),
+    overpaid_amount: Number(fullData.overpaid_amount || 0),
+    refund_amount: Number(fullData.refund_amount || fullData.overpaid_amount || 0),
+    refund_status: fullData.refund_status || '',
+    refund_slip_url: fullData.refund_slip_url || '',
+    refund_bank_name: fullData.refund_bank_name || '',
+    refund_bank_account: fullData.refund_bank_account || '',
+    refund_account_holder: fullData.refund_account_holder || '',
+    refund_citizen_id: fullData.refund_citizen_id || '',
+    refund_doc_url: fullData.refund_doc_url || '',
+    refund_at: fullData.refund_at || '',
+    refund_notes: fullData.refund_notes || '',
     installment_1_amount: fullData.installment_1_amount,
     installment_1_status: fullData.installment_1_status,
     installment_1_due: fullData.installment_1_due,
@@ -1438,7 +1450,16 @@ export const DataService = {
           .select('value')
           .eq('key', 'team_members')
           .maybeSingle();
-        if (!error && data?.value && Array.isArray(data.value)) {
+        if (!error && data?.value && Array.isArray(data.value) && data.value.length > 0) {
+          // Auto-upgrade legacy placeholder ('นาย สมชาย รัตนวิชัย') to the official 14-person Organizing Committee
+          const hasLegacyPlaceholder = data.value.some(m => m?.name?.includes('สมชาย รัตนวิชัย'));
+          if (hasLegacyPlaceholder && data.value.length < 10) {
+            await supabase
+              .from('project_settings')
+              .upsert({ key: 'team_members', value: DEFAULT_TEAM_MEMBERS, updated_at: new Date().toISOString() });
+            localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
+            return DEFAULT_TEAM_MEMBERS;
+          }
           localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(data.value));
           return data.value;
         }
@@ -1447,7 +1468,16 @@ export const DataService = {
       }
     }
     const raw = localStorage.getItem(STORAGE_KEYS.TEAM);
-    return raw ? JSON.parse(raw) : DEFAULT_TEAM_MEMBERS;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && !parsed.some(m => m?.name?.includes('สมชาย รัตนวิชัย'))) {
+          return parsed;
+        }
+      } catch {}
+    }
+    localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
+    return DEFAULT_TEAM_MEMBERS;
   },
 
   async saveTeam(team) {

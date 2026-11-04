@@ -3,63 +3,156 @@
  */
 
 export const DEFAULT_TEAM_MEMBERS = [
-  // 1-3 MSU (มหาวิทยาลัยมหาสารคาม)
+  // === มหาวิทยาลัยมหาสารคาม (มมส) — ชมรมกู้ภัยราชพฤกษ์ ===
   {
     id: 'team-msu-1',
-    name: 'นาย สมชาย รัตนวิชัย',
-    role: 'ประธานโครงการและผู้อำนวยการฝึก',
-    institution: 'ชมรมกู้ภัยราชพฤกษ์ มมส',
-    tag: 'มมส 1',
-    photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
+    name: 'นายพีรณัฐ พาลึก',
+    nickname: 'เยลโล่ / Yellow',
+    callsign: 'RCP15-46 (STAFF)',
+    role: 'คณะกรรมการดำเนินงาน (ฝ่ายปฏิบัติการและประสานงานฝึก)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 1 • RCP15-46',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792657788806_qkqpan'
   },
   {
     id: 'team-msu-2',
-    name: 'นางสาว กัญญารัตน์ สุขสวัสดิ์',
-    role: 'หัวหน้าฝ่ายพยาบาลและเวชศาสตร์ฉุกเฉิน',
-    institution: 'ชมรมกู้ภัยราชพฤกษ์ มมส',
-    tag: 'มมส 2',
-    photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80'
+    name: 'นายเศรษฐบุตร อากานิส',
+    nickname: 'โฟกัส / FOCUS',
+    callsign: 'RCP15-05 (STAFF)',
+    role: 'คณะกรรมการดำเนินงาน (ฝ่ายอำนวยการและควบคุมการฝึก)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 2 • RCP15-05',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792659231387_t8ot9w'
   },
   {
     id: 'team-msu-3',
-    name: 'นาย ภัทรพล เจริญสุข',
-    role: 'หัวหน้าชุดปฏิบัติการเคลื่อนที่เร็ว',
-    institution: 'ชมรมกู้ภัยราชพฤกษ์ มมส',
-    tag: 'มมส 3',
-    photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'
+    name: 'นางสาวอนุสรา แสนขรยาง',
+    callsign: '(STAFF)',
+    role: 'คณะกรรมการดำเนินงาน (ฝ่ายทะเบียนและประสานงาน)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 3 • STAFF',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Anusara_MSU&backgroundColor=b6e3f4'
   },
-  // 4-7 KKU (มหาวิทยาลัยขอนแก่น)
+  {
+    id: 'team-msu-4',
+    name: 'นางสาวอพัชนิภา ไวมาตร',
+    callsign: '(STAFF)',
+    role: 'คณะกรรมการดำเนินงาน (ฝ่ายพยาบาลและสวัสดิการ)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 4 • STAFF',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Apatchanipha_MSU&backgroundColor=ffdfbf'
+  },
+  {
+    id: 'team-msu-5',
+    name: 'นายณัฐพล เชื้อคนแข็ง',
+    callsign: '(STAFF)',
+    role: 'คณะกรรมการดำเนินงาน (ฝ่ายสนับสนุนและอุปกรณ์ภาคสนาม)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 5 • STAFF',
+    photo: 'https://lh3.googleusercontent.com/a/ACg8ocL6a64t-MX62tV11cIUjlJzIMSONnc3oZZkFu9rMJbH7oRYKg=s96-c'
+  },
+  {
+    id: 'team-msu-6',
+    name: 'น้องฟิล์ม (พิธีกร)',
+    callsign: 'MC (STAFF)',
+    role: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 6 • พิธีกร',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Film_MC_JRE2027&backgroundColor=c0aede'
+  },
+  {
+    id: 'team-msu-7',
+    name: 'น้องน้ำหวาน (พิธีกร)',
+    callsign: 'MC (STAFF)',
+    role: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 7 • พิธีกร',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Namwan_MC_JRE2027&backgroundColor=ffd5dc'
+  },
+  {
+    id: 'team-msu-8',
+    name: 'นายวรภัทร เวสสุริยา',
+    nickname: 'นิก / Nick',
+    callsign: '17-02 (STAFF)',
+    role: 'คณะกรรมการดำเนินงาน • ช่างภาพและสื่อโสตทัศนูปกรณ์',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 8 • ช่างภาพ (17-02)',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792034200329_4h02q2'
+  },
+  {
+    id: 'team-msu-dev',
+    name: 'นายพงศ์ภรณ์ ทองศิริ',
+    nickname: 'เบส / Best',
+    callsign: '16-37 (DEV / STAFF)',
+    role: 'ผู้พัฒนาระบบและเทคโนโลยีสารสนเทศ (Lead Developer & System Architect)',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    tag: 'มมส 9 • DEV (16-37)',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792543678934_ljitsl'
+  },
+
+  // === มหาวิทยาลัยขอนแก่น (มข) — TSI (Tactic of Special Services and Investigation) ===
   {
     id: 'team-kku-1',
-    name: 'นาย อานนท์ วงศ์สว่าง',
-    role: 'ผู้บัญชาการเหตุการณ์ร่วม (มข)',
-    institution: 'อาสาสมัครปฏิบัติการพิเศษ มข',
-    tag: 'มข 4',
-    photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80'
+    name: 'นายวชิรวิทย์ มังสระคู',
+    nickname: 'โดโด้ / DoDo',
+    callsign: 'TSI1805 (STAFF)',
+    role: 'คณะกรรมการดำเนินงานร่วม (ฝ่ายปฏิบัติการและประสานงาน มข)',
+    institution: 'TSI - มหาวิทยาลัยขอนแก่น (มข)',
+    university: 'มหาวิทยาลัยขอนแก่น (มข)',
+    tag: 'มข 10 • TSI1805',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792599946054_r0de70'
   },
   {
     id: 'team-kku-2',
-    name: 'นางสาว ณิชากร แก้วพิลา',
-    role: 'หัวหน้าฝ่ายสื่อสารและควบคุมข่ายวิทยุ',
-    institution: 'อาสาสมัครสืบสวนพิเศษ มข',
-    tag: 'มข 5',
-    photo: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80'
+    name: 'นายวุฒิชัย ช้อยชด',
+    callsign: 'TSI (STAFF)',
+    role: 'คณะกรรมการดำเนินงานร่วม (ฝ่ายปฏิบัติการภาคสนาม มข)',
+    institution: 'TSI - มหาวิทยาลัยขอนแก่น (มข)',
+    university: 'มหาวิทยาลัยขอนแก่น (มข)',
+    tag: 'มข 11 • STAFF',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Wutthichai_KKU&backgroundColor=d1d4f9'
   },
   {
     id: 'team-kku-3',
-    name: 'นาย ศิริชัย พรหมมา',
-    role: 'ผู้เชี่ยวชาญการกู้ภัยในที่อับอากาศ',
-    institution: 'เครือข่ายกู้ภัย มข',
-    tag: 'มข 6',
-    photo: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=400&q=80'
+    name: 'นายฐิติภูมิ สิงหาปัด',
+    nickname: 'ไตเติ้ล / Title',
+    callsign: 'TSI 1905 (STAFF)',
+    role: 'คณะกรรมการดำเนินงานร่วม (ฝ่ายควบคุมข่ายสื่อสารและยุทธวิธี มข)',
+    institution: 'TSI - มหาวิทยาลัยขอนแก่น (มข)',
+    university: 'มหาวิทยาลัยขอนแก่น (มข)',
+    tag: 'มข 12 • TSI 1905',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792572954627_ovb1d0'
   },
   {
     id: 'team-kku-4',
-    name: 'นาย ธนกฤต ทวีโชค',
-    role: 'หัวหน้าฝ่ายสนับสนุนโลจิสติกส์และยานพาหนะ',
-    institution: 'เครือข่ายกู้ภัย มข',
-    tag: 'มข 7',
-    photo: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=400&q=80'
+    name: 'นางสาววัชราภา จำปาโพธิ์',
+    nickname: 'ปอปอ / PorPor',
+    callsign: 'TSI 2002 (STAFF)',
+    role: 'คณะกรรมการดำเนินงานร่วม (ฝ่ายประสานงานและสวัสดิการ มข)',
+    institution: 'TSI - มหาวิทยาลัยขอนแก่น (มข)',
+    university: 'มหาวิทยาลัยขอนแก่น (มข)',
+    tag: 'มข 13 • TSI 2002',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792386977601_x8dezs'
+  },
+  {
+    id: 'team-kku-5',
+    name: 'นางสาววารัทยา เรืองเวทย์วัฒนา',
+    nickname: 'ซิน / CYN',
+    callsign: 'TSI 2101 (STAFF)',
+    role: 'คณะกรรมการดำเนินงานร่วม (ฝ่ายทะเบียนและประสานงาน มข)',
+    institution: 'TSI - มหาวิทยาลัยขอนแก่น (มข)',
+    university: 'มหาวิทยาลัยขอนแก่น (มข)',
+    tag: 'มข 14 • TSI 2101',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792388078320_vibkv9'
   }
 ];
 
@@ -715,16 +808,65 @@ export const isMsuInstitution = (inst) => {
   );
 };
 
+export const STAFF_ROLE_OPTIONS = [
+  { value: 'participant', label: '👤 ผู้เข้าอบรมทั่วไป (Participant)', isStaff: false },
+  { value: 'committee', label: '🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)', isStaff: true, badge: 'คณะกรรมการดำเนินงาน (STAFF)' },
+  { value: 'dev', label: '💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)', isStaff: true, badge: 'ผู้พัฒนาระบบ (DEV / STAFF)' },
+  { value: 'mc', label: '🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)', isStaff: true, badge: 'พิธีกร (STAFF)' },
+  { value: 'photographer', label: '📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (280 บ.)', isStaff: true, badge: 'ช่างภาพ (STAFF)' },
+  { value: 'staff', label: '🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)', isStaff: true, badge: 'สตาฟโครงการ (STAFF)' }
+];
+
+export const OFFICIAL_COMMITTEE_NAMES = [
+  { match: 'พีรณัฐ พาลึก', role: 'committee' },
+  { match: 'เศรษฐบุตร อากานิส', role: 'committee' },
+  { match: 'อนุสรา แสนขรยาง', role: 'committee' },
+  { match: 'อพัชนิภา ไวมาตร', role: 'committee' },
+  { match: 'ณัฐพล เชื้อคนแข็ง', role: 'committee' },
+  { match: 'ณัฐพล เชืิอคนแข็ง', role: 'committee' },
+  { match: 'วรภัทร เวสสุริยา', role: 'photographer' },
+  { match: 'วชิรวิทย์ มังสระคู', role: 'committee' },
+  { match: 'วุฒิชัย ช้อยชด', role: 'committee' },
+  { match: 'ฐิติภูมิ สิงหาปัด', role: 'committee' },
+  { match: 'วัชราภา จำปาโพธิ์', role: 'committee' },
+  { match: 'วารัทยา เรืองเวทย์วัฒนา', role: 'committee' },
+  { match: 'พงศ์ภรณ์ ทองศิริ', role: 'dev' }
+];
+
+export const resolveStaffRoleType = (reg) => {
+  if (!reg) return 'participant';
+  if (reg.admin_staff_override === false) return 'participant';
+  if (reg.staff_role_type && reg.staff_role_type !== 'participant') return reg.staff_role_type;
+  const fullNameStr = `${reg.first_name || ''} ${reg.last_name || ''} ${reg.full_name_affiliation || ''}`;
+  for (const item of OFFICIAL_COMMITTEE_NAMES) {
+    if (fullNameStr.includes(item.match)) {
+      return item.role;
+    }
+  }
+  const unitStr = `${reg.unit || ''} ${reg.callsign || ''}`.toLowerCase();
+  if (unitStr.includes('ช่างภาพ')) return 'photographer';
+  if (unitStr.includes('พิธีกร')) return 'mc';
+  if (unitStr.includes('dev')) return 'dev';
+  return isStaffRegistration(reg) ? 'committee' : 'participant';
+};
+
 /**
  * ตรวจสอบว่าผู้สมัครเป็น Staff โครงการ (โอน 280 บาท ค่าเสื้อ หรือหมายเหตุเป็น (STAFF) แม้โอนเกิน) หรือไม่
- * รองรับทั้งการติ๊กเลือก is_staff, การกดปุ่มหมายเหตุ (STAFF) โดย Admin/Dev, และการตรวจจับอัตโนมัติจากยอดโอน 280 บาท
+ * รองรับทั้งการติ๊กเลือก is_staff, การเลือกผ่าน Dropdown ของ Admin/Dev, รายชื่อคณะกรรมการดำเนินงาน 14 ท่าน และการตรวจจับอัตโนมัติจากยอดโอน 280 บาท
  */
 export const isStaffRegistration = (reg) => {
   if (!reg) return false;
   if (typeof reg === 'boolean') return reg;
   if (reg.admin_staff_override === false) return false;
   if (reg.admin_staff_override === true || reg.is_staff === true || reg.is_staff === 'true') return true;
+  if (reg.staff_role_type && reg.staff_role_type !== 'participant') return true;
   if (reg.registration_type === 'staff' || reg.applicant_role === 'staff' || reg.payment_plan === 'staff') return true;
+
+  // ตรวจจากรายชื่อคณะกรรมการดำเนินงานอย่างเป็นทางการ + ผู้พัฒนาระบบ
+  const fullNameStr = `${reg.first_name || ''} ${reg.last_name || ''} ${reg.full_name_affiliation || ''}`;
+  if (OFFICIAL_COMMITTEE_NAMES.some(item => fullNameStr.includes(item.match))) {
+    return true;
+  }
 
   // ตรวจจากรหัสนามเรียกขาน ชื่อ หรือชื่อเล่นที่มีคำว่า (STAFF) / STAFF / สตาฟ
   const callsignAndNameStr = `${reg.callsign || ''} ${reg.full_name_affiliation || ''} ${reg.nickname || ''}`.toLowerCase();
@@ -761,6 +903,7 @@ export const isStaffRegistration = (reg) => {
  */
 export const formatStaffCallsign = (rawCallsign = '', shouldBeStaff = false) => {
   const cleaned = String(rawCallsign || '')
+    .replace(/\s*\(\s*dev\s*\/\s*staff\s*\)/gi, '')
     .replace(/\s*\(\s*staff\s*\)/gi, '')
     .replace(/\s*\[\s*staff\s*\]/gi, '')
     .trim();
@@ -769,19 +912,30 @@ export const formatStaffCallsign = (rawCallsign = '', shouldBeStaff = false) => 
 };
 
 /**
- * คำนวณสรุปยอดโอนของ Staff (รองรับกรณีโอน 280 บ. พอดี หรือโอนเกินมา เช่น 400 / 650 / 850 บ.)
+ * คำนวณสรุปยอดโอนของ Staff และสถานะการโอนเงินส่วนเกินคืน (รองรับกรณีโอน 280 บ. พอดี หรือโอนเกินมา เช่น 400 / 650 / 850 บ.)
  */
 export const getStaffPaymentSummary = (reg) => {
   if (!reg) {
     return {
       isStaff: false,
+      staffRoleType: 'participant',
+      staffRoleLabel: 'ผู้เข้าอบรมทั่วไป',
       actualSlipAmount: 0,
       overpaidAmount: 0,
       isOverpaid: false,
-      staffFee: STAFF_SHIRT_FEE
+      staffFee: STAFF_SHIRT_FEE,
+      refundStatus: 'none',
+      isRefunded: false,
+      refundSlipUrl: '',
+      refundBankName: '',
+      refundBankAccount: '',
+      refundAccountHolder: '',
+      refundCitizenId: ''
     };
   }
   const isStaff = isStaffRegistration(reg);
+  const staffRoleType = isStaff ? resolveStaffRoleType(reg) : 'participant';
+  const matchedOption = STAFF_ROLE_OPTIONS.find(o => o.value === staffRoleType) || STAFF_ROLE_OPTIONS[1];
   const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
   const ocrR1 = Number(reg.slip_ocr_round1?.amount || 0);
   const ocrR2 = Number(reg.slip_ocr_round2?.amount || 0);
@@ -789,16 +943,32 @@ export const getStaffPaymentSummary = (reg) => {
   const fallbackPaidAmt = (reg.payment_status === 'paid' || reg.installment_1_status === 'paid')
     ? (detectedSlipAmt > 0 ? detectedSlipAmt : STAFF_SHIRT_FEE)
     : detectedSlipAmt;
-  const overpaidAmount = isStaff && fallbackPaidAmt > STAFF_SHIRT_FEE
+  const computedOverpaid = isStaff && fallbackPaidAmt > STAFF_SHIRT_FEE
     ? fallbackPaidAmt - STAFF_SHIRT_FEE
     : 0;
+  const overpaidAmount = Number(reg.overpaid_amount || reg.refund_amount || computedOverpaid || 0);
+  const isOverpaid = isStaff && overpaidAmount > 0;
+  const hasBankInfo = Boolean((reg.refund_bank_account || '').trim() && (reg.refund_bank_name || '').trim());
+  let refundStatus = reg.refund_status || (isOverpaid ? (hasBankInfo ? 'info_submitted' : 'pending_refund') : 'none');
+  if (reg.refund_slip_url && refundStatus !== 'refunded') {
+    refundStatus = 'refunded';
+  }
 
   return {
     isStaff,
+    staffRoleType,
+    staffRoleLabel: isStaff ? (matchedOption.badge || 'คณะกรรมการดำเนินงาน (STAFF)') : 'ผู้เข้าอบรมทั่วไป',
     actualSlipAmount: fallbackPaidAmt,
     overpaidAmount,
-    isOverpaid: overpaidAmount > 0,
-    staffFee: STAFF_SHIRT_FEE
+    isOverpaid,
+    staffFee: STAFF_SHIRT_FEE,
+    refundStatus,
+    isRefunded: refundStatus === 'refunded',
+    refundSlipUrl: reg.refund_slip_url || '',
+    refundBankName: reg.refund_bank_name || '',
+    refundBankAccount: reg.refund_bank_account || '',
+    refundAccountHolder: reg.refund_account_holder || `${reg.first_name || ''} ${reg.last_name || ''}`.trim(),
+    refundCitizenId: reg.refund_citizen_id || ''
   };
 };
 

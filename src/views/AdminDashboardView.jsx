@@ -84,6 +84,8 @@ import {
   isStaffRegistration,
   formatStaffCallsign,
   getStaffPaymentSummary,
+  STAFF_ROLE_OPTIONS,
+  resolveStaffRoleType,
   resolveGender,
   resolveUniversityInfo,
   resolveApplicantMemberType,
@@ -2361,11 +2363,18 @@ export default function AdminDashboardView({
     }
   };
 
-  // Quick 1-click toggle to mark/unmark any applicant as (STAFF) (supports applicants who paid > 280 THB)
-  const handleQuickToggleStaff = async (reg, forcedState) => {
+  // Quick 1-click toggle or Dropdown Role Selector to mark/unmark any applicant as (STAFF) (supports applicants who paid > 280 THB)
+  const handleQuickToggleStaff = async (reg, forcedState, roleTypeOverride = null) => {
     if (!reg) return;
     const currentlyStaff = isStaffRegistration(reg);
-    const nextStaff = typeof forcedState === 'boolean' ? forcedState : !currentlyStaff;
+    const nextStaff = roleTypeOverride
+      ? roleTypeOverride !== 'participant'
+      : (typeof forcedState === 'boolean' ? forcedState : !currentlyStaff);
+    const nextRoleType = nextStaff
+      ? (roleTypeOverride && roleTypeOverride !== 'participant' ? roleTypeOverride : (resolveStaffRoleType(reg) !== 'participant' ? resolveStaffRoleType(reg) : 'committee'))
+      : 'participant';
+    const roleLabelObj = STAFF_ROLE_OPTIONS.find(o => o.value === nextRoleType) || STAFF_ROLE_OPTIONS[1];
+
     const rawCurrentCallsign = (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id))
       ? (modalCallsign || reg.callsign || '')
       : (reg.callsign || '');
@@ -2383,14 +2392,34 @@ export default function AdminDashboardView({
       const effStatus = hasPaidAny ? 'paid' : (hasPending ? 'pending_review' : 'unpaid');
       const effAmount = hasPaidAny ? 0 : STAFF_SHIRT_FEE;
       const overpaid = slipAmt > STAFF_SHIRT_FEE ? slipAmt - STAFF_SHIRT_FEE : 0;
+      const isAlreadyRefunded = reg.refund_status === 'refunded' || Boolean(reg.refund_slip_url);
+      const nextRefundStatus = overpaid > 0
+        ? (isAlreadyRefunded ? 'refunded' : (reg.refund_bank_account ? 'info_submitted' : 'pending_refund'))
+        : 'none';
+
       const autoNote = hasPaidAny
         ? (overpaid > 0
-            ? `หมายเหตุ: (STAFF) ชำระค่าเสื้อ 280 บ. ครบแล้ว (โอนมา ${slipAmt} บ. / ชำระเกิน +${overpaid} บ.)`
-            : 'หมายเหตุ: (STAFF) ชำระค่าเสื้อ 280 บ. ครบถ้วนแล้ว')
-        : 'หมายเหตุ: (STAFF) รอชำระค่าเสื้อ 280 บ. (จ่ายครั้งเดียว)';
+            ? `หมายเหตุ: ${roleLabelObj.badge || '(STAFF)'} ชำระค่าเสื้อ 280 บ. ครบแล้ว (โอนมาจริง ${slipAmt} บ. / ชำระเกินค่าเสื้อ +${overpaid} บ. • ${isAlreadyRefunded ? 'โอนเงินส่วนเกินคืนแล้ว ✓' : 'รอโอนเงินส่วนเกินคืน'})`
+            : `หมายเหตุ: ${roleLabelObj.badge || '(STAFF)'} ชำระค่าเสื้อ 280 บ. ครบถ้วนแล้ว`)
+        : `หมายเหตุ: ${roleLabelObj.badge || '(STAFF)'} รอชำระค่าเสื้อ 280 บ. (จ่ายครั้งเดียว)`;
+
+      let nextDocs = Array.isArray(reg.requested_docs) ? [...reg.requested_docs] : [];
+      if (overpaid > 0 && !isAlreadyRefunded) {
+        const hasRefundDoc = nextDocs.some(d => d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')));
+        if (!hasRefundDoc) {
+          nextDocs.push({
+            id: 'req_staff_overpaid_refund',
+            doc_type: `ข้อมูลรับเงินคืนส่วนเกิน (+${overpaid} บ.): ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน`,
+            description: `เนื่องจากท่านเป็น ${roleLabelObj.badge || 'คณะกรรมการดำเนินงาน (STAFF)'} ชำระเฉพาะค่าเสื้อ 280 บาท แต่ได้โอนเงินมา ${slipAmt} บาท จึงมียอดชำระเกิน +${overpaid} บาท กรุณาระบุชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก (หรือแนบภาพหน้าสมุดบัญชี) เพื่อให้ฝ่ายการเงินโอนเงินส่วนเกินคืนให้ครับ`,
+            status: 'pending',
+            requested_at: new Date().toISOString()
+          });
+        }
+      }
 
       updates = {
         is_staff: true,
+        staff_role_type: nextRoleType,
         admin_staff_override: true,
         admin_manual_override: true,
         registration_type: 'staff',
@@ -2402,6 +2431,10 @@ export default function AdminDashboardView({
         installment_1_amount: slipAmt > 0 ? slipAmt : STAFF_SHIRT_FEE,
         installment_2_status: 'unpaid',
         installment_2_amount: 0,
+        overpaid_amount: overpaid,
+        refund_amount: overpaid,
+        refund_status: nextRefundStatus,
+        requested_docs: nextDocs,
         payment_notes: autoNote
       };
     } else {
@@ -2418,6 +2451,7 @@ export default function AdminDashboardView({
 
       updates = {
         is_staff: false,
+        staff_role_type: 'participant',
         admin_staff_override: false,
         admin_manual_override: true,
         registration_type: 'participant',
@@ -2429,6 +2463,9 @@ export default function AdminDashboardView({
         installment_1_amount: round1Fee,
         installment_2_status: isFullPaid ? 'paid' : 'unpaid',
         installment_2_amount: round2Fee,
+        overpaid_amount: 0,
+        refund_amount: 0,
+        refund_status: 'none',
         payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)` : ''
       };
     }
@@ -2455,11 +2492,155 @@ export default function AdminDashboardView({
       const overpaid = slipAmt > STAFF_SHIRT_FEE ? slipAmt - STAFF_SHIRT_FEE : 0;
       triggerToast(
         overpaid > 0
-          ? `🛠️ หมายเหตุ "${personName}" เป็น (STAFF) เรียบร้อยแล้ว! (โอนมา ${slipAmt} บ. / เกินค่าเสื้อ +${overpaid} บ. • ปรับสถานะเป็นชำระครบแล้ว)`
-          : `🛠️ หมายเหตุ "${personName}" เป็น (STAFF) เรียบร้อยแล้ว! (${nextCallsign})`
+          ? `🛠️ ปรับสถานะ "${personName}" เป็น ${roleLabelObj.badge || '(STAFF)'} เรียบร้อย! (โอนมา ${slipAmt} บ. / เกินค่าเสื้อ +${overpaid} บ. • สร้างรายการขอเลขบัญชีเพื่อโอนคืนแล้ว)`
+          : `🛠️ ปรับสถานะ "${personName}" เป็น ${roleLabelObj.badge || '(STAFF)'} เรียบร้อยแล้ว! (${nextCallsign})`
       );
     } else {
-      triggerToast(`ยกเลิกสถานะ (STAFF) ของ "${personName}" กลับเป็นผู้เข้าอบรมทั่วไปแล้ว`);
+      triggerToast(`ปรับสถานะ "${personName}" กลับเป็นผู้เข้าอบรมทั่วไปแล้ว`);
+    }
+  };
+
+  // Request Overpayment Refund Bank Info & Citizen ID from Applicant (1-click)
+  const handleRequestOverpaidRefundDocs = async (reg) => {
+    if (!reg) return;
+    const paySummary = getStaffPaymentSummary(reg);
+    const overpaid = paySummary.overpaidAmount || 120;
+    const slipAmt = paySummary.actualSlipAmount || (STAFF_SHIRT_FEE + overpaid);
+    const currentDocs = Array.isArray(reg.requested_docs) ? [...reg.requested_docs] : [];
+    const hasRefundDoc = currentDocs.some(d => d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')));
+
+    const updatedDocs = hasRefundDoc
+      ? currentDocs.map(d => (d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน'))) ? { ...d, status: 'pending', requested_at: new Date().toISOString() } : d)
+      : [
+          ...currentDocs,
+          {
+            id: 'req_staff_overpaid_refund',
+            doc_type: `ข้อมูลรับเงินคืนส่วนเกิน (+${overpaid} บ.): ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน`,
+            description: `เนื่องจากท่านเป็นคณะกรรมการดำเนินงาน (STAFF) ชำระเฉพาะค่าเสื้อ 280 บาท แต่ได้โอนเงินมา ${slipAmt} บาท จึงมียอดชำระเกิน +${overpaid} บาท กรุณาระบุชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก (หรือแนบภาพหน้าสมุดบัญชี) เพื่อให้ฝ่ายการเงินโอนเงินส่วนเกินคืนให้ครับ`,
+            status: 'pending',
+            requested_at: new Date().toISOString()
+          }
+        ];
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    const updates = {
+      requested_docs: updatedDocs,
+      overpaid_amount: overpaid,
+      refund_amount: overpaid,
+      refund_status: reg.refund_status === 'refunded' ? 'refunded' : 'pending_refund'
+    };
+    await onUpdateAllocation(targetKey, updates);
+
+    try {
+      await DataService.sendAdminMessage(
+        reg.user_id,
+        `แจ้งเรื่องการโอนเงินคืนส่วนเกิน (+${overpaid} บาท): เนื่องจากท่านมีรายชื่อเป็นคณะกรรมการดำเนินงาน (STAFF) ซึ่งชำระเฉพาะค่าเสื้อโครงการ 280 บาท (จากยอดที่ท่านโอนมา ${slipAmt} บาท) ขอความกรุณากรอก "ชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก" ในหน้าระบบตรวจสอบสถานะ เพื่อให้ฝ่ายการเงินดำเนินการโอนเงินส่วนเกินคืนให้ครับ`,
+        {
+          sender_key: 'finance',
+          sender_name: 'ฝ่ายการเงินและบัญชีโครงการ JRE 2027',
+          sender_role: 'เหรัญญิกและตรวจสอบการชำระเงิน',
+          system_name: 'ระบบการเงินและคืนเงินส่วนเกิน (Refund System)',
+          color_theme: 'amber',
+          title: `💸 ขอข้อมูลเลขบัญชีธนาคารและเลขบัตรประชาชน เพื่อโอนเงินส่วนเกินคืน (+${overpaid} บาท)`
+        }
+      );
+    } catch (err) {
+      console.warn('Send refund doc request message notice:', err);
+    }
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+    triggerToast(`📨 ส่งคำขอเลขบัญชีธนาคาร ชื่อธนาคาร และเลขบัตรประชาชน เพื่อคืนเงินส่วนเกิน (+${overpaid} บ.) ให้ ${reg.first_name} เรียบร้อยแล้ว`);
+  };
+
+  // Update Overpayment Refund Info or Status (e.g. Mark as Refunded or Save Bank Details)
+  const handleUpdateRefundStatusAndInfo = async (reg, partialRefundUpdates = {}) => {
+    if (!reg) return;
+    const paySummary = getStaffPaymentSummary(reg);
+    const overpaid = Number(partialRefundUpdates.refund_amount ?? paySummary.overpaidAmount ?? 0);
+    const slipAmt = paySummary.actualSlipAmount || (STAFF_SHIRT_FEE + overpaid);
+    const nextStatus = partialRefundUpdates.refund_status || reg.refund_status || 'pending_refund';
+    const isNowRefunded = nextStatus === 'refunded';
+
+    let currentDocs = Array.isArray(reg.requested_docs) ? [...reg.requested_docs] : [];
+    if (isNowRefunded) {
+      currentDocs = currentDocs.map(d =>
+        (d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')))
+          ? { ...d, status: 'approved', verified_at: new Date().toISOString() }
+          : d
+      );
+    }
+
+    const updatedPaymentNotes = isNowRefunded
+      ? `หมายเหตุ: คณะกรรมการดำเนินงาน (STAFF) ชำระค่าเสื้อ 280 บ. (โอนมาจริง ${slipAmt} บ. / โอนคืนเงินส่วนเกิน +${overpaid} บ. เรียบร้อยแล้ว ✓)`
+      : `หมายเหตุ: คณะกรรมการดำเนินงาน (STAFF) ชำระค่าเสื้อ 280 บ. (โอนมาจริง ${slipAmt} บ. / ชำระเกินค่าเสื้อ +${overpaid} บ. • รอโอนเงินส่วนเกินคืน)`;
+
+    const updates = {
+      overpaid_amount: overpaid,
+      refund_amount: overpaid,
+      refund_status: nextStatus,
+      refund_bank_name: partialRefundUpdates.refund_bank_name !== undefined ? partialRefundUpdates.refund_bank_name : (reg.refund_bank_name || ''),
+      refund_bank_account: partialRefundUpdates.refund_bank_account !== undefined ? partialRefundUpdates.refund_bank_account : (reg.refund_bank_account || ''),
+      refund_account_holder: partialRefundUpdates.refund_account_holder !== undefined ? partialRefundUpdates.refund_account_holder : (reg.refund_account_holder || `${reg.first_name || ''} ${reg.last_name || ''}`.trim()),
+      refund_citizen_id: partialRefundUpdates.refund_citizen_id !== undefined ? partialRefundUpdates.refund_citizen_id : (reg.refund_citizen_id || ''),
+      refund_slip_url: partialRefundUpdates.refund_slip_url !== undefined ? partialRefundUpdates.refund_slip_url : (reg.refund_slip_url || ''),
+      refund_at: isNowRefunded ? (reg.refund_at || new Date().toISOString()) : (reg.refund_at || ''),
+      requested_docs: currentDocs,
+      payment_notes: updatedPaymentNotes
+    };
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, updates);
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setModalPaymentNotes(updatedPaymentNotes);
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    if (isNowRefunded) {
+      try {
+        await DataService.sendAdminMessage(
+          reg.user_id,
+          `ฝ่ายการเงินได้ดำเนินการโอนเงินส่วนเกินคืนจำนวน +${overpaid} บาท (จากยอดโอน ${slipAmt} บาท หักค่าเสื้อ STAFF 280 บาท) เข้าบัญชีของท่านเรียบร้อยแล้ว ท่านสามารถตรวจสอบหลักฐานสลิปการโอนเงินคืนได้ในหน้าระบบตรวจสอบสถานะครับ`,
+          {
+            sender_key: 'finance',
+            sender_name: 'ฝ่ายการเงินและบัญชีโครงการ JRE 2027',
+            sender_role: 'เหรัญญิกและตรวจสอบการชำระเงิน',
+            system_name: 'ระบบการเงินและคืนเงินส่วนเกิน (Refund System)',
+            color_theme: 'emerald',
+            title: `✅ โอนเงินส่วนเกินคืนเรียบร้อยแล้ว (+${overpaid} บาท)`,
+            attachment_url: updates.refund_slip_url || '',
+            attachment_name: updates.refund_slip_url ? 'สลิปโอนเงินคืนส่วนเกิน.jpg' : ''
+          }
+        );
+      } catch (err) {
+        console.warn('Send refund completion message notice:', err);
+      }
+      triggerToast(`✅ ปรับสถานะเป็น "คืนเงินส่วนเกินแล้ว (+${overpaid} บ.)" สำหรับ ${reg.first_name} เรียบร้อยแล้ว!`);
+    } else {
+      triggerToast(`💾 บันทึกข้อมูลการคืนเงินส่วนเกินของ ${reg.first_name} เรียบร้อยแล้ว`);
+    }
+  };
+
+  // Upload Admin Refund Slip for Overpaid Staff/Applicant
+  const handleUploadAdminRefundSlip = async (e, reg) => {
+    const file = e.target.files?.[0];
+    if (!file || !reg) return;
+    try {
+      triggerToast('กำลังอัปโหลดสลิปโอนเงินคืนส่วนเกิน...');
+      const uploaded = await DataService.uploadFile(file, 'slips');
+      if (uploaded?.url) {
+        await handleUpdateRefundStatusAndInfo(reg, {
+          refund_slip_url: uploaded.url,
+          refund_status: 'refunded'
+        });
+      }
+    } catch (err) {
+      console.error('Upload refund slip error:', err);
+      triggerToast('อัปโหลดสลิปโอนเงินคืนไม่สำเร็จ', 'error');
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -5490,50 +5671,75 @@ export default function AdminDashboardView({
                                     </span>
                                   );
                                 })()}
-                                {isStaff ? (() => {
+                                {(() => {
                                   const staffPayInfo = getStaffPaymentSummary(reg);
+                                  const currentRoleVal = isStaff ? staffPayInfo.staffRoleType : 'participant';
+                                  const isMsuRow = isMsuInstitution(reg.institution);
                                   return (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleQuickToggleStaff(reg, false);
-                                      }}
-                                      className="px-2 py-0.5 bg-purple-500/30 hover:bg-purple-500/45 text-purple-100 border border-purple-400/70 rounded-full text-[10px] font-black inline-flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                                      title="หมายเหตุเป็น (STAFF) แล้ว • คลิกเพื่อยกเลิกสถานะ (STAFF)"
-                                    >
-                                      <span>🛠️ (STAFF) • ค่าเสื้อ 280 บ.</span>
+                                    <div className="inline-flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
+                                      <select
+                                        value={currentRoleVal}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          handleQuickToggleStaff(reg, val !== 'participant', val);
+                                        }}
+                                        className={`px-2 py-0.5 rounded-full text-[10px] font-black border cursor-pointer outline-none transition-all ${
+                                          isStaff
+                                            ? 'bg-purple-600/35 text-purple-100 border-purple-400/80 hover:border-purple-300 shadow-sm'
+                                            : isMsuRow
+                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                                            : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:border-blue-400'
+                                        }`}
+                                        title="สำหรับ Admin/Dev: คลิกดรอปดาวน์เพื่อเลือกปรับสถานะเป็น คณะกรรมการดำเนินงาน (STAFF) / Dev / พิธีกร / ช่างภาพ / ผู้เข้าอบรมทั่วไป"
+                                      >
+                                        <option value="participant" className="bg-slate-900 text-slate-200">
+                                          {isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
+                                        </option>
+                                        <option value="committee" className="bg-slate-900 text-purple-200">
+                                          🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
+                                        </option>
+                                        <option value="dev" className="bg-slate-900 text-purple-200">
+                                          💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
+                                        </option>
+                                        <option value="mc" className="bg-slate-900 text-purple-200">
+                                          🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
+                                        </option>
+                                        <option value="photographer" className="bg-slate-900 text-purple-200">
+                                          📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
+                                        </option>
+                                        <option value="staff" className="bg-slate-900 text-purple-200">
+                                          🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
+                                        </option>
+                                      </select>
+
                                       {staffPayInfo.isOverpaid && (
-                                        <span className="px-1 py-0.2 bg-amber-400/25 text-amber-200 border border-amber-300/40 rounded text-[9px]">
-                                          โอน {staffPayInfo.actualSlipAmount} บ. (+{staffPayInfo.overpaidAmount})
-                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenProfileModal(reg, 'payment');
+                                          }}
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-black border cursor-pointer transition-all inline-flex items-center gap-1 ${
+                                            staffPayInfo.isRefunded
+                                              ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60 hover:bg-emerald-500/35'
+                                              : staffPayInfo.refundStatus === 'info_submitted'
+                                              ? 'bg-sky-500/25 text-sky-200 border-sky-400/60 animate-pulse'
+                                              : 'bg-amber-500/25 text-amber-200 border-amber-400/60 hover:bg-amber-500/35'
+                                          }`}
+                                          title="คลิกเพื่อจัดการโอนเงินส่วนเกินคืน / อัปโหลดสลิปคืนเงิน / ตรวจเลขบัญชี"
+                                        >
+                                          {staffPayInfo.isRefunded ? (
+                                            <span>💸 คืนเงินส่วนเกิน +{staffPayInfo.overpaidAmount} บ. แล้ว ✓</span>
+                                          ) : staffPayInfo.refundStatus === 'info_submitted' ? (
+                                            <span>📋 แจ้งเลขบัญชีแล้ว (รอโอนคืน +{staffPayInfo.overpaidAmount} บ.)</span>
+                                          ) : (
+                                            <span>💸 โอนเกิน +{staffPayInfo.overpaidAmount} บ. (คลิกจัดการคืนเงิน)</span>
+                                          )}
+                                        </button>
                                       )}
-                                    </button>
+                                    </div>
                                   );
-                                })() : (
-                                  <>
-                                    {isMsuInstitution(reg.institution) ? (
-                                      <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-semibold">
-                                        มมส (650 บ.)
-                                      </span>
-                                    ) : (
-                                      <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px] font-semibold">
-                                        ต่างสถาบัน (850 บ.)
-                                      </span>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleQuickToggleStaff(reg, true);
-                                      }}
-                                      className="px-2 py-0.5 bg-slate-900/90 hover:bg-purple-600/30 text-purple-300 hover:text-purple-100 border border-purple-500/40 hover:border-purple-400 rounded-full text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all"
-                                      title="คลิก 1 ครั้งเพื่อหมายเหตุผู้สมัครคนนี้ว่าเป็น (STAFF) ทันที (แม้โอนเกิน 280 บ. ระบบจะปรับเป็นชำระครบ + ระบุยอดโอนเกินให้อัตโนมัติ)"
-                                    >
-                                      <span>+ หมายเหตุ (STAFF)</span>
-                                    </button>
-                                  </>
-                                )}
+                                })()}
                                 {reg.is_special_care && (
                                   <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[10px] font-black animate-pulse flex items-center gap-1">
                                     ⭐ ดูแลพิเศษ
@@ -5578,11 +5784,11 @@ export default function AdminDashboardView({
                               <button
                                 type="button"
                                 onClick={() => handleOpenProfileModal(reg, 'payment')}
-                                className="text-left group cursor-pointer block hover:opacity-90"
+                                className="text-left group cursor-pointer block hover:opacity-90 space-y-1"
                               >
-                                <div className="flex items-center gap-1.5 mb-1">
+                                <div className="flex items-center gap-1.5">
                                   <span className="px-1.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/40 rounded text-[9px] font-black">
-                                    🛠️ (STAFF) 280 บ.
+                                    🛠️ {staffPayInfo.staffRoleLabel} (280 บ.)
                                   </span>
                                   {isStaffPaid ? (
                                     <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระแล้ว</span>
@@ -5597,6 +5803,17 @@ export default function AdminDashboardView({
                                     ? `โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกินค่าเสื้อ +${staffPayInfo.overpaidAmount} บ.)`
                                     : 'เฉพาะค่าเสื้อ: 280 บ. (ครั้งเดียว)'}
                                 </div>
+                                {staffPayInfo.isOverpaid && (
+                                  <div className={`text-[10px] font-bold ${
+                                    staffPayInfo.isRefunded ? 'text-emerald-400' : 'text-amber-300'
+                                  }`}>
+                                    {staffPayInfo.isRefunded
+                                      ? `✅ โอนเงินส่วนเกินคืนแล้ว (+${staffPayInfo.overpaidAmount} บ.)`
+                                      : staffPayInfo.refundBankAccount
+                                      ? `📋 เลขบัญชีคืนเงิน: ${staffPayInfo.refundBankName} ${staffPayInfo.refundBankAccount}`
+                                      : `⏳ รอโอนเงินส่วนเกินคืน (+${staffPayInfo.overpaidAmount} บ.)`}
+                                  </div>
+                                )}
                               </button>
                             );
                           })() : (reg.payment_plan ? reg.payment_plan === 'installment' : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url)) ? (() => {
@@ -6007,44 +6224,65 @@ export default function AdminDashboardView({
                   }`}>
                     {modalGender === 'ชาย' ? '👨 ชาย' : modalGender === 'หญิง' ? '👩 หญิง' : 'ไม่ระบุเพศ'}
                   </span>
-                  {modalIsStaff ? (() => {
+                  {(() => {
                     const staffPayInfo = getStaffPaymentSummary(profileModalReg);
+                    const currentRoleVal = modalIsStaff ? staffPayInfo.staffRoleType : 'participant';
+                    const isMsuModal = isMsuInstitution(profileModalReg.institution);
                     return (
-                      <button
-                        type="button"
-                        onClick={() => handleQuickToggleStaff(profileModalReg, false)}
-                        className="px-3 py-1 bg-purple-600/35 hover:bg-purple-600/50 text-purple-100 border border-purple-400/80 rounded-full text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
-                        title="หมายเหตุเป็น (STAFF) แล้ว • คลิกเพื่อยกเลิกสถานะ (STAFF)"
-                      >
-                        <span>🛠️ (STAFF) ✓ • ชำระค่าเสื้อ 280 บ.</span>
+                      <div className="inline-flex flex-wrap items-center gap-1.5">
+                        <select
+                          value={currentRoleVal}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleQuickToggleStaff(profileModalReg, val !== 'participant', val);
+                          }}
+                          className={`px-3 py-1 rounded-full text-xs font-black border cursor-pointer outline-none transition-all ${
+                            modalIsStaff
+                              ? 'bg-purple-600/35 text-purple-100 border-purple-400/80 hover:border-purple-300 shadow-sm'
+                              : isMsuModal
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                              : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:border-blue-400'
+                          }`}
+                          title="สำหรับ Admin/Dev: ดรอปดาวน์เลือกปรับสถานะเป็น คณะกรรมการดำเนินงาน (STAFF) / Dev / พิธีกร / ช่างภาพ / ผู้เข้าอบรมทั่วไป"
+                        >
+                          <option value="participant" className="bg-slate-900 text-slate-200">
+                            {isMsuModal ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
+                          </option>
+                          <option value="committee" className="bg-slate-900 text-purple-200">
+                            🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
+                          </option>
+                          <option value="dev" className="bg-slate-900 text-purple-200">
+                            💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
+                          </option>
+                          <option value="mc" className="bg-slate-900 text-purple-200">
+                            🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
+                          </option>
+                          <option value="photographer" className="bg-slate-900 text-purple-200">
+                            📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
+                          </option>
+                          <option value="staff" className="bg-slate-900 text-purple-200">
+                            🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
+                          </option>
+                        </select>
+
                         {staffPayInfo.isOverpaid && (
-                          <span className="px-1.5 py-0.5 bg-amber-400/25 text-amber-200 border border-amber-300/40 rounded-full text-[10px]">
-                            โอน {staffPayInfo.actualSlipAmount} บ. (เกิน +{staffPayInfo.overpaidAmount} บ.)
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setProfileModalTab('payment')}
+                            className={`px-2.5 py-1 rounded-full text-xs font-black border cursor-pointer transition-all inline-flex items-center gap-1 ${
+                              staffPayInfo.isRefunded
+                                ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60'
+                                : 'bg-amber-500/25 text-amber-200 border-amber-400/60'
+                            }`}
+                          >
+                            {staffPayInfo.isRefunded
+                              ? `💸 คืนเงินส่วนเกิน +${staffPayInfo.overpaidAmount} บ. แล้ว ✓`
+                              : `💸 โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกินค่าเสื้อ +${staffPayInfo.overpaidAmount} บ. • คลิกจัดการคืนเงิน)`}
+                          </button>
                         )}
-                      </button>
+                      </div>
                     );
-                  })() : (
-                    <>
-                      {isMsuInstitution(profileModalReg.institution) ? (
-                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold">
-                          🏫 มมส (650 บ.)
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold">
-                          🏢 ต่างสถาบัน (850 บ. รวมหอพัก)
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleQuickToggleStaff(profileModalReg, true)}
-                        className="px-3 py-1 bg-purple-600/25 hover:bg-purple-600/45 text-purple-200 hover:text-white border border-purple-400/60 hover:border-purple-300 rounded-full text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
-                        title="คลิก 1 ครั้งเพื่อหมายเหตุว่าเป็น (STAFF) ทันทีโดยไม่ต้องกดปลดล็อก (แม้โอนเกิน 280 บ. ระบบจะปรับเป็นชำระครบ + บันทึกยอดโอนเกินให้อัตโนมัติ)"
-                      >
-                        <span>🛠️ + หมายเหตุว่าเป็น (STAFF)</span>
-                      </button>
-                    </>
-                  )}
+                  })()}
                   {modalSpecialCare && (
                     <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-xs font-black animate-pulse flex items-center gap-1">
                       ⭐ ผู้เข้าร่วมดูแลเป็นพิเศษ
@@ -7360,30 +7598,217 @@ export default function AdminDashboardView({
                       การจัดการยอดชำระเงินและตรวจสอบสลิป
                     </h4>
 
-                    {/* Staff 280 THB Checkbox in Payment Tab (Always 1-click active for Admin/Dev) */}
-                    <label className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all cursor-pointer hover:border-purple-400 ${
-                      modalIsStaff
-                        ? 'bg-purple-600/30 border-purple-400 text-purple-100 shadow-sm'
-                        : 'bg-slate-900 border-slate-700 text-slate-300'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        checked={modalIsStaff}
+                    {/* Staff Role Dropdown & Checkbox in Payment Tab (Always 1-click active for Admin/Dev) */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={modalIsStaff ? getStaffPaymentSummary(profileModalReg).staffRoleType : 'participant'}
                         onChange={(e) => {
-                          handleQuickToggleStaff(profileModalReg, e.target.checked);
+                          const val = e.target.value;
+                          handleQuickToggleStaff(profileModalReg, val !== 'participant', val);
                         }}
-                        className="w-4 h-4 rounded text-purple-600 bg-slate-950 border-purple-400 cursor-pointer"
-                      />
-                      <div>
-                        <span className="text-xs font-black block">
-                          🛠️ หมายเหตุว่าเป็น (STAFF) โครงการ • ค่าเสื้อ 280 บ. (คลิกบันทึกทันที)
-                        </span>
-                        <span className="text-[10px] text-purple-300 block">
-                          แม้โอนเกิน 280 บ. (เช่น 400/650/850 บ.) ระบบจะหมายเหตุ (STAFF) และปรับสถานะเป็นชำระครบให้อัตโนมัติ
-                        </span>
-                      </div>
-                    </label>
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black border cursor-pointer outline-none transition-all ${
+                          modalIsStaff
+                            ? 'bg-purple-600/30 border-purple-400 text-purple-100 shadow-sm'
+                            : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-purple-400'
+                        }`}
+                      >
+                        <option value="participant" className="bg-slate-900 text-slate-200">
+                          👤 ผู้เข้าอบรมทั่วไป ({isMsuInstitution(profileModalReg.institution) ? 'มมส 650 บ.' : 'ต่างสถาบัน 850 บ.'})
+                        </option>
+                        <option value="committee" className="bg-slate-900 text-purple-200">
+                          🛠️ (STAFF) คณะกรรมการดำเนินงาน (ค่าเสื้อ 280 บ.)
+                        </option>
+                        <option value="dev" className="bg-slate-900 text-purple-200">
+                          💻 (STAFF) ผู้พัฒนาระบบ Dev (ค่าเสื้อ 280 บ.)
+                        </option>
+                        <option value="mc" className="bg-slate-900 text-purple-200">
+                          🎤 (STAFF) พิธีกรดำเนินรายการ (ค่าเสื้อ 280 บ.)
+                        </option>
+                        <option value="photographer" className="bg-slate-900 text-purple-200">
+                          📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (ค่าเสื้อ 280 บ.)
+                        </option>
+                        <option value="staff" className="bg-slate-900 text-purple-200">
+                          🛠️ (STAFF) สตาฟโครงการทั่วไป (ค่าเสื้อ 280 บ.)
+                        </option>
+                      </select>
+                    </div>
                   </div>
+
+                  {/* OVERPAID STAFF REFUND MANAGEMENT PANEL */}
+                  {(() => {
+                    const staffPayInfo = getStaffPaymentSummary(profileModalReg);
+                    if (!staffPayInfo.isOverpaid && !profileModalReg.refund_slip_url && !profileModalReg.overpaid_amount) return null;
+                    const overpaidAmt = staffPayInfo.overpaidAmount || Number(profileModalReg.overpaid_amount || 0);
+                    return (
+                      <div className={`p-4 rounded-2xl border-2 space-y-4 ${
+                        staffPayInfo.isRefunded
+                          ? 'bg-emerald-950/25 border-emerald-500/50'
+                          : 'bg-amber-950/25 border-amber-500/50'
+                      }`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-black text-white flex items-center gap-1.5">
+                                💸 ระบบจัดการโอนเงินคืนส่วนเกินสำหรับ (STAFF)
+                              </span>
+                              {staffPayInfo.isRefunded ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[11px]">
+                                  ✅ โอนเงินส่วนเกินคืนแล้ว (+{overpaidAmt} บ.)
+                                </span>
+                              ) : staffPayInfo.refundStatus === 'info_submitted' ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-sky-500/25 text-sky-200 border border-sky-400/50 font-black text-[11px]">
+                                  📋 ผู้สมัครแจ้งเลขบัญชีแล้ว (รอ Admin โอนคืน +{overpaidAmt} บ.)
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/25 text-amber-200 border border-amber-400/50 font-black text-[11px]">
+                                  ⏳ รอข้อมูลบัญชี / รอโอนคืนส่วนเกิน (+{overpaidAmt} บ.)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-300 mt-1">
+                              ผู้สมัครโอนมาจริง <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • หักค่าเสื้อ STAFF <strong className="text-purple-300">280 บาท</strong> • ยอดเงินส่วนเกินที่ต้องโอนคืน: <strong className="text-amber-300 text-xs">+{overpaidAmt} บาท</strong>
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleRequestOverpaidRefundDocs(profileModalReg)}
+                              className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-400/50 rounded-xl text-[11px] font-bold cursor-pointer transition-all"
+                              title="ส่งคำขอ เลขที่บัญชี ชื่อธนาคาร และเลขบัตรประชาชน ไปยังหน้าตรวจสอบสถานะและกล่องข้อความของผู้สมัคร"
+                            >
+                              📨 ขอเอกสาร เลขบัญชี/ชื่อธนาคาร/เลขบัตร ปชช.
+                            </button>
+
+                            {!staffPayInfo.isRefunded ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'refunded' })}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
+                              >
+                                ✅ ปรับสถานะ: คืนเงินส่วนเกินแล้ว
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'pending_refund' })}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
+                              >
+                                ↩️ ยกเลิกสถานะคืนเงินแล้ว
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bank Account, Bank Name, Citizen ID & Refund Slip Upload */}
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">ชื่อธนาคาร (สำหรับรับเงินคืน):</label>
+                            <input
+                              type="text"
+                              defaultValue={profileModalReg.refund_bank_name || ''}
+                              onBlur={(e) => {
+                                if (e.target.value !== (profileModalReg.refund_bank_name || '')) {
+                                  handleUpdateRefundStatusAndInfo(profileModalReg, { refund_bank_name: e.target.value.trim() });
+                                }
+                              }}
+                              placeholder="เช่น กสิกรไทย, ไทยพาณิชย์, กรุงไทย, ออมสิน"
+                              className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">เลขที่บัญชีธนาคาร / พร้อมเพย์:</label>
+                            <input
+                              type="text"
+                              defaultValue={profileModalReg.refund_bank_account || ''}
+                              onBlur={(e) => {
+                                if (e.target.value !== (profileModalReg.refund_bank_account || '')) {
+                                  handleUpdateRefundStatusAndInfo(profileModalReg, { refund_bank_account: e.target.value.trim() });
+                                }
+                              }}
+                              placeholder="ระบุเลขบัญชีธนาคาร..."
+                              className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-emerald-300 font-mono font-bold text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">ชื่อบัญชีผู้รับเงินคืน:</label>
+                            <input
+                              type="text"
+                              defaultValue={profileModalReg.refund_account_holder || `${profileModalReg.first_name || ''} ${profileModalReg.last_name || ''}`.trim()}
+                              onBlur={(e) => {
+                                if (e.target.value !== (profileModalReg.refund_account_holder || '')) {
+                                  handleUpdateRefundStatusAndInfo(profileModalReg, { refund_account_holder: e.target.value.trim() });
+                                }
+                              }}
+                              placeholder="ชื่อ-นามสกุล เจ้าของบัญชี..."
+                              className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">เลขประจำตัวประชาชน 13 หลัก:</label>
+                            <input
+                              type="text"
+                              defaultValue={profileModalReg.refund_citizen_id || ''}
+                              onBlur={(e) => {
+                                if (e.target.value !== (profileModalReg.refund_citizen_id || '')) {
+                                  handleUpdateRefundStatusAndInfo(profileModalReg, { refund_citizen_id: e.target.value.trim() });
+                                }
+                              }}
+                              placeholder="เลขบัตรประชาชน 13 หลัก..."
+                              className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-amber-300 font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-bold text-slate-300">หลักฐานการโอนเงินคืนจาก Admin:</span>
+                            {profileModalReg.refund_slip_url ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDoc({
+                                  title: `สลิปโอนเงินคืนส่วนเกิน (+${overpaidAmt} บ.) - ${profileModalReg.first_name}`,
+                                  file_url: profileModalReg.refund_slip_url,
+                                  file_name: 'refund-slip.jpg'
+                                })}
+                                className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-[11px] font-bold cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>ดูสลิปโอนเงินคืนที่แนบไว้</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">ยังไม่ได้แนบสลิปโอนเงินคืน</span>
+                            )}
+                            {profileModalReg.refund_doc_url && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDoc({
+                                  title: `เอกสารหน้าสมุดบัญชี/บัตรประชาชน - ${profileModalReg.first_name}`,
+                                  file_url: profileModalReg.refund_doc_url,
+                                  file_name: 'applicant-refund-doc.jpg'
+                                })}
+                                className="px-3 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-lg text-[11px] font-bold cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <FileCheck className="w-3.5 h-3.5" />
+                                <span>ดูเอกสารบัญชี/บัตร ปชช. ของผู้สมัคร</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <label className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black cursor-pointer inline-flex items-center gap-1.5 shadow transition-all shrink-0 w-fit">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{profileModalReg.refund_slip_url ? 'เปลี่ยนสลิปโอนเงินคืนส่วนเกิน' : '📤 อัปโหลดสลิปโอนเงินคืนส่วนเกิน (+ปรับสถานะคืนแล้ว)'}</span>
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => handleUploadAdminRefundSlip(e, profileModalReg)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
@@ -13169,6 +13594,37 @@ export default function AdminDashboardView({
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
+                onClick={async () => {
+                  const synced = DEFAULT_TEAM_MEMBERS.map(tm => {
+                    const matchedReg = (registrations || []).find(r => {
+                      const fullStr = `${r.first_name || ''} ${r.last_name || ''} ${r.full_name_affiliation || ''}`;
+                      const cleanTmName = (tm.name || '').replace(/^(นาย|นางสาว|น\.ส\.|นาง)\s*/g, '').trim();
+                      return cleanTmName && fullStr.includes(cleanTmName);
+                    });
+                    if (matchedReg && (matchedReg.id_card_photo || matchedReg.user_avatar)) {
+                      return {
+                        ...tm,
+                        photo: matchedReg.id_card_photo || matchedReg.user_avatar,
+                        callsign: matchedReg.callsign || tm.callsign,
+                        nickname: matchedReg.nickname || tm.nickname
+                      };
+                    }
+                    return tm;
+                  });
+                  setLocalTeam(synced);
+                  if (typeof onSaveTeam === 'function') {
+                    await onSaveTeam(synced);
+                  }
+                  triggerToast('✨ ซิงค์รายชื่อและรูปถ่ายคณะกรรมการดำเนินงาน 14 ท่าน (มมส & มข) เรียบร้อยแล้ว');
+                }}
+                className="px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>ซิงค์รายชื่อ & รูปคณะกรรมการ 14 ท่าน</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleOpenAddTeamMember}
                 className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
               >
@@ -13284,7 +13740,17 @@ export default function AdminDashboardView({
                         <h4 className="font-bold text-white text-sm mt-2.5 truncate group-hover:text-blue-300 transition-colors">
                           {member.name}
                         </h4>
-                        <p className="text-xs font-semibold text-rescue-400 mt-0.5 line-clamp-1">
+                        {member.nickname && (
+                          <span className="text-[11px] font-bold text-amber-300 block">
+                            ({member.nickname})
+                          </span>
+                        )}
+                        {member.callsign && (
+                          <span className="mt-1 px-2 py-0.5 bg-purple-500/20 text-purple-200 border border-purple-400/40 rounded-full text-[10px] font-mono font-bold inline-block">
+                            📡 {member.callsign}
+                          </span>
+                        )}
+                        <p className="text-xs font-semibold text-rescue-400 mt-1 line-clamp-1">
                           {member.role}
                         </p>
                       </div>

@@ -78,6 +78,7 @@ import {
   getRegistrationFeeDetails,
   isMsuInstitution,
   isStaffRegistration,
+  getStaffPaymentSummary,
   resolveGender,
   resolveUniversityInfo,
   resolveApplicantMemberType,
@@ -2759,6 +2760,190 @@ export default function RegisterView({
               </div>
             )}
           </div>
+
+          {/* OVERPAID STAFF REFUND FORM & STATUS CARD (For Staff / Committee members who transferred > 280 THB) */}
+          {(() => {
+            const staffPayInfo = getStaffPaymentSummary(myRegistration);
+            if (!staffPayInfo.isOverpaid && !myRegistration.overpaid_amount && !myRegistration.refund_slip_url) return null;
+            const overpaidAmt = staffPayInfo.overpaidAmount || Number(myRegistration.overpaid_amount || 0);
+            return (
+              <div className={`mt-6 p-5 sm:p-6 rounded-3xl border-2 shadow-2xl space-y-4 ${
+                staffPayInfo.isRefunded
+                  ? 'bg-gradient-to-r from-emerald-950/70 via-slate-900 to-teal-950/70 border-emerald-500/60'
+                  : 'bg-gradient-to-r from-amber-950/60 via-slate-900 to-purple-950/60 border-amber-500/60'
+              }`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm sm:text-base font-black text-white flex items-center gap-1.5">
+                        💸 การโอนเงินคืนส่วนเกินสำหรับ {staffPayInfo.staffRoleLabel || 'คณะกรรมการดำเนินงาน (STAFF)'}
+                      </span>
+                      {staffPayInfo.isRefunded ? (
+                        <span className="px-3 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-xs shadow">
+                          ✅ โอนเงินส่วนเกินคืนเรียบร้อยแล้ว (+{overpaidAmt} บ.)
+                        </span>
+                      ) : staffPayInfo.refundStatus === 'info_submitted' ? (
+                        <span className="px-3 py-0.5 rounded-full bg-sky-500/25 text-sky-200 border border-sky-400/50 font-bold text-xs">
+                          📋 แจ้งเลขบัญชีแล้ว • รอฝ่ายการเงินโอนคืน (+{overpaidAmt} บ.)
+                        </span>
+                      ) : (
+                        <span className="px-3 py-0.5 rounded-full bg-amber-500/25 text-amber-200 border border-amber-400/50 font-bold text-xs animate-pulse">
+                          ⏳ กรุณากรอกเลขบัญชีธนาคารเพื่อรับเงินส่วนเกินคืน (+{overpaidAmt} บ.)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1">
+                      ท่านมีรายชื่อเป็น <strong className="text-purple-300">{staffPayInfo.staffRoleLabel}</strong> ชำระเฉพาะค่าเสื้อ <strong className="text-white">280 บาท</strong> • ยอดที่ท่านโอนมา <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • ยอดเงินส่วนเกินที่ได้รับคืน: <strong className="text-amber-300 text-sm">+{overpaidAmt} บาท</strong>
+                    </p>
+                  </div>
+
+                  {myRegistration.refund_slip_url && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewSlipModal(myRegistration.refund_slip_url)}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl text-xs font-black inline-flex items-center gap-1.5 shadow-lg cursor-pointer shrink-0"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>ดูสลิปโอนเงินคืนจากโครงการ (+{overpaidAmt} บ.)</span>
+                    </button>
+                  )}
+                </div>
+
+                {!staffPayInfo.isRefunded && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const formData = new FormData(e.currentTarget);
+                      const bankName = String(formData.get('refund_bank_name') || '').trim();
+                      const bankAccount = String(formData.get('refund_bank_account') || '').trim();
+                      const accountHolder = String(formData.get('refund_account_holder') || '').trim();
+                      const citizenId = String(formData.get('refund_citizen_id') || '').trim();
+                      if (!bankName || !bankAccount || !citizenId) {
+                        setToast({ message: 'กรุณากรอก ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน 13 หลักให้ครบถ้วน', type: 'error' });
+                        return;
+                      }
+                      const currentDocs = Array.isArray(myRegistration.requested_docs) ? [...myRegistration.requested_docs] : [];
+                      const updatedDocs = currentDocs.map(d =>
+                        (d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')))
+                          ? {
+                              ...d,
+                              status: 'submitted',
+                              submitted_at: new Date().toISOString(),
+                              applicant_note: `ธนาคาร: ${bankName} | เลขบัญชี: ${bankAccount} | ชื่อบัญชี: ${accountHolder} | เลขบัตร ปชช.: ${citizenId}`
+                            }
+                          : d
+                      );
+                      await onUpdateRegistration(myRegistration.user_id || myRegistration.id, {
+                        refund_bank_name: bankName,
+                        refund_bank_account: bankAccount,
+                        refund_account_holder: accountHolder,
+                        refund_citizen_id: citizenId,
+                        refund_status: 'info_submitted',
+                        requested_docs: updatedDocs
+                      });
+                      setToast({ message: `บันทึกข้อมูลบัญชีธนาคารเพื่อรับเงินคืนส่วนเกิน (+${overpaidAmt} บ.) เรียบร้อยแล้ว!`, type: 'success' });
+                    }}
+                    className="space-y-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <label className="block font-bold text-amber-200 mb-1">1. ชื่อธนาคาร *</label>
+                        <input
+                          type="text"
+                          name="refund_bank_name"
+                          required
+                          defaultValue={myRegistration.refund_bank_name || ''}
+                          placeholder="เช่น กสิกรไทย, ไทยพาณิชย์, กรุงไทย, ออมสิน"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white focus:border-amber-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-amber-200 mb-1">2. เลขที่บัญชีธนาคาร *</label>
+                        <input
+                          type="text"
+                          name="refund_bank_account"
+                          required
+                          defaultValue={myRegistration.refund_bank_account || ''}
+                          placeholder="ระบุเลขที่บัญชีธนาคาร..."
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold focus:border-amber-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-amber-200 mb-1">3. ชื่อ-นามสกุล เจ้าของบัญชี *</label>
+                        <input
+                          type="text"
+                          name="refund_account_holder"
+                          required
+                          defaultValue={myRegistration.refund_account_holder || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim()}
+                          placeholder="ชื่อ-นามสกุล เจ้าของบัญชี..."
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white focus:border-amber-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-amber-200 mb-1">4. เลขประจำตัวประชาชน 13 หลัก *</label>
+                        <input
+                          type="text"
+                          name="refund_citizen_id"
+                          required
+                          defaultValue={myRegistration.refund_citizen_id || ''}
+                          placeholder="เลขบัตรประชาชน 13 หลัก..."
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-amber-300 font-mono focus:border-amber-400 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <label className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/40 rounded-xl font-bold cursor-pointer inline-flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{myRegistration.refund_doc_url ? 'เปลี่ยนรูปหน้าสมุดบัญชี / บัตร ปชช.' : 'แนบรูปหน้าสมุดบัญชี / บัตรประชาชน (ถ้ามี)'}</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              try {
+                                const uploaded = await DataService.uploadFile(f, 'docs');
+                                if (uploaded?.url) {
+                                  await onUpdateRegistration(myRegistration.user_id || myRegistration.id, {
+                                    refund_doc_url: uploaded.url
+                                  });
+                                  setToast({ message: 'แนบไฟล์เอกสารหน้าสมุดบัญชี/บัตรประชาชนเรียบร้อยแล้ว', type: 'success' });
+                                }
+                              } catch (err) {
+                                setToast({ message: 'อัปโหลดไฟล์ไม่สำเร็จ', type: 'error' });
+                              } finally {
+                                e.target.value = '';
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        {myRegistration.refund_doc_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewSlipModal(myRegistration.refund_doc_url)}
+                            className="text-xs text-sky-300 underline font-semibold cursor-pointer"
+                          >
+                            ดูเอกสารที่แนบไว้
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center justify-center gap-1.5"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>บันทึกข้อมูลเพื่อรับเงินคืนส่วนเกิน (+{overpaidAmt} บ.)</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            );
+          })()}
 
           {/* VISUAL INTERACTIVE PROGRESS FLOW (3 Steps for Full Payment / 4 Steps for 2 Installments) */}
           <div className="mt-8 space-y-4">
