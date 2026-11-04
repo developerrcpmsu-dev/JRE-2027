@@ -17,11 +17,17 @@ import {
   Crown,
   ShieldCheck,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  X,
+  Eye,
+  Maximize2,
+  Tag,
+  UserCheck
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
 import RegistrationCountdown from '../components/RegistrationCountdown';
+import ModalPortal from '../components/ModalPortal';
 import { getRegistrationScheduleStatus } from '../utils/registrationSchedule';
 import { DEFAULT_SPEAKERS, getSpeakerCategory, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
 
@@ -36,6 +42,7 @@ export default function HomeView({
   paymentConfig
 }) {
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
+  const [selectedPersonModal, setSelectedPersonModal] = React.useState(null);
   // Dynamic university resolution helper
   const getMemberUniversity = (m) => {
     if (m.university && m.university.trim()) return m.university.trim();
@@ -411,7 +418,7 @@ export default function HomeView({
               return (
                 <span key={group.name} className={`flex items-center gap-1.5 font-semibold px-3 py-1.5 rounded-lg border ${badgeColor}`}>
                   <span className="w-2 h-2 rounded-full bg-current"></span>
-                  <span>{group.members.length} {group.name.replace(/มหาวิทยาลัย/g, 'ม.').slice(0, 20)}</span>
+                  <span>{group.members.length} ท่าน • {group.name}</span>
                 </span>
               );
             })}
@@ -421,53 +428,87 @@ export default function HomeView({
         {/* Dynamic Groups */}
         {groupedTeam.map((group, groupIdx) => {
           const accentColors = [
-            { border: 'hover:border-yellow-500/50', text: 'text-yellow-400', tagBg: 'bg-yellow-500 text-slate-950', imgBorder: 'border-yellow-500/40 group-hover:border-yellow-400' },
-            { border: 'hover:border-orange-500/50', text: 'text-orange-400', tagBg: 'bg-orange-600 text-white', imgBorder: 'border-orange-500/40 group-hover:border-orange-400' },
-            { border: 'hover:border-blue-500/50', text: 'text-blue-400', tagBg: 'bg-blue-600 text-white', imgBorder: 'border-blue-500/40 group-hover:border-blue-400' },
-            { border: 'hover:border-emerald-500/50', text: 'text-emerald-400', tagBg: 'bg-emerald-600 text-white', imgBorder: 'border-emerald-500/40 group-hover:border-emerald-400' },
-            { border: 'hover:border-purple-500/50', text: 'text-purple-400', tagBg: 'bg-purple-600 text-white', imgBorder: 'border-purple-500/40 group-hover:border-purple-400' }
+            { border: 'hover:border-yellow-500/60', text: 'text-yellow-400', tagBg: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40', imgBorder: 'border-yellow-500/50 group-hover:border-yellow-400' },
+            { border: 'hover:border-orange-500/60', text: 'text-orange-400', tagBg: 'bg-orange-500/20 text-orange-300 border border-orange-500/40', imgBorder: 'border-orange-500/50 group-hover:border-orange-400' },
+            { border: 'hover:border-blue-500/60', text: 'text-blue-400', tagBg: 'bg-blue-500/20 text-blue-300 border border-blue-500/40', imgBorder: 'border-blue-500/50 group-hover:border-blue-400' },
+            { border: 'hover:border-emerald-500/60', text: 'text-emerald-400', tagBg: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40', imgBorder: 'border-emerald-500/50 group-hover:border-emerald-400' },
+            { border: 'hover:border-purple-500/60', text: 'text-purple-400', tagBg: 'bg-purple-500/20 text-purple-300 border border-purple-500/40', imgBorder: 'border-purple-500/50 group-hover:border-purple-400' }
           ];
           const accent = accentColors[groupIdx % accentColors.length];
 
           return (
             <div key={group.name} className="space-y-4">
-              <h3 className={`text-sm font-bold ${accent.text} uppercase tracking-wider flex items-center gap-2`}>
-                <span>🏛️ {group.name} ({group.members.length} ท่าน)</span>
-              </h3>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h3 className={`text-sm sm:text-base font-bold ${accent.text} uppercase tracking-wider flex items-center gap-2`}>
+                  <span>🏛️ {group.name} ({group.members.length} ท่าน)</span>
+                </h3>
+                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Eye className="w-3.5 h-3.5 text-rescue-400" />
+                  คลิกที่รูปหรือการ์ดเพื่อดูข้อมูลแบบเต็ม
+                </span>
+              </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {group.members.map((member) => (
                   <div 
                     key={member.id || member.name}
-                    className={`bg-slate-900 border border-slate-800 ${accent.border} rounded-3xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group flex flex-col justify-between`}
+                    onClick={() => setSelectedPersonModal({
+                      type: 'committee',
+                      data: member,
+                      groupName: group.name
+                    })}
+                    className={`bg-slate-900/95 border border-slate-800 ${accent.border} rounded-3xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl group flex flex-col justify-between cursor-pointer`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-start gap-4">
+                      {/* Clean Unobstructed Portrait Photo */}
                       <div className="relative shrink-0">
                         <img 
                           src={member.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`} 
                           alt={member.name}
-                          className={`w-20 h-20 rounded-2xl object-cover border-2 ${accent.imgBorder} transition-colors shadow-md bg-slate-950`} 
+                          className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 ${accent.imgBorder} transition-transform duration-300 group-hover:scale-105 shadow-lg bg-slate-950`} 
                           onError={(e) => {
                             e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`;
                           }}
                         />
-                        {member.tag && (
-                          <span className={`absolute -top-2 -left-2 px-2 py-0.5 ${accent.tagBg} text-[10px] font-black rounded-full shadow`}>
-                            {member.tag}
-                          </span>
-                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-white text-sm sm:text-base truncate group-hover:text-white transition-colors">
+
+                      {/* Full Text Details (No Truncate / No Overlap) */}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {member.tag && (
+                            <span className={`px-2.5 py-0.5 ${accent.tagBg} text-[10px] font-black rounded-full`}>
+                              {member.tag}
+                            </span>
+                          )}
+                          {member.nickname && (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold">
+                              ชื่อเล่น: {member.nickname}
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="font-black text-white text-base sm:text-lg leading-snug break-words group-hover:text-amber-300 transition-colors">
                           {member.name}
                         </h4>
-                        <p className="text-xs font-semibold text-rescue-400 mt-0.5 line-clamp-2">
+
+                        <p className="text-xs font-bold text-rescue-400 leading-relaxed break-words">
                           {member.role}
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+
+                        <p className="text-[11px] text-slate-300 leading-relaxed break-words">
                           {member.institution || group.name}
                         </p>
                       </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 group-hover:text-white transition-colors">
+                      <span className="font-semibold text-slate-400 group-hover:text-amber-300">
+                        {member.callsign ? `รหัส: ${member.callsign}` : 'คณะกรรมการดำเนินงาน JRE 2027'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-bold text-rescue-400 group-hover:translate-x-0.5 transition-transform">
+                        <Maximize2 className="w-3 h-3" />
+                        <span>ดูข้อมูลเต็ม</span>
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -479,17 +520,23 @@ export default function HomeView({
 
       {/* Dignitaries & Instructors Section: Clearly separated into President, Advisors & Keynote Instructors */}
       <section className="space-y-12 pt-4">
-        <div className="border-b border-slate-800 pb-5">
-          <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
-            <Award className="w-4 h-4" />
-            Distinguished President, Advisors & Keynote Instructors
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-800 pb-5">
+          <div>
+            <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
+              <Award className="w-4 h-4" />
+              Distinguished President, Advisors & Keynote Instructors
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-white">
+              ประธานในพิธี, คณะที่ปรึกษา และวิทยากรประจำโครงการ
+            </h2>
+            <p className="text-slate-400 text-xs sm:text-sm mt-1">
+              เกียรติยศแห่งการฝึกซ้อมร่วม Joint Response Exercise (JRE 2027) ณ มหาวิทยาลัยมหาสารคาม
+            </p>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-white">
-            ประธานในพิธี, คณะที่ปรึกษา และวิทยากรประจำโครงการ
-          </h2>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            เกียรติยศแห่งการฝึกซ้อมร่วม Joint Response Exercise (JRE 2027) ณ มหาวิทยาลัยมหาสารคาม
-          </p>
+          <span className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/30 px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 w-fit">
+            <Eye className="w-4 h-4 text-amber-400" />
+            คลิกที่รูปหรือการ์ดเพื่อเปิดหน้าต่างข้อมูลฉบับเต็ม
+          </span>
         </div>
 
         {/* 1. ประธานในพิธี (Ceremony President & Guest of Honor) */}
@@ -501,8 +548,8 @@ export default function HomeView({
                   <Crown className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                    ประธานในพิธี (Ceremony President & Guest of Honor)
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 flex-wrap">
+                    <span>ประธานในพิธี (Ceremony President & Guest of Honor)</span>
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
                       {categorizedDignitaries.presidents.length} ท่าน
                     </span>
@@ -519,33 +566,37 @@ export default function HomeView({
                 return (
                   <div 
                     key={spk.id || idx}
-                    className="bg-slate-900/90 border border-amber-500/30 hover:border-amber-400/70 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-amber-500/10 flex flex-col justify-between group relative overflow-hidden"
+                    onClick={() => setSelectedPersonModal({
+                      type: 'dignitary',
+                      categoryLabel: 'ประธานในพิธี (Ceremony President)',
+                      badgeTheme: 'amber',
+                      data: spk,
+                      displayNum: idx + 1
+                    })}
+                    className="bg-slate-900/90 border border-amber-500/30 hover:border-amber-400/70 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-amber-500/10 flex flex-col justify-between group relative overflow-hidden cursor-pointer"
                   >
                     <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
                     <div>
-                      <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
+                      <div className="flex items-start gap-4 mb-4">
                         <div className="relative shrink-0">
                           <img 
                             src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
                             alt={spk.name}
-                            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-amber-400/60 group-hover:border-amber-300 transition-colors shadow-lg bg-slate-950 shrink-0" 
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-amber-400/60 group-hover:border-amber-300 group-hover:scale-105 transition-all shadow-lg bg-slate-950 shrink-0" 
                             onError={(e) => {
                               e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
                             }}
                           />
-                          <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-amber-500 text-slate-950 rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
-                            👑
-                          </span>
                         </div>
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/30 inline-flex items-center gap-1">
                             <Crown className="w-3 h-3 text-amber-400" />
-                            ประธานในพิธี
+                            👑 ประธานในพิธี
                           </span>
-                          <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words group-hover:text-amber-200 transition-colors">
+                          <h3 className="font-black text-white text-base sm:text-lg mt-1.5 leading-snug break-words group-hover:text-amber-200 transition-colors">
                             {spk.name}
                           </h3>
-                          <p className="text-xs text-slate-300 font-medium mt-1 break-words">
+                          <p className="text-xs text-slate-300 font-medium mt-1 leading-relaxed break-words">
                             {spk.title}
                           </p>
                         </div>
@@ -561,6 +612,13 @@ export default function HomeView({
                           <span className="text-slate-200 break-words">{spk.topic || '-'}</span>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end text-[11px] font-bold text-amber-400 group-hover:text-amber-300">
+                      <span className="inline-flex items-center gap-1">
+                        <Maximize2 className="w-3 h-3" />
+                        คลิกดูข้อมูลเต็ม
+                      </span>
                     </div>
                   </div>
                 );
@@ -578,8 +636,8 @@ export default function HomeView({
                   <ShieldCheck className="w-5 h-5 text-indigo-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                    คณะที่ปรึกษาโครงการ (Project Advisors & Mentors)
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 flex-wrap">
+                    <span>คณะที่ปรึกษาโครงการ (Project Advisors & Mentors)</span>
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                       {categorizedDignitaries.advisors.length} ท่าน
                     </span>
@@ -597,33 +655,37 @@ export default function HomeView({
                 return (
                   <div 
                     key={spk.id || idx}
-                    className="bg-slate-900/90 border border-indigo-500/30 hover:border-indigo-400/70 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-500/10 flex flex-col justify-between group relative overflow-hidden"
+                    onClick={() => setSelectedPersonModal({
+                      type: 'dignitary',
+                      categoryLabel: `ที่ปรึกษาโครงการ (ลำดับที่ ${displayNum})`,
+                      badgeTheme: 'indigo',
+                      data: spk,
+                      displayNum
+                    })}
+                    className="bg-slate-900/90 border border-indigo-500/30 hover:border-indigo-400/70 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-500/10 flex flex-col justify-between group relative overflow-hidden cursor-pointer"
                   >
                     <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none"></div>
                     <div>
-                      <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
+                      <div className="flex items-start gap-4 mb-4">
                         <div className="relative shrink-0">
                           <img 
                             src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
                             alt={spk.name}
-                            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-indigo-400/60 group-hover:border-indigo-300 transition-colors shadow-lg bg-slate-950 shrink-0" 
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-indigo-400/60 group-hover:border-indigo-300 group-hover:scale-105 transition-all shadow-lg bg-slate-950 shrink-0" 
                             onError={(e) => {
                               e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
                             }}
                           />
-                          <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
-                            {displayNum}
-                          </span>
                         </div>
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-500/30 inline-flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3 text-indigo-400" />
-                            ที่ปรึกษาโครงการ
+                            ที่ปรึกษาโครงการ #{displayNum}
                           </span>
-                          <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words group-hover:text-indigo-200 transition-colors">
+                          <h3 className="font-black text-white text-base sm:text-lg mt-1.5 leading-snug break-words group-hover:text-indigo-200 transition-colors">
                             {spk.name}
                           </h3>
-                          <p className="text-xs text-slate-300 font-medium mt-1 break-words">
+                          <p className="text-xs text-slate-300 font-medium mt-1 leading-relaxed break-words">
                             {spk.title}
                           </p>
                         </div>
@@ -639,6 +701,13 @@ export default function HomeView({
                           <span className="text-slate-200 break-words">{spk.topic || '-'}</span>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end text-[11px] font-bold text-indigo-400 group-hover:text-indigo-300">
+                      <span className="inline-flex items-center gap-1">
+                        <Maximize2 className="w-3 h-3" />
+                        คลิกดูข้อมูลเต็ม
+                      </span>
                     </div>
                   </div>
                 );
@@ -656,8 +725,8 @@ export default function HomeView({
                   <Award className="w-5 h-5 text-emergency-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                    คณะวิทยากรประจำโครงการ (Keynote Instructors & Trainers)
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 flex-wrap">
+                    <span>คณะวิทยากรประจำโครงการ (Keynote Instructors & Trainers)</span>
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emergency-500/20 text-emergency-300 border border-emergency-500/40">
                       {categorizedDignitaries.instructors.length} ท่าน
                     </span>
@@ -675,31 +744,35 @@ export default function HomeView({
                 return (
                   <div 
                     key={spk.id || idx}
-                    className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group relative overflow-hidden"
+                    onClick={() => setSelectedPersonModal({
+                      type: 'dignitary',
+                      categoryLabel: `วิทยากรประจำโครงการ (ท่านที่ ${displayNum})`,
+                      badgeTheme: 'emergency',
+                      data: spk,
+                      displayNum
+                    })}
+                    className="bg-slate-900/90 border border-slate-800 hover:border-emergency-500/50 rounded-3xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between group relative overflow-hidden cursor-pointer"
                   >
                     <div>
-                      <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
+                      <div className="flex items-start gap-4 mb-4">
                         <div className="relative shrink-0">
                           <img 
                             src={spk.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`} 
                             alt={spk.name}
-                            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 transition-colors shadow-lg bg-slate-950 shrink-0" 
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-emergency-500/40 group-hover:border-emergency-400 group-hover:scale-105 transition-all shadow-lg bg-slate-950 shrink-0" 
                             onError={(e) => {
                               e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(spk.name)}`;
                             }}
                           />
-                          <span className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-emergency-600 text-white rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black border-2 border-slate-900 shadow">
-                            {displayNum}
-                          </span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2 py-0.5 rounded border border-emergency-500/20 inline-block">
+                          <span className="text-[10px] font-bold text-emergency-400 bg-emergency-500/10 px-2.5 py-0.5 rounded-full border border-emergency-500/30 inline-block">
                             วิทยากรท่านที่ {displayNum}
                           </span>
-                          <h3 className="font-bold text-white text-base mt-1.5 leading-snug break-words">
+                          <h3 className="font-black text-white text-base sm:text-lg mt-1.5 leading-snug break-words group-hover:text-amber-200 transition-colors">
                             {spk.name}
                           </h3>
-                          <p className="text-xs text-slate-300 font-medium mt-1 break-words">
+                          <p className="text-xs text-slate-300 font-medium mt-1 leading-relaxed break-words">
                             {spk.title}
                           </p>
                         </div>
@@ -716,6 +789,13 @@ export default function HomeView({
                         </div>
                       </div>
                     </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end text-[11px] font-bold text-rescue-400 group-hover:text-amber-300">
+                      <span className="inline-flex items-center gap-1">
+                        <Maximize2 className="w-3 h-3" />
+                        คลิกดูข้อมูลเต็ม
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -723,6 +803,183 @@ export default function HomeView({
           </div>
         )}
       </section>
+
+      {/* POPUP MODAL FOR ORGANIZING COMMITTEE, PRESIDENT, ADVISORS & INSTRUCTORS */}
+      {selectedPersonModal && (
+        <ModalPortal isOpen={Boolean(selectedPersonModal)} onClose={() => setSelectedPersonModal(null)}>
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setSelectedPersonModal(null)}
+          >
+            <div
+              className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setSelectedPersonModal(null)}
+                className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/90 hover:bg-red-600 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {selectedPersonModal.type === 'committee' ? (
+                <>
+                  {/* Committee Member Popup Content */}
+                  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                    <div className="shrink-0 flex flex-col items-center gap-2">
+                      <img
+                        src={selectedPersonModal.data.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`}
+                        alt={selectedPersonModal.data.name}
+                        className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl object-cover border-2 border-amber-400/70 shadow-2xl bg-slate-950"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`;
+                        }}
+                      />
+                      {selectedPersonModal.data.photo && (
+                        <a
+                          href={selectedPersonModal.data.photo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-bold text-rescue-400 hover:text-rescue-300 inline-flex items-center gap-1 mt-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>เปิดดูรูปขนาดเต็ม</span>
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="flex-1 text-center sm:text-left space-y-3">
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        {selectedPersonModal.data.tag && (
+                          <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black">
+                            {selectedPersonModal.data.tag}
+                          </span>
+                        )}
+                        {selectedPersonModal.data.callsign && (
+                          <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/40 text-xs font-bold">
+                            นามเรียกขาน: {selectedPersonModal.data.callsign}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h3 className="text-xl sm:text-2xl font-black text-white leading-snug">
+                          {selectedPersonModal.data.name}
+                        </h3>
+                        {selectedPersonModal.data.nickname && (
+                          <p className="text-sm font-bold text-amber-300 mt-1">
+                            ชื่อเล่น: {selectedPersonModal.data.nickname}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2 text-left">
+                        <div>
+                          <span className="text-[11px] text-slate-400 block">ตำแหน่ง / บทบาทหน้าที่ในโครงการ:</span>
+                          <span className="text-sm font-bold text-rescue-400">
+                            {selectedPersonModal.data.role || 'คณะกรรมการดำเนินงานโครงการ JRE 2027'}
+                          </span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-800/80">
+                          <span className="text-[11px] text-slate-400 block">สังกัด / ชมรม / สถาบันการศึกษา:</span>
+                          <span className="text-xs sm:text-sm font-semibold text-slate-200">
+                            {selectedPersonModal.data.institution || selectedPersonModal.groupName}
+                          </span>
+                        </div>
+                        {selectedPersonModal.data.university && (
+                          <div className="pt-2 border-t border-slate-800/80">
+                            <span className="text-[11px] text-slate-400 block">มหาวิทยาลัย:</span>
+                            <span className="text-xs sm:text-sm font-semibold text-emerald-300">
+                              {selectedPersonModal.data.university}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Dignitary / President / Advisor / Instructor Popup Content */}
+                  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                    <div className="shrink-0 flex flex-col items-center gap-2">
+                      <img
+                        src={selectedPersonModal.data.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`}
+                        alt={selectedPersonModal.data.name}
+                        className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl object-cover border-2 border-amber-400/70 shadow-2xl bg-slate-950"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`;
+                        }}
+                      />
+                      {selectedPersonModal.data.photo && (
+                        <a
+                          href={selectedPersonModal.data.photo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-bold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 mt-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>เปิดดูรูปขนาดเต็ม</span>
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="flex-1 text-center sm:text-left space-y-3">
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black">
+                          {selectedPersonModal.categoryLabel}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="text-xl sm:text-2xl font-black text-white leading-snug">
+                          {selectedPersonModal.data.name}
+                        </h3>
+                        <p className="text-xs sm:text-sm font-bold text-amber-300 mt-1 leading-relaxed">
+                          {selectedPersonModal.data.title}
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3 text-left">
+                        <div>
+                          <span className="text-[11px] text-slate-400 block">สังกัด / หน่วยงาน:</span>
+                          <span className="text-xs sm:text-sm font-semibold text-white">
+                            {selectedPersonModal.data.org || '-'}
+                          </span>
+                        </div>
+                        <div className="pt-2.5 border-t border-slate-800/80">
+                          <span className="text-[11px] text-amber-400 font-bold block mb-0.5">
+                            บทบาทในพิธี / หัวข้อการฝึกอบรมและบรรยาย:
+                          </span>
+                          <span className="text-xs sm:text-sm text-slate-200 leading-relaxed block">
+                            {selectedPersonModal.data.topic || '-'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-400">
+                  โครงการฝึกซ้อมร่วมกู้ภัยและดับเพลิง JRE 2027 • มหาวิทยาลัยมหาสารคาม
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPersonModal(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
     </div>
   );
