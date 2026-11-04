@@ -2247,7 +2247,7 @@ export default function RegisterView({
   }
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
-  if (myRegistration && (!isEditing || (isApplicantFullyPaid && !isSuperEditor))) {
+  if (myRegistration && (!isEditing || !isSuperEditor)) {
     const paymentStatus = myRegistration.payment_status || 'unpaid';
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
     const unreadMessagesCount = adminMessages.filter(m => !m.read).length;
@@ -2594,22 +2594,14 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-              {/* EDIT REGISTRATION BUTTON: Locked once fully paid and confirmed, or if registration is closed (except Admin/Developer) */}
-              {!isSuperEditor && isApplicantFullyPaid ? (
-                <div
-                  className="px-4 py-2.5 bg-slate-900/90 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
-                  title="ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ข้อมูลถูกล็อคเรียบร้อย หากต้องการแก้ไขกรุณาติดต่อผู้จัดโครงการ"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>ยืนยันสิทธิ์สมบูรณ์แล้ว (ล็อคข้อมูล)</span>
-                </div>
-              ) : !isSuperEditor && isRegistrationClosed ? (
+              {/* EDIT REGISTRATION BUTTON: Locked for regular users (only Admin/Developer can edit now that registration & shirt orders are closed) */}
+              {!isSuperEditor ? (
                 <div
                   className="px-4 py-2.5 bg-slate-900/90 text-slate-400 border border-slate-700/60 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
-                  title="โครงการได้ปิดรับสมัครแล้ว ไม่อนุญาตให้แก้ไขข้อมูลใบสมัคร แต่ท่านยังสามารถชำระเงินงวดที่ 2 ได้ตามปกติ"
+                  title="โครงการได้ปิดรับสมัครและส่งผลิตเสื้อแล้ว การแก้ไขข้อมูลสงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin / Dev) เท่านั้น"
                 >
                   <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  <span>ปิดรับสมัครแล้ว (ล็อคข้อมูล)</span>
+                  <span>ล็อคการแก้ไขแล้ว (เฉพาะ Admin / Dev)</span>
                 </div>
               ) : (
                 <button
@@ -2619,10 +2611,10 @@ export default function RegisterView({
                     if (onSubRouteChange) onSubRouteChange('form');
                   }}
                   className="px-4 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
-                  title={hasAnyPaymentApproved ? "แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม (Update Information)" : "แก้ไขข้อมูลรายละเอียดในใบสมัคร (Update Application)"}
+                  title="แก้ไขข้อมูลใบสมัคร (สิทธิ์เฉพาะ Admin / Dev)"
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  <span>{hasAnyPaymentApproved ? 'แก้ไขข้อมูล' : 'แก้ไขใบสมัคร'}</span>
+                  <span>แก้ไขข้อมูล (สิทธิ์ Admin / Dev)</span>
                 </button>
               )}
 
@@ -4386,24 +4378,31 @@ export default function RegisterView({
                 </span>
               </div>
 
-              {/* Shirt Size Card */}
+              {/* Shirt Size Card (Locked for regular participants; editable only by Admin/Dev) */}
               <div className="bg-slate-950/70 p-3.5 rounded-xl border border-purple-500/30 space-y-2">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-purple-300 font-semibold flex items-center gap-1">
                     <Shirt className="w-3.5 h-3.5 text-purple-400" />
                     ไซส์เสื้อฝึก JRE 2027:
                   </span>
-                  {!isEditingDashboardShirtNote && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDashboardCustomShirtNote(myRegistration.custom_shirt_note || '');
-                        setIsEditingDashboardShirtNote(true);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[10px] font-bold cursor-pointer transition-colors"
-                    >
-                      ✏️ ระบุ/แก้ไขไซส์พิเศษที่ต้องการ
-                    </button>
+                  {isSuperEditor ? (
+                    !isEditingDashboardShirtNote && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDashboardCustomShirtNote(myRegistration.custom_shirt_note || '');
+                          setIsEditingDashboardShirtNote(true);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[10px] font-bold cursor-pointer transition-colors"
+                      >
+                        ✏️ แก้ไขไซส์พิเศษ (Admin/Dev)
+                      </button>
+                    )
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-lg bg-slate-900 text-slate-400 border border-slate-700 text-[10px] font-bold inline-flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-slate-400" />
+                      <span>สั่งผลิตแล้ว (ล็อคไซส์)</span>
+                    </span>
                   )}
                 </div>
                 <div>
@@ -4412,20 +4411,15 @@ export default function RegisterView({
                   </span>
                   {myRegistration.custom_shirt_note && !isEditingDashboardShirtNote && (
                     <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-950/50 border border-amber-500/40 text-[11px] text-amber-200 font-semibold">
-                      📝 ไซส์/รอบอกที่ท่านระบุแจ้ง Admin: <span className="text-white font-bold">{myRegistration.custom_shirt_note}</span>
-                    </div>
-                  )}
-                  {String(myRegistration.shirt_size || '').startsWith('อื่นๆ') && !myRegistration.custom_shirt_note && !isEditingDashboardShirtNote && (
-                    <div className="mt-1 px-2.5 py-1 rounded-lg bg-rose-950/50 border border-rose-500/40 text-[11px] text-rose-200 font-semibold">
-                      ⚠️ ท่านเลือกไซส์ &ldquo;อื่นๆ&rdquo; กรุณากดปุ่ม <strong>&ldquo;✏️ ระบุ/แก้ไขไซส์พิเศษที่ต้องการ&rdquo;</strong> เพื่อแจ้งไซส์หรือรอบอกให้ Admin ทราบ
+                      📝 หมายเหตุไซส์พิเศษ: <span className="text-white font-bold">{myRegistration.custom_shirt_note}</span>
                     </div>
                   )}
                 </div>
 
-                {isEditingDashboardShirtNote && (
+                {isSuperEditor && isEditingDashboardShirtNote && (
                   <div className="pt-2 border-t border-slate-800 space-y-2">
                     <label className="block text-[11px] font-bold text-amber-300">
-                      ระบุไซส์หรือขนาดรอบอกที่ต้องการแจ้ง Admin (เช่น 6XL รอบอก 54 นิ้ว):
+                      ระบุไซส์หรือขนาดรอบอกพิเศษ (เฉพาะ Admin / Dev):
                     </label>
                     <input
                       type="text"
@@ -4459,7 +4453,7 @@ export default function RegisterView({
                             }
                             setCustomShirtNote(dashboardCustomShirtNote.trim());
                             setIsEditingDashboardShirtNote(false);
-                            triggerToast('บันทึกขนาดไซส์/รอบอกที่ต้องการแจ้ง Admin เรียบร้อยแล้ว');
+                            triggerToast('บันทึกขนาดไซส์/รอบอกเรียบร้อยแล้ว');
                           } catch (err) {
                             triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลไซส์', 'error');
                           } finally {
@@ -4468,7 +4462,7 @@ export default function RegisterView({
                         }}
                         className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
                       >
-                        {isSavingDashboardShirtNote ? 'กำลังบันทึก...' : '💾 บันทึกแจ้ง Admin'}
+                        {isSavingDashboardShirtNote ? 'กำลังบันทึก...' : '💾 บันทึก'}
                       </button>
                     </div>
                   </div>

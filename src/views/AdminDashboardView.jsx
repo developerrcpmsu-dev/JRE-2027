@@ -5359,56 +5359,91 @@ export default function AdminDashboardView({
             </div>
           </div>
           
-          {/* Search & Filters */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="ค้นหาชื่อ, มหาลัย, เพศ, Staff, เบอร์โทร, ไซส์เสื้อ..."
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+          {/* Search & Filters (Clean 2-Tier Layout so Search Box is Full-Width & Never Squished) */}
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 shadow-inner">
+            {/* Row 1: Prominent Full-Width Search Input + Advanced Mode Toggle */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="🔍 ค้นหาชื่อ-สกุล, นามเรียกขาน, ชื่อเล่น, มหาวิทยาลัย, เพศ, Staff, เบอร์โทร, ไซส์เสื้อ..."
+                  className="w-full pl-10 pr-20 py-2.5 bg-slate-900 border border-slate-700 hover:border-purple-500/50 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>ล้าง</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {(searchTerm || uniFilter !== 'all' || memberTypeFilter !== 'all' || genderFilter !== 'all' || roleFilter !== 'all' || filterType !== 'all' || bloodFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setUniFilter('all');
+                      setMemberTypeFilter('all');
+                      setGenderFilter('all');
+                      setRoleFilter('all');
+                      setFilterType('all');
+                      setBloodFilter('all');
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>รีเซ็ตตัวกรอง</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isAdvancedMode) {
+                      askConfirm({
+                        title: '🛡️ เปิดโหมดแก้ไขขั้นสูง (Advanced Mode)',
+                        message: 'โหมดนี้อนุญาตให้ผู้ดูแลระบบสามารถลบข้อมูลผู้สมัครที่มีประวัติการโอนเงิน/ส่งสลิปได้ โปรดใช้ด้วยความระมัดระวังเพื่อป้องกันความผิดพลาดทางบัญชี',
+                        confirmText: 'เปิดใช้งานโหมดขั้นสูง',
+                        cancelText: 'ยกเลิก',
+                        variant: 'warning',
+                        onConfirm: () => {
+                          setIsAdvancedMode(true);
+                          triggerToast('🛡️ เปิดใช้งานโหมดแก้ไขขั้นสูงแล้ว (สามารถลบ/จัดการข้อมูลที่มีประวัติการโอนเงินได้)', 'warning');
+                        }
+                      });
+                    } else {
+                      setIsAdvancedMode(false);
+                      triggerToast('ปิดโหมดแก้ไขขั้นสูงแล้ว');
+                    }
+                  }}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                    isAdvancedMode
+                      ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/40 ring-2 ring-rose-400 animate-pulse'
+                      : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-700 hover:border-slate-600'
+                  }`}
+                  title="โหมดแก้ไขและลบข้อมูลขั้นสูง (Master Override สำหรับผู้ดูแลระบบ)"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>{isAdvancedMode ? '🛡️ โหมดขั้นสูง (เปิดอยู่)' : '🛡️ โหมดแก้ไขขั้นสูง'}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isAdvancedMode) {
-                    askConfirm({
-                      title: '🛡️ เปิดโหมดแก้ไขขั้นสูง (Advanced Mode)',
-                      message: 'โหมดนี้อนุญาตให้ผู้ดูแลระบบสามารถลบข้อมูลผู้สมัครที่มีประวัติการโอนเงิน/ส่งสลิปได้ โปรดใช้ด้วยความระมัดระวังเพื่อป้องกันความผิดพลาดทางบัญชี',
-                      confirmText: 'เปิดใช้งานโหมดขั้นสูง',
-                      cancelText: 'ยกเลิก',
-                      variant: 'warning',
-                      onConfirm: () => {
-                        setIsAdvancedMode(true);
-                        triggerToast('🛡️ เปิดใช้งานโหมดแก้ไขขั้นสูงแล้ว (สามารถลบ/จัดการข้อมูลที่มีประวัติการโอนเงินได้)', 'warning');
-                      }
-                    });
-                  } else {
-                    setIsAdvancedMode(false);
-                    triggerToast('ปิดโหมดแก้ไขขั้นสูงแล้ว');
-                  }
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isAdvancedMode
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/40 ring-2 ring-rose-400 animate-pulse'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600'
-                }`}
-                title="โหมดแก้ไขและลบข้อมูลขั้นสูง (Master Override สำหรับผู้ดูแลระบบ)"
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span>{isAdvancedMode ? '🛡️ โหมดขั้นสูง (เปิดอยู่)' : '🛡️ โหมดแก้ไขขั้นสูง'}</span>
-              </button>
-
+            {/* Row 2: Responsive Filter Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
               {/* University Filter */}
               <select
                 value={uniFilter}
                 onChange={e => setUniFilter(e.target.value)}
-                className="px-3 py-2 bg-slate-950 border border-purple-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-bold"
+                className="w-full px-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-bold"
               >
                 <option value="all">🏛️ ทุกมหาวิทยาลัย ({regMetrics.total} คน)</option>
                 {universitySummary.list.map(u => (
@@ -5422,7 +5457,7 @@ export default function AdminDashboardView({
               <select
                 value={memberTypeFilter}
                 onChange={e => setMemberTypeFilter(e.target.value)}
-                className="px-3 py-2 bg-slate-950 border border-teal-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-teal-500 font-bold"
+                className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-teal-500 font-bold"
               >
                 <option value="all">🏷️ ทุกประเภทสังกัด (ชมรม {regMetrics.clubMemberCount} / อาสา {regMetrics.volunteerCount})</option>
                 <option value="club">📡 มีนามเรียกขาน • องค์กร/ชมรม ({regMetrics.clubMemberCount} คน)</option>
@@ -5433,7 +5468,7 @@ export default function AdminDashboardView({
               <select
                 value={genderFilter}
                 onChange={e => setGenderFilter(e.target.value)}
-                className="px-3 py-2 bg-slate-950 border border-sky-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-sky-500 font-bold"
+                className="w-full px-3 py-2 bg-slate-900 border border-sky-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-sky-500 font-bold"
               >
                 <option value="all">🚻 ทุกเพศ (ชาย {regMetrics.maleCount} / หญิง {regMetrics.femaleCount})</option>
                 <option value="ชาย">👨 เฉพาะผู้ชาย ({regMetrics.maleCount} คน)</option>
@@ -5444,7 +5479,7 @@ export default function AdminDashboardView({
               <select
                 value={roleFilter}
                 onChange={e => setRoleFilter(e.target.value)}
-                className="px-3 py-2 bg-slate-950 border border-amber-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-amber-500 font-bold"
               >
                 <option value="all">👥 ทุกประเภท (ผู้เข้าอบรม + Staff)</option>
                 <option value="participant">🎓 เฉพาะผู้เข้าอบรม ({regMetrics.participantCount} คน)</option>
@@ -5454,7 +5489,7 @@ export default function AdminDashboardView({
               <select
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
-                className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
               >
                 <option value="all">สถานะทั้งหมด ({regMetrics.total} คน)</option>
                 <option value="staff">🛠️ เฉพาะ Staff 280 บ. ({regMetrics.staffCount} คน)</option>
@@ -5476,7 +5511,7 @@ export default function AdminDashboardView({
               <select
                 value={bloodFilter}
                 onChange={e => setBloodFilter(e.target.value)}
-                className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="all">ทุกกรุ๊ปเลือด</option>
                 <option value="A">กรุ๊ป A</option>
@@ -11710,15 +11745,15 @@ export default function AdminDashboardView({
             </div>
 
             {/* Search and Dropdown Filter Controls */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+            <div className="flex flex-col gap-2.5 bg-slate-950/50 border border-slate-800/80 rounded-2xl p-3.5">
+              <div className="relative w-full">
+                <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={merchSearchQuery}
                   onChange={(e) => setMerchSearchQuery(e.target.value)}
-                  placeholder="ค้นหาชื่อ, นามเรียกขาน, ชื่อเล่น, เบอร์โทร, สังกัด, รหัส..."
-                  className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                  placeholder="🔍 ค้นหาชื่อ-สกุล, นามเรียกขาน, ชื่อเล่น, เบอร์โทร, สังกัด, รหัส..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-purple-500"
                 />
               </div>
 
