@@ -204,7 +204,18 @@ export default function AdminDashboardView({
   const [isEditingForms, setIsEditingForms] = useState(false);
   const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [pendingRoleDrafts, setPendingRoleDrafts] = useState({});
+  const [pendingSpeakerCatDrafts, setPendingSpeakerCatDrafts] = useState({});
   const [isRefreshingData, setIsRefreshingData] = useState(false);
+
+  const getRoleBadgeLabel = (roleVal, isMsuRow) => {
+    if (roleVal === 'committee') return '🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)';
+    if (roleVal === 'dev') return '💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)';
+    if (roleVal === 'mc') return '🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)';
+    if (roleVal === 'photographer') return '📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)';
+    if (roleVal === 'staff') return '🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)';
+    return isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)';
+  };
 
   const getUrlSub = (t) => {
     if (t === 'payment_settings') return 'payment';
@@ -5710,42 +5721,107 @@ export default function AdminDashboardView({
                                   const staffPayInfo = getStaffPaymentSummary(reg);
                                   const currentRoleVal = isStaff ? staffPayInfo.staffRoleType : 'participant';
                                   const isMsuRow = isMsuInstitution(reg.institution);
+                                  const regKey = reg.id || reg.user_id || reg.user_email;
+                                  const draftRoleVal = pendingRoleDrafts[regKey] ?? currentRoleVal;
+                                  const hasUnsavedRoleDraft = isAdvancedMode && draftRoleVal !== currentRoleVal;
+
                                   return (
                                     <div className="inline-flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
-                                      <select
-                                        value={currentRoleVal}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          handleQuickToggleStaff(reg, val !== 'participant', val);
-                                        }}
-                                        className={`px-2 py-0.5 rounded-full text-[10px] font-black border cursor-pointer outline-none transition-all ${
-                                          isStaff
-                                            ? 'bg-purple-600/35 text-purple-100 border-purple-400/80 hover:border-purple-300 shadow-sm'
-                                            : isMsuRow
-                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:border-amber-400'
-                                            : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:border-blue-400'
-                                        }`}
-                                        title="สำหรับ Admin/Dev: คลิกดรอปดาวน์เพื่อเลือกปรับสถานะเป็น คณะกรรมการดำเนินงาน (STAFF) / Dev / พิธีกร / ช่างภาพ / ผู้เข้าอบรมทั่วไป"
-                                      >
-                                        <option value="participant" className="bg-slate-900 text-slate-200">
-                                          {isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
-                                        </option>
-                                        <option value="committee" className="bg-slate-900 text-purple-200">
-                                          🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
-                                        </option>
-                                        <option value="dev" className="bg-slate-900 text-purple-200">
-                                          💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
-                                        </option>
-                                        <option value="mc" className="bg-slate-900 text-purple-200">
-                                          🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
-                                        </option>
-                                        <option value="photographer" className="bg-slate-900 text-purple-200">
-                                          📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
-                                        </option>
-                                        <option value="staff" className="bg-slate-900 text-purple-200">
-                                          🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
-                                        </option>
-                                      </select>
+                                      {!isAdvancedMode ? (
+                                        <span
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            triggerToast('🔒 ต้องเปิด "🛡️ โหมดแก้ไขขั้นสูง" ด้านบนก่อน จึงจะสามารถแก้ไขสถานะ STAFF / บทบาทสำคัญได้', 'warning');
+                                          }}
+                                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border inline-flex items-center gap-1 select-none cursor-pointer transition-all ${
+                                            isStaff
+                                              ? 'bg-purple-600/30 text-purple-100 border-purple-400/70'
+                                              : isMsuRow
+                                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+                                              : 'bg-blue-500/15 text-blue-300 border-blue-500/35'
+                                          }`}
+                                          title="🔒 ล็อคป้องกันการแก้ไขโดยไม่ตั้งใจ — กรุณาเปิด '🛡️ โหมดแก้ไขขั้นสูง' ด้านบนก่อน จึงจะสามารถเลือกดรอปดาวน์และกดบันทึกได้"
+                                        >
+                                          <Lock className="w-2.5 h-2.5 opacity-80 shrink-0" />
+                                          <span>{getRoleBadgeLabel(currentRoleVal, isMsuRow)}</span>
+                                        </span>
+                                      ) : (
+                                        <div className="inline-flex flex-wrap items-center gap-1">
+                                          <select
+                                            value={draftRoleVal}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              setPendingRoleDrafts(prev => ({ ...prev, [regKey]: val }));
+                                            }}
+                                            className={`px-2 py-0.5 rounded-full text-[10px] font-black border cursor-pointer outline-none transition-all ${
+                                              hasUnsavedRoleDraft
+                                                ? 'bg-amber-500/30 text-amber-100 border-amber-400 ring-2 ring-amber-400/50'
+                                                : draftRoleVal !== 'participant'
+                                                ? 'bg-purple-600/35 text-purple-100 border-purple-400/80 hover:border-purple-300 shadow-sm'
+                                                : isMsuRow
+                                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                                                : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:border-blue-400'
+                                            }`}
+                                            title="โหมดแก้ไขขั้นสูง: เลือกบทบาทที่ต้องการ แล้วกดปุ่ม '💾 บันทึก' ด้านข้างเพื่อยืนยันการเปลี่ยนแปลง"
+                                          >
+                                            <option value="participant" className="bg-slate-900 text-slate-200">
+                                              {isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
+                                            </option>
+                                            <option value="committee" className="bg-slate-900 text-purple-200">
+                                              🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
+                                            </option>
+                                            <option value="dev" className="bg-slate-900 text-purple-200">
+                                              💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
+                                            </option>
+                                            <option value="mc" className="bg-slate-900 text-purple-200">
+                                              🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
+                                            </option>
+                                            <option value="photographer" className="bg-slate-900 text-purple-200">
+                                              📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
+                                            </option>
+                                            <option value="staff" className="bg-slate-900 text-purple-200">
+                                              🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
+                                            </option>
+                                          </select>
+
+                                          {hasUnsavedRoleDraft && (
+                                            <>
+                                              <button
+                                                type="button"
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  await handleQuickToggleStaff(reg, draftRoleVal !== 'participant', draftRoleVal);
+                                                  setPendingRoleDrafts(prev => {
+                                                    const next = { ...prev };
+                                                    delete next[regKey];
+                                                    return next;
+                                                  });
+                                                }}
+                                                className="px-2 py-0.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black shadow flex items-center gap-1 cursor-pointer"
+                                                title="กดยืนยันบันทึกการเปลี่ยนบทบาท"
+                                              >
+                                                <Save className="w-2.5 h-2.5" />
+                                                <span>บันทึก</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setPendingRoleDrafts(prev => {
+                                                    const next = { ...prev };
+                                                    delete next[regKey];
+                                                    return next;
+                                                  });
+                                                }}
+                                                className="px-1.5 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold cursor-pointer"
+                                                title="ยกเลิกการเลือก"
+                                              >
+                                                ✕
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
 
                                       {staffPayInfo.isOverpaid && (
                                         <button
@@ -6263,42 +6339,100 @@ export default function AdminDashboardView({
                     const staffPayInfo = getStaffPaymentSummary(profileModalReg);
                     const currentRoleVal = modalIsStaff ? staffPayInfo.staffRoleType : 'participant';
                     const isMsuModal = isMsuInstitution(profileModalReg.institution);
+                    const modalRegKey = profileModalReg.id || profileModalReg.user_id || profileModalReg.user_email;
+                    const draftRoleVal = pendingRoleDrafts[modalRegKey] ?? currentRoleVal;
+                    const hasUnsavedRoleDraft = isAdvancedMode && draftRoleVal !== currentRoleVal;
+
                     return (
                       <div className="inline-flex flex-wrap items-center gap-1.5">
-                        <select
-                          value={currentRoleVal}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            handleQuickToggleStaff(profileModalReg, val !== 'participant', val);
-                          }}
-                          className={`px-3 py-1 rounded-full text-xs font-black border cursor-pointer outline-none transition-all ${
-                            modalIsStaff
-                              ? 'bg-purple-600/35 text-purple-100 border-purple-400/80 hover:border-purple-300 shadow-sm'
-                              : isMsuModal
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:border-amber-400'
-                              : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:border-blue-400'
-                          }`}
-                          title="สำหรับ Admin/Dev: ดรอปดาวน์เลือกปรับสถานะเป็น คณะกรรมการดำเนินงาน (STAFF) / Dev / พิธีกร / ช่างภาพ / ผู้เข้าอบรมทั่วไป"
-                        >
-                          <option value="participant" className="bg-slate-900 text-slate-200">
-                            {isMsuModal ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
-                          </option>
-                          <option value="committee" className="bg-slate-900 text-purple-200">
-                            🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
-                          </option>
-                          <option value="dev" className="bg-slate-900 text-purple-200">
-                            💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
-                          </option>
-                          <option value="mc" className="bg-slate-900 text-purple-200">
-                            🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
-                          </option>
-                          <option value="photographer" className="bg-slate-900 text-purple-200">
-                            📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
-                          </option>
-                          <option value="staff" className="bg-slate-900 text-purple-200">
-                            🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
-                          </option>
-                        </select>
+                        {!isAdvancedMode ? (
+                          <span
+                            onClick={() => triggerToast('🔒 กรุณากดเปิด "โหมดขั้นสูง" ด้านขวาบนของหน้าต่างนี้ก่อน จึงจะสามารถเปลี่ยนบทบาทและกดบันทึกได้', 'warning')}
+                            className={`px-3 py-1 rounded-full text-xs font-black border inline-flex items-center gap-1.5 select-none cursor-pointer ${
+                              modalIsStaff
+                                ? 'bg-purple-600/30 text-purple-100 border-purple-400/70'
+                                : isMsuModal
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                            }`}
+                            title="🔒 ต้องเปิดโหมดขั้นสูงก่อนจึงจะแก้ไขบทบาทได้"
+                          >
+                            <Lock className="w-3 h-3 opacity-80" />
+                            <span>{getRoleBadgeLabel(currentRoleVal, isMsuModal)}</span>
+                          </span>
+                        ) : (
+                          <div className="inline-flex flex-wrap items-center gap-1.5">
+                            <select
+                              value={draftRoleVal}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPendingRoleDrafts(prev => ({ ...prev, [modalRegKey]: val }));
+                              }}
+                              className={`px-3 py-1 rounded-full text-xs font-black border cursor-pointer outline-none transition-all ${
+                                hasUnsavedRoleDraft
+                                  ? 'bg-amber-500/30 text-amber-100 border-amber-400 ring-2 ring-amber-400/50'
+                                  : draftRoleVal !== 'participant'
+                                  ? 'bg-purple-600/35 text-purple-100 border-purple-400/80 hover:border-purple-300 shadow-sm'
+                                  : isMsuModal
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                                  : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:border-blue-400'
+                              }`}
+                              title="เลือกบทบาท แล้วกดปุ่ม 'บันทึกบทบาท' ด้านข้างเพื่อยืนยัน"
+                            >
+                              <option value="participant" className="bg-slate-900 text-slate-200">
+                                {isMsuModal ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
+                              </option>
+                              <option value="committee" className="bg-slate-900 text-purple-200">
+                                🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
+                              </option>
+                              <option value="dev" className="bg-slate-900 text-purple-200">
+                                💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
+                              </option>
+                              <option value="mc" className="bg-slate-900 text-purple-200">
+                                🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
+                              </option>
+                              <option value="photographer" className="bg-slate-900 text-purple-200">
+                                📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
+                              </option>
+                              <option value="staff" className="bg-slate-900 text-purple-200">
+                                🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
+                              </option>
+                            </select>
+
+                            {hasUnsavedRoleDraft && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await handleQuickToggleStaff(profileModalReg, draftRoleVal !== 'participant', draftRoleVal);
+                                    setPendingRoleDrafts(prev => {
+                                      const next = { ...prev };
+                                      delete next[modalRegKey];
+                                      return next;
+                                    });
+                                  }}
+                                  className="px-3 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Save className="w-3 h-3" />
+                                  <span>บันทึกบทบาท</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPendingRoleDrafts(prev => {
+                                      const next = { ...prev };
+                                      delete next[modalRegKey];
+                                      return next;
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                                >
+                                  ยกเลิก
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
 
                         {staffPayInfo.isOverpaid && (
                           <button
@@ -6621,7 +6755,24 @@ export default function AdminDashboardView({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setIsEditingProfileModal(true)}
+                      onClick={() => {
+                        if (!isAdvancedMode) {
+                          askConfirm({
+                            title: '🛡️ ต้องเปิดโหมดแก้ไขขั้นสูงก่อนแก้ไขข้อมูลสำคัญ',
+                            message: 'เพื่อป้องกันการแก้ไขข้อมูลผู้สมัครโดยไม่ตั้งใจ ระบบกำหนดให้ต้องเปิด "โหมดแก้ไขขั้นสูง" ก่อนจึงจะสามารถแก้ไขดรอปดาวน์และข้อมูลสำคัญได้ ต้องการเปิดโหมดขั้นสูงและปลดล็อกการแก้ไขใช่หรือไม่?',
+                            confirmText: 'เปิดโหมดขั้นสูง & ปลดล็อกแก้ไข',
+                            cancelText: 'ยกเลิก',
+                            variant: 'warning',
+                            onConfirm: () => {
+                              setIsAdvancedMode(true);
+                              setIsEditingProfileModal(true);
+                              triggerToast('🔓 เปิดโหมดแก้ไขขั้นสูงและปลดล็อกการแก้ไขข้อมูลแล้ว (เมื่อแก้ไขเสร็จอย่าลืมกด "บันทึกข้อมูล")');
+                            }
+                          });
+                          return;
+                        }
+                        setIsEditingProfileModal(true);
+                      }}
                       className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
@@ -7633,40 +7784,93 @@ export default function AdminDashboardView({
                       การจัดการยอดชำระเงินและตรวจสอบสลิป
                     </h4>
 
-                    {/* Staff Role Dropdown & Checkbox in Payment Tab (Always 1-click active for Admin/Dev) */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        value={modalIsStaff ? getStaffPaymentSummary(profileModalReg).staffRoleType : 'participant'}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          handleQuickToggleStaff(profileModalReg, val !== 'participant', val);
-                        }}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-black border cursor-pointer outline-none transition-all ${
-                          modalIsStaff
-                            ? 'bg-purple-600/30 border-purple-400 text-purple-100 shadow-sm'
-                            : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-purple-400'
-                        }`}
-                      >
-                        <option value="participant" className="bg-slate-900 text-slate-200">
-                          👤 ผู้เข้าอบรมทั่วไป ({isMsuInstitution(profileModalReg.institution) ? 'มมส 650 บ.' : 'ต่างสถาบัน 850 บ.'})
-                        </option>
-                        <option value="committee" className="bg-slate-900 text-purple-200">
-                          🛠️ (STAFF) คณะกรรมการดำเนินงาน (ค่าเสื้อ 280 บ.)
-                        </option>
-                        <option value="dev" className="bg-slate-900 text-purple-200">
-                          💻 (STAFF) ผู้พัฒนาระบบ Dev (ค่าเสื้อ 280 บ.)
-                        </option>
-                        <option value="mc" className="bg-slate-900 text-purple-200">
-                          🎤 (STAFF) พิธีกรดำเนินรายการ (ค่าเสื้อ 280 บ.)
-                        </option>
-                        <option value="photographer" className="bg-slate-900 text-purple-200">
-                          📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (ค่าเสื้อ 280 บ.)
-                        </option>
-                        <option value="staff" className="bg-slate-900 text-purple-200">
-                          🛠️ (STAFF) สตาฟโครงการทั่วไป (ค่าเสื้อ 280 บ.)
-                        </option>
-                      </select>
-                    </div>
+                    {/* Staff Role Dropdown in Payment Tab (Requires Advanced Mode + Explicit Save Button) */}
+                    {(() => {
+                      const currentRoleVal = modalIsStaff ? getStaffPaymentSummary(profileModalReg).staffRoleType : 'participant';
+                      const modalRegKey = profileModalReg.id || profileModalReg.user_id || profileModalReg.user_email;
+                      const draftRoleVal = pendingRoleDrafts[modalRegKey] ?? currentRoleVal;
+                      const hasUnsavedRoleDraft = isAdvancedMode && draftRoleVal !== currentRoleVal;
+
+                      return (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            disabled={!isAdvancedMode}
+                            value={draftRoleVal}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPendingRoleDrafts(prev => ({ ...prev, [modalRegKey]: val }));
+                            }}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black border outline-none transition-all ${
+                              !isAdvancedMode
+                                ? 'bg-slate-900/60 border-slate-800 text-slate-400 cursor-not-allowed opacity-75'
+                                : hasUnsavedRoleDraft
+                                ? 'bg-amber-500/30 border-amber-400 text-amber-100 ring-2 ring-amber-400/50 cursor-pointer'
+                                : draftRoleVal !== 'participant'
+                                ? 'bg-purple-600/30 border-purple-400 text-purple-100 shadow-sm cursor-pointer'
+                                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-purple-400 cursor-pointer'
+                            }`}
+                            title={!isAdvancedMode ? '🔒 ต้องเปิดโหมดขั้นสูงก่อนจึงจะเปลี่ยนบทบาทได้' : 'เลือกบทบาทแล้วกดปุ่มบันทึกด้านข้าง'}
+                          >
+                            <option value="participant" className="bg-slate-900 text-slate-200">
+                              👤 ผู้เข้าอบรมทั่วไป ({isMsuInstitution(profileModalReg.institution) ? 'มมส 650 บ.' : 'ต่างสถาบัน 850 บ.'})
+                            </option>
+                            <option value="committee" className="bg-slate-900 text-purple-200">
+                              🛠️ (STAFF) คณะกรรมการดำเนินงาน (ค่าเสื้อ 280 บ.)
+                            </option>
+                            <option value="dev" className="bg-slate-900 text-purple-200">
+                              💻 (STAFF) ผู้พัฒนาระบบ Dev (ค่าเสื้อ 280 บ.)
+                            </option>
+                            <option value="mc" className="bg-slate-900 text-purple-200">
+                              🎤 (STAFF) พิธีกรดำเนินรายการ (ค่าเสื้อ 280 บ.)
+                            </option>
+                            <option value="photographer" className="bg-slate-900 text-purple-200">
+                              📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (ค่าเสื้อ 280 บ.)
+                            </option>
+                            <option value="staff" className="bg-slate-900 text-purple-200">
+                              🛠️ (STAFF) สตาฟโครงการทั่วไป (ค่าเสื้อ 280 บ.)
+                            </option>
+                          </select>
+
+                          {!isAdvancedMode ? (
+                            <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                              <Lock className="w-3.5 h-3.5 text-slate-500" />
+                              <span>เปิดโหมดขั้นสูงเพื่อแก้ไข</span>
+                            </span>
+                          ) : hasUnsavedRoleDraft && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await handleQuickToggleStaff(profileModalReg, draftRoleVal !== 'participant', draftRoleVal);
+                                  setPendingRoleDrafts(prev => {
+                                    const next = { ...prev };
+                                    delete next[modalRegKey];
+                                    return next;
+                                  });
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                                <span>บันทึกบทบาท</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPendingRoleDrafts(prev => {
+                                    const next = { ...prev };
+                                    delete next[modalRegKey];
+                                    return next;
+                                  });
+                                }}
+                                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                              >
+                                ยกเลิก
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* OVERPAID STAFF REFUND MANAGEMENT PANEL */}
@@ -12006,6 +12210,23 @@ export default function AdminDashboardView({
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    if (!isAdvancedMode) {
+                                      askConfirm({
+                                        title: '🛡️ ต้องเปิดโหมดแก้ไขขั้นสูงก่อนแก้ไขไซส์เสื้อ',
+                                        message: 'เพื่อป้องกันการเผลอเปลี่ยนไซส์เสื้อโดยไม่ตั้งใจ ต้องเปิด "โหมดแก้ไขขั้นสูง" ก่อนจึงจะสามารถเลือกไซส์และกดบันทึกได้ ต้องการเปิดโหมดแก้ไขขั้นสูงหรือไม่?',
+                                        confirmText: 'เปิดโหมดขั้นสูง & แก้ไขไซส์',
+                                        cancelText: 'ยกเลิก',
+                                        variant: 'warning',
+                                        onConfirm: () => {
+                                          setIsAdvancedMode(true);
+                                          setEditingMerchSizeItemId(item.id);
+                                          const norm = normalizeSize(item.size);
+                                          setEditingMerchSizeVal(['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(norm) ? norm : 'อื่นๆ');
+                                          setEditingMerchCustomNote(item.custom_shirt_note || '');
+                                        }
+                                      });
+                                      return;
+                                    }
                                     setEditingMerchSizeItemId(item.id);
                                     const norm = normalizeSize(item.size);
                                     setEditingMerchSizeVal(['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(norm) ? norm : 'อื่นๆ');
@@ -13512,19 +13733,72 @@ export default function AdminDashboardView({
                           </div>
                         </div>
 
-                        {/* Quick Role Switcher */}
-                        <div className="flex items-center justify-between gap-2 p-1.5 bg-slate-900/90 rounded-xl border border-slate-800 mb-3.5">
-                          <span className="text-[10px] text-slate-400 font-bold pl-1.5">บทบาท:</span>
-                          <select
-                            value={cat}
-                            onChange={(e) => handleChangeSpeakerCategory(spk.id, e.target.value)}
-                            className="bg-slate-950 border border-slate-700 text-[11px] text-white rounded-lg px-2 py-1 font-bold focus:outline-none focus:border-amber-400 cursor-pointer"
-                          >
-                            <option value="president">👑 ประธานในพิธี</option>
-                            <option value="advisor">👔 ที่ปรึกษาโครงการ</option>
-                            <option value="speaker">🎖️ วิทยากรประจำโครงการ</option>
-                          </select>
-                        </div>
+                        {/* Quick Role Switcher (Requires Advanced Mode + Save Button) */}
+                        {(() => {
+                          const draftCat = pendingSpeakerCatDrafts[spk.id] ?? cat;
+                          const hasUnsavedCat = isAdvancedMode && draftCat !== cat;
+                          return (
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-1.5 bg-slate-900/90 rounded-xl border border-slate-800 mb-3.5">
+                              <span className="text-[10px] text-slate-400 font-bold pl-1.5 flex items-center gap-1">
+                                {!isAdvancedMode && <Lock className="w-3 h-3 text-slate-500" />}
+                                <span>บทบาท:</span>
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  disabled={!isAdvancedMode}
+                                  value={draftCat}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setPendingSpeakerCatDrafts(prev => ({ ...prev, [spk.id]: val }));
+                                  }}
+                                  className={`bg-slate-950 border text-[11px] text-white rounded-lg px-2 py-1 font-bold focus:outline-none ${
+                                    !isAdvancedMode
+                                      ? 'border-slate-800 text-slate-400 opacity-75 cursor-not-allowed'
+                                      : hasUnsavedCat
+                                      ? 'border-amber-400 ring-1 ring-amber-400 cursor-pointer'
+                                      : 'border-slate-700 focus:border-amber-400 cursor-pointer'
+                                  }`}
+                                  title={!isAdvancedMode ? '🔒 เปิดโหมดแก้ไขขั้นสูงก่อนจึงจะเปลี่ยนบทบาทได้' : 'เลือกบทบาทแล้วกดบันทึก'}
+                                >
+                                  <option value="president">👑 ประธานในพิธี</option>
+                                  <option value="advisor">👔 ที่ปรึกษาโครงการ</option>
+                                  <option value="speaker">🎖️ วิทยากรประจำโครงการ</option>
+                                </select>
+                                {hasUnsavedCat && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleChangeSpeakerCategory(spk.id, draftCat);
+                                        setPendingSpeakerCatDrafts(prev => {
+                                          const next = { ...prev };
+                                          delete next[spk.id];
+                                          return next;
+                                        });
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black cursor-pointer"
+                                    >
+                                      💾 บันทึก
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPendingSpeakerCatDrafts(prev => {
+                                          const next = { ...prev };
+                                          delete next[spk.id];
+                                          return next;
+                                        });
+                                      }}
+                                      className="px-1.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold cursor-pointer"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Photo & Basic Info */}
                         <div className="flex items-start gap-3.5 mb-3.5">
