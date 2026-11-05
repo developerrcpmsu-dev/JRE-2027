@@ -75,6 +75,8 @@ import {
   OFFICIAL_NETWORK_INSTITUTIONS,
   SHIRT_SIZE_OPTIONS,
   STAFF_SHIRT_FEE,
+  STAFF_ACCOMMODATION_FEE,
+  STAFF_EXTERNAL_TOTAL_FEE,
   getRegistrationFeeDetails,
   isMsuInstitution,
   isStaffRegistration,
@@ -1935,7 +1937,7 @@ export default function RegisterView({
     }
   };
 
-  // Upload Installment Payment Slip Handler (Round 1 or Round 2)
+  // Upload Installment Payment Slip Handler (Round 1 or Round 2 / Staff Accommodation)
   const handleUploadInstallmentSlip = async (e, round) => {
     const file = e.target.files?.[0];
     if (!file || !myRegistration) return;
@@ -1947,7 +1949,11 @@ export default function RegisterView({
       const uploadResult = await DataService.uploadFile(file, 'slips');
       if (uploadResult?.url) {
         let ocrInfo = null;
-        const expectedAmount = round === 1 ? 400 : feeInfo.round2Amount;
+        const staffSum = getStaffPaymentSummary(myRegistration);
+        const regFee = getRegistrationFeeDetails(myRegistration, staffSum.isStaff);
+        const expectedAmount = round === 1
+          ? (staffSum.isStaff ? STAFF_SHIRT_FEE : 400)
+          : (staffSum.isStaff ? (staffSum.accommodationNetRequiredAfterOffset || STAFF_ACCOMMODATION_FEE) : regFee.round2Amount);
         try {
           const rawOcr = await scanSlipImage(file, expectedAmount);
           ocrInfo = await evaluateSlipWithRegistry(rawOcr, expectedAmount);
@@ -1958,19 +1964,25 @@ export default function RegisterView({
 
         if (onUpdateRegistration) {
           const update = {
-            payment_plan: 'installment',
+            payment_plan: (staffSum.isStaff && round === 2 && roundStatus === 'paid') ? 'full' : 'installment',
             [`installment_${round}_slip_url`]: uploadResult.url,
             [`installment_${round}_slip_date`]: new Date().toISOString(),
             [`installment_${round}_status`]: roundStatus,
             [`slip_ocr_round${round}`]: ocrInfo
           };
 
-          if (round === 2 && roundStatus === 'paid' && myRegistration.installment_1_status === 'paid') {
+          if (round === 2 && roundStatus === 'paid' && (myRegistration.installment_1_status === 'paid' || staffSum.isStaff)) {
             update.payment_status = 'paid';
+            update.payment_amount = 0;
+            if (staffSum.isStaff) {
+              update.staff_accommodation_paid = true;
+            }
           } else if (round === 1 && roundStatus === 'paid' && myRegistration.installment_2_status === 'paid') {
             update.payment_status = 'paid';
           } else if (round === 1 && roundStatus === 'paid') {
             update.payment_status = 'partial_paid';
+          } else if (round === 2 && roundStatus === 'pending_review') {
+            update.payment_status = 'pending_review';
           }
 
           await onUpdateRegistration(myRegistration.user_id, update);
@@ -1988,19 +2000,20 @@ export default function RegisterView({
           });
         }
 
+        const labelText = staffSum.isStaff && round === 2 ? `ค่าที่พัก Staff (${expectedAmount} บ.)` : `งวดที่ ${round}`;
         if (ocrInfo?.isFullyVerified) {
-          triggerToast(`✓ สลิปงวดที่ ${round} ถูกต้องสมบูรณ์ (${ocrInfo.amountFormatted}) ยืนยันสิทธิ์เรียบร้อย!`, 'success');
+          triggerToast(`✓ สลิป${labelText} ถูกต้องสมบูรณ์ (${ocrInfo.amountFormatted}) ยืนยันสิทธิ์เรียบร้อย!`, 'success');
         } else if (ocrInfo?.isDuplicate) {
           triggerToast(`🚨 ${ocrInfo.duplicateMessage} (รอเจ้าหน้าที่ตรวจสอบ)`, 'error');
         } else if (ocrInfo?.isDetected) {
-          triggerToast(`อัปโหลดและสแกนสลิปงวดที่ ${round} เรียบร้อย (${ocrInfo.amountFormatted}) เจ้าหน้าที่จะทำการตรวจสอบ`, 'warning');
+          triggerToast(`อัปโหลดและสแกนสลิป${labelText} เรียบร้อย (${ocrInfo.amountFormatted}) เจ้าหน้าที่จะทำการตรวจสอบ`, 'warning');
         } else {
-          triggerToast(`อัปโหลดหลักฐานงวดที่ ${round} เรียบร้อย (รอเจ้าหน้าที่ตรวจสลิป)`, 'info');
+          triggerToast(`อัปโหลดหลักฐาน${labelText} เรียบร้อย (รอเจ้าหน้าที่ตรวจสลิป)`, 'info');
         }
       }
     } catch (err) {
       console.error(err);
-      triggerToast(`เกิดข้อผิดพลาดในการอัปโหลดสลิปงวดที่ ${round}`, 'error');
+      triggerToast(`เกิดข้อผิดพลาดในการอัปโหลดสลิป`, 'error');
     } finally {
       if (round === 1) setIsUploadingRound1(false);
       else setIsUploadingRound2(false);
@@ -2254,24 +2267,32 @@ export default function RegisterView({
     const requestedDocs = Array.isArray(myRegistration.requested_docs) ? myRegistration.requested_docs : [];
 
     const isStaffReg = isStaffRegistration(myRegistration);
+    const staffSummary = getStaffPaymentSummary(myRegistration);
     const participantFee = getRegistrationFeeDetails(myRegistration, isStaffReg);
     const isMsu = participantFee.isMsu;
-    const totalFee = participantFee.totalFee;
-    const round1Amount = participantFee.round1Amount;
-    const round2Amount = participantFee.round2Amount;
+    const totalFee = isStaffReg ? staffSummary.totalStaffFee : participantFee.totalFee;
+    const round1Amount = isStaffReg ? staffSummary.shirtFee : participantFee.round1Amount;
+    const round2Amount = isStaffReg ? (isMsu ? 0 : staffSummary.accommodationNetRequiredAfterOffset) : participantFee.round2Amount;
     const resolvedApplicantGender = resolveGender(myRegistration);
     const resolvedUni = resolveUniversityInfo(myRegistration);
 
     // Detect if single payment was approved OR if both installments were approved
-    const isSinglePaid = (isStaffReg || myRegistration.payment_plan !== 'installment') && (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified');
-    const isRound2Paid = !isStaffReg && myRegistration.installment_2_status === 'paid' && Boolean(myRegistration.installment_2_slip_url);
-    const isInstallmentsBothPaid = !isStaffReg && (myRegistration.installment_1_status === 'paid') && isRound2Paid;
+    const isSinglePaid = (isStaffReg ? (isMsu ? (myRegistration.payment_status === 'paid' || myRegistration.installment_1_status === 'paid' || staffSummary.r1SlipAmount >= STAFF_SHIRT_FEE) : staffSummary.isAccommodationPaid) : (myRegistration.payment_plan !== 'installment' && (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified')));
+    const isRound2Paid = isStaffReg ? staffSummary.isAccommodationPaid : (myRegistration.installment_2_status === 'paid' && Boolean(myRegistration.installment_2_slip_url));
+    const isInstallmentsBothPaid = isStaffReg ? (!isMsu && staffSummary.isAccommodationPaid) : ((myRegistration.installment_1_status === 'paid') && isRound2Paid);
     const isFullyPaid = isSinglePaid || isInstallmentsBothPaid;
 
     let paidAmount = 0;
     if (isFullyPaid) {
       paidAmount = totalFee;
-    } else if (!isStaffReg && myRegistration.payment_plan === 'installment') {
+    } else if (isStaffReg) {
+      if (isMsu) {
+        paidAmount = (myRegistration.payment_status === 'paid' || myRegistration.installment_1_status === 'paid' || staffSummary.r1SlipAmount >= STAFF_SHIRT_FEE) ? STAFF_SHIRT_FEE : 0;
+      } else {
+        const shirtPaidPart = (myRegistration.installment_1_status === 'paid' || staffSummary.r1SlipAmount >= STAFF_SHIRT_FEE) ? STAFF_SHIRT_FEE : 0;
+        paidAmount = Math.min(totalFee, shirtPaidPart + staffSummary.accommodationPaidTotal);
+      }
+    } else if (myRegistration.payment_plan === 'installment') {
       if (myRegistration.installment_1_status === 'paid') paidAmount += round1Amount;
       if (isRound2Paid) paidAmount += round2Amount;
     } else {
@@ -2279,17 +2300,17 @@ export default function RegisterView({
     }
     const remainingAmount = Math.max(0, totalFee - paidAmount);
     const isInstallmentPlan = isStaffReg
-      ? false
+      ? !isMsu
       : (myRegistration.payment_plan 
         ? (myRegistration.payment_plan === 'installment') 
         : Boolean(myRegistration.installment_1_slip_url || myRegistration.installment_2_slip_url));
 
     const dashboardPaymentConfig = {
       ...effectivePaymentConfig,
-      fee_total: participantFee.totalFee,
-      installment_round1_amount: participantFee.round1Amount,
+      fee_total: totalFee,
+      installment_round1_amount: round1Amount,
       installment_round1_due: participantFee.round1Due,
-      installment_round2_amount: participantFee.round2Amount,
+      installment_round2_amount: round2Amount,
       installment_round2_due: participantFee.round2Due,
       notes: participantFee.feeNote
     };
@@ -2445,7 +2466,7 @@ export default function RegisterView({
                   </span>
                   {isStaffReg ? (
                     <span className="px-2.5 py-0.5 bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-400/50 rounded-full text-[11px] font-black shadow-sm">
-                      🛠️ Staff โครงการ ({resolvedUni.shortTag} • ชำระค่าเสื้อ 280 บ.)
+                      🛠️ Staff โครงการ ({resolvedUni.shortTag} • {isMsu ? 'ค่าเสื้อ 280 บ.' : 'ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.'})
                     </span>
                   ) : participantFee.isMsu ? (
                     <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[11px] font-bold">
@@ -2756,10 +2777,18 @@ export default function RegisterView({
                     </div>
                     <div>
                       <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 block">
-                        {isInstallmentPlan ? 'สถานะการเงิน: แผนแบ่งจ่าย 2 งวด' : 'สถานะการเงิน: แผนชำระเต็มจำนวน'}
+                        {isStaffReg
+                          ? (isMsu ? 'สถานะการเงิน Staff มมส (เฉพาะค่าเสื้อ 280 บ.)' : 'สถานะการเงิน Staff ต่างมหาวิทยาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.)')
+                          : (isInstallmentPlan ? 'สถานะการเงิน: แผนแบ่งจ่าย 2 งวด' : 'สถานะการเงิน: แผนชำระเต็มจำนวน')}
                       </span>
                       <h2 className="text-base sm:text-lg font-black text-white">
-                        {isInstallmentPlan ? (
+                        {isStaffReg && !isMsu ? (
+                          staffSummary.isAccommodationPendingReview
+                            ? `✅ ชำระค่าเสื้อ Staff แล้ว | ⏳ ส่งสลิปค่าที่พักแล้ว (${round2Amount} บ.) • รอผู้ดูแลระบบตรวจสอบ`
+                            : staffSummary.isOffsetApplied
+                            ? `✅ โอนรอบแรกมา ${staffSummary.r1SlipAmount} บ. (หักค่าเสื้อ 280 บ. + นำส่วนเกิน ${staffSummary.offsetToAccommodation} บ. หักลบค่าที่พัก 200 บ.) • ⚠️ คงเหลือต้องชำระค่าที่พักเพิ่ม ${staffSummary.accommodationRemaining} บาท`
+                            : `✅ ชำระค่าเสื้อ Staff แล้ว (280 บ.) | ⚠️ ค้างชำระค่าที่พักหอพักกุดรัง จำนวน ${staffSummary.accommodationRemaining} บาท`
+                        ) : isInstallmentPlan ? (
                           myRegistration.installment_1_status === 'unpaid'
                             ? `⚠️ ค้างชำระงวดที่ 1 จำนวน 400 บาท (ค่าจัดทำเสื้อพรีออเดอร์ กำหนดชำระ 15–20 ต.ค. 2569)`
                             : myRegistration.installment_1_status === 'pending_review'
@@ -2774,7 +2803,9 @@ export default function RegisterView({
                         )}
                       </h2>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        ระบบส่งข้อมูลใบสมัครและรายการสั่งเสื้อไปยังผู้ดูแลระบบ (Admin) แล้ว ท่านสามารถแนบสลิปด้านล่างเพื่อยืนยันยอดเงิน
+                        {isStaffReg && !isMsu
+                          ? staffSummary.summaryNote
+                          : 'ระบบส่งข้อมูลใบสมัครและรายการสั่งเสื้อไปยังผู้ดูแลระบบ (Admin) แล้ว ท่านสามารถแนบสลิปด้านล่างเพื่อยืนยันยอดเงิน'}
                       </p>
                     </div>
                   </div>
@@ -2794,11 +2825,128 @@ export default function RegisterView({
             )}
           </div>
 
-          {/* OVERPAID STAFF REFUND FORM & STATUS CARD (For Staff / Committee members who transferred > 280 THB) */}
+          {/* NON-MSU STAFF ACCOMMODATION FEE (200 THB) & AUTOMATIC OVERPAYMENT OFFSET SYSTEM */}
+          {isStaffReg && !isMsu && (
+            <div className={`mt-6 p-5 sm:p-6 rounded-3xl border-2 shadow-2xl space-y-4 ${
+              staffSummary.isAccommodationPaid
+                ? 'bg-gradient-to-r from-emerald-950/70 via-slate-900 to-teal-950/70 border-emerald-500/60'
+                : staffSummary.isAccommodationPendingReview
+                ? 'bg-gradient-to-r from-amber-950/60 via-slate-900 to-indigo-950/60 border-amber-500/60'
+                : 'bg-gradient-to-r from-indigo-950/70 via-slate-900 to-purple-950/70 border-indigo-500/60'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm sm:text-base font-black text-white flex items-center gap-1.5">
+                      🏨 ระบบชำระค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัย ({resolvedUni.shortTag}) • คนละ 200 บาท
+                    </span>
+                    {staffSummary.isAccommodationPaid ? (
+                      <span className="px-3 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-xs shadow">
+                        ✅ ชำระค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ. ครบถ้วนแล้ว (รวม 480 บ.)
+                      </span>
+                    ) : staffSummary.isAccommodationPendingReview ? (
+                      <span className="px-3 py-0.5 rounded-full bg-amber-500/25 text-amber-200 border border-amber-400/50 font-bold text-xs animate-pulse">
+                        ⏳ ส่งสลิปค่าที่พักแล้ว ({staffSummary.accommodationRemaining} บ.) • รอฝ่ายการเงินตรวจสอบ
+                      </span>
+                    ) : (
+                      <span className="px-3 py-0.5 rounded-full bg-rose-500/25 text-rose-200 border border-rose-400/50 font-bold text-xs">
+                        ⚠️ คงเหลือยอดค่าที่พักที่ต้องชำระเพิ่ม: {staffSummary.accommodationRemaining} บาท
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1">
+                    ระเบียบโครงการ: คณะทำงาน/Staff จากทุกมหาวิทยาลัยที่ไม่ใช่ มมส มีค่าเสื้อโครงการ <strong className="text-white">280 บาท</strong> และค่าที่พักหอพักกุดรัง มมส <strong className="text-sky-300">200 บาท/คน</strong> (รวมทั้งสิ้น <strong className="text-amber-300">480 บาท</strong>)
+                  </p>
+                </div>
+              </div>
+
+              {/* Calculation & Offset Breakdown Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="bg-slate-950/90 border border-slate-800 p-3.5 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">1. ยอดโอนรอบแรกของท่าน</span>
+                  <span className="text-lg font-black text-white mt-0.5 block">{staffSummary.r1SlipAmount} บาท</span>
+                  <span className="text-[11px] text-emerald-400 block mt-0.5">✓ หักค่าเสื้อ Staff 280 บ. แล้ว</span>
+                </div>
+
+                <div className="bg-slate-950/90 border border-slate-800 p-3.5 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">2. ค่าที่พัก Staff ต่างมหาลัย</span>
+                  <span className="text-lg font-black text-sky-300 mt-0.5 block">200 บาท</span>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">หอพักกุดรัง มมส (แอร์ + น้ำอุ่น)</span>
+                </div>
+
+                <div className={`p-3.5 rounded-2xl border ${staffSummary.isOffsetApplied ? 'bg-purple-950/40 border-purple-500/50' : 'bg-slate-950/90 border-slate-800'}`}>
+                  <span className="text-[10px] text-purple-300 block font-bold uppercase">3. หักลบจากยอดโอนเกินรอบแรก</span>
+                  <span className={`text-lg font-black mt-0.5 block ${staffSummary.isOffsetApplied ? 'text-purple-300' : 'text-slate-500'}`}>
+                    {staffSummary.isOffsetApplied ? `-${staffSummary.offsetToAccommodation} บาท` : '0 บาท'}
+                  </span>
+                  <span className="text-[11px] text-slate-300 block mt-0.5">
+                    {staffSummary.isOffsetApplied
+                      ? `นำส่วนเกิน +${staffSummary.overpaidShirtAmount} บ. มาหักลบอัตโนมัติ`
+                      : 'โอนรอบแรกพอดีค่าเสื้อ 280 บ.'}
+                  </span>
+                </div>
+
+                <div className={`p-3.5 rounded-2xl border ${staffSummary.accommodationRemaining > 0 ? 'bg-amber-950/40 border-amber-500/60' : 'bg-emerald-950/40 border-emerald-500/60'}`}>
+                  <span className="text-[10px] text-amber-200 block font-bold uppercase">4. คงเหลือค่าที่พักที่ต้องโอนเพิ่ม</span>
+                  <span className={`text-xl font-black mt-0.5 block ${staffSummary.accommodationRemaining > 0 ? 'text-amber-300' : 'text-emerald-400'}`}>
+                    {staffSummary.accommodationRemaining} บาท
+                  </span>
+                  <span className="text-[11px] text-slate-300 block mt-0.5">
+                    {staffSummary.accommodationRemaining > 0
+                      ? (staffSummary.isOffsetApplied ? `คำนวณจาก 200 - ${staffSummary.offsetToAccommodation} = ${staffSummary.accommodationRemaining} บ.` : 'ชำระค่าที่พักเต็มจำนวน 200 บ.')
+                      : '✓ ชำระครบถ้วนแล้ว'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Remarks Banner */}
+              <div className="p-3 rounded-2xl bg-slate-950/80 border border-indigo-500/30 text-xs text-slate-200 flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-indigo-300">หมายเหตุการคำนวณ: </strong>
+                  <span>{staffSummary.summaryNote}</span>
+                </div>
+              </div>
+
+              {/* Upload Slip or View Slip for Staff Accommodation */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
+                <div className="text-xs text-slate-300">
+                  🏦 โอนเข้าบัญชี: <strong className="text-amber-300">{dashboardPaymentConfig.bank_name} {dashboardPaymentConfig.bank_account_number}</strong> ({dashboardPaymentConfig.bank_account_name})
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {myRegistration.installment_2_slip_url && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url)}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/40 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>ดูสลิปค่าที่พักที่แนบไว้</span>
+                    </button>
+                  )}
+
+                  {!staffSummary.isAccommodationPaid && (
+                    <label className={`px-5 py-2.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-400 hover:to-pink-400 text-white font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center gap-2 transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {isUploadingRound2 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      <span>
+                        {myRegistration.installment_2_slip_url
+                          ? `ส่งสลิปค่าที่พักใหม่ (${staffSummary.accommodationRemaining} บ.)`
+                          : `📤 แนบสลิปชำระค่าที่พัก Staff (${staffSummary.accommodationRemaining} บาท)`}
+                      </span>
+                      <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* OVERPAID STAFF REFUND FORM & STATUS CARD (For Staff / Committee members who have net overpayment > totalStaffFee) */}
           {(() => {
             const staffPayInfo = getStaffPaymentSummary(myRegistration);
-            if (!staffPayInfo.isOverpaid && !myRegistration.overpaid_amount && !myRegistration.refund_slip_url) return null;
-            const overpaidAmt = staffPayInfo.overpaidAmount || Number(myRegistration.overpaid_amount || 0);
+            if (!staffPayInfo.isOverpaid && !myRegistration.refund_slip_url) return null;
+            const overpaidAmt = staffPayInfo.overpaidAmount;
             return (
               <div className={`mt-6 p-5 sm:p-6 rounded-3xl border-2 shadow-2xl space-y-4 ${
                 staffPayInfo.isRefunded
@@ -2826,7 +2974,7 @@ export default function RegisterView({
                       )}
                     </div>
                     <p className="text-xs text-slate-300 mt-1">
-                      ท่านมีรายชื่อเป็น <strong className="text-purple-300">{staffPayInfo.staffRoleLabel}</strong> ชำระเฉพาะค่าเสื้อ <strong className="text-white">280 บาท</strong> • ยอดที่ท่านโอนมา <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • ยอดเงินส่วนเกินที่ได้รับคืน: <strong className="text-amber-300 text-sm">+{overpaidAmt} บาท</strong>
+                      ท่านมีรายชื่อเป็น <strong className="text-purple-300">{staffPayInfo.staffRoleLabel}</strong> ({staffPayInfo.isMsu ? 'มมส ชำระเฉพาะค่าเสื้อ 280 บาท' : 'ต่างมหาวิทยาลัย ชำระค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บาท'}) • ยอดที่ท่านโอนมา <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • ยอดเงินส่วนเกินสุทธิที่ทางโครงการต้องโอนคืน: <strong className="text-amber-300 text-sm">+{overpaidAmt} บาท</strong>
                     </p>
                   </div>
 
@@ -3198,10 +3346,14 @@ export default function RegisterView({
                         )}
                       </div>
                       <h4 className="font-black text-white text-sm mt-2">
-                        ชำระรอบที่ 1: 400 บาท
+                        {isStaffReg ? `ชำระค่าเสื้อ Staff: ${round1Amount} บาท` : `ชำระรอบที่ 1: ${round1Amount} บาท`}
                       </h4>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        ค่าจัดทำเสื้อโครงการ (15–20 ต.ค. 2569)
+                        {isStaffReg
+                          ? (staffSummary.isOffsetApplied
+                            ? `โอนมา ${staffSummary.r1SlipAmount} บ. • หักลบค่าที่พัก +${staffSummary.offsetToAccommodation} บ.`
+                            : 'ค่าเสื้อ Staff โครงการ (280 บาท)')
+                          : 'ค่าจัดทำเสื้อโครงการ (15–20 ต.ค. 2569)'}
                       </p>
                     </div>
 
@@ -3237,14 +3389,14 @@ export default function RegisterView({
                       ) : (
                         <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound1 ? 'opacity-50 pointer-events-none' : ''}`}>
                           {isUploadingRound1 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                          <span>แนบสลิปงวด 1 (400 บ.)</span>
+                          <span>แนบสลิปงวด 1 ({round1Amount} บ.)</span>
                           <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
                         </label>
                       )}
                     </div>
                   </div>
 
-                  {/* Step 4 Card: งวดที่ 2 (450 หรือ 250 บาท) */}
+                  {/* Step 4 Card: งวดที่ 2 (450 หรือ 250 บาท หรือ ค่าที่พัก Staff 200/80 บาท) */}
                   <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
                     (isFullyPaid || isRound2Paid)
                       ? 'border-emerald-500/40 bg-emerald-950/10'
@@ -3255,7 +3407,7 @@ export default function RegisterView({
                     <div>
                       <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                         <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
-                          <CreditCard className="w-3.5 h-3.5 text-sky-400" /> ขั้นตอนที่ 4 (งวด 2)
+                          <CreditCard className="w-3.5 h-3.5 text-sky-400" /> {isStaffReg ? 'ขั้นตอนที่ 4 (ค่าที่พัก)' : 'ขั้นตอนที่ 4 (งวด 2)'}
                         </span>
                         {(isFullyPaid || isRound2Paid) ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -3272,10 +3424,14 @@ export default function RegisterView({
                         )}
                       </div>
                       <h4 className="font-black text-white text-sm mt-2">
-                        ชำระรอบที่ 2: {round2Amount} บาท
+                        {isStaffReg ? `ค่าที่พักคงเหลือ: ${round2Amount} บาท` : `ชำระรอบที่ 2: ${round2Amount} บาท`}
                       </h4>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        {isMsu ? 'ค่าอาหาร & กิจกรรม (1–5 พ.ย. 2569)' : 'ค่าที่พัก & อาหาร (1–5 พ.ย. 2569)'}
+                        {isStaffReg
+                          ? (staffSummary.isOffsetApplied
+                            ? `ค่าที่พัก 200 บ. หักส่วนเกิน -${staffSummary.offsetToAccommodation} บ.`
+                            : 'ค่าที่พัก Staff ต่างมหาลัย (200 บ.)')
+                          : (isMsu ? 'ค่าอาหาร & กิจกรรม (1–5 พ.ย. 2569)' : 'ค่าที่พัก & อาหาร (1–5 พ.ย. 2569)')}
                       </p>
                     </div>
 
@@ -3291,7 +3447,7 @@ export default function RegisterView({
                           </div>
                           <div className="min-w-0 flex-1">
                             <span className="text-[10px] text-emerald-400 font-bold block truncate">
-                              {(isFullyPaid || isRound2Paid) ? '✓ อนุมัติงวด 2 แล้ว' : '✓ แนบสลิปแล้ว'}
+                              {(isFullyPaid || isRound2Paid) ? '✓ อนุมัติแล้ว' : '✓ แนบสลิปแล้ว'}
                             </span>
                             {myRegistration.slip_ocr_round2 && (
                               <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>
@@ -3311,7 +3467,7 @@ export default function RegisterView({
                       ) : (
                         <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
                           {isUploadingRound2 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                          <span>แนบสลิปงวด 2 ({round2Amount} บ.)</span>
+                          <span>{isStaffReg ? `แนบสลิปค่าที่พัก (${round2Amount} บ.)` : `แนบสลิปงวด 2 (${round2Amount} บ.)`}</span>
                           <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
                         </label>
                       )}
@@ -3763,10 +3919,15 @@ export default function RegisterView({
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider block">
-                        งวดที่ 1 (รอบแรก - วันเปิดรับสมัคร)
+                        {isStaffReg ? 'ส่วนที่ 1: ค่าเสื้อ Staff โครงการ' : 'งวดที่ 1 (รอบแรก - วันเปิดรับสมัคร)'}
                       </span>
                       <p className="text-xl font-black text-white mt-0.5">
                         {dashboardPaymentConfig.installment_round1_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
+                        {isStaffReg && staffSummary.isOffsetApplied && (
+                          <span className="ml-2 text-xs font-bold text-purple-300">
+                            (โอนมา {staffSummary.r1SlipAmount} บ. • หักลบค่าที่พัก +{staffSummary.offsetToAccommodation} บ.)
+                          </span>
+                        )}
                       </p>
                     </div>
 
@@ -3788,7 +3949,7 @@ export default function RegisterView({
                   <div className="text-xs text-slate-300 space-y-1">
                     <p className="flex items-center gap-1.5 text-slate-400">
                       <CalendarClock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>กำหนดชำระ: <strong className="text-white">{dashboardPaymentConfig.installment_round1_due}</strong></span>
+                      <span>รายละเอียด: <strong className="text-white">{dashboardPaymentConfig.installment_round1_due}</strong></span>
                     </p>
                   </div>
 
@@ -3852,10 +4013,15 @@ export default function RegisterView({
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">
-                      งวดที่ 2 (รอบที่ 2)
+                      {isStaffReg ? 'ส่วนที่ 2: ค่าที่พักหอพักกุดรังสำหรับ Staff ต่างมหาลัย (200 บ.)' : 'งวดที่ 2 (รอบที่ 2)'}
                     </span>
                     <p className="text-xl font-black text-white mt-0.5">
                       {dashboardPaymentConfig.installment_round2_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
+                      {isStaffReg && staffSummary.isOffsetApplied && (
+                        <span className="ml-2 text-xs font-bold text-amber-300">
+                          (จากค่าที่พัก 200 บ. หักส่วนเกิน -{staffSummary.offsetToAccommodation} บ.)
+                        </span>
+                      )}
                     </p>
                   </div>
 
@@ -3869,7 +4035,7 @@ export default function RegisterView({
                     </span>
                   ) : (
                     <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-[11px] font-bold">
-                      ค้างชำระงวด 2
+                      {isStaffReg ? `ค้างค่าที่พัก (${dashboardPaymentConfig.installment_round2_amount} บ.)` : 'ค้างชำระงวด 2'}
                     </span>
                   )}
                 </div>
@@ -3881,7 +4047,13 @@ export default function RegisterView({
                   </p>
                   <div className="mt-1 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 flex items-center gap-1.5">
                     <span>💡</span>
-                    <span><strong>ชำระล่วงหน้าได้ทันที:</strong> สามารถชำระเงินและแนบสลิปงวดที่ 2 ก่อนกำหนดได้ตลอดเวลา โดยไม่ต้องรอถึงเดือนพฤศจิกายน</span>
+                    <span>
+                      {isStaffReg
+                        ? (staffSummary.isOffsetApplied
+                          ? `ระบบนำเงินที่ท่านโอนเกินในรอบแรก (+${staffSummary.offsetToAccommodation} บ.) มาหักลบค่าที่พัก 200 บ. ให้แล้ว คงเหลือโอนเพิ่มเพียง ${dashboardPaymentConfig.installment_round2_amount} บาท`
+                          : 'สามารถโอนชำระค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัย (200 บาท) และแนบสลิปด้านล่างได้ทันที')
+                        : 'ชำระล่วงหน้าได้ทันที: สามารถชำระเงินและแนบสลิปงวดที่ 2 ก่อนกำหนดได้ตลอดเวลา โดยไม่ต้องรอถึงเดือนพฤศจิกายน'}
+                    </span>
                   </div>
                 </div>
 
@@ -3904,18 +4076,18 @@ export default function RegisterView({
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className="text-[11px] text-emerald-400 font-semibold block">
-                          ✓ อัปโหลดสลิปงวดที่ 2 แล้ว
+                          ✓ อัปโหลดสลิปแล้ว
                         </span>
                         <span className="text-[10px] text-slate-500 block truncate">
                           {myRegistration.installment_2_slip_date ? new Date(myRegistration.installment_2_slip_date).toLocaleString('th-TH') : '-'}
                         </span>
                         {myRegistration.installment_2_status === 'paid' ? (
                           <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
-                            <CheckCircle className="w-3.5 h-3.5" /> อนุมัติงวดที่ 2 แล้ว (ล็อคสลิป)
+                            <CheckCircle className="w-3.5 h-3.5" /> อนุมัติแล้ว (ล็อคสลิป)
                           </span>
                         ) : (
                           <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
-                            <span>{myRegistration.installment_2_status === 'unpaid' ? 'อัปโหลดสลิปงวด 2 ใหม่' : 'ส่งสลิปงวด 2 ใหม่ทดแทน (กรณีแนบผิด)'}</span>
+                            <span>{myRegistration.installment_2_status === 'unpaid' ? 'อัปโหลดสลิปใหม่' : 'ส่งสลิปใหม่ทดแทน (กรณีแนบผิด)'}</span>
                             <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
                           </label>
                         )}
@@ -3926,12 +4098,12 @@ export default function RegisterView({
                         {isUploadingRound2 ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>กำลังส่งสลิปงวด 2...</span>
+                            <span>กำลังส่งสลิป...</span>
                           </>
                         ) : (
                           <>
                             <Upload className="w-4 h-4" />
-                            <span>แนบสลิปงวดที่ 2 ({dashboardPaymentConfig.installment_round2_amount} บ.)</span>
+                            <span>{isStaffReg ? `แนบสลิปค่าที่พัก Staff (${dashboardPaymentConfig.installment_round2_amount} บ.)` : `แนบสลิปงวดที่ 2 (${dashboardPaymentConfig.installment_round2_amount} บ.)`}</span>
                           </>
                         )}
                         <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />

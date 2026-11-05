@@ -3,6 +3,10 @@ import {
   isMsuInstitution,
   isStaffRegistration,
   STAFF_SHIRT_FEE,
+  STAFF_ACCOMMODATION_FEE,
+  STAFF_EXTERNAL_TOTAL_FEE,
+  getStaffPaymentSummary,
+  computeStaffAndRefundMetrics,
   resolveGender,
   resolveUniversityInfo,
   resolveApplicantMemberType,
@@ -176,6 +180,72 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     r.height = 22;
   });
 
+  // Sheet 1B: Dedicated Staff Accommodation (200 THB for Non-MSU), Overpayment Offset & Refund Summary Sheet
+  const staffMetrics = computeStaffAndRefundMetrics(sortedRegs);
+  const staffSheet = workbook.addWorksheet('สรุปค่าที่พักStaffและโอนคืน', {
+    views: [{ state: 'frozen', ySplit: 5, xSplit: 2 }]
+  });
+  staffSheet.columns = [
+    { header: 'ลำดับ', key: 'idx', width: 8 },
+    { header: 'ชื่อ-สกุล Staff', key: 'full_name', width: 28 },
+    { header: 'มหาวิทยาลัย', key: 'uni_short', width: 16 },
+    { header: 'เกณฑ์ Staff', key: 'staff_tier', width: 32 },
+    { header: 'ค่าเสื้อ (บาท)', key: 'shirt_fee', width: 15 },
+    { header: 'ค่าที่พัก (บาท)', key: 'accom_fee', width: 15 },
+    { header: 'รวมต้องจ่าย (บาท)', key: 'total_fee', width: 18 },
+    { header: 'โอนมาจริง (บาท)', key: 'actual_paid', width: 18 },
+    { header: 'หักลบเงินโอนเกินเข้าค่าที่พัก (บาท)', key: 'offset_accom', width: 28 },
+    { header: 'คงเหลือค่าที่พักที่ต้องโอนเพิ่ม (บาท)', key: 'accom_rem', width: 28 },
+    { header: 'ยอดที่ทางเราต้องโอนคืน (บาท)', key: 'refund_amt', width: 25 },
+    { header: 'สถานะการโอนคืน', key: 'refund_status', width: 22 },
+    { header: 'หมายเหตุสรุปรายบุคคล', key: 'note', width: 65 }
+  ];
+
+  // Top summary banner rows inside staffSheet
+  const sRow1 = staffSheet.getRow(1);
+  sRow1.values = [
+    'สรุปภาพรวม Staff & การโอนเงินคืน:',
+    `Staff ทั้งหมด ${staffMetrics.allStaff.length} คน (มมส ${staffMetrics.msuStaff.length} คน [280 บ.] • ต่างมหาลัย ${staffMetrics.externalStaff.length} คน [เสื้อ 280 + ที่พัก 200 = 480 บ.])`,
+    '', '',
+    `หักลบเงินโอนเกินเข้าค่าที่พักแล้ว: ${staffMetrics.externalStaffOffsetList.length} คน (รวม ${staffMetrics.externalStaffTotalOffsetAmount} บาท)`,
+    '', '',
+    `คงเหลือค้างค่าที่พัก Staff ต่างมหาลัย: ${staffMetrics.externalStaffUnpaidAccomList.length} คน (รวม ${staffMetrics.externalStaffUnpaidAccomAmount} บาท)`,
+    '', '',
+    `ต้องโอนคืนทั้งหมด: ${staffMetrics.totalRefundPeopleCount} คน (${staffMetrics.totalRefundAmount} บาท) | โอนคืนแล้ว: ${staffMetrics.refundedPeopleCount} คน (${staffMetrics.refundedAmount} บาท) | เหลือต้องโอนคืน: ${staffMetrics.pendingRefundPeopleCount} คน (${staffMetrics.pendingRefundAmount} บาท)`
+  ];
+  sRow1.height = 26;
+  sRow1.font = { name: 'Sarabun', size: 11, bold: true, color: { argb: 'FF1E1B4B' } };
+
+  const sHeaderRow = staffSheet.getRow(3);
+  sHeaderRow.values = staffSheet.columns.map(c => c.header);
+  sHeaderRow.height = 28;
+  sHeaderRow.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4C1D95' } };
+    cell.font = { name: 'Sarabun', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+
+  staffMetrics.allStaff.forEach(({ reg: sr, summary: ss }, sIdx) => {
+    const pName = resolvePersonFullNameWithTitle(sr).fullName;
+    const uShort = resolveUniversityInfo(sr).shortTag;
+    const row = staffSheet.addRow({
+      idx: sIdx + 1,
+      full_name: pName,
+      uni_short: uShort,
+      staff_tier: ss.isMsu ? 'Staff มมส (เฉพาะค่าเสื้อ 280 บ.)' : 'Staff ต่างมหาลัย (เสื้อ 280 + ที่พัก 200 = 480 บ.)',
+      shirt_fee: ss.shirtFee,
+      accom_fee: ss.accommodationFee,
+      total_fee: ss.totalStaffFee,
+      actual_paid: (ss.r1SlipAmount || STAFF_SHIRT_FEE) + ss.r2SlipAmount,
+      offset_accom: ss.offsetToAccommodation,
+      accom_rem: ss.accommodationRemaining,
+      refund_amt: ss.overpaidAmount,
+      refund_status: ss.overpaidAmount > 0 ? (ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน') : 'ไม่ต้องโอนคืน',
+      note: ss.summaryNote
+    });
+    row.height = 24;
+  });
+
   const worksheet = workbook.addWorksheet('ผู้สมัคร JRE 2027', {
     views: [{ state: 'frozen', ySplit: 1, xSplit: 5 }]
   });
@@ -202,7 +272,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'จ่ายครั้งแรกวันที่', key: 'paid_round1_date', width: 22 },
     { header: 'จำนวนเงินงวดที่ 1', key: 'paid_round1_amount', width: 22 },
     { header: 'ครั้งที่ 2 วันที่', key: 'paid_round2_date', width: 22 },
-    { header: 'จำนวนเงินงวดที่ 2', key: 'paid_round2_amount', width: 22 },
+    { header: 'จำนวนเงินงวดที่ 2 / ค่าที่พัก Staff', key: 'paid_round2_amount', width: 26 },
     { header: 'มียอดค้างชำระไหม', key: 'remaining_balance_status', width: 26 },
     { header: 'รูปทำบัตร ID Card (รูปภาพจริง)', key: 'id_card_photo', width: 22 },
     { header: 'ไซส์เสื้อฝึก JRE 2027', key: 'shirt_size', width: 18 },
@@ -228,7 +298,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     { header: 'ชำระเต็ม: รูปสลิปโอนเงิน (รูปภาพจริง)', key: 'full_slip', width: 22 },
     { header: 'รายการเอกสารแนบ', key: 'submitted_docs', width: 30 },
     { header: 'ดูแลพิเศษ', key: 'special_care', width: 16 },
-    { header: 'หมายเหตุพิเศษ', key: 'special_notes', width: 26 },
+    { header: 'หมายเหตุพิเศษ / หมายเหตุการเงินและโอนคืน', key: 'special_notes', width: 42 },
     { header: 'วันเวลาที่สมัคร', key: 'created_at', width: 20 }
   ];
 
@@ -276,22 +346,25 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     const { title, firstName, lastName } = resolveFirstAndLastName(r);
     const isStaff = isStaffRegistration(r);
+    const staffSum = isStaff ? getStaffPaymentSummary(r) : null;
     const gender = resolveGender(r);
     const uniInfo = resolveUniversityInfo(r);
     const isMsu = isMsuInstitution(r.institution);
-    const totalFee = isStaff ? STAFF_SHIRT_FEE : (isMsu ? 650 : 850);
+    const totalFee = isStaff ? staffSum.totalStaffFee : (isMsu ? 650 : 850);
     const round1Amount = isStaff ? STAFF_SHIRT_FEE : 400;
-    const round2Amount = isStaff ? 0 : (isMsu ? 250 : 450);
+    const round2Amount = isStaff ? staffSum.accommodationFee : (isMsu ? 250 : 450);
 
     let paidAmount = 0;
-    const isR1Paid = r.installment_1_status === 'paid';
+    const isR1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid';
     const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
     if (isStaff) {
-      if (r.payment_status === 'paid' || isR1Paid) {
-        paidAmount = STAFF_SHIRT_FEE;
+      if (staffSum.isMsu) {
+        paidAmount = isR1Paid ? STAFF_SHIRT_FEE : 0;
+      } else {
+        paidAmount = (isR1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal;
       }
     } else if (r.payment_plan === 'installment') {
-      if (isR1Paid) paidAmount += round1Amount;
+      if (r.installment_1_status === 'paid') paidAmount += round1Amount;
       if (isR2Paid) paidAmount += round2Amount;
     } else {
       if (r.payment_status === 'paid') paidAmount = totalFee;
@@ -300,17 +373,11 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     let paymentStatusDesc = '';
     if (isStaff) {
-      if (r.payment_status === 'paid' || isR1Paid) {
-        paymentStatusDesc = 'Staff (ชำระค่าเสื้อ 280 บ. ครั้งเดียวแล้ว)';
-      } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
-        paymentStatusDesc = 'Staff (รอตรวจสลิป 280 บ.)';
-      } else {
-        paymentStatusDesc = 'Staff (ค้างชำระค่าเสื้อ 280 บ.)';
-      }
+      paymentStatusDesc = staffSum.summaryNote;
     } else if (r.payment_plan === 'installment') {
-      if (isR1Paid && isR2Paid) {
+      if (r.installment_1_status === 'paid' && isR2Paid) {
         paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
-      } else if (isR1Paid) {
+      } else if (r.installment_1_status === 'paid') {
         paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
       } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
         paymentStatusDesc = 'ผ่อนชำระ (รอตรวจสอบสลิป)';
@@ -348,8 +415,10 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     let paidRound1Amount = '';
     if (isStaff) {
-      if (r.payment_status === 'paid' || isR1Paid) {
-        paidRound1Amount = '280 บาท (ค่าเสื้อ Staff จ่ายครั้งเดียว)';
+      if (isR1Paid) {
+        paidRound1Amount = staffSum.r1SlipAmount > STAFF_SHIRT_FEE
+          ? `โอนจริง ${staffSum.r1SlipAmount} บ. (หักเสื้อ 280${!staffSum.isMsu ? ` + หักที่พัก ${staffSum.offsetToAccommodation}` : ` / โอนคืน +${staffSum.overpaidAmount}`} บ.)`
+          : '280 บาท (ค่าเสื้อ Staff)';
       } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
         paidRound1Amount = '280 บาท (Staff รอตรวจสอบ)';
       } else {
@@ -374,7 +443,12 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound2Date = '-';
-    if (!isStaff && r.payment_plan === 'installment') {
+    if (isStaff) {
+      if (staffSum.isMsu) paidRound2Date = 'ไม่มีค่าที่พัก (มมส)';
+      else if (r.installment_2_slip_date) paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
+      else if (staffSum.isAccommodationPaid) paidRound2Date = 'ชำระค่าที่พักครบแล้ว';
+      else paidRound2Date = 'ยังไม่ชำระค่าที่พัก';
+    } else if (r.payment_plan === 'installment') {
       if (r.installment_2_slip_date) {
         paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
       } else if (isR2Paid) {
@@ -382,12 +456,15 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       } else {
         paidRound2Date = 'ยังไม่ชำระ';
       }
-    } else {
-      paidRound2Date = '-';
     }
 
     let paidRound2Amount = '-';
-    if (!isStaff && r.payment_plan === 'installment') {
+    if (isStaff) {
+      if (staffSum.isMsu) paidRound2Amount = '0 บาท (Staff มมส)';
+      else if (staffSum.isAccommodationPaid) paidRound2Amount = '200 บาท (ชำระครบแล้ว)';
+      else if (staffSum.isOffsetApplied) paidRound2Amount = `ที่พัก 200 บ. (หักลบส่วนเกิน -${staffSum.offsetToAccommodation} บ. เหลือค้าง ${staffSum.accommodationRemaining} บ.)`;
+      else paidRound2Amount = '200 บาท (ค้างค่าที่พัก Staff ต่างมหาลัย)';
+    } else if (r.payment_plan === 'installment') {
       if (isR2Paid) {
         paidRound2Amount = `${round2Amount} บาท`;
       } else if (r.installment_2_status === 'pending_review' && r.installment_2_slip_url) {
@@ -395,23 +472,26 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       } else {
         paidRound2Amount = `${round2Amount} บาท (ยังไม่ชำระ)`;
       }
-    } else {
-      paidRound2Amount = '-';
     }
 
     const remainingBalanceStatus = remainingAmount === 0 
-      ? 'ไม่มี (ชำระครบถ้วนแล้ว)' 
-      : `มียอดค้างชำระ ${remainingAmount} บาท`;
+      ? (isStaff && staffSum.overpaidAmount > 0 ? `ชำระครบแล้ว (ทางเราต้องโอนคืนส่วนเกิน +${staffSum.overpaidAmount} บาท)` : 'ไม่มี (ชำระครบถ้วนแล้ว)') 
+      : `มียอดค้างชำระ ${remainingAmount} บาท${isStaff && !staffSum.isMsu ? ' (ค่าที่พัก Staff ต่างมหาลัย)' : ''}`;
 
     const docsSummary = Array.isArray(r.requested_docs) && r.requested_docs.length > 0
-      ? r.requested_docs.map(d => `${d.title}: [${d.status}] ${d.file_url ? 'มีไฟล์แนบ' : 'ยังไม่แนบ'}`).join(' | ')
+      ? r.requested_docs.map(d => `${d.title || d.doc_type}: [${d.status}] ${d.file_url ? 'มีไฟล์แนบ' : 'ยังไม่แนบ'}`).join(' | ')
       : 'ไม่มีคำขอเอกสารเพิ่มเติม';
+
+    const combinedSpecialNotes = [
+      r.special_notes || '',
+      isStaff ? staffSum.summaryNote : (r.payment_notes || '')
+    ].filter(Boolean).join(' | ');
 
     const rowData = {
       index: i + 1,
       uni_short: uniInfo.shortTag,
       gender: gender,
-      role_label: isStaff ? 'Staff (ค่าเสื้อ 280 บ. ครั้งเดียว)' : 'ผู้เข้าอบรมปกติ',
+      role_label: isStaff ? (staffSum.isMsu ? 'Staff มมส (280 บ.)' : 'Staff ต่างมหาลัย (480 บ.)') : 'ผู้เข้าอบรมปกติ',
       title: title || '-',
       first_name: firstName || '-',
       last_name: lastName || '-',
@@ -441,21 +521,21 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       age_full: `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,
       blood_group: r.blood_group || '-',
       emergency_relation: r.emergency_relation || '-',
-      institution_tier: isStaff ? `Staff ${uniInfo.shortTag} (ค่าเสื้อ 280 บาท ครั้งเดียว)` : (isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)'),
+      institution_tier: isStaff ? `Staff ${uniInfo.shortTag} (${staffSum.isMsu ? 'เสื้อ 280 บ.' : 'เสื้อ 280 + ที่พัก 200 = 480 บ.'})` : (isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)'),
       total_fee: totalFee,
       paid_amount: paidAmount,
       remaining_amount: remainingAmount,
-      round1_status: isStaff ? 'ไม่แบ่งงวด (Staff 280 บ.)' : (r.installment_1_status === 'paid' ? 'ชำระแล้ว' : r.installment_1_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
+      round1_status: isStaff ? (isR1Paid ? 'ชำระค่าเสื้อแล้ว (280 บ.)' : 'ค้างชำระ') : (r.installment_1_status === 'paid' ? 'ชำระแล้ว' : r.installment_1_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
       round1_slip: '',
       round1_notes: r.installment_1_notes || '',
-      round2_status: isStaff ? 'ไม่แบ่งงวด (Staff 280 บ.)' : (r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
+      round2_status: isStaff ? (staffSum.isMsu ? 'ไม่มีค่าที่พัก (มมส)' : (staffSum.isAccommodationPaid ? 'ชำระค่าที่พักครบแล้ว' : `ค้างค่าที่พัก ${staffSum.accommodationRemaining} บ.`)) : (r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
       round2_slip: '',
       round2_notes: r.installment_2_notes || '',
       full_slip_date: r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
       full_slip: '',
       submitted_docs: docsSummary,
       special_care: r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ',
-      special_notes: r.special_notes || '',
+      special_notes: combinedSpecialNotes,
       created_at: r.created_at ? new Date(r.created_at).toLocaleString('th-TH') : '-'
     };
 

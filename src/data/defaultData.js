@@ -755,12 +755,16 @@ export const DEFAULT_FORMS_CONFIG = {
 };
 
 export const STAFF_SHIRT_FEE = 280;
+export const STAFF_ACCOMMODATION_FEE = 200;
+export const STAFF_EXTERNAL_TOTAL_FEE = STAFF_SHIRT_FEE + STAFF_ACCOMMODATION_FEE; // 480 บาท (ค่าเสื้อ 280 + ค่าที่พัก 200 สำหรับ Staff ต่างมหาวิทยาลัย)
 
 export const DEFAULT_PAYMENT_CONFIG = {
   fee_total: 850,
   fee_total_msu: 650,
   fee_total_external: 850,
   fee_staff_shirt: 280,
+  fee_staff_accommodation: 200,
+  fee_staff_external_total: 480,
   bank_name: 'ธนาคารไทยพาณิชย์',
   bank_account_number: '594-264865-5',
   bank_account_name: 'นางสาวมัญชุพร ยังเหล็ก',
@@ -772,8 +776,8 @@ export const DEFAULT_PAYMENT_CONFIG = {
   installment_round2_amount: 450,
   installment_round2_amount_msu: 250,
   installment_round2_amount_external: 450,
-  installment_round2_due: '1-5 พฤศจิกายน 2569 (สำหรับค่าใช้จ่ายด้านที่พักและอาหาร / นิสิต มมส 250 บ. ต่างสถาบัน 450 บ.)',
-  notes: 'ต่างมหาวิทยาลัย 850 บาท (รวมค่าที่พักหอพักกุดรัง มมส) / นิสิต มมส 650 บาท (ไม่มีค่าที่พัก) / Staff โครงการ 280 บาท (ค่าเสื้อฝึก) • แบ่งชำระ 2 รอบ (รอบ 1: 400 บาท [15-20 ต.ค. 2569], รอบ 2: 450/250 บาท [1-5 พ.ย. 2569])',
+  installment_round2_due: '1-5 พฤศจิกายน 2569 (สำหรับค่าใช้จ่ายด้านที่พักและอาหาร / นิสิต มมส 250 บ. ต่างสถาบัน 450 บ. / Staff ต่างสถาบัน ค่าที่พัก 200 บ.)',
+  notes: 'ต่างมหาวิทยาลัย 850 บาท (รวมค่าที่พักหอพักกุดรัง มมส) / นิสิต มมส 650 บาท (ไม่มีค่าที่พัก) / Staff มมส 280 บาท (ค่าเสื้อฝึก) / Staff ต่างมหาวิทยาลัย 480 บาท (ค่าเสื้อฝึก 280 บ. + ค่าที่พัก 200 บ.)',
   // Registration Schedule & Live Countdown Settings:
   reg_open_datetime: '2026-10-15T08:30:00',
   reg_close_datetime: '2026-10-20T23:59:59',
@@ -812,11 +816,11 @@ export const isMsuInstitution = (inst) => {
 
 export const STAFF_ROLE_OPTIONS = [
   { value: 'participant', label: '👤 ผู้เข้าอบรมทั่วไป (Participant)', isStaff: false },
-  { value: 'committee', label: '🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)', isStaff: true, badge: 'คณะกรรมการดำเนินงาน (STAFF)' },
-  { value: 'dev', label: '💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)', isStaff: true, badge: 'ผู้พัฒนาระบบ (DEV / STAFF)' },
-  { value: 'mc', label: '🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)', isStaff: true, badge: 'พิธีกร (STAFF)' },
-  { value: 'photographer', label: '📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (280 บ.)', isStaff: true, badge: 'ช่างภาพ (STAFF)' },
-  { value: 'staff', label: '🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)', isStaff: true, badge: 'สตาฟโครงการ (STAFF)' }
+  { value: 'committee', label: '🛠️ (STAFF) คณะกรรมการดำเนินงาน (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'คณะกรรมการดำเนินงาน (STAFF)' },
+  { value: 'dev', label: '💻 (STAFF) ผู้พัฒนาระบบ Dev (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'ผู้พัฒนาระบบ (DEV / STAFF)' },
+  { value: 'mc', label: '🎤 (STAFF) พิธีกรดำเนินรายการ (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'พิธีกร (STAFF)' },
+  { value: 'photographer', label: '📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'ช่างภาพ (STAFF)' },
+  { value: 'staff', label: '🛠️ (STAFF) สตาฟโครงการทั่วไป (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'สตาฟโครงการ (STAFF)' }
 ];
 
 export const OFFICIAL_COMMITTEE_NAMES = [
@@ -876,23 +880,26 @@ export const isStaffRegistration = (reg) => {
     return true;
   }
 
-  // ตรวจจากยอดสลิป OCR หรือยอดเงินที่บันทึกว่าเป็น 280 บาท
+  // ตรวจจากยอดสลิป OCR หรือยอดเงินที่บันทึกว่าเป็น 280 บาท (ค่าเสื้อ Staff) หรือ 480 บาท (ค่าเสื้อ 280 + ค่าที่พัก Staff ต่างมหาลัย 200)
   const ocrFullAmt = Number(reg.slip_ocr_full?.amount || 0);
   const ocrR1Amt = Number(reg.slip_ocr_round1?.amount || 0);
   const paymentAmt = Number(reg.payment_amount || 0);
-  if (Math.abs(ocrFullAmt - STAFF_SHIRT_FEE) <= 0.01) return true;
-  if (Math.abs(ocrR1Amt - STAFF_SHIRT_FEE) <= 0.01) return true;
-  if (Math.abs(paymentAmt - STAFF_SHIRT_FEE) <= 0.01) return true;
+  if (Math.abs(ocrFullAmt - STAFF_SHIRT_FEE) <= 0.01 || Math.abs(ocrFullAmt - STAFF_EXTERNAL_TOTAL_FEE) <= 0.01) return true;
+  if (Math.abs(ocrR1Amt - STAFF_SHIRT_FEE) <= 0.01 || Math.abs(ocrR1Amt - STAFF_EXTERNAL_TOTAL_FEE) <= 0.01) return true;
+  if (Math.abs(paymentAmt - STAFF_SHIRT_FEE) <= 0.01 || Math.abs(paymentAmt - STAFF_EXTERNAL_TOTAL_FEE) <= 0.01) return true;
 
   // ตรวจจากหมายเหตุการโอนเงินและหมายเหตุแอดมิน (รองรับกรณีจ่ายเกินมาแต่แอดมินหมายเหตุว่า (STAFF))
-  const notesStr = `${reg.payment_notes || ''} ${reg.installment_1_notes || ''} ${reg.special_notes || ''} ${reg.admin_private_notes || ''}`.toLowerCase();
+  const safeSpecialNotes = (reg.special_notes && !String(reg.special_notes).trim().startsWith('{') && !String(reg.special_notes).startsWith('__JSON__:'))
+    ? reg.special_notes
+    : (reg.user_notes || '');
+  const notesStr = `${reg.payment_notes || ''} ${reg.installment_1_notes || ''} ${safeSpecialNotes} ${reg.admin_private_notes || ''}`.toLowerCase();
   if (
     notesStr.includes('(staff)') ||
     notesStr.includes('[staff]') ||
     notesStr.includes('เป็น staff') ||
     notesStr.includes('ค่าเสื้อ staff') ||
     notesStr.includes('สตาฟ') ||
-    (notesStr.includes('staff') && notesStr.includes('280'))
+    (notesStr.includes('staff') && (notesStr.includes('280') || notesStr.includes('480')))
   ) {
     return true;
   }
@@ -914,63 +921,286 @@ export const formatStaffCallsign = (rawCallsign = '', shouldBeStaff = false) => 
 };
 
 /**
- * คำนวณสรุปยอดโอนของ Staff และสถานะการโอนเงินส่วนเกินคืน (รองรับกรณีโอน 280 บ. พอดี หรือโอนเกินมา เช่น 400 / 650 / 850 บ.)
+ * คำนวณสรุปยอดโอนของ Staff ค่าเสื้อ (280 บ.) + ค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัยที่ไม่ใช่ มมส (200 บ.)
+ * พร้อมระบบหักลบเงินที่โอนเกินมาในรอบแรกเข้ากับค่าที่พัก 200 บ. อัตโนมัติ และคำนวณยอดคงเหลือ/ยอดที่ต้องโอนคืนสุทธิ
  */
 export const getStaffPaymentSummary = (reg) => {
   if (!reg) {
     return {
       isStaff: false,
+      isMsu: false,
       staffRoleType: 'participant',
       staffRoleLabel: 'ผู้เข้าอบรมทั่วไป',
+      shirtFee: STAFF_SHIRT_FEE,
+      accommodationFee: 0,
+      staffFee: STAFF_SHIRT_FEE,
+      totalStaffFee: STAFF_SHIRT_FEE,
+      r1SlipAmount: 0,
+      r2SlipAmount: 0,
       actualSlipAmount: 0,
+      overpaidShirtAmount: 0,
+      offsetToAccommodation: 0,
+      isOffsetApplied: false,
+      accommodationNetRequiredAfterOffset: 0,
+      accommodationPaidFromR2: 0,
+      accommodationPaidTotal: 0,
+      accommodationRemaining: 0,
+      isAccommodationPaid: false,
+      isAccommodationPendingReview: false,
       overpaidAmount: 0,
       isOverpaid: false,
-      staffFee: STAFF_SHIRT_FEE,
       refundStatus: 'none',
       isRefunded: false,
       refundSlipUrl: '',
       refundBankName: '',
       refundBankAccount: '',
       refundAccountHolder: '',
-      refundCitizenId: ''
+      refundCitizenId: '',
+      summaryNote: ''
     };
   }
+
   const isStaff = isStaffRegistration(reg);
+  const isMsu = isMsuInstitution(reg);
   const staffRoleType = isStaff ? resolveStaffRoleType(reg) : 'participant';
   const matchedOption = STAFF_ROLE_OPTIONS.find(o => o.value === staffRoleType) || STAFF_ROLE_OPTIONS[1];
+
+  const shirtFee = STAFF_SHIRT_FEE; // 280 บาท
+  const accommodationFee = isStaff ? (isMsu ? 0 : STAFF_ACCOMMODATION_FEE) : 0; // มมส = 0 บาท, ต่างมหาลัย = 200 บาท
+  const totalStaffFee = shirtFee + accommodationFee; // มมส = 280 บาท, ต่างมหาลัย = 480 บาท
+
   const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
   const ocrR1 = Number(reg.slip_ocr_round1?.amount || 0);
   const ocrR2 = Number(reg.slip_ocr_round2?.amount || 0);
-  const detectedSlipAmt = ocrFull > 0 ? ocrFull : (ocrR1 + ocrR2 > 0 ? ocrR1 + ocrR2 : 0);
-  const fallbackPaidAmt = (reg.payment_status === 'paid' || reg.installment_1_status === 'paid')
-    ? (detectedSlipAmt > 0 ? detectedSlipAmt : STAFF_SHIRT_FEE)
-    : detectedSlipAmt;
-  const computedOverpaid = isStaff && fallbackPaidAmt > STAFF_SHIRT_FEE
-    ? fallbackPaidAmt - STAFF_SHIRT_FEE
+
+  // ยอดสลิปรอบแรก / สลิปหลัก
+  const primarySlipDetected = ocrR1 > 0 ? ocrR1 : (ocrFull > 0 ? ocrFull : 0);
+  const isR1MarkedPaid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || primarySlipDetected >= shirtFee;
+  const r1SlipAmount = primarySlipDetected > 0 ? primarySlipDetected : (isR1MarkedPaid ? shirtFee : 0);
+
+  // คำนวณส่วนเกินจากค่าเสื้อ 280 บ. และนำไปหักลบกับค่าที่พัก 200 บ. (เฉพาะ Staff ต่างมหาวิทยาลัยที่ไม่ใช่ มมส)
+  const overpaidShirtAmount = isStaff ? Math.max(0, r1SlipAmount - shirtFee) : 0;
+  const offsetToAccommodation = (isStaff && !isMsu) ? Math.min(accommodationFee, overpaidShirtAmount) : 0;
+  const isOffsetApplied = offsetToAccommodation > 0;
+  const accommodationNetRequiredAfterOffset = Math.max(0, accommodationFee - offsetToAccommodation);
+
+  // ตรวจสอบการชำระค่าที่พักเพิ่มเติมในรอบที่ 2 (หรือสลิปค่าที่พัก)
+  const hasRealR2Payment = Boolean(
+    reg.staff_accommodation_paid === true ||
+    (reg.installment_2_status === 'paid' && (Boolean(reg.installment_2_slip_url) || ocrR2 > 0))
+  );
+  const r2SlipAmount = ocrR2 > 0 ? ocrR2 : (hasRealR2Payment ? accommodationNetRequiredAfterOffset : 0);
+  const accommodationPaidFromR2 = (reg.installment_2_status === 'paid' && (hasRealR2Payment || ocrR2 > 0))
+    ? (ocrR2 > 0 ? ocrR2 : accommodationNetRequiredAfterOffset)
     : 0;
-  const overpaidAmount = Number(reg.overpaid_amount || reg.refund_amount || computedOverpaid || 0);
+
+  const accommodationPaidTotal = (isStaff && !isMsu)
+    ? Math.min(accommodationFee, offsetToAccommodation + accommodationPaidFromR2)
+    : 0;
+  const accommodationRemaining = (isStaff && !isMsu)
+    ? Math.max(0, accommodationFee - accommodationPaidTotal)
+    : 0;
+  const isAccommodationPaid = isStaff ? (isMsu ? true : accommodationRemaining <= 0) : false;
+  const isAccommodationPendingReview = Boolean(
+    isStaff &&
+    !isMsu &&
+    accommodationRemaining > 0 &&
+    (reg.installment_2_status === 'pending_review' ||
+      (Boolean(reg.installment_2_slip_url) && reg.installment_2_status !== 'rejected' && reg.installment_2_status !== 'paid'))
+  );
+
+  // ยอดโอนจริงรวมทั้งหมด
+  const actualSlipAmount = r1SlipAmount + (reg.installment_2_status === 'paid' ? accommodationPaidFromR2 : (ocrR2 > 0 ? ocrR2 : 0));
+
+  // คำนวณยอดโอนเกินสุทธิที่ทางโครงการต้องโอนคืน (หลังจากหักค่าเสื้อ 280 บ. และหักค่าที่พัก 200 บ. สำหรับต่างมหาวิทยาลัยแล้ว)
+  const computedNetOverpaid = isStaff && actualSlipAmount > totalStaffFee
+    ? actualSlipAmount - totalStaffFee
+    : 0;
+
+  // หากมีผลรวมสลิปจริง ให้ยึดตามการคำนวณหักลบสุทธิ (เพื่อไม่ให้ค่า overpaid_amount เก่าก่อนมีค่าที่พัก 200 บ. มาค้าง)
+  let overpaidAmount = 0;
+  if (isStaff) {
+    if (actualSlipAmount > 0) {
+      overpaidAmount = computedNetOverpaid;
+    } else {
+      const legacyOverpaid = Number(reg.overpaid_amount || reg.refund_amount || 0);
+      overpaidAmount = isMsu ? legacyOverpaid : Math.max(0, legacyOverpaid - accommodationFee);
+    }
+  }
+
   const isOverpaid = isStaff && overpaidAmount > 0;
   const hasBankInfo = Boolean((reg.refund_bank_account || '').trim() && (reg.refund_bank_name || '').trim());
-  let refundStatus = reg.refund_status || (isOverpaid ? (hasBankInfo ? 'info_submitted' : 'pending_refund') : 'none');
-  if (reg.refund_slip_url && refundStatus !== 'refunded') {
-    refundStatus = 'refunded';
+  let refundStatus = 'none';
+  if (isOverpaid) {
+    if (reg.refund_slip_url || reg.refund_status === 'refunded') {
+      refundStatus = 'refunded';
+    } else if (hasBankInfo || reg.refund_status === 'info_submitted') {
+      refundStatus = 'info_submitted';
+    } else {
+      refundStatus = 'pending_refund';
+    }
+  }
+
+  // สร้างข้อความสรุปและหมายเหตุชัดเจน
+  let summaryNote = '';
+  if (isStaff) {
+    if (isMsu) {
+      if (isOverpaid) {
+        summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) โอนมา ${actualSlipAmount} บ. -> โอนเกินสุทธิ +${overpaidAmount} บ. (${refundStatus === 'refunded' ? 'โอนคืนแล้ว' : 'ทางเราต้องโอนคืน'})`;
+      } else if (actualSlipAmount >= shirtFee) {
+        summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) ชำระครบถ้วนแล้ว ${actualSlipAmount} บ. (ไม่ต้องโอนคืน)`;
+      } else {
+        summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) ค้างชำระ ${Math.max(0, shirtFee - actualSlipAmount)} บ.`;
+      }
+    } else {
+      // Staff ต่างมหาวิทยาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.)
+      if (isOverpaid) {
+        summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนมา ${actualSlipAmount} บ. หักค่าเสื้อและค่าที่พักครบแล้ว -> เหลือยอดโอนเกินที่ต้องโอนคืน +${overpaidAmount} บ. (${refundStatus === 'refunded' ? 'โอนคืนแล้ว' : 'รอโอนคืน'})`;
+      } else if (isOffsetApplied && accommodationRemaining > 0) {
+        summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนรอบแรกมา ${r1SlipAmount} บ. (เกินค่าเสื้อมา +${overpaidShirtAmount} บ. นำไปหักลบค่าที่พัก ${accommodationFee} บ.) -> คงเหลือต้องชำระค่าที่พักเพิ่ม ${accommodationRemaining} บ. (ไม่ต้องโอนเงินคืน)`;
+      } else if (isOffsetApplied && accommodationRemaining === 0) {
+        summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) หักลบส่วนเกิน +${offsetToAccommodation} บ. และชำระค่าที่พักครบถ้วนแล้ว (รวม ${totalStaffFee} บ. ไม่ต้องโอนคืน)`;
+      } else if (accommodationRemaining > 0) {
+        summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) ชำระค่าเสื้อแล้ว ${r1SlipAmount} บ. -> คงเหลือค้างชำระค่าที่พัก ${accommodationRemaining} บ.`;
+      } else {
+        summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) ชำระค่าเสื้อและค่าที่พักครบถ้วนแล้ว ${actualSlipAmount} บ.`;
+      }
+    }
   }
 
   return {
     isStaff,
+    isMsu,
     staffRoleType,
     staffRoleLabel: isStaff ? (matchedOption.badge || 'คณะกรรมการดำเนินงาน (STAFF)') : 'ผู้เข้าอบรมทั่วไป',
-    actualSlipAmount: fallbackPaidAmt,
+    shirtFee,
+    accommodationFee,
+    staffFee: totalStaffFee,
+    totalStaffFee,
+    r1SlipAmount,
+    r2SlipAmount,
+    actualSlipAmount,
+    overpaidShirtAmount,
+    offsetToAccommodation,
+    isOffsetApplied,
+    accommodationNetRequiredAfterOffset,
+    accommodationPaidFromR2,
+    accommodationPaidTotal,
+    accommodationRemaining,
+    isAccommodationPaid,
+    isAccommodationPendingReview,
     overpaidAmount,
     isOverpaid,
-    staffFee: STAFF_SHIRT_FEE,
     refundStatus,
-    isRefunded: refundStatus === 'refunded',
-    refundSlipUrl: reg.refund_slip_url || '',
+    isRefunded: isOverpaid && refundStatus === 'refunded',
+    refundSlipUrl: isOverpaid ? (reg.refund_slip_url || '') : '',
     refundBankName: reg.refund_bank_name || '',
     refundBankAccount: reg.refund_bank_account || '',
     refundAccountHolder: reg.refund_account_holder || `${reg.first_name || ''} ${reg.last_name || ''}`.trim(),
-    refundCitizenId: reg.refund_citizen_id || ''
+    refundCitizenId: reg.refund_citizen_id || '',
+    summaryNote
+  };
+};
+
+/**
+ * คำนวณสรุปภาพรวมของ Staff ทั้งหมด (มมส vs ต่างมหาวิทยาลัย), การหักลบค่าที่พัก 200 บ. และสรุปยอดที่ทางโครงการต้องโอนคืน
+ */
+export const computeStaffAndRefundMetrics = (registrations = []) => {
+  const allStaff = [];
+  const msuStaff = [];
+  const externalStaff = [];
+  const externalStaffOffsetList = [];
+  const externalStaffUnpaidAccomList = [];
+  const externalStaffPaidAccomList = [];
+  const externalStaffPendingReviewAccomList = [];
+  const refundList = [];
+  const refundedList = [];
+  const pendingRefundList = [];
+  const infoSubmittedRefundList = [];
+  const waitingBankInfoRefundList = [];
+
+  (registrations || []).forEach(reg => {
+    if (!reg) return;
+    const summary = getStaffPaymentSummary(reg);
+    if (!summary.isStaff) return;
+
+    const item = {
+      reg,
+      summary,
+      id: reg.id,
+      fullName: resolvePersonFullNameWithTitle(reg).fullName,
+      uniInfo: resolveUniversityInfo(reg)
+    };
+
+    allStaff.push(item);
+
+    if (summary.isMsu) {
+      msuStaff.push(item);
+    } else {
+      externalStaff.push(item);
+      if (summary.isOffsetApplied) {
+        externalStaffOffsetList.push(item);
+      }
+      if (summary.accommodationRemaining > 0) {
+        externalStaffUnpaidAccomList.push(item);
+        if (summary.isAccommodationPendingReview) {
+          externalStaffPendingReviewAccomList.push(item);
+        }
+      } else {
+        externalStaffPaidAccomList.push(item);
+      }
+    }
+
+    if (summary.isOverpaid && summary.overpaidAmount > 0) {
+      refundList.push(item);
+      if (summary.isRefunded) {
+        refundedList.push(item);
+      } else {
+        pendingRefundList.push(item);
+        if (summary.refundStatus === 'info_submitted') {
+          infoSubmittedRefundList.push(item);
+        } else {
+          waitingBankInfoRefundList.push(item);
+        }
+      }
+    }
+  });
+
+  const externalStaffTotalAccommodationFee = externalStaff.reduce((sum, x) => sum + x.summary.accommodationFee, 0);
+  const externalStaffTotalOffsetAmount = externalStaffOffsetList.reduce((sum, x) => sum + x.summary.offsetToAccommodation, 0);
+  const externalStaffPaidAccomAmount = externalStaff.reduce((sum, x) => sum + x.summary.accommodationPaidTotal, 0);
+  const externalStaffUnpaidAccomAmount = externalStaffUnpaidAccomList.reduce((sum, x) => sum + x.summary.accommodationRemaining, 0);
+
+  const totalRefundPeopleCount = refundList.length;
+  const totalRefundAmount = refundList.reduce((sum, x) => sum + x.summary.overpaidAmount, 0);
+  const refundedPeopleCount = refundedList.length;
+  const refundedAmount = refundedList.reduce((sum, x) => sum + x.summary.overpaidAmount, 0);
+  const pendingRefundPeopleCount = pendingRefundList.length;
+  const pendingRefundAmount = pendingRefundList.reduce((sum, x) => sum + x.summary.overpaidAmount, 0);
+
+  return {
+    allStaff,
+    msuStaff,
+    externalStaff,
+    externalStaffTotalAccommodationFee,
+    externalStaffOffsetList,
+    externalStaffTotalOffsetAmount,
+    externalStaffPaidAccomList,
+    externalStaffPaidAccomAmount,
+    externalStaffUnpaidAccomList,
+    externalStaffUnpaidAccomAmount,
+    externalStaffPendingReviewAccomList,
+    refundList,
+    totalRefundPeopleCount,
+    totalRefundAmount,
+    refundedList,
+    refundedPeopleCount,
+    refundedAmount,
+    pendingRefundList,
+    pendingRefundPeopleCount,
+    pendingRefundAmount,
+    infoSubmittedRefundList,
+    waitingBankInfoRefundList
   };
 };
 
@@ -1472,18 +1702,26 @@ export const getRegistrationFeeDetails = (institutionOrReg, explicitIsStaff = fa
   const isMsu = isMsuInstitution(instStr);
 
   if (isStaff) {
+    const staffTotal = isMsu ? STAFF_SHIRT_FEE : STAFF_EXTERNAL_TOTAL_FEE;
+    const staffRound2 = isMsu ? 0 : STAFF_ACCOMMODATION_FEE;
     return {
       isMsu,
       isStaff: true,
-      totalFee: STAFF_SHIRT_FEE, // 280 บาท
+      totalFee: staffTotal, // มมส 280 บาท / ต่างมหาวิทยาลัย 480 บาท (ค่าเสื้อ 280 + ค่าที่พัก 200)
+      shirtFee: STAFF_SHIRT_FEE,
+      accommodationFee: staffRound2,
       round1Amount: STAFF_SHIRT_FEE,
-      round1Due: 'ชำระครั้งเดียว (ค่าเสื้อ Staff 280 บาท)',
-      round1Purpose: 'สำหรับคณะทำงาน / Staff โครงการ JRE 2027 (ชำระเฉพาะค่าเสื้อโครงการ 280 บาท)',
-      round2Amount: 0,
-      round2Due: '-',
-      round2Purpose: 'Staff โครงการไม่ต้องชำระงวดที่ 2',
-      accommodationIncluded: false,
-      feeNote: 'คณะทำงาน / Staff โครงการ ชำระเฉพาะค่าเสื้อ 280 บาท (โอนครั้งเดียว)'
+      round1Due: isMsu ? 'ชำระครั้งเดียว (ค่าเสื้อ Staff 280 บาท)' : 'ค่าเสื้อ Staff 280 บาท (ชำระตอนสมัคร หรือโอนรวม 480 บาท)',
+      round1Purpose: 'สำหรับคณะทำงาน / Staff โครงการ JRE 2027 (ค่าเสื้อโครงการ 280 บาท)',
+      round2Amount: staffRound2,
+      round2Due: isMsu ? '-' : '1-5 พฤศจิกายน 2569 (ค่าที่พัก Staff ต่างมหาวิทยาลัย 200 บาท)',
+      round2Purpose: isMsu
+        ? 'Staff มหาวิทยาลัยมหาสารคาม (มมส) ไม่มีค่าใช้จ่ายด้านที่พัก'
+        : 'ค่าที่พักหอพักกุดรัง มมส สำหรับ Staff ต่างมหาวิทยาลัย (200 บาท/คน • หากโอนรอบแรกเกิน 280 บ. ระบบจะหักลบให้อัตโนมัติ)',
+      accommodationIncluded: !isMsu,
+      feeNote: isMsu
+        ? 'คณะทำงาน / Staff มหาวิทยาลัยมหาสารคาม ชำระเฉพาะค่าเสื้อ 280 บาท (ไม่มีค่าที่พัก)'
+        : 'คณะทำงาน / Staff ต่างมหาวิทยาลัย ชำระรวม 480 บาท (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ. • หากโอนเกินในรอบแรก ระบบจะนำไปหักลบค่าที่พักอัตโนมัติ)'
     };
   }
 

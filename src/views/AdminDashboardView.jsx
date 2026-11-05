@@ -79,11 +79,14 @@ import {
   DEFAULT_SPEAKERS,
   DEFAULT_TEAM_MEMBERS,
   STAFF_SHIRT_FEE,
+  STAFF_ACCOMMODATION_FEE,
+  STAFF_EXTERNAL_TOTAL_FEE,
   OFFICIAL_NETWORK_INSTITUTIONS,
   isMsuInstitution,
   isStaffRegistration,
   formatStaffCallsign,
   getStaffPaymentSummary,
+  computeStaffAndRefundMetrics,
   STAFF_ROLE_OPTIONS,
   resolveStaffRoleType,
   resolveGender,
@@ -759,10 +762,11 @@ export default function AdminDashboardView({
         bucket.participantCount += 1;
       }
 
-      // Financial calculation per person (Staff = 280 single payment, never installment)
+      // Financial calculation per person (MSU Staff = 280 THB shirt only, Non-MSU Staff = 480 THB [280 shirt + 200 accommodation])
       const isMsu = uniInfo.isMsu;
+      const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
       const totalFee = isStaff
-        ? STAFF_SHIRT_FEE
+        ? staffSum.totalStaffFee
         : (isMsu
             ? (paymentConfig?.fee_total_msu || 650)
             : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
@@ -776,7 +780,41 @@ export default function AdminDashboardView({
       const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
       bucket.expectedAmount += totalFee;
 
-      if (isInstallment) {
+      if (isStaff) {
+        const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
+        const isR1Pending = !isR1Paid && (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review');
+        if (staffSum.isMsu) {
+          if (isR1Paid) {
+            bucket.fullyPaidCount += 1;
+            bucket.staffPaidCount += 1;
+            bucket.collectedAmount += STAFF_SHIRT_FEE;
+          } else if (isR1Pending) {
+            bucket.pendingReviewCount += 1;
+            bucket.outstandingAmount += STAFF_SHIRT_FEE;
+          } else {
+            bucket.unpaidCount += 1;
+            bucket.outstandingAmount += STAFF_SHIRT_FEE;
+          }
+        } else {
+          const shirtCol = isR1Paid ? STAFF_SHIRT_FEE : 0;
+          const accomCol = staffSum.accommodationPaidTotal;
+          const staffCol = shirtCol + accomCol;
+          const staffOut = Math.max(0, totalFee - staffCol);
+          bucket.collectedAmount += staffCol;
+          bucket.outstandingAmount += staffOut;
+          if (isR1Paid) bucket.staffPaidCount += 1;
+
+          if (isR1Paid && staffSum.isAccommodationPaid) {
+            bucket.fullyPaidCount += 1;
+          } else if (isR1Pending || staffSum.isAccommodationPendingReview) {
+            bucket.pendingReviewCount += 1;
+          } else if (isR1Paid && staffSum.accommodationRemaining > 0) {
+            bucket.partialPaidCount += 1;
+          } else {
+            bucket.unpaidCount += 1;
+          }
+        }
+      } else if (isInstallment) {
         const isR1Paid = reg.installment_1_status === 'paid';
         const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
         const hasPending = reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review';
@@ -800,11 +838,10 @@ export default function AdminDashboardView({
           bucket.outstandingAmount += totalFee;
         }
       } else {
-        const isPaid = reg.payment_status === 'paid' || (isStaff && reg.installment_1_status === 'paid');
-        const isPending = reg.payment_status === 'pending_review' || (isStaff && reg.installment_1_status === 'pending_review');
+        const isPaid = reg.payment_status === 'paid';
+        const isPending = reg.payment_status === 'pending_review';
         if (isPaid) {
           bucket.fullyPaidCount += 1;
-          if (isStaff) bucket.staffPaidCount += 1;
           bucket.collectedAmount += totalFee;
         } else if (isPending) {
           bucket.pendingReviewCount += 1;
@@ -2100,23 +2137,45 @@ export default function AdminDashboardView({
     setModalGender(resolvedGen === 'หญิง' ? 'หญิง' : (resolvedGen === 'ไม่ระบุ' ? 'ไม่ระบุ' : 'ชาย'));
 
     const isMsu = isMsuInstitution(reg.institution);
+    const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
     const totalFee = isStaff
-      ? STAFF_SHIRT_FEE
+      ? staffSum.totalStaffFee
       : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
     const round1Fee = isMsu ? (paymentConfig?.installment_round1_amount_msu || 400) : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
     const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-    // Staff never has 2-round installment payment
-    const isInstallment = !isStaff && (reg.payment_plan 
-      ? (reg.payment_plan === 'installment') 
-      : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
-    const isR1Paid = reg.installment_1_status === 'paid';
-    const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url || reg.admin_manual_override);
+
+    const isInstallment = isStaff
+      ? (!staffSum.isMsu && (staffSum.accommodationRemaining > 0 || Boolean(reg.installment_2_slip_url)))
+      : (reg.payment_plan
+          ? (reg.payment_plan === 'installment')
+          : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
+    const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
+    const isR2Paid = isStaff
+      ? staffSum.isAccommodationPaid
+      : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url || reg.admin_manual_override));
     const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid' || (isStaff && isR1Paid));
 
     let effStatus = reg.payment_status || 'unpaid';
     let effAmount = reg.payment_amount;
 
-    if (isInstallment) {
+    if (isStaff) {
+      if (staffSum.isMsu) {
+        if (isR1Paid) { effStatus = 'paid'; effAmount = 0; }
+        else if (reg.installment_1_status === 'pending_review') { effStatus = 'pending_review'; effAmount = STAFF_SHIRT_FEE; }
+        else { effStatus = 'unpaid'; effAmount = STAFF_SHIRT_FEE; }
+      } else {
+        if (isR1Paid && staffSum.isAccommodationPaid) {
+          effStatus = 'paid';
+          effAmount = 0;
+        } else if (staffSum.isAccommodationPendingReview || reg.installment_1_status === 'pending_review') {
+          effStatus = 'pending_review';
+          effAmount = staffSum.accommodationRemaining + (isR1Paid ? 0 : STAFF_SHIRT_FEE);
+        } else {
+          effStatus = 'unpaid';
+          effAmount = staffSum.accommodationRemaining + (isR1Paid ? 0 : STAFF_SHIRT_FEE);
+        }
+      }
+    } else if (isInstallment) {
       if (isBothPaid) {
         effStatus = 'paid';
         effAmount = 0;
@@ -2128,9 +2187,7 @@ export default function AdminDashboardView({
         effAmount = totalFee;
       }
     } else {
-      if (isStaff && isR1Paid) effStatus = 'paid';
-      else if (isStaff && reg.installment_1_status === 'pending_review') effStatus = 'pending_review';
-      effAmount = (effStatus === 'paid') ? 0 : (isStaff ? STAFF_SHIRT_FEE : (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee));
+      effAmount = (effStatus === 'paid') ? 0 : (reg.payment_amount !== undefined && reg.payment_amount !== null ? reg.payment_amount : totalFee);
     }
 
     setModalPaymentPlan(isInstallment ? 'installment' : 'full');
@@ -2139,12 +2196,12 @@ export default function AdminDashboardView({
     setModalPaymentBank(reg.payment_bank_info || 'ธนาคารไทยพาณิชย์ (SCB) เลขที่ 594-264865-5 ชื่อบัญชี นางสาวมัญชุพร ยังเหล็ก');
     setModalPaymentNotes(reg.payment_notes || '');
     setModalPaymentSlipUrl(reg.payment_slip_url || reg.slip_url || '');
-    setModalInstallment1Status(reg.installment_1_status || (effStatus === 'paid' ? 'paid' : 'unpaid'));
+    setModalInstallment1Status(reg.installment_1_status || (isR1Paid ? 'paid' : 'unpaid'));
     setModalInstallment1Amount(reg.installment_1_amount !== undefined ? reg.installment_1_amount : (isStaff ? STAFF_SHIRT_FEE : round1Fee));
     setModalInstallment1Notes(reg.installment_1_notes || '');
     setModalInstallment1SlipUrl(reg.installment_1_slip_url || '');
-    setModalInstallment2Status(reg.installment_2_status || 'unpaid');
-    setModalInstallment2Amount(reg.installment_2_amount !== undefined ? reg.installment_2_amount : (isStaff ? 0 : round2Fee));
+    setModalInstallment2Status(isStaff ? (staffSum.isMsu ? 'unpaid' : (staffSum.isAccommodationPaid ? 'paid' : (staffSum.isAccommodationPendingReview ? 'pending_review' : (reg.installment_2_status || 'unpaid')))) : (reg.installment_2_status || 'unpaid'));
+    setModalInstallment2Amount(isStaff ? (staffSum.isMsu ? 0 : staffSum.accommodationNetRequiredAfterOffset) : (reg.installment_2_amount !== undefined ? reg.installment_2_amount : round2Fee));
     setModalInstallment2Notes(reg.installment_2_notes || '');
     setModalInstallment2SlipUrl(reg.installment_2_slip_url || '');
   };
@@ -2246,12 +2303,15 @@ export default function AdminDashboardView({
 
     setIsSavingProfile(true);
     try {
-      const effectivePlan = modalIsStaff ? 'full' : modalPaymentPlan;
+      const isModalMsu = isMsuInstitution(modalInstitution || profileModalReg.institution);
+      const effectivePlan = modalIsStaff
+        ? (isModalMsu ? 'full' : (modalInstallment2Status === 'paid' && modalPaymentStatus === 'paid' ? 'full' : 'installment'))
+        : modalPaymentPlan;
       const defaultFee = modalIsStaff
-        ? STAFF_SHIRT_FEE
-        : (isMsuInstitution(modalInstitution || profileModalReg.institution) ? 650 : 850);
+        ? (isModalMsu ? STAFF_SHIRT_FEE : STAFF_EXTERNAL_TOTAL_FEE)
+        : (isModalMsu ? 650 : 850);
       const effectiveAmount = modalIsStaff
-        ? (modalPaymentStatus === 'paid' ? 0 : (Number(modalPaymentAmount) > 0 ? Number(modalPaymentAmount) : STAFF_SHIRT_FEE))
+        ? (modalPaymentStatus === 'paid' ? 0 : (Number(modalPaymentAmount) > 0 ? Number(modalPaymentAmount) : (isModalMsu ? STAFF_SHIRT_FEE : STAFF_ACCOMMODATION_FEE)))
         : (modalPaymentStatus === 'paid' ? 0 : (Number(modalPaymentAmount) >= 0 ? Number(modalPaymentAmount) : defaultFee));
 
       const rawSz = String(modalShirtSize || 'L').trim();
@@ -2344,15 +2404,19 @@ export default function AdminDashboardView({
         installment_1_amount: Number(modalInstallment1Amount) || 0,
         installment_1_notes: (modalInstallment1Notes || '').trim(),
         installment_1_slip_url: modalInstallment1SlipUrl || profileModalReg.installment_1_slip_url || null,
-        installment_2_status: modalIsStaff ? 'unpaid' : (modalInstallment2Status || 'unpaid'),
-        installment_2_amount: modalIsStaff ? 0 : (Number(modalInstallment2Amount) || 0),
-        installment_2_notes: modalIsStaff ? '' : (modalInstallment2Notes || '').trim(),
-        installment_2_slip_url: modalIsStaff ? null : (modalInstallment2SlipUrl || profileModalReg.installment_2_slip_url || null),
+        installment_2_status: (modalIsStaff && isModalMsu) ? 'unpaid' : (modalInstallment2Status || 'unpaid'),
+        installment_2_amount: (modalIsStaff && isModalMsu) ? 0 : (Number(modalInstallment2Amount) || 0),
+        installment_2_notes: (modalIsStaff && isModalMsu) ? '' : (modalInstallment2Notes || '').trim(),
+        installment_2_slip_url: (modalIsStaff && isModalMsu) ? null : (modalInstallment2SlipUrl || profileModalReg.installment_2_slip_url || null),
+        staff_accommodation_paid: Boolean(modalIsStaff && !isModalMsu && (modalInstallment2Status === 'paid' || modalPaymentStatus === 'paid')),
         admin_manual_override: true
       };
 
-      if (modalIsStaff && modalPaymentStatus === 'paid') {
+      if (modalIsStaff && isModalMsu && modalPaymentStatus === 'paid') {
         updates.installment_1_status = 'paid';
+      } else if (modalIsStaff && !isModalMsu && modalPaymentStatus === 'paid') {
+        updates.installment_1_status = 'paid';
+        updates.installment_2_status = 'paid';
       } else if (effectivePlan === 'full' && modalPaymentStatus === 'paid') {
         updates.installment_1_status = 'paid';
       } else if (effectivePlan === 'installment' && modalPaymentStatus === 'paid') {
@@ -2374,7 +2438,7 @@ export default function AdminDashboardView({
     }
   };
 
-  // Quick 1-click toggle or Dropdown Role Selector to mark/unmark any applicant as (STAFF) (supports applicants who paid > 280 THB)
+  // Quick 1-click toggle or Dropdown Role Selector to mark/unmark any applicant as (STAFF) (supports MSU 280 THB & Non-MSU 480 THB with automatic accommodation offset)
   const handleQuickToggleStaff = async (reg, forcedState, roleTypeOverride = null) => {
     if (!reg) return;
     const currentlyStaff = isStaffRegistration(reg);
@@ -2391,28 +2455,58 @@ export default function AdminDashboardView({
       : (reg.callsign || '');
     const nextCallsign = formatStaffCallsign(rawCurrentCallsign, nextStaff);
 
-    const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
-    const ocrR1 = Number(reg.slip_ocr_round1?.amount || 0);
-    const ocrR2 = Number(reg.slip_ocr_round2?.amount || 0);
+    const ocrFull = Number(reg.slip_ocr_full?.amount || reg.slip_ocr_full?.amountDetected || 0);
+    const ocrR1 = Number(reg.slip_ocr_round1?.amount || reg.slip_ocr_round1?.amountDetected || 0);
+    const ocrR2 = Number(reg.slip_ocr_round2?.amount || reg.slip_ocr_round2?.amountDetected || 0);
     const slipAmt = ocrFull > 0 ? ocrFull : (ocrR1 + ocrR2 > 0 ? ocrR1 + ocrR2 : 0);
 
     let updates = {};
     if (nextStaff) {
-      const hasPaidAny = reg.payment_status === 'paid' || reg.installment_1_status === 'paid' || slipAmt >= STAFF_SHIRT_FEE;
-      const hasPending = !hasPaidAny && (reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review' || Boolean(reg.payment_slip_url || reg.installment_1_slip_url));
-      const effStatus = hasPaidAny ? 'paid' : (hasPending ? 'pending_review' : 'unpaid');
-      const effAmount = hasPaidAny ? 0 : STAFF_SHIRT_FEE;
-      const overpaid = slipAmt > STAFF_SHIRT_FEE ? slipAmt - STAFF_SHIRT_FEE : 0;
+      const tempStaffSum = getStaffPaymentSummary({
+        ...reg,
+        is_staff: true,
+        staff_role_type: nextRoleType,
+        registration_type: 'staff'
+      });
+      const isMsu = tempStaffSum.isMsu;
+      const hasPaidShirt = reg.payment_status === 'paid' || reg.installment_1_status === 'paid' || slipAmt >= STAFF_SHIRT_FEE;
+      const hasPending = !hasPaidShirt && (reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review' || Boolean(reg.payment_slip_url || reg.installment_1_slip_url));
+      const overpaid = tempStaffSum.overpaidAmount;
       const isAlreadyRefunded = reg.refund_status === 'refunded' || Boolean(reg.refund_slip_url);
       const nextRefundStatus = overpaid > 0
         ? (isAlreadyRefunded ? 'refunded' : (reg.refund_bank_account ? 'info_submitted' : 'pending_refund'))
         : 'none';
 
-      const autoNote = hasPaidAny
-        ? (overpaid > 0
-            ? `หมายเหตุ: ${roleLabelObj.badge || '(STAFF)'} ชำระค่าเสื้อ 280 บ. ครบแล้ว (โอนมาจริง ${slipAmt} บ. / ชำระเกินค่าเสื้อ +${overpaid} บ. • ${isAlreadyRefunded ? 'โอนเงินส่วนเกินคืนแล้ว ✓' : 'รอโอนเงินส่วนเกินคืน'})`
-            : `หมายเหตุ: ${roleLabelObj.badge || '(STAFF)'} ชำระค่าเสื้อ 280 บ. ครบถ้วนแล้ว`)
-        : `หมายเหตุ: ${roleLabelObj.badge || '(STAFF)'} รอชำระค่าเสื้อ 280 บ. (จ่ายครั้งเดียว)`;
+      let effStatus = 'unpaid';
+      let effAmount = tempStaffSum.totalStaffFee;
+      let effPlan = 'full';
+      let r1Status = hasPaidShirt ? 'paid' : (hasPending ? 'pending_review' : 'unpaid');
+      let r2Status = 'unpaid';
+      let r2Amount = 0;
+
+      if (isMsu) {
+        effStatus = hasPaidShirt ? 'paid' : (hasPending ? 'pending_review' : 'unpaid');
+        effAmount = hasPaidShirt ? 0 : STAFF_SHIRT_FEE;
+        effPlan = 'full';
+      } else {
+        r2Amount = tempStaffSum.accommodationNetRequiredAfterOffset;
+        if (hasPaidShirt && tempStaffSum.isAccommodationPaid) {
+          effStatus = 'paid';
+          effAmount = 0;
+          effPlan = 'full';
+          r2Status = 'paid';
+        } else if (tempStaffSum.isAccommodationPendingReview || hasPending) {
+          effStatus = 'pending_review';
+          effAmount = tempStaffSum.accommodationRemaining + (hasPaidShirt ? 0 : STAFF_SHIRT_FEE);
+          effPlan = 'installment';
+          r2Status = tempStaffSum.isAccommodationPendingReview ? 'pending_review' : 'unpaid';
+        } else {
+          effStatus = 'unpaid';
+          effAmount = tempStaffSum.accommodationRemaining + (hasPaidShirt ? 0 : STAFF_SHIRT_FEE);
+          effPlan = 'installment';
+          r2Status = 'unpaid';
+        }
+      }
 
       let nextDocs = Array.isArray(reg.requested_docs) ? [...reg.requested_docs] : [];
       if (overpaid > 0 && !isAlreadyRefunded) {
@@ -2421,11 +2515,13 @@ export default function AdminDashboardView({
           nextDocs.push({
             id: 'req_staff_overpaid_refund',
             doc_type: `ข้อมูลรับเงินคืนส่วนเกิน (+${overpaid} บ.): ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน`,
-            description: `เนื่องจากท่านเป็น ${roleLabelObj.badge || 'คณะกรรมการดำเนินงาน (STAFF)'} ชำระเฉพาะค่าเสื้อ 280 บาท แต่ได้โอนเงินมา ${slipAmt} บาท จึงมียอดชำระเกิน +${overpaid} บาท กรุณาระบุชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก (หรือแนบภาพหน้าสมุดบัญชี) เพื่อให้ฝ่ายการเงินโอนเงินส่วนเกินคืนให้ครับ`,
+            description: `เนื่องจากท่านเป็น ${roleLabelObj.badge || 'คณะกรรมการดำเนินงาน (STAFF)'} ยอดรวมที่ต้องชำระ ${tempStaffSum.totalStaffFee} บาท แต่ได้โอนเงินมา ${tempStaffSum.actualSlipAmount} บาท จึงมียอดชำระเกินสุทธิ +${overpaid} บาท กรุณาระบุชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก เพื่อให้ฝ่ายการเงินโอนเงินส่วนเกินคืนให้ครับ`,
             status: 'pending',
             requested_at: new Date().toISOString()
           });
         }
+      } else if (overpaid === 0) {
+        nextDocs = nextDocs.filter(d => d.id !== 'req_staff_overpaid_refund' && !(d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')));
       }
 
       updates = {
@@ -2434,19 +2530,20 @@ export default function AdminDashboardView({
         admin_staff_override: true,
         admin_manual_override: true,
         registration_type: 'staff',
-        payment_plan: 'full',
+        payment_plan: effPlan,
         callsign: nextCallsign,
         payment_status: effStatus,
         payment_amount: effAmount,
-        installment_1_status: effStatus,
-        installment_1_amount: slipAmt > 0 ? slipAmt : STAFF_SHIRT_FEE,
-        installment_2_status: 'unpaid',
-        installment_2_amount: 0,
+        installment_1_status: r1Status,
+        installment_1_amount: STAFF_SHIRT_FEE,
+        installment_2_status: r2Status,
+        installment_2_amount: r2Amount,
+        staff_accommodation_paid: Boolean(!isMsu && tempStaffSum.isAccommodationPaid),
         overpaid_amount: overpaid,
         refund_amount: overpaid,
         refund_status: nextRefundStatus,
         requested_docs: nextDocs,
-        payment_notes: autoNote
+        payment_notes: tempStaffSum.summaryNote
       };
     } else {
       const isMsu = isMsuInstitution(reg.institution);
@@ -2500,12 +2597,7 @@ export default function AdminDashboardView({
 
     const personName = resolvePersonFullNameWithTitle(reg).fullName;
     if (nextStaff) {
-      const overpaid = slipAmt > STAFF_SHIRT_FEE ? slipAmt - STAFF_SHIRT_FEE : 0;
-      triggerToast(
-        overpaid > 0
-          ? `🛠️ ปรับสถานะ "${personName}" เป็น ${roleLabelObj.badge || '(STAFF)'} เรียบร้อย! (โอนมา ${slipAmt} บ. / เกินค่าเสื้อ +${overpaid} บ. • สร้างรายการขอเลขบัญชีเพื่อโอนคืนแล้ว)`
-          : `🛠️ ปรับสถานะ "${personName}" เป็น ${roleLabelObj.badge || '(STAFF)'} เรียบร้อยแล้ว! (${nextCallsign})`
-      );
+      triggerToast(`🛠️ ปรับสถานะ "${personName}" เป็น ${roleLabelObj.badge || '(STAFF)'} เรียบร้อย! (${updates.payment_notes})`);
     } else {
       triggerToast(`ปรับสถานะ "${personName}" กลับเป็นผู้เข้าอบรมทั่วไปแล้ว`);
     }
@@ -3131,7 +3223,12 @@ export default function AdminDashboardView({
     }
   };
 
-  // Calculate comprehensive registration payment, gender & Staff 280 THB metrics
+  // Comprehensive Staff Accommodation (200 THB for Non-MSU), Offset & Overpaid Refund Metrics
+  const staffAndRefundMetrics = React.useMemo(() => {
+    return computeStaffAndRefundMetrics(registrations || []);
+  }, [registrations]);
+
+  // Calculate comprehensive registration payment, gender & Staff (MSU 280 / Non-MSU 480) metrics
   const regMetrics = (() => {
     let fullPlanCount = 0;
     let fullPlanPaidCount = 0;
@@ -3180,8 +3277,9 @@ export default function AdminDashboardView({
         else externalParticipantCount++;
       }
 
+      const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
       const totalFee = isStaff
-        ? STAFF_SHIRT_FEE
+        ? staffSum.totalStaffFee
         : (isMsu
             ? (paymentConfig?.fee_total_msu || 650)
             : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
@@ -3194,10 +3292,57 @@ export default function AdminDashboardView({
 
       expectedTotalAmount += totalFee;
 
-      // Staff never has 2-round installment payment (จ่ายแค่ค่าเสื้อ 280 บาท ครั้งเดียว)
       const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
 
-      if (isInstallment) {
+      if (isStaff) {
+        const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
+        const isR1Pending = !isR1Paid && (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review');
+        if (staffSum.isMsu) {
+          fullPlanCount++;
+          if (isR1Paid) {
+            fullPlanPaidCount++;
+            fullyPaidCount++;
+            staffPaidCount++;
+            totalCollectedAmount += STAFF_SHIRT_FEE;
+            staffCollectedAmount += STAFF_SHIRT_FEE;
+          } else if (isR1Pending) {
+            pendingReviewCount++;
+            staffPendingCount++;
+            totalOutstandingBalance += STAFF_SHIRT_FEE;
+          } else {
+            unpaidTotalCount++;
+            staffUnpaidCount++;
+            totalOutstandingBalance += STAFF_SHIRT_FEE;
+          }
+        } else {
+          // Non-MSU Staff: 480 THB total (280 shirt + 200 accommodation)
+          const shirtCol = isR1Paid ? STAFF_SHIRT_FEE : 0;
+          const accomCol = staffSum.accommodationPaidTotal;
+          const staffCol = shirtCol + accomCol;
+          const staffOut = Math.max(0, totalFee - staffCol);
+          totalCollectedAmount += staffCol;
+          staffCollectedAmount += staffCol;
+          totalOutstandingBalance += staffOut;
+          if (isR1Paid) staffPaidCount++;
+
+          if (isR1Paid && staffSum.isAccommodationPaid) {
+            fullPlanCount++;
+            fullPlanPaidCount++;
+            fullyPaidCount++;
+          } else if (isR1Pending || staffSum.isAccommodationPendingReview) {
+            installmentPlanCount++;
+            pendingReviewCount++;
+            staffPendingCount++;
+          } else if (isR1Paid && staffSum.accommodationRemaining > 0) {
+            installmentPlanCount++;
+            partialPaidCount++;
+          } else {
+            installmentPlanCount++;
+            unpaidTotalCount++;
+            staffUnpaidCount++;
+          }
+        }
+      } else if (isInstallment) {
         installmentPlanCount++;
         const isR1Paid = reg.installment_1_status === 'paid';
         const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
@@ -3227,25 +3372,19 @@ export default function AdminDashboardView({
         }
       } else {
         fullPlanCount++;
-        const isPaid = reg.payment_status === 'paid' || (isStaff && reg.installment_1_status === 'paid');
-        const isPending = reg.payment_status === 'pending_review' || (isStaff && reg.installment_1_status === 'pending_review');
+        const isPaid = reg.payment_status === 'paid';
+        const isPending = reg.payment_status === 'pending_review';
         if (isPaid) {
           fullPlanPaidCount++;
           fullyPaidCount++;
-          const paidAmt = isStaff ? STAFF_SHIRT_FEE : (reg.payment_amount !== undefined && reg.payment_amount !== null && Number(reg.payment_amount) > 0 ? Number(reg.payment_amount) : totalFee);
+          const paidAmt = (reg.payment_amount !== undefined && reg.payment_amount !== null && Number(reg.payment_amount) > 0) ? Number(reg.payment_amount) : totalFee;
           totalCollectedAmount += paidAmt;
-          if (isStaff) {
-            staffPaidCount++;
-            staffCollectedAmount += STAFF_SHIRT_FEE;
-          }
         } else if (isPending) {
           pendingReviewCount++;
           totalOutstandingBalance += totalFee;
-          if (isStaff) staffPendingCount++;
         } else {
           unpaidTotalCount++;
           totalOutstandingBalance += totalFee;
-          if (isStaff) staffUnpaidCount++;
         }
       }
     });
@@ -3291,6 +3430,7 @@ export default function AdminDashboardView({
   // Filtered registrations
   const filteredRegs = registrations.filter(reg => {
     const isStaff = isStaffRegistration(reg);
+    const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
     const gender = resolveGender(reg);
     const uniInfo = resolveUniversityInfo(reg);
     const memberTypeInfo = resolveApplicantMemberType(reg);
@@ -3311,7 +3451,8 @@ export default function AdminDashboardView({
       (reg.institution || '') + ' ' +
       (uniInfo.shortTag || '') + ' ' +
       (gender || '') + ' ' +
-      (isStaff ? 'staff สตาฟ คณะทำงาน 280' : 'ผู้เข้าอบรม') + ' ' +
+      (isStaff ? 'staff สตาฟ คณะทำงาน 280 480 ค่าที่พัก โอนคืน' : 'ผู้เข้าอบรม') + ' ' +
+      (staffSum?.summaryNote || '') + ' ' +
       (reg.user_email || '') + ' ' +
       (reg.group_assigned || '') + ' ' +
       (reg.room_assigned || '') + ' ' +
@@ -3328,21 +3469,36 @@ export default function AdminDashboardView({
     const matchMemberType = memberTypeFilter === 'all' || (memberTypeFilter === 'club' ? memberTypeInfo.isClubMember : memberTypeInfo.isVolunteer);
     
     let matchFilter = true;
-    const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
-    const isR1Paid = reg.installment_1_status === 'paid';
-    const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
-    const isBothPaid = isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid' || (isStaff && isR1Paid));
-    const isPartialPaid = isInstallment && isR1Paid && !isR2Paid;
-    const hasPendingReview = isInstallment 
-      ? (reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review') 
-      : (reg.payment_status === 'pending_review' || (isStaff && reg.installment_1_status === 'pending_review'));
-    const isUnpaid = isInstallment 
-      ? (!isR1Paid && !isR2Paid && !hasPendingReview) 
+    const isInstallment = isStaff
+      ? (!staffSum.isMsu && (staffSum.accommodationRemaining > 0 || Boolean(reg.installment_2_slip_url)))
+      : (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
+    const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
+    const isR2Paid = isStaff
+      ? staffSum.isAccommodationPaid
+      : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url));
+    const isBothPaid = isStaff
+      ? (staffSum.isMsu ? isR1Paid : (isR1Paid && staffSum.isAccommodationPaid))
+      : (isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid'));
+    const isPartialPaid = isStaff
+      ? (!staffSum.isMsu && isR1Paid && staffSum.accommodationRemaining > 0 && !staffSum.isAccommodationPendingReview)
+      : (isInstallment && isR1Paid && !isR2Paid);
+    const hasPendingReview = isStaff
+      ? (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review' || staffSum.isAccommodationPendingReview)
+      : (isInstallment
+          ? (reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review')
+          : (reg.payment_status === 'pending_review'));
+    const isUnpaid = isInstallment
+      ? (!isR1Paid && !isR2Paid && !hasPendingReview)
       : (!isBothPaid && !hasPendingReview);
     const hasOutstanding = isPartialPaid || isUnpaid;
 
     if (filterType === 'special_care') matchFilter = Boolean(reg.is_special_care);
     else if (filterType === 'staff') matchFilter = isStaff;
+    else if (filterType === 'staff_accom_unpaid') matchFilter = Boolean(isStaff && !staffSum.isMsu && staffSum.accommodationRemaining > 0);
+    else if (filterType === 'staff_offset') matchFilter = Boolean(isStaff && !staffSum.isMsu && staffSum.isOffsetApplied);
+    else if (filterType === 'refund_needed') matchFilter = Boolean(isStaff && staffSum.isOverpaid);
+    else if (filterType === 'refund_pending') matchFilter = Boolean(isStaff && staffSum.isOverpaid && !staffSum.isRefunded);
+    else if (filterType === 'refund_done') matchFilter = Boolean(isStaff && staffSum.isOverpaid && staffSum.isRefunded);
     else if (filterType === 'participant_only') matchFilter = !isStaff;
     else if (filterType === 'has_allergy') matchFilter = hasFoodOrDrugAllergy(reg);
     else if (filterType === 'has_medical') matchFilter = hasMedicalCondition(reg);
@@ -3464,14 +3620,28 @@ export default function AdminDashboardView({
 
     // 1. Build Top Summary Sections so opening the CSV immediately shows clear University, Gender, Shirt & Financial breakdowns
     const summaryLines = [];
-    summaryLines.push([esc('=== รายงานสรุปข้อมูลผู้สมัครและสตาฟ โครงการ JRE 2027 (แยกตามมหาวิทยาลัย / ชาย-หญิงจัดห้องพัก / ไซส์เสื้อ / ยอดการเงิน) ===')].join(','));
+    summaryLines.push([esc('=== รายงานสรุปข้อมูลผู้สมัครและสตาฟ โครงการ JRE 2027 (แยกตามมหาวิทยาลัย / ชาย-หญิงจัดห้องพัก / ไซส์เสื้อ / ยอดการเงิน / ค่าที่พัก Staff & ยอดโอนคืน) ===')].join(','));
     summaryLines.push([
       esc('รวมผู้ลงทะเบียนทั้งหมด'), esc(`${regMetrics.total} คน`),
       esc('ผู้เข้าอบรมปกติ'), esc(`${regMetrics.participantCount} คน (มมส ${regMetrics.msuParticipantCount} / ต่างสถาบัน ${regMetrics.externalParticipantCount})`),
-      esc('Staff คณะทำงาน (ชำระค่าเสื้อ 280 บ.)'), esc(`${regMetrics.staffCount} คน (ชำระแล้ว ${regMetrics.staffPaidCount} คน)`),
+      esc('Staff คณะทำงาน (มมส 280 บ. / ต่างมหาลัย 480 บ.)'), esc(`${regMetrics.staffCount} คน (มมส ${staffAndRefundMetrics.msuStaff.length} / ต่างมหาลัย ${staffAndRefundMetrics.externalStaff.length})`),
       esc('แยกเพศรวม'), esc(`ชาย ${regMetrics.maleCount} คน / หญิง ${regMetrics.femaleCount} คน${regMetrics.unknownGenderCount > 0 ? ` / ไม่ระบุ ${regMetrics.unknownGenderCount} คน` : ''}`),
       esc('ยอดรับเงินจริงรวม'), esc(`${regMetrics.totalCollectedAmount.toLocaleString()} บาท`),
       esc('ยอดค้างชำระรวม'), esc(`${regMetrics.totalOutstandingBalance.toLocaleString()} บาท`)
+    ].join(','));
+    summaryLines.push([
+      esc('สรุปค่าที่พัก Staff ต่างมหาลัย (200 บ./คน)'),
+      esc(`ทั้งหมด ${staffAndRefundMetrics.externalStaff.length} คน (รวม ${staffAndRefundMetrics.externalStaffExpectedAccom} บาท)`),
+      esc('หักลบจากยอดโอนเกินเข้าค่าที่พักแล้ว'),
+      esc(`${staffAndRefundMetrics.externalStaffOffsetList.length} คน (รวม ${staffAndRefundMetrics.externalStaffTotalOffsetAmount} บาท)`),
+      esc('คงเหลือค้างชำระค่าที่พัก Staff ต่างมหาลัย'),
+      esc(`${staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน (รวม ${staffAndRefundMetrics.externalStaffUnpaidAccomAmount} บาท)`),
+      esc('สรุปยอดที่ทางเราต้องโอนคืนทั้งหมด'),
+      esc(`${staffAndRefundMetrics.totalRefundPeopleCount} คน (รวม ${staffAndRefundMetrics.totalRefundAmount} บาท)`),
+      esc('โอนคืนแล้ว'),
+      esc(`${staffAndRefundMetrics.refundedPeopleCount} คน (รวม ${staffAndRefundMetrics.refundedAmount} บาท)`),
+      esc('คงเหลือที่ต้องโอนคืน'),
+      esc(`${staffAndRefundMetrics.pendingRefundPeopleCount} คน (รวม ${staffAndRefundMetrics.pendingRefundAmount} บาท)`)
     ].join(','));
     summaryLines.push('');
 
@@ -3487,7 +3657,7 @@ export default function AdminDashboardView({
       esc('ชาย จัดห้องแล้ว/รอจัด'),
       esc('หญิง จัดห้องแล้ว/รอจัด'),
       esc('ผู้เข้าอบรม (คน)'),
-      esc('Staff 280 บ. (คน)'),
+      esc('Staff (คน)'),
       esc('รวมเสื้อ (ตัว)'),
       ...universitySummary.STANDARD_SIZES.map(sz => esc(`ไซส์ ${sz}`)),
       esc('สรุปรายการไซส์เสื้อของมหาลัยนี้'),
@@ -3547,13 +3717,52 @@ export default function AdminDashboardView({
       esc(regMetrics.totalOutstandingBalance)
     ].join(','));
     summaryLines.push('');
+
+    // Table 1B: Staff Accommodation (200 THB) & Overpayment Offset & Refund Summary Table
+    summaryLines.push([esc('=== ตารางที่ 1.2: สรุปค่าที่พัก Staff ต่างมหาวิทยาลัย (200 บ./คน), การหักลบเงินโอนเกิน และรายการที่ทางเราต้องโอนคืน ===')].join(','));
+    summaryLines.push([
+      esc('ลำดับ'),
+      esc('ชื่อ-สกุล Staff'),
+      esc('มหาวิทยาลัย'),
+      esc('ประเภท Staff'),
+      esc('ค่าเสื้อ (บาท)'),
+      esc('ค่าที่พัก (บาท)'),
+      esc('รวมต้องชำระ (บาท)'),
+      esc('โอนมาจริงรอบแรก (บาท)'),
+      esc('หักลบเงินโอนเกินเข้าค่าที่พัก (บาท)'),
+      esc('คงเหลือค่าที่พักที่ต้องโอนเพิ่ม (บาท)'),
+      esc('ยอดที่ทางเราต้องโอนคืน (บาท)'),
+      esc('สถานะการโอนคืน'),
+      esc('หมายเหตุสรุปรายบุคคล')
+    ].join(','));
+    staffAndRefundMetrics.allStaff.forEach((item, sIdx) => {
+      const { reg: sr, summary: ss } = item;
+      const pName = resolvePersonFullNameWithTitle(sr).fullName;
+      const uShort = resolveUniversityInfo(sr).shortTag;
+      summaryLines.push([
+        esc(sIdx + 1),
+        esc(pName),
+        esc(uShort),
+        esc(ss.isMsu ? 'Staff มมส (เฉพาะค่าเสื้อ 280 บ.)' : 'Staff ต่างมหาลัย (เสื้อ 280 + ที่พัก 200 = 480 บ.)'),
+        esc(ss.shirtFee),
+        esc(ss.accommodationFee),
+        esc(ss.totalStaffFee),
+        esc(ss.r1SlipAmount || ss.actualSlipAmount),
+        esc(ss.offsetToAccommodation),
+        esc(ss.accommodationRemaining),
+        esc(ss.overpaidAmount),
+        esc(ss.overpaidAmount > 0 ? (ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน') : 'ไม่ต้องโอนคืน'),
+        esc(ss.summaryNote)
+      ].join(','));
+    });
+    summaryLines.push('');
     summaryLines.push([esc('=== ตารางที่ 2: รายชื่อผู้สมัครและ Staff รายบุคคล (เรียงตามมหาวิทยาลัย -> ประเภทผู้สมัคร/Staff -> เพศ ชาย/หญิง เพื่อจัดห้องพักง่าย) ===')].join(','));
 
     const headers = [
       'ลำดับ',
       'มหาวิทยาลัย (ตัวย่อ)',
       'เพศ (ชาย/หญิง)',
-      'ประเภทผู้สมัคร (ผู้เข้าอบรม / Staff 280 บ.)',
+      'ประเภทผู้สมัคร (ผู้เข้าอบรม / Staff)',
       'ไซส์เสื้อฝึก JRE 2027',
       'ห้องนอนที่จัดสรร',
       'กลุ่มฝึกที่จัดสรร',
@@ -3572,7 +3781,7 @@ export default function AdminDashboardView({
       'จ่ายครั้งแรกวันที่',
       'จำนวนเงินงวดที่ 1 / เต็มจำนวน',
       'ครั้งที่ 2 วันที่',
-      'จำนวนเงินงวดที่ 2',
+      'จำนวนเงินงวดที่ 2 / ค่าที่พัก Staff',
       'ชื่อสกุลผู้ที่ติดต่อได้',
       'เบอร์โทรผู้ที่ติดต่อได้',
       'ความสัมพันธ์ผู้ติดต่อฉุกเฉิน',
@@ -3594,7 +3803,7 @@ export default function AdminDashboardView({
       'สลิปเต็มจำนวน (สูตร =IMAGE)',
       'สลิปเต็มจำนวน (URL ลิงก์ตรง)',
       'ดูแลพิเศษ',
-      'หมายเหตุพิเศษ'
+      'หมายเหตุพิเศษ / หมายเหตุการเงินและโอนคืน'
     ];
 
     // Sort registrations by University order -> Role (Participant first, then Staff) -> Gender (ชาย first, then หญิง) -> Name
@@ -3622,38 +3831,39 @@ export default function AdminDashboardView({
       const lastName = personNameData.lastName;
       const title = personNameData.title;
       const isStaff = isStaffRegistration(r);
+      const staffSum = isStaff ? getStaffPaymentSummary(r) : null;
       const gender = resolveGender(r);
       const uniInfo = resolveUniversityInfo(r);
       const isMsu = uniInfo.isMsu;
-      const totalFee = isStaff ? STAFF_SHIRT_FEE : (isMsu ? 650 : 850);
+      const totalFee = isStaff ? staffSum.totalStaffFee : (isMsu ? 650 : 850);
       const round1Amount = isStaff ? STAFF_SHIRT_FEE : 400;
-      const round2Amount = isStaff ? 0 : (isMsu ? 250 : 450);
+      const round2Amount = isStaff ? staffSum.accommodationFee : (isMsu ? 250 : 450);
       const isInstallment = !isStaff && (r.payment_plan === 'installment' || Boolean(r.installment_1_slip_url || r.installment_2_slip_url));
 
       let paidAmount = 0;
-      const isR1Paid = r.installment_1_status === 'paid';
+      const isR1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid';
       const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
-      if (isInstallment) {
-        if (isR1Paid) paidAmount += round1Amount;
+      if (isStaff) {
+        if (staffSum.isMsu) {
+          paidAmount = isR1Paid ? STAFF_SHIRT_FEE : 0;
+        } else {
+          paidAmount = (isR1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal;
+        }
+      } else if (isInstallment) {
+        if (r.installment_1_status === 'paid') paidAmount += round1Amount;
         if (isR2Paid) paidAmount += round2Amount;
       } else {
-        if (r.payment_status === 'paid' || (isStaff && isR1Paid)) paidAmount = totalFee;
+        if (r.payment_status === 'paid') paidAmount = totalFee;
       }
       const remainingAmount = Math.max(0, totalFee - paidAmount);
 
       let paymentStatusDesc = '';
       if (isStaff) {
-        if (r.payment_status === 'paid' || isR1Paid) {
-          paymentStatusDesc = 'Staff (ชำระค่าเสื้อ 280 บาทครบแล้ว)';
-        } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
-          paymentStatusDesc = 'Staff 280 บาท (รอตรวจสอบสลิป)';
-        } else {
-          paymentStatusDesc = 'Staff 280 บาท (ยังไม่ชำระ)';
-        }
+        paymentStatusDesc = staffSum.summaryNote;
       } else if (isInstallment) {
-        if (isR1Paid && isR2Paid) {
+        if (r.installment_1_status === 'paid' && isR2Paid) {
           paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบ 2 งวดแล้ว)';
-        } else if (isR1Paid) {
+        } else if (r.installment_1_status === 'paid') {
           paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
         } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
           paymentStatusDesc = 'ผ่อนชำระ (รอตรวจสอบสลิป)';
@@ -3692,8 +3902,10 @@ export default function AdminDashboardView({
 
       let paidRound1Amount = '';
       if (isStaff) {
-        if (r.payment_status === 'paid' || isR1Paid) {
-          paidRound1Amount = '280 บาท (ค่าเสื้อ Staff จ่ายครบ)';
+        if (isR1Paid) {
+          paidRound1Amount = staffSum.r1SlipAmount > STAFF_SHIRT_FEE
+            ? `โอนจริง ${staffSum.r1SlipAmount} บ. (หักค่าเสื้อ 280 บ.${!staffSum.isMsu ? ` + หักค่าที่พัก ${staffSum.offsetToAccommodation} บ.` : ` / โอนคืน +${staffSum.overpaidAmount} บ.`})`
+            : '280 บาท (ค่าเสื้อ Staff จ่ายครบ)';
         } else if (r.payment_status === 'pending_review' || r.installment_1_status === 'pending_review') {
           paidRound1Amount = '280 บาท (Staff รอตรวจสอบ)';
         } else {
@@ -3718,7 +3930,17 @@ export default function AdminDashboardView({
       }
 
       let paidRound2Date = '-';
-      if (isInstallment) {
+      if (isStaff) {
+        if (staffSum.isMsu) {
+          paidRound2Date = 'ไม่มีค่าที่พัก (Staff มมส)';
+        } else if (r.installment_2_slip_date) {
+          paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
+        } else if (staffSum.isAccommodationPaid) {
+          paidRound2Date = 'ชำระค่าที่พักครบแล้ว';
+        } else {
+          paidRound2Date = 'ยังไม่ชำระค่าที่พัก';
+        }
+      } else if (isInstallment) {
         if (r.installment_2_slip_date) {
           paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
         } else if (isR2Paid) {
@@ -3726,12 +3948,20 @@ export default function AdminDashboardView({
         } else {
           paidRound2Date = 'ยังไม่ชำระ';
         }
-      } else {
-        paidRound2Date = isStaff ? 'ไม่มีแบ่งจ่าย 2 งวด (Staff)' : '-';
       }
 
       let paidRound2Amount = '-';
-      if (isInstallment) {
+      if (isStaff) {
+        if (staffSum.isMsu) {
+          paidRound2Amount = '0 บาท (Staff มมส ไม่มีค่าที่พัก)';
+        } else if (staffSum.isAccommodationPaid) {
+          paidRound2Amount = `200 บาท (ชำระค่าที่พักครบแล้ว)`;
+        } else if (staffSum.isOffsetApplied) {
+          paidRound2Amount = `ค่าที่พัก 200 บ. (หักลบเงินโอนเกิน -${staffSum.offsetToAccommodation} บ. เหลือค้างโอนเพิ่ม ${staffSum.accommodationRemaining} บ.)`;
+        } else {
+          paidRound2Amount = `200 บาท (ค้างชำระค่าที่พัก Staff ต่างมหาลัย)`;
+        }
+      } else if (isInstallment) {
         if (isR2Paid) {
           paidRound2Amount = `${round2Amount} บาท`;
         } else if (r.installment_2_status === 'pending_review' && r.installment_2_slip_url) {
@@ -3739,13 +3969,11 @@ export default function AdminDashboardView({
         } else {
           paidRound2Amount = `${round2Amount} บาท (ยังไม่ชำระ)`;
         }
-      } else {
-        paidRound2Amount = isStaff ? 'ไม่มี (โครงการออกให้)' : '-';
       }
 
       const remainingBalanceStatus = remainingAmount === 0 
-        ? 'ไม่มี (ชำระครบถ้วนแล้ว)' 
-        : `มียอดค้างชำระ ${remainingAmount} บาท`;
+        ? (isStaff && staffSum.overpaidAmount > 0 ? `ชำระครบแล้ว (ทางเราต้องโอนคืนส่วนเกิน +${staffSum.overpaidAmount} บาท)` : 'ไม่มี (ชำระครบถ้วนแล้ว)')
+        : `มียอดค้างชำระ ${remainingAmount} บาท${isStaff && !staffSum.isMsu ? ' (ค่าที่พัก Staff ต่างมหาลัย)' : ''}`;
 
       const s1 = r.installment_1_slip_url ? await ensureHostedUrl(r.installment_1_slip_url, 'slip-round1.jpg') : '';
       const s2 = r.installment_2_slip_url ? await ensureHostedUrl(r.installment_2_slip_url, 'slip-round2.jpg') : '';
@@ -3753,8 +3981,13 @@ export default function AdminDashboardView({
       const idPhoto = r.id_card_photo ? await ensureHostedUrl(r.id_card_photo, 'id-card.jpg') : '';
 
       const roleLabel = isStaff
-        ? 'Staff คณะทำงาน (ค่าเสื้อ 280 บาท)'
+        ? (staffSum.isMsu ? 'Staff มมส (เฉพาะค่าเสื้อ 280 บาท)' : 'Staff ต่างมหาลัย (เสื้อ 280 + ที่พัก 200 = 480 บาท)')
         : (isMsu ? 'ผู้เข้าอบรม มมส (650 บาท)' : 'ผู้เข้าอบรม ต่างสถาบัน (850 บาท)');
+
+      const combinedNotes = [
+        r.special_notes || '',
+        isStaff ? staffSum.summaryNote : (r.payment_notes || '')
+      ].filter(Boolean).join(' | ');
 
       return [
         idx + 1,
@@ -3801,7 +4034,7 @@ export default function AdminDashboardView({
         esc(sFull ? `=IMAGE("${sFull}")` : 'ยังไม่แนบ'),
         esc(sFull || 'ยังไม่แนบ'),
         esc(r.is_special_care ? 'ใช่ (ดูแลพิเศษ)' : 'ปกติ'),
-        esc(r.special_notes || '')
+        esc(combinedNotes)
       ];
     }));
 
@@ -4497,7 +4730,7 @@ export default function AdminDashboardView({
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
               <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 font-bold">
-                🛠️ Staff (280 บ.): {regMetrics.staffCount} คน (จ่ายแล้ว {regMetrics.staffPaidCount})
+                🛠️ Staff (มมส 280 / ต่างมหาลัย 480 บ.): {regMetrics.staffCount} คน (มมส {staffAndRefundMetrics.msuStaff.length} • ต่างมหาลัย {staffAndRefundMetrics.externalStaff.length})
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 font-bold">
                 👨 ชาย {regMetrics.maleCount} • 👩 หญิง {regMetrics.femaleCount}
@@ -4508,6 +4741,11 @@ export default function AdminDashboardView({
               <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 font-bold">
                 ยอดค้างรับ: ฿{regMetrics.totalOutstandingBalance.toLocaleString()}
               </span>
+              {staffAndRefundMetrics.totalRefundPeopleCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">
+                  💸 ต้องโอนคืน: {staffAndRefundMetrics.pendingRefundPeopleCount}/{staffAndRefundMetrics.totalRefundPeopleCount} คน (฿{staffAndRefundMetrics.pendingRefundAmount.toLocaleString()})
+                </span>
+              )}
             </div>
           </div>
 
@@ -4531,7 +4769,7 @@ export default function AdminDashboardView({
               <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">ชาย {regMetrics.maleCount} • หญิง {regMetrics.femaleCount}</div>
             </button>
 
-            {/* 1b. Staff คณะทำงาน (280 บ.) */}
+            {/* 1b. Staff คณะทำงาน (มมส 280 / ต่างมหาลัย 480 บ.) */}
             <button
               type="button"
               onClick={() => { setFilterType('staff'); setRoleFilter('staff'); }}
@@ -4542,11 +4780,11 @@ export default function AdminDashboardView({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-purple-300 font-bold">🛠️ Staff (280 บ.)</span>
+                <span className="text-[11px] text-purple-300 font-bold">🛠️ Staff (280/480 บ.)</span>
                 <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-purple-300 mt-1">{regMetrics.staffCount} <span className="text-xs font-normal text-purple-200">คน</span></p>
-              <div className="text-[10px] text-purple-300/80 mt-0.5">จ่ายแล้ว {regMetrics.staffPaidCount} • รับ ฿{regMetrics.staffCollectedAmount.toLocaleString()}</div>
+              <div className="text-[10px] text-purple-300/80 mt-0.5">มมส {staffAndRefundMetrics.msuStaff.length} • ต่างมหาลัย {staffAndRefundMetrics.externalStaff.length} • รับ ฿{regMetrics.staffCollectedAmount.toLocaleString()}</div>
             </button>
 
             {/* 2. แผนจ่ายครบ (1 รอบ) */}
@@ -4743,6 +4981,239 @@ export default function AdminDashboardView({
                 {registrations.filter(r => r.room_assigned).length}/{registrations.length}
               </span>
             </button>
+          </div>
+
+          {/* Dedicated Staff Accommodation (200 THB for Non-MSU), Automatic Overpayment Offset & Refund Summary Hub */}
+          <div className="p-4 sm:p-5 bg-gradient-to-br from-purple-950/35 via-slate-900 to-sky-950/35 border border-purple-500/40 rounded-2xl space-y-4 shadow-lg">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                  <Building className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-black text-white text-xs sm:text-sm">
+                      🏨 สรุปค่าที่พัก Staff ต่างมหาวิทยาลัย (200 บ./คน) • หักลบเงินโอนเกิน • และสรุปยอดที่ทางเราต้องโอนคืน
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-400/30 text-[10px] font-bold">
+                      มมส 280 บ. ({staffAndRefundMetrics.msuStaff.length} คน) • ต่างมหาลัย 480 บ. ({staffAndRefundMetrics.externalStaff.length} คน)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                    เกณฑ์ Staff: <strong className="text-purple-200">มมส จ่ายเฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)</strong> • ส่วน <strong className="text-sky-300">Staff ทุกมหาวิทยาลัยที่ไม่ใช่ มมส มีค่าที่พักคนละ 200 บ. (รวมเป็น 480 บ.)</strong> โดยคนที่โอนเกินมาในรอบแรก ระบบได้นำไปหักลบค่าที่พักให้อัตโนมัติ และสรุปยอดคงเหลือพร้อมยอดที่ทางโครงการต้องโอนคืนด้านล่าง
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setFilterType('staff_accom_unpaid'); setRoleFilter('staff'); }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                    filterType === 'staff_accom_unpaid'
+                      ? 'bg-amber-500 text-slate-950 border-amber-300'
+                      : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border-amber-500/40'
+                  }`}
+                >
+                  🏨 กรองค้างค่าที่พัก Staff ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFilterType('refund_needed'); setRoleFilter('staff'); }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                    filterType === 'refund_needed'
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                      : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40'
+                  }`}
+                >
+                  💸 กรองรายการต้องโอนคืน ({staffAndRefundMetrics.totalRefundPeopleCount} คน • ฿{staffAndRefundMetrics.totalRefundAmount})
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Key Summary Boxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* Box 1: Staff Breakdown */}
+              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                <div className="text-[11px] text-slate-400 font-bold flex items-center justify-between">
+                  <span>1. จำนวน Staff แยกตามเกณฑ์</span>
+                  <span className="text-purple-300 font-mono">{staffAndRefundMetrics.allStaff.length} คน</span>
+                </div>
+                <p className="text-base font-black text-white">
+                  ต่างมหาลัย {staffAndRefundMetrics.externalStaff.length} คน <span className="text-xs font-normal text-sky-300">(480 บ./คน)</span>
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  • Staff มมส: <strong className="text-purple-300">{staffAndRefundMetrics.msuStaff.length} คน</strong> (ค่าเสื้อ 280 บ. ไม่มีค่าที่พัก)
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  • Staff ต่างมหาลัย: <strong className="text-sky-300">{staffAndRefundMetrics.externalStaff.length} คน</strong> (เสื้อ 280 + ที่พัก 200 บ.)
+                </p>
+              </div>
+
+              {/* Box 2: Automatic Offset to Accommodation */}
+              <div
+                onClick={() => { setFilterType('staff_offset'); setRoleFilter('staff'); }}
+                className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/40 hover:border-emerald-400 space-y-1 cursor-pointer transition-all"
+              >
+                <div className="text-[11px] text-emerald-300 font-bold flex items-center justify-between">
+                  <span>2. หักลบเงินโอนเกินเข้าค่าที่พัก</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-black">อัตโนมัติ</span>
+                </div>
+                <p className="text-base font-black text-emerald-300">
+                  {staffAndRefundMetrics.externalStaffOffsetList.length} คน <span className="text-xs font-bold text-emerald-200">(หักลบแล้วรวม ฿{staffAndRefundMetrics.externalStaffTotalOffsetAmount.toLocaleString()})</span>
+                </p>
+                <p className="text-[11px] text-emerald-100/80 leading-snug">
+                  โอนรอบแรกมา 400 บ. หักค่าเสื้อ 280 บ. เหลือส่วนเกิน +120 บ. นำไปหักค่าที่พัก 200 บ. → <strong className="text-amber-300">คงเหลือจ่ายเพิ่มคนละ 80 บ. (ไม่ต้องโอนคืน)</strong>
+                </p>
+              </div>
+
+              {/* Box 3: Remaining Accommodation Balance to Collect */}
+              <div
+                onClick={() => { setFilterType('staff_accom_unpaid'); setRoleFilter('staff'); }}
+                className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 hover:border-amber-400 space-y-1 cursor-pointer transition-all"
+              >
+                <div className="text-[11px] text-amber-300 font-bold flex items-center justify-between">
+                  <span>3. คงเหลือค้างค่าที่พัก Staff ต่างมหาลัย</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-[10px] font-black">
+                    จ่ายครบแล้ว {staffAndRefundMetrics.externalStaffPaidAccomList.length}/{staffAndRefundMetrics.externalStaff.length} คน
+                  </span>
+                </div>
+                <p className="text-base font-black text-amber-300">
+                  ค้าง {staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • รวม ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount.toLocaleString()}
+                </p>
+                <p className="text-[11px] text-amber-100/80 leading-snug">
+                  • ค้างเต็ม 200 บ.: {staffAndRefundMetrics.externalStaffUnpaidAccomList.filter(x => x.summary.accommodationRemaining === 200).length} คน
+                  {' '}• ค้างหลังหักลบ 80 บ.: {staffAndRefundMetrics.externalStaffUnpaidAccomList.filter(x => x.summary.accommodationRemaining === 80).length} คน
+                </p>
+              </div>
+
+              {/* Box 4: Overpaid Refund Summary (ต้องโอนคืนกี่บาท กี่คน / โอนคืนแล้วกี่คน / เหลือกี่คน) */}
+              <div
+                onClick={() => { setFilterType('refund_needed'); setRoleFilter('staff'); }}
+                className="p-3.5 rounded-xl bg-rose-950/25 border border-rose-500/40 hover:border-rose-400 space-y-1 cursor-pointer transition-all"
+              >
+                <div className="text-[11px] text-rose-300 font-bold flex items-center justify-between">
+                  <span>4. สรุปยอดที่ทางเราต้องโอนคืน</span>
+                  <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 text-[10px] font-black">Refund Summary</span>
+                </div>
+                <p className="text-base font-black text-white">
+                  ต้องโอนคืนรวม: <span className="text-amber-300">{staffAndRefundMetrics.totalRefundPeopleCount} คน ({staffAndRefundMetrics.totalRefundAmount.toLocaleString()} บาท)</span>
+                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                  <span className="text-emerald-300 font-bold">
+                    ✅ โอนคืนแล้ว: {staffAndRefundMetrics.refundedPeopleCount} คน ({staffAndRefundMetrics.refundedAmount.toLocaleString()} บ.)
+                  </span>
+                  <span className="text-rose-300 font-bold">
+                    ⏳ เหลือต้องโอนคืน: {staffAndRefundMetrics.pendingRefundPeopleCount} คน ({staffAndRefundMetrics.pendingRefundAmount.toLocaleString()} บ.)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Per-Staff Breakdown & Remarks Table */}
+            <div className="bg-slate-950/90 border border-slate-800 rounded-xl overflow-hidden">
+              <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <span className="font-bold text-slate-200">
+                  📋 ตารางสรุปรายชื่อ Staff ทุกคน (การหักลบค่าเสื้อ 280 บ. • ค่าที่พัก 200 บ. • ยอดคงเหลือที่ต้องโอนเพิ่ม • และหมายเหตุยอดที่ทางเราต้องโอนคืน)
+                </span>
+                <span className="text-slate-400">คลิกที่รายชื่อเพื่อเปิดจัดการสลิปค่าที่พักหรือโอนเงินคืน</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-900/50 text-slate-400 border-b border-slate-800">
+                      <th className="py-2 px-3 font-bold">#</th>
+                      <th className="py-2 px-3 font-bold">ชื่อ-สกุล Staff</th>
+                      <th className="py-2 px-3 font-bold">มหาลัย</th>
+                      <th className="py-2 px-3 font-bold text-right">ค่าเสื้อ</th>
+                      <th className="py-2 px-3 font-bold text-right">ค่าที่พัก</th>
+                      <th className="py-2 px-3 font-bold text-right">รวมต้องจ่าย</th>
+                      <th className="py-2 px-3 font-bold text-right">โอนมาจริง</th>
+                      <th className="py-2 px-3 font-bold text-right">หักลบเข้าที่พัก</th>
+                      <th className="py-2 px-3 font-bold text-right">คงเหลือต้องโอนเพิ่ม</th>
+                      <th className="py-2 px-3 font-bold text-right">ทางเราต้องโอนคืน</th>
+                      <th className="py-2 px-3 font-bold">หมายเหตุสรุป & สถานะ</th>
+                      <th className="py-2 px-3 font-bold text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {staffAndRefundMetrics.allStaff.map(({ reg: sr, summary: ss }, idx) => {
+                      const pName = resolvePersonFullNameWithTitle(sr).fullName;
+                      const uShort = resolveUniversityInfo(sr).shortTag;
+                      const totalTransferred = (ss.r1SlipAmount || STAFF_SHIRT_FEE) + ss.r2SlipAmount;
+                      return (
+                        <tr
+                          key={sr.id || sr.user_id || idx}
+                          onClick={() => handleOpenProfileModal(sr, 'payment')}
+                          className="hover:bg-slate-900/70 cursor-pointer transition-colors"
+                        >
+                          <td className="py-2 px-3 font-mono text-slate-500">{idx + 1}</td>
+                          <td className="py-2 px-3 font-bold text-white whitespace-nowrap">
+                            {pName} <span className="text-slate-400 font-normal">({sr.nickname || '-'})</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              ss.isMsu
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                            }`}>
+                              {uShort}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-slate-300">280 บ.</td>
+                          <td className="py-2 px-3 text-right font-mono">
+                            {ss.isMsu ? (
+                              <span className="text-slate-500">0 บ. (มมส)</span>
+                            ) : (
+                              <span className="text-sky-300 font-bold">200 บ.</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-white">{ss.totalStaffFee} บ.</td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-emerald-300">{totalTransferred} บ.</td>
+                          <td className="py-2 px-3 text-right font-mono">
+                            {ss.offsetToAccommodation > 0 ? (
+                              <span className="text-emerald-400 font-bold">-{ss.offsetToAccommodation} บ.</span>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono">
+                            {ss.accommodationRemaining > 0 ? (
+                              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black">
+                                ค้าง {ss.accommodationRemaining} บ.
+                              </span>
+                            ) : (
+                              <span className="text-emerald-400 font-bold">0 บ. (ครบ)</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono">
+                            {ss.overpaidAmount > 0 ? (
+                              <span className={`px-2 py-0.5 rounded font-black ${
+                                ss.isRefunded
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  : 'bg-rose-500/25 text-rose-200 border border-rose-500/40'
+                              }`}>
+                                +{ss.overpaidAmount} บ. ({ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน'})
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">0 บ.</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-slate-300 max-w-md truncate" title={ss.summaryNote}>
+                            {ss.summaryNote}
+                          </td>
+                          <td className="py-2 px-3 text-right whitespace-nowrap">
+                            <span className="px-2.5 py-1 rounded-lg bg-purple-600/25 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-[10px] font-bold">
+                              เปิดจัดการ
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           {/* Dedicated Catering & Dietary Notice Banner */}
@@ -5888,9 +6359,12 @@ export default function AdminDashboardView({
                         {/* Payment Status & Slip */}
                         <td className="py-4 px-3 whitespace-nowrap">
                           {isStaff ? (() => {
-                            const isStaffPaid = paymentStatus === 'paid' || reg.installment_1_status === 'paid';
-                            const isStaffPending = paymentStatus === 'pending_review' || reg.installment_1_status === 'pending_review';
                             const staffPayInfo = getStaffPaymentSummary(reg);
+                            const isShirtPaid = paymentStatus === 'paid' || reg.installment_1_status === 'paid';
+                            const isStaffFullyPaid = staffPayInfo.isMsu
+                              ? isShirtPaid
+                              : (isShirtPaid && staffPayInfo.isAccommodationPaid);
+                            const isStaffPending = paymentStatus === 'pending_review' || reg.installment_1_status === 'pending_review' || staffPayInfo.isAccommodationPendingReview;
                             return (
                               <button
                                 type="button"
@@ -5899,21 +6373,36 @@ export default function AdminDashboardView({
                               >
                                 <div className="flex items-center gap-1.5">
                                   <span className="px-1.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/40 rounded text-[9px] font-black">
-                                    🛠️ {staffPayInfo.staffRoleLabel} (280 บ.)
+                                    🛠️ {staffPayInfo.staffRoleLabel} ({staffPayInfo.totalStaffFee} บ.)
                                   </span>
-                                  {isStaffPaid ? (
-                                    <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระแล้ว</span>
+                                  {isStaffFullyPaid ? (
+                                    <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระครบแล้ว</span>
                                   ) : isStaffPending ? (
                                     <span className="text-[10px] text-amber-300 font-bold animate-pulse">⏳ รอตรวจสลิป</span>
+                                  ) : isShirtPaid && !staffPayInfo.isMsu && staffPayInfo.accommodationRemaining > 0 ? (
+                                    <span className="text-[10px] text-amber-300 font-bold">🏨 ค้างที่พัก {staffPayInfo.accommodationRemaining} บ.</span>
                                   ) : (
                                     <span className="text-[10px] text-rose-400 font-bold">🔴 ค้างชำระ</span>
                                   )}
                                 </div>
                                 <div className="text-[10px] text-purple-300/90 font-mono">
-                                  {staffPayInfo.isOverpaid
-                                    ? `โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกินค่าเสื้อ +${staffPayInfo.overpaidAmount} บ.)`
-                                    : 'เฉพาะค่าเสื้อ: 280 บ. (ครั้งเดียว)'}
+                                  {staffPayInfo.isMsu ? (
+                                    staffPayInfo.isOverpaid
+                                      ? `มมส 280 บ. • โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกิน +${staffPayInfo.overpaidAmount} บ.)`
+                                      : 'Staff มมส: เฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)'
+                                  ) : staffPayInfo.isOffsetApplied ? (
+                                    `โอน ${staffPayInfo.r1SlipAmount} บ. → หักเสื้อ 280 + หักที่พัก ${staffPayInfo.offsetToAccommodation} บ.`
+                                  ) : (
+                                    `ต่างมหาลัย: เสื้อ 280 + ที่พัก 200 = 480 บ.`
+                                  )}
                                 </div>
+                                {!staffPayInfo.isMsu && staffPayInfo.accommodationRemaining > 0 && (
+                                  <div className="text-[10px] font-bold text-amber-300">
+                                    {staffPayInfo.isOffsetApplied
+                                      ? `⚡ หักลบส่วนเกินแล้ว เหลือโอนค่าที่พักเพิ่ม ${staffPayInfo.accommodationRemaining} บ.`
+                                      : `🏨 รอชำระค่าที่พัก Staff ต่างมหาลัย ${staffPayInfo.accommodationRemaining} บ.`}
+                                  </div>
+                                )}
                                 {staffPayInfo.isOverpaid && (
                                   <div className={`text-[10px] font-bold ${
                                     staffPayInfo.isRefunded ? 'text-emerald-400' : 'text-amber-300'
@@ -5922,7 +6411,7 @@ export default function AdminDashboardView({
                                       ? `✅ โอนเงินส่วนเกินคืนแล้ว (+${staffPayInfo.overpaidAmount} บ.)`
                                       : staffPayInfo.refundBankAccount
                                       ? `📋 เลขบัญชีคืนเงิน: ${staffPayInfo.refundBankName} ${staffPayInfo.refundBankAccount}`
-                                      : `⏳ รอโอนเงินส่วนเกินคืน (+${staffPayInfo.overpaidAmount} บ.)`}
+                                      : `⏳ ทางเราต้องโอนคืน (+${staffPayInfo.overpaidAmount} บ.)`}
                                   </div>
                                 )}
                               </button>
@@ -7873,10 +8362,135 @@ export default function AdminDashboardView({
                     })()}
                   </div>
 
+                  {/* NON-MSU STAFF ACCOMMODATION (200 THB) & AUTOMATIC OFFSET MANAGEMENT PANEL */}
+                  {(() => {
+                    const staffPayInfo = getStaffPaymentSummary(profileModalReg);
+                    if (!staffPayInfo.isStaff || staffPayInfo.isMsu) return null;
+                    return (
+                      <div className={`p-4 rounded-2xl border-2 space-y-3 ${
+                        staffPayInfo.isAccommodationPaid
+                          ? 'bg-emerald-950/25 border-emerald-500/50'
+                          : 'bg-sky-950/25 border-sky-500/50'
+                      }`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-black text-white flex items-center gap-1.5">
+                                🏨 ระบบค่าที่พัก Staff ต่างมหาวิทยาลัย (200 บ./คน) & การหักลบเงินโอนเกิน
+                              </span>
+                              {staffPayInfo.isAccommodationPaid ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[11px]">
+                                  ✅ ชำระค่าที่พักครบ 200 บ. แล้ว
+                                </span>
+                              ) : staffPayInfo.isAccommodationPendingReview ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/25 text-amber-200 border border-amber-400/50 font-black text-[11px]">
+                                  ⏳ แนบสลิปค่าที่พักแล้ว (รอ Admin อนุมัติ)
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/25 text-rose-200 border border-rose-400/50 font-black text-[11px]">
+                                  🔴 ค้างชำระค่าที่พัก {staffPayInfo.accommodationRemaining} บาท
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-300 mt-1">
+                              {staffPayInfo.summaryNote}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            {!staffPayInfo.isAccommodationPaid ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffPayInfo.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffPayInfo.offsetToAccommodation} บ. + โอนเพิ่ม ${staffPayInfo.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
+                                  const updates = {
+                                    payment_plan: 'full',
+                                    payment_status: 'paid',
+                                    payment_amount: 0,
+                                    installment_1_status: 'paid',
+                                    installment_2_status: 'paid',
+                                    installment_2_amount: staffPayInfo.accommodationNetRequiredAfterOffset,
+                                    staff_accommodation_paid: true,
+                                    payment_notes: nextNote
+                                  };
+                                  setModalPaymentPlan('full');
+                                  setModalPaymentStatus('paid');
+                                  setModalPaymentAmount(0);
+                                  setModalInstallment1Status('paid');
+                                  setModalInstallment2Status('paid');
+                                  setModalPaymentNotes(nextNote);
+                                  await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                  triggerToast('อนุมัติการชำระค่าที่พัก Staff ต่างมหาลัยครบถ้วนแล้ว');
+                                }}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
+                              >
+                                ✅ อนุมัติชำระค่าที่พักครบแล้ว
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const rem = staffPayInfo.accommodationNetRequiredAfterOffset;
+                                  const nextNote = staffPayInfo.isOffsetApplied
+                                    ? `หมายเหตุ: Staff ต่างมหาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.) โอนรอบแรกมา ${staffPayInfo.r1SlipAmount} บ. หักค่าเสื้อ 280 บ. และนำส่วนเกิน +${staffPayInfo.offsetToAccommodation} บ. ไปหักลบค่าที่พัก 200 บ. → คงเหลือต้องโอนค่าที่พักเพิ่มอีก ${rem} บ.`
+                                    : `หมายเหตุ: Staff ต่างมหาลัย ชำระค่าเสื้อ 280 บ. แล้ว • ค้างชำระค่าที่พัก ${rem} บ. (รวมต้องชำระ 480 บ.)`;
+                                  const updates = {
+                                    payment_plan: 'installment',
+                                    payment_status: 'unpaid',
+                                    payment_amount: rem,
+                                    installment_2_status: 'unpaid',
+                                    installment_2_amount: rem,
+                                    staff_accommodation_paid: false,
+                                    payment_notes: nextNote
+                                  };
+                                  setModalPaymentPlan('installment');
+                                  setModalPaymentStatus('unpaid');
+                                  setModalPaymentAmount(rem);
+                                  setModalInstallment2Status('unpaid');
+                                  setModalPaymentNotes(nextNote);
+                                  await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                  triggerToast(`ปรับสถานะกลับเป็นค้างค่าที่พัก ${rem} บาท`);
+                                }}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
+                              >
+                                ↩️ ปรับกลับเป็นค้างค่าที่พัก ({staffPayInfo.accommodationNetRequiredAfterOffset} บ.)
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block">1. ยอดโอนรอบแรก (ค่าเสื้อ 280 บ.)</span>
+                            <span className="text-sm font-black text-white">{staffPayInfo.r1SlipAmount || STAFF_SHIRT_FEE} บาท</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block">2. ค่าที่พัก Staff ต่างมหาลัย</span>
+                            <span className="text-sm font-black text-sky-300">+{STAFF_ACCOMMODATION_FEE} บาท</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block">3. หักลบจากยอดโอนเกินรอบแรก</span>
+                            <span className={`text-sm font-black ${staffPayInfo.isOffsetApplied ? 'text-emerald-400' : 'text-slate-400'}`}>
+                              {staffPayInfo.isOffsetApplied ? `-${staffPayInfo.offsetToAccommodation} บาท` : '0 บาท'}
+                            </span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block">4. คงเหลือค่าที่พักที่ต้องโอนเพิ่ม</span>
+                            <span className={`text-sm font-black ${staffPayInfo.accommodationRemaining > 0 ? 'text-amber-300' : 'text-emerald-400'}`}>
+                              {staffPayInfo.accommodationRemaining} บาท
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* OVERPAID STAFF REFUND MANAGEMENT PANEL */}
                   {(() => {
                     const staffPayInfo = getStaffPaymentSummary(profileModalReg);
-                    if (!staffPayInfo.isOverpaid && !profileModalReg.refund_slip_url && !profileModalReg.overpaid_amount) return null;
+                    if (!staffPayInfo.isOverpaid && !profileModalReg.refund_slip_url) return null;
                     const overpaidAmt = staffPayInfo.overpaidAmount || Number(profileModalReg.overpaid_amount || 0);
                     return (
                       <div className={`p-4 rounded-2xl border-2 space-y-4 ${
@@ -7905,7 +8519,7 @@ export default function AdminDashboardView({
                               )}
                             </div>
                             <p className="text-[11px] text-slate-300 mt-1">
-                              ผู้สมัครโอนมาจริง <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • หักค่าเสื้อ STAFF <strong className="text-purple-300">280 บาท</strong> • ยอดเงินส่วนเกินที่ต้องโอนคืน: <strong className="text-amber-300 text-xs">+{overpaidAmt} บาท</strong>
+                              ผู้สมัครโอนมาจริง <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • หักยอดรวม STAFF <strong className="text-purple-300">{staffPayInfo.totalStaffFee} บาท</strong> • ยอดเงินส่วนเกินสุทธิที่ทางเราต้องโอนคืน: <strong className="text-amber-300 text-xs">+{overpaidAmt} บาท</strong>
                             </p>
                           </div>
 
@@ -8054,12 +8668,9 @@ export default function AdminDashboardView({
                       <label className="block text-slate-300 mb-1 font-semibold">แผนการชำระเงิน:</label>
                       <select
                         disabled={!isEditingProfileModal || modalIsStaff}
-                        value={modalIsStaff ? 'full' : modalPaymentPlan}
+                        value={modalPaymentPlan}
                         onChange={e => {
-                          if (modalIsStaff) {
-                            setModalPaymentPlan('full');
-                            return;
-                          }
+                          if (modalIsStaff) return;
                           const newPlan = e.target.value;
                           setModalPaymentPlan(newPlan);
                           const isMsu = isMsuInstitution(profileModalReg.institution);
@@ -8087,10 +8698,14 @@ export default function AdminDashboardView({
                         }`}
                       >
                         <option value="full">
-                          {modalIsStaff ? '🛠️ Staff จ่ายครั้งเดียว (280 บ.)' : '🌟 จ่ายครบ 1 รอบ'}
+                          {modalIsStaff
+                            ? (isMsuInstitution(profileModalReg.institution) ? '🛠️ Staff มมส (280 บ.)' : '🛠️ Staff ต่างมหาลัย (ครบ 480 บ.)')
+                            : '🌟 จ่ายครบ 1 รอบ'}
                         </option>
-                        {!modalIsStaff && (
-                          <option value="installment">💳 แบ่งจ่าย 2 งวด</option>
+                        {(!modalIsStaff || !isMsuInstitution(profileModalReg.institution)) && (
+                          <option value="installment">
+                            {modalIsStaff ? '🏨 Staff ต่างมหาลัย (เสื้อ 280 + ที่พัก 200)' : '💳 แบ่งจ่าย 2 งวด'}
+                          </option>
                         )}
                       </select>
                     </div>
@@ -8164,7 +8779,7 @@ export default function AdminDashboardView({
                   {/* Detailed Installment R1 / R2 & Slip URL Override Controls (Editable when unlocked) */}
                   <div className="p-3.5 bg-slate-900/70 border border-slate-800 rounded-xl space-y-3">
                     <div className="text-[11px] font-bold text-amber-300 flex items-center justify-between">
-                      <span>💳 ตั้งค่ารายละเอียดงวดที่ 1 / งวดที่ 2 และอัปโหลดสลิปแทนผู้สมัคร</span>
+                      <span>💳 ตั้งค่ารายละเอียดงวดที่ 1 / งวดที่ 2 (หรือค่าที่พัก Staff ต่างมหาลัย) และอัปโหลดสลิปแทนผู้สมัคร</span>
                       {isUploadingModalSlip && (
                         <span className="text-purple-300 flex items-center gap-1">
                           <Loader2 className="w-3.5 h-3.5 animate-spin" /> กำลังอัปโหลดสลิป...
@@ -8173,7 +8788,7 @@ export default function AdminDashboardView({
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สถานะงวดที่ 1 / เต็มจำนวน:</label>
+                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สถานะงวดที่ 1 / ค่าเสื้อ Staff:</label>
                         <select
                           disabled={!isEditingProfileModal}
                           value={modalInstallment1Status}
@@ -8188,7 +8803,7 @@ export default function AdminDashboardView({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">ยอดงวดที่ 1 (บาท):</label>
+                        <label className="block text-[11px] text-slate-300 mb-1 font-semibold">ยอดงวดที่ 1 / ค่าเสื้อ (บาท):</label>
                         <input
                           type="number"
                           disabled={!isEditingProfileModal}
@@ -8225,10 +8840,12 @@ export default function AdminDashboardView({
                       </div>
                     </div>
 
-                    {!modalIsStaff && modalPaymentPlan === 'installment' && (
+                    {((!modalIsStaff && modalPaymentPlan === 'installment') || (modalIsStaff && !isMsuInstitution(profileModalReg?.institution))) && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80">
                         <div>
-                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สถานะงวดที่ 2:</label>
+                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">
+                            {modalIsStaff ? 'สถานะค่าที่พัก Staff (200 บ.):' : 'สถานะงวดที่ 2:'}
+                          </label>
                           <select
                             disabled={!isEditingProfileModal}
                             value={modalInstallment2Status}
@@ -8243,7 +8860,9 @@ export default function AdminDashboardView({
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">ยอดงวดที่ 2 (บาท):</label>
+                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">
+                            {modalIsStaff ? 'ยอดค่าที่พักหลังหักลบ (บาท):' : 'ยอดงวดที่ 2 (บาท):'}
+                          </label>
                           <input
                             type="number"
                             disabled={!isEditingProfileModal}
@@ -8255,14 +8874,16 @@ export default function AdminDashboardView({
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">สลิปงวดที่ 2:</label>
+                          <label className="block text-[11px] text-slate-300 mb-1 font-semibold">
+                            {modalIsStaff ? 'สลิปค่าที่พัก Staff:' : 'สลิปงวดที่ 2:'}
+                          </label>
                           <div className="flex items-center gap-1.5">
                             <input
                               type="text"
                               disabled={!isEditingProfileModal}
                               value={modalInstallment2SlipUrl}
                               onChange={e => setModalInstallment2SlipUrl(e.target.value)}
-                              placeholder="URL สลิปงวด 2..."
+                              placeholder="URL สลิปงวด 2 / ค่าที่พัก..."
                               className={`flex-1 px-2.5 py-1.5 rounded-lg text-white font-mono text-[11px] ${
                                 !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
                               }`}
@@ -8313,14 +8934,15 @@ export default function AdminDashboardView({
                   </div>
                 </div>
 
-                {/* Unified Slip Review: Either 2-Round Installments (for non-Staff installment plan) OR Single Full/Staff Payment (NEVER both!) */}
+                {/* Unified Slip Review: Either 2-Round Installments (for non-Staff installment plan OR Non-MSU Staff with 200 THB accommodation) OR Single Full/Staff Payment */}
                 {(() => {
                   const isModalStaff = Boolean(modalIsStaff || isStaffRegistration(profileModalReg));
-                  const isModalInstallment = !isModalStaff && (
+                  const isModalNonMsuStaff = isModalStaff && !isMsuInstitution(profileModalReg?.institution);
+                  const isModalInstallment = isModalNonMsuStaff || (!isModalStaff && (
                     modalPaymentPlan
                       ? modalPaymentPlan === 'installment'
                       : (profileModalReg.payment_plan ? profileModalReg.payment_plan === 'installment' : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url))
-                  );
+                  ));
 
                   if (isModalInstallment) {
                     const r1SlipUrl = profileModalReg.installment_1_slip_url || profileModalReg.payment_slip_url;

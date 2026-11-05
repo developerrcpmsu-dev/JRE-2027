@@ -8,7 +8,11 @@ import {
   DEFAULT_MERCHANDISE_CONFIG,
   DEFAULT_MERCHANDISE_ORDERS,
   STAFF_SHIRT_FEE,
+  STAFF_ACCOMMODATION_FEE,
+  STAFF_EXTERNAL_TOTAL_FEE,
+  isMsuInstitution,
   isStaffRegistration,
+  getStaffPaymentSummary,
   formatStaffCallsign,
   resolveGender
 } from './data/defaultData';
@@ -153,12 +157,11 @@ const unpackRegistration = (row) => {
     special_notes: extra.user_notes !== undefined ? extra.user_notes : row.special_notes
   };
 
-  // Auto-detect Staff (280 THB or manually marked as (STAFF) even when overpaid) & Gender
+  // Auto-detect Staff (280 THB MSU / 480 THB Non-MSU or manually marked as (STAFF) even when overpaid) & Gender
   const detectedStaff = isStaffRegistration(unpacked);
   if (detectedStaff) {
     unpacked.is_staff = true;
     unpacked.registration_type = 'staff';
-    unpacked.payment_plan = 'full';
     unpacked.callsign = formatStaffCallsign(unpacked.callsign, true);
     if (!unpacked.payment_slip_url && unpacked.installment_1_slip_url) {
       unpacked.payment_slip_url = unpacked.installment_1_slip_url;
@@ -167,10 +170,16 @@ const unpackRegistration = (row) => {
     if (!unpacked.slip_ocr_full && unpacked.slip_ocr_round1) {
       unpacked.slip_ocr_full = { ...unpacked.slip_ocr_round1 };
     }
+
+    const staffSum = getStaffPaymentSummary(unpacked);
+    unpacked.overpaid_amount = staffSum.overpaidAmount;
+    unpacked.refund_amount = staffSum.overpaidAmount;
+    unpacked.refund_status = staffSum.refundStatus;
+
     if (unpacked.slip_ocr_full && Number(unpacked.slip_ocr_full.amount || 0) >= STAFF_SHIRT_FEE - 1) {
       unpacked.slip_ocr_full = {
         ...unpacked.slip_ocr_full,
-        expectedAmount: STAFF_SHIRT_FEE,
+        expectedAmount: staffSum.isMsu ? STAFF_SHIRT_FEE : STAFF_EXTERNAL_TOTAL_FEE,
         isAmountMatch: true,
         matchExpected: true,
         isFullyVerified: !unpacked.slip_ocr_full.isDuplicate
@@ -185,17 +194,52 @@ const unpackRegistration = (row) => {
         isFullyVerified: !unpacked.slip_ocr_round1.isDuplicate
       };
     }
-    // Staff only pays once (280 THB): if Round 1 or Full was already approved, sync payment_status to 'paid'
-    if (unpacked.payment_status === 'paid' || unpacked.installment_1_status === 'paid') {
-      unpacked.payment_status = 'paid';
-      unpacked.installment_1_status = 'paid';
-      unpacked.payment_amount = 0;
-    } else {
-      if (unpacked.installment_1_status === 'pending_review' && unpacked.payment_status === 'unpaid') {
-        unpacked.payment_status = 'pending_review';
-      }
-      if (Number(unpacked.payment_amount) === 650 || Number(unpacked.payment_amount) === 850 || Number(unpacked.payment_amount) === 400 || Number(unpacked.payment_amount) === 450 || !unpacked.payment_amount) {
+
+    if (staffSum.isMsu) {
+      // Staff มมส: ชำระเฉพาะค่าเสื้อ 280 บาท (ไม่มีค่าที่พัก)
+      unpacked.payment_plan = 'full';
+      unpacked.installment_1_amount = STAFF_SHIRT_FEE;
+      unpacked.installment_2_amount = 0;
+      if (unpacked.payment_status === 'paid' || unpacked.installment_1_status === 'paid' || staffSum.r1SlipAmount >= STAFF_SHIRT_FEE) {
+        unpacked.payment_status = 'paid';
+        unpacked.installment_1_status = 'paid';
+        unpacked.payment_amount = 0;
+      } else {
+        if (unpacked.installment_1_status === 'pending_review' && unpacked.payment_status === 'unpaid') {
+          unpacked.payment_status = 'pending_review';
+        }
         unpacked.payment_amount = STAFF_SHIRT_FEE;
+      }
+    } else {
+      // Staff ต่างมหาวิทยาลัยที่ไม่ใช่ มมส: ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ. (รวม 480 บ.)
+      // หากโอนรอบแรกเกิน 280 บ. (เช่น โอนมา 400 บ.) ระบบจะนำส่วนเกิน (+120 บ.) ไปหักลบค่าที่พัก 200 บ. เหลือค้างชำระค่าที่พัก 80 บ.
+      unpacked.installment_1_amount = STAFF_SHIRT_FEE;
+      unpacked.installment_2_amount = staffSum.accommodationNetRequiredAfterOffset; // 200 บ. หรือ 80 บ. (หลังหักลบส่วนเกิน)
+
+      if (staffSum.r1SlipAmount >= STAFF_SHIRT_FEE || unpacked.installment_1_status === 'paid') {
+        unpacked.installment_1_status = 'paid';
+      }
+
+      if (staffSum.isAccommodationPaid) {
+        unpacked.payment_plan = 'full';
+        unpacked.installment_2_status = 'paid';
+        unpacked.payment_status = 'paid';
+        unpacked.payment_amount = 0;
+      } else {
+        unpacked.payment_plan = 'installment';
+        unpacked.payment_amount = staffSum.accommodationRemaining;
+        if (staffSum.isAccommodationPendingReview) {
+          unpacked.installment_2_status = 'pending_review';
+          unpacked.payment_status = 'pending_review';
+        } else if (unpacked.installment_2_status !== 'rejected') {
+          unpacked.installment_2_status = 'unpaid';
+          unpacked.payment_status = unpacked.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+        }
+      }
+
+      // หากหักลบค่าที่พักแล้วไม่มียอดต้องโอนคืน (overpaidAmount === 0) ให้ลบรายการขอเอกสารโอนคืนเงินส่วนเกินเดิมออกอัตโนมัติ
+      if (!staffSum.isOverpaid && Array.isArray(unpacked.requested_docs)) {
+        unpacked.requested_docs = unpacked.requested_docs.filter(d => d?.id !== 'req_staff_overpaid_refund');
       }
     }
   } else {
@@ -282,9 +326,10 @@ const packRegistrationForSupabase = (fullData) => {
     id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
     is_staff: Boolean(isStaff),
     staff_role_type: fullData.staff_role_type || (isStaff ? 'committee' : 'participant'),
+    staff_accommodation_paid: Boolean(fullData.staff_accommodation_paid),
     registration_type: isStaff ? 'staff' : (fullData.registration_type || 'participant'),
     gender: fullData.gender || resolveGender(fullData),
-    payment_plan: isStaff ? 'full' : (fullData.payment_plan || 'full'),
+    payment_plan: isStaff ? (isMsuInstitution(fullData) ? 'full' : (fullData.payment_plan || 'installment')) : (fullData.payment_plan || 'full'),
     overpaid_amount: Number(fullData.overpaid_amount || 0),
     refund_amount: Number(fullData.refund_amount || fullData.overpaid_amount || 0),
     refund_status: fullData.refund_status || '',
