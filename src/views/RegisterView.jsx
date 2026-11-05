@@ -2386,6 +2386,63 @@ export default function RegisterView({
           <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" />
         )}
 
+        {/* Urgent Final Deadline Notification for Pending Round 2 / Accommodation */}
+        {(() => {
+          const isStaff = isStaffRegistration(myRegistration);
+          let owesMoney = false;
+          let remAmount = 0;
+          let label = '';
+          if (isStaff) {
+            const s = getStaffPaymentSummary(myRegistration);
+            if (!s.isMsu && s.accommodationRemaining > 0) {
+              owesMoney = true;
+              remAmount = s.accommodationRemaining;
+              label = `ค่าที่พัก Staff ต่างมหาวิทยาลัย (${remAmount} บาท)`;
+            }
+          } else {
+            const isInstallment = myRegistration.payment_plan === 'installment' || Boolean(myRegistration.installment_1_slip_url || myRegistration.installment_2_slip_url);
+            if (isInstallment && myRegistration.installment_2_status !== 'paid') {
+              owesMoney = true;
+              const isMsu = isMsuInstitution(myRegistration.institution);
+              remAmount = isMsu ? 250 : 450;
+              label = `เงินงวดที่ 2 (งวดสุดท้าย: ${remAmount} บาท)`;
+            } else if (myRegistration.payment_status === 'unpaid') {
+              owesMoney = true;
+              const isMsu = isMsuInstitution(myRegistration.institution);
+              remAmount = isMsu ? 650 : 850;
+              label = `ยอดค้างชำระค่าลงทะเบียน (${remAmount} บาท)`;
+            }
+          }
+
+          if (!owesMoney) return null;
+
+          return (
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-950/90 via-red-950/85 to-amber-950/80 border-2 border-rose-500/70 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-600 flex items-center justify-center text-white shrink-0 shadow">
+                  <AlertCircle className="w-5 h-5 text-amber-200" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black uppercase">
+                      🚨 แจ้งเตือนด่วนวันสุดท้าย
+                    </span>
+                    <span className="text-xs font-bold text-amber-200">
+                      ช้าสุดไม่เกินพรุ่งนี้ทุกกรณี
+                    </span>
+                  </div>
+                  <h3 className="text-sm sm:text-base font-black text-white mt-0.5">
+                    กำหนดชำระ{label} วันนี้วันสุดท้าย (5 พ.ย.)
+                  </h3>
+                  <p className="text-xs text-rose-100/90 mt-0.5">
+                    โปรดโอนชำระเข้าบัญชี SCB 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก) และแนบสลิปด้านล่างเพื่อรักษาสิทธิ์ของท่าน
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Official JRE 2027 Participant Group Chat Banner (Mandatory Join) */}
         <section className="rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-purple-950/90 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">

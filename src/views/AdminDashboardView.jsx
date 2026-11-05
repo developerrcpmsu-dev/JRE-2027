@@ -2868,12 +2868,12 @@ export default function AdminDashboardView({
     const remAmt = paySummary.accommodationRemaining;
 
     const msgTitle = paySummary.isOffsetApplied
-      ? `🏨 แจ้งยอดชำระค่าที่พัก Staff ต่างมหาวิทยาลัย (หลังหักลบยอดโอนเกิน คงเหลือชำระเพิ่ม ${remAmt} บาท)`
-      : `🏨 แจ้งเตือนชำระค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัย (${remAmt} บาท)`;
+      ? `🚨 [ด่วนที่สุด] ชำระค่าที่พัก Staff ต่างมหาลัย วันนี้วันสุดท้าย (หลังหักลบยอดโอนเกิน คงเหลือ ${remAmt} บาท)`
+      : `🚨 [ด่วนที่สุด] ชำระค่าที่พัก Staff ต่างมหาวิทยาลัย (${remAmt} บาท) วันนี้วันสุดท้าย • ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี`;
 
     const msgBody = paySummary.isOffsetApplied
-      ? `เรียนคุณ ${fullName} (คณะกรรมการดำเนินงาน / STAFF สังกัด ${uniShort})\n\nขอแจ้งรายละเอียดค่าใช้จ่ายและการหักลบยอดโอนสำหรับ Staff ต่างมหาวิทยาลัย (ไม่ใช่ มมส) ดังนี้ครับ:\n• ค่าเสื้อฝึก Staff: 280 บาท\n• ค่าที่พักหอพักกุดรัง มมส: 200 บาท\n• รวมยอดที่ต้องชำระทั้งหมด: 480 บาท\n\n✅ ยอดที่ท่านโอนมาแล้วในรอบแรก: ${paySummary.r1SlipAmount} บาท\n🔄 หักค่าเสื้อ Staff 280 บาท (มีส่วนเกิน +${paySummary.overpaidShirtAmount} บาท ระบบได้นำไปหักลบกับค่าที่พัก 200 บาทให้อัตโนมัติแล้ว)\n💳 คงเหลือยอดค่าที่พักส่วนที่เหลือที่ต้องโอนเพิ่ม: ${remAmt} บาท (ไม่ต้องโอนเงินคืน)\n\n🏦 ช่องทางโอนชำระส่วนที่เหลือ (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\nเมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปค่าที่พัก (${remAmt} บาท) ในหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ขอบคุณครับ`
-      : `เรียนคุณ ${fullName} (คณะกรรมการดำเนินงาน / STAFF สังกัด ${uniShort})\n\nขอแจ้งรายละเอียดค่าใช้จ่ายสำหรับ Staff ต่างมหาวิทยาลัย (ไม่ใช่ มมส) ดังนี้ครับ:\n• ค่าเสื้อฝึก Staff: 280 บาท (ชำระเรียบร้อยแล้ว ✓)\n• ค่าที่พักหอพักกุดรัง มมส: 200 บาท (รอชำระ)\n• รวมยอดที่ต้องชำระทั้งหมด: 480 บาท\n\n💳 คงเหลือยอดค่าที่พักที่ต้องโอนชำระเพิ่ม: ${remAmt} บาท\n\n🏦 ช่องทางโอนชำระค่าที่พัก (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\nเมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปค่าที่พัก (${remAmt} บาท) ในหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ขอบคุณครับ`;
+      ? `เรียนคุณ ${fullName} (คณะกรรมการดำเนินงาน / STAFF สังกัด ${uniShort})\n\n🚨 แจ้งเตือนด่วนที่สุด: กำหนดชำระค่าที่พัก Staff วันนี้เป็นวันสุดท้าย และช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี เพื่อรักษาสิทธิ์การเข้าร่วมโครงการ JRE 2027 และการจัดเตรียมห้องพักครับ\n\nขอแจ้งรายละเอียดค่าใช้จ่ายและการหักลบยอดโอนสำหรับ Staff ต่างมหาวิทยาลัย (ไม่ใช่ มมส) ดังนี้ครับ:\n• ค่าเสื้อฝึก Staff: 280 บาท\n• ค่าที่พักหอพักกุดรัง มมส: 200 บาท\n• รวมยอดที่ต้องชำระทั้งหมด: 480 บาท\n\n✅ ยอดที่ท่านโอนมาแล้วในรอบแรก: ${paySummary.r1SlipAmount} บาท\n🔄 หักค่าเสื้อ Staff 280 บาท (มีส่วนเกิน +${paySummary.overpaidShirtAmount} บาท ระบบได้นำไปหักลบกับค่าที่พัก 200 บาทให้อัตโนมัติแล้ว)\n💳 คงเหลือยอดค่าที่พักส่วนที่เหลือที่ต้องโอนเพิ่ม: ${remAmt} บาท (ไม่ต้องโอนเงินคืน)\n\n🏦 ช่องทางโอนชำระส่วนที่เหลือ (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\n⚠️ เมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปค่าที่พัก (${remAmt} บาท) ในหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ภายในวันนี้หรือช้าสุดไม่เกินวันพรุ่งนี้ ขอบคุณครับ`
+      : `เรียนคุณ ${fullName} (คณะกรรมการดำเนินงาน / STAFF สังกัด ${uniShort})\n\n🚨 แจ้งเตือนด่วนที่สุด: กำหนดชำระค่าที่พัก Staff วันนี้เป็นวันสุดท้าย และช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี เพื่อรักษาสิทธิ์การเข้าร่วมโครงการ JRE 2027 และการจัดเตรียมห้องพักครับ\n\nขอแจ้งรายละเอียดค่าใช้จ่ายสำหรับ Staff ต่างมหาวิทยาลัย (ไม่ใช่ มมส) ดังนี้ครับ:\n• ค่าเสื้อฝึก Staff: 280 บาท (ชำระเรียบร้อยแล้ว ✓)\n• ค่าที่พักหอพักกุดรัง มมส: 200 บาท (รอชำระ)\n• รวมยอดที่ต้องชำระทั้งหมด: 480 บาท\n\n💳 คงเหลือยอดค่าที่พักที่ต้องโอนชำระเพิ่ม: ${remAmt} บาท\n\n🏦 ช่องทางโอนชำระค่าที่พัก (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\n⚠️ เมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปค่าที่พัก (${remAmt} บาท) ในหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ภายในวันนี้หรือช้าสุดไม่เกินวันพรุ่งนี้ ขอบคุณครับ`;
 
     const existingMsgs = Array.isArray(reg.admin_messages) ? reg.admin_messages : [];
     const cleanedMsgs = existingMsgs.filter(m =>
@@ -2966,8 +2966,8 @@ export default function AdminDashboardView({
     const bankAcc = paymentConfig?.bank_account_number || '594-264865-5';
     const bankHolder = paymentConfig?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก';
 
-    const msgTitle = `⏳ แจ้งเตือนชำระเงินงวดที่ 2 (${remAmt} บาท) • ยืนยันสิทธิ์โครงการ JRE 2027`;
-    const msgBody = `เรียนคุณ ${fullName}\n\nขอแจ้งรายละเอียดและกำหนดการชำระเงินงวดที่ 2 เพื่อยืนยันสิทธิ์การเข้าร่วมโครงการฝึกซ้อมร่วมประจำปี JRE 2027 ดังนี้ครับ:\n\n• ยอดชำระงวดที่ 1: 400 บาท (ชำระแล้ว ✓)\n• ยอดชำระงวดที่ 2: ${remAmt} บาท (รอชำระ)\n\n🏦 ช่องทางโอนชำระเงินงวดที่ 2 (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\nเมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปงวดที่ 2 ผ่านหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ขอบคุณครับ`;
+    const msgTitle = `🚨 [ด่วนที่สุด] ชำระเงินรอบที่ 2 (${remAmt} บาท) วันนี้วันสุดท้าย • ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี`;
+    const msgBody = `เรียนคุณ ${fullName}\n\n🚨 แจ้งเตือนด่วนที่สุด: กำหนดชำระเงินรอบที่ 2 (งวดสุดท้าย) วันนี้เป็นวันสุดท้าย และช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี เพื่อรักษาสิทธิ์การเข้าร่วมโครงการฝึกซ้อมร่วมประจำปี JRE 2027 และการจัดเตรียมที่พัก/เสื้อโครงการครับ\n\n• ยอดชำระงวดที่ 1: 400 บาท (ชำระแล้ว ✓)\n• ยอดชำระงวดที่ 2 (งวดสุดท้าย): ${remAmt} บาท (รอชำระ)\n\n🏦 ช่องทางโอนชำระเงินงวดที่ 2 (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\n⚠️ เมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปงวดที่ 2 ผ่านระบบที่ https://jre-2027.vercel.app/register ภายในวันนี้หรือช้าสุดพรุ่งนี้เท่านั้น หากมีข้อติดขัดประการใดโปรดติดต่อฝ่ายการเงินทันทีครับ ขอบคุณครับ`;
 
     const existingMsgs = Array.isArray(reg.admin_messages) ? reg.admin_messages : [];
     const newMsg = {
@@ -3016,6 +3016,103 @@ export default function AdminDashboardView({
       await handleNotifyRound2(reg, true);
     }
     triggerToast(`🔔 ส่งข้อความแจ้งเตือนงวดที่ 2 ครบทั้ง ${list.length} คน เรียบร้อยแล้ว!`);
+  };
+
+  // Dev & Admin Refund Toggle: Choose whether to refund overpaid amount or keep as project donation (No Refund)
+  const handleToggleRefundMode = async (reg) => {
+    if (!reg) return;
+    const staffSum = getStaffPaymentSummary(reg);
+    const nextIsNoRefund = !staffSum.isNoRefund;
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    const pName = resolvePersonFullNameWithTitle(reg).fullName;
+
+    const updates = {
+      refund_action_type: nextIsNoRefund ? 'no_refund' : 'refund',
+      refund_status: nextIsNoRefund ? 'no_refund' : (reg.refund_slip_url ? 'refunded' : 'pending_refund'),
+      no_refund: nextIsNoRefund,
+      keep_as_donation: nextIsNoRefund
+    };
+
+    await onUpdateAllocation(targetKey, updates);
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    if (nextIsNoRefund) {
+      triggerToast(`💙 ปรับสถานะ ${pName} เป็น: ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน ${staffSum.actualSlipAmount} บ.)`);
+    } else {
+      triggerToast(`🔄 ปรับสถานะ ${pName} เป็น: ต้องโอนเงินคืน (+${staffSum.overpaidAmount} บ.) • สรุปยอดเงิน: รายรับ / รายจ่ายโอนคืน / คงเหลือสุทธิ`);
+    }
+  };
+
+  const handleSetRefundMode = async (reg, mode) => {
+    if (!reg) return;
+    const isNoRef = mode === 'no_refund';
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    const staffSum = getStaffPaymentSummary(reg);
+    const pName = resolvePersonFullNameWithTitle(reg).fullName;
+
+    const updates = {
+      refund_action_type: isNoRef ? 'no_refund' : 'refund',
+      refund_status: isNoRef ? 'no_refund' : (reg.refund_slip_url ? 'refunded' : 'pending_refund'),
+      no_refund: isNoRef,
+      keep_as_donation: isNoRef
+    };
+
+    await onUpdateAllocation(targetKey, updates);
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    if (isNoRef) {
+      triggerToast(`💙 ปรับสถานะ ${pName} เป็น: ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน ${staffSum.actualSlipAmount} บ.)`);
+    } else {
+      triggerToast(`🔄 ปรับสถานะ ${pName} เป็น: ต้องโอนเงินคืน (+${staffSum.overpaidAmount} บ.) • สรุปยอดเงิน: รายรับ / รายจ่ายโอนคืน / คงเหลือสุทธิ`);
+    }
+  };
+
+  // 1-Click Broadcast: Urgent Round 2 Final Deadline (Today is last day, tomorrow at absolute latest)
+  const handleBroadcastRound2UrgentDeadline = async () => {
+    const targetRegs = (registrations || []).filter(reg => {
+      if (!reg) return false;
+      const isStaff = isStaffRegistration(reg);
+      if (isStaff) {
+        const s = getStaffPaymentSummary(reg);
+        return !s.isMsu && s.accommodationRemaining > 0;
+      } else {
+        const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+        if (isInstallment && reg.installment_2_status !== 'paid') return true;
+        if (reg.payment_status === 'unpaid') return true;
+        return false;
+      }
+    });
+
+    if (targetRegs.length === 0) {
+      triggerToast('ยอดเยี่ยม! ผู้เข้าร่วมและ Staff ทุกคนชำระเงินครบถ้วนเรียบร้อยแล้ว ไม่มีรายการค้างชำระ');
+      return;
+    }
+
+    const ok = await askConfirm({
+      title: `🚨 แจ้งเตือนด่วน: ชำระรอบ 2 วันนี้วันสุดท้าย (${targetRegs.length} คน)`,
+      message: `ระบบจะส่งข้อความแจ้งเตือนด่วน "ชำระเงินรอบที่ 2 วันนี้วันสุดท้าย ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี" พร้อมยอดเงินและเลขที่บัญชี SCB ถึงผู้ที่มียอดค้างชำระทั้งหมด ${targetRegs.length} คน คุณต้องการยืนยันหรือไม่?`,
+      confirmText: 'ยืนยันส่งข้อความด่วนทุกคน',
+      cancelText: 'ยกเลิก',
+      variant: 'warning'
+    });
+    if (!ok) return;
+
+    let count = 0;
+    for (const reg of targetRegs) {
+      const isStaff = isStaffRegistration(reg);
+      if (isStaff) {
+        await handleNotifyStaffAccommodation(reg, true);
+      } else {
+        await handleNotifyRound2(reg, true);
+      }
+      count++;
+    }
+
+    triggerToast(`🚨 ส่งข้อความแจ้งเตือนด่วนกำหนดชำระรอบ 2 วันสุดท้ายครบทั้ง ${count} คน เรียบร้อยแล้ว!`);
   };
 
   // Upload Attachment for Outgoing Admin Message
@@ -4909,6 +5006,16 @@ export default function AdminDashboardView({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
+              onClick={handleBroadcastRound2UrgentDeadline}
+              className="px-4 py-2.5 bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-rose-950/40 border border-rose-400/40 transition-all active:scale-95 cursor-pointer animate-pulse"
+              title="ส่งข้อความแจ้งเตือนด่วน 'ชำระเงินรอบที่ 2 วันนี้วันสุดท้าย ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี' ถึงทุกคนที่มียอดค้าง"
+            >
+              <Bell className="w-4 h-4 text-amber-200" />
+              <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowUniversalScanner(true)}
               className="px-4 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-orange-950/40 border border-orange-300/50 transition-all active:scale-95 cursor-pointer"
               title="สแกน QR Code อัจฉริยะ (ตรวจบัตร ID, เช็คชื่อรับเสื้อฝึก, ส่งมอบสินค้า/ออเดอร์ ที่เดียวครบ)"
@@ -5837,17 +5944,29 @@ export default function AdminDashboardView({
                           </div>
                         </div>
 
-                        {staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start lg:self-auto">
+                          {staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleBulkNotifyStaffAccommodation}
+                              className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                              title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักพร้อมรายละเอียดหักลบเงินโอนเกินให้ Staff ต่างมหาวิทยาลัยทุกคนที่ยังค้างชำระ"
+                            >
+                              <Bell className="w-4 h-4" />
+                              <span>🔔 แจ้งเตือนค้างค่าที่พัก Staff ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount})</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
-                            onClick={handleBulkNotifyStaffAccommodation}
-                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-lg transition-all cursor-pointer flex items-center gap-2 shrink-0 self-start lg:self-auto"
-                            title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักพร้อมรายละเอียดหักลบเงินโอนเกินให้ Staff ต่างมหาวิทยาลัยทุกคนที่ยังค้างชำระ"
+                            onClick={handleBroadcastRound2UrgentDeadline}
+                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg transition-all cursor-pointer flex items-center gap-2 animate-pulse"
+                            title="ส่งแจ้งเตือนด่วน: วันนี้วันสุดท้ายสำหรับการชำระเงินรอบ 2 / ค่าที่พัก ช้าสุดไม่เกินพรุ่งนี้ทุกกรณี"
                           >
-                            <Bell className="w-4 h-4" />
-                            <span>🔔 แจ้งเตือนค้างค่าที่พักครบทุกคน ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount})</span>
+                            <AlertCircle className="w-4 h-4 text-amber-200" />
+                            <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
 
@@ -5922,7 +6041,7 @@ export default function AdminDashboardView({
                         </p>
                       </div>
 
-                      {/* Box 4: Overpaid Refund Summary */}
+                      {/* Box 4: Overpaid Refund & Financial Summary (Gross, Expense, Net) */}
                       <div
                         onClick={() => setStaffSubFilter(staffSubFilter === 'refund' ? 'all' : 'refund')}
                         className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
@@ -5932,19 +6051,36 @@ export default function AdminDashboardView({
                         }`}
                       >
                         <div className="flex items-center justify-between text-rose-300 font-bold">
-                          <span>4. สรุปยอดที่ทางเราต้องโอนคืน</span>
-                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 text-[10px] font-black">Refund Summary</span>
+                          <span>4. สรุปการเงิน Staff & ยอดโอนคืน</span>
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 text-[10px] font-black">
+                            {staffAndRefundMetrics.totalRefundPeopleCount > 0 ? `ต้องคืน ${staffAndRefundMetrics.totalRefundPeopleCount} คน` : 'ไม่ต้องโอนคืน'}
+                          </span>
                         </div>
                         <p className="text-base sm:text-lg font-black text-white">
-                          ต้องโอนคืนรวม: <span className="text-amber-300 font-bold">{staffAndRefundMetrics.totalRefundPeopleCount} คน ({staffAndRefundMetrics.totalRefundAmount.toLocaleString()} บาท)</span>
+                          {staffAndRefundMetrics.totalRefundAmount > 0 ? (
+                            <>ต้องโอนคืน: <span className="text-rose-300 font-bold">฿{staffAndRefundMetrics.totalRefundAmount.toLocaleString()}</span></>
+                          ) : (
+                            <span className="text-emerald-400 font-bold">ไม่ต้องโอนคืน (สมทบเข้าโครงการ)</span>
+                          )}
                         </p>
-                        <div className="flex flex-wrap items-center gap-x-2 text-[11px]">
-                          <span className="text-emerald-300 font-bold">
-                            ✅ โอนคืนแล้ว: {staffAndRefundMetrics.refundedPeopleCount} คน ({staffAndRefundMetrics.refundedAmount.toLocaleString()} บ.)
-                          </span>
-                          <span className="text-rose-300 font-bold">
-                            ⏳ รอโอนคืน: {staffAndRefundMetrics.pendingRefundPeopleCount} คน ({staffAndRefundMetrics.pendingRefundAmount.toLocaleString()} บ.)
-                          </span>
+                        <div className="text-[11px] space-y-0.5">
+                          <div className="flex items-center justify-between text-slate-300">
+                            <span>📥 รายรับ Staff รวม:</span>
+                            <span className="font-mono font-bold text-white">฿{staffAndRefundMetrics.totalStaffGrossRevenue.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-rose-300">
+                            <span>💸 รายจ่ายโอนคืน:</span>
+                            <span className="font-mono font-bold">฿{staffAndRefundMetrics.totalStaffRefundExpense.toLocaleString()} ({staffAndRefundMetrics.totalRefundPeopleCount} คน)</span>
+                          </div>
+                          <div className="flex items-center justify-between text-emerald-300 font-bold border-t border-slate-800/80 pt-0.5">
+                            <span>💰 คงเหลือสุทธิโครงการ:</span>
+                            <span className="font-mono">฿{staffAndRefundMetrics.totalStaffNetRevenue.toLocaleString()}</span>
+                          </div>
+                          {staffAndRefundMetrics.noRefundPeopleCount > 0 && (
+                            <div className="text-[10px] text-sky-300 mt-1">
+                              💙 สมทบเข้าโครงการ (ไม่ต้องคืน): {staffAndRefundMetrics.noRefundPeopleCount} คน (฿{staffAndRefundMetrics.noRefundAmount.toLocaleString()})
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -6172,16 +6308,50 @@ export default function AdminDashboardView({
                                       )}
                                     </td>
 
-                                    {/* Overpaid Refund */}
-                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                                    {/* Overpaid Refund / Dev Toggle Override */}
+                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap" onClick={e => e.stopPropagation()}>
                                       {ss.overpaidAmount > 0 ? (
-                                        <span className={`px-2.5 py-1 rounded-lg font-black inline-flex items-center gap-1 ${
-                                          ss.isRefunded
-                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                            : 'bg-rose-500/25 text-rose-200 border border-rose-500/40 animate-pulse'
-                                        }`}>
-                                          +{ss.overpaidAmount} บ. ({ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน'})
-                                        </span>
+                                        ss.isNoRefund ? (
+                                          <div className="space-y-1 inline-block text-right">
+                                            <span className="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/40 font-black inline-flex items-center gap-1 text-[11px] shadow-sm">
+                                              <CheckCircle2 className="w-3 h-3 text-sky-400" />
+                                              💙 ไม่ต้องโอนคืน
+                                            </span>
+                                            <div className="text-[10px] text-emerald-400 font-bold">
+                                              (สมทบโครงการ {ss.actualSlipAmount} บ.)
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleRefundMode(sr)}
+                                              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[10px] font-bold cursor-pointer transition-all inline-flex items-center gap-1 shadow"
+                                              title="คลิกเพื่อสลับเป็นต้องโอนเงินคืน (Dev Override)"
+                                            >
+                                              <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
+                                              <span>สลับเป็นต้องโอนคืน</span>
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-1 inline-block text-right">
+                                            <span className={`px-2.5 py-1 rounded-lg font-black inline-flex items-center gap-1 text-[11px] ${
+                                              ss.isRefunded
+                                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                                : 'bg-rose-500/25 text-rose-200 border border-rose-500/40 animate-pulse'
+                                            }`}>
+                                              +{ss.overpaidAmount} บ. ({ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน'})
+                                            </span>
+                                            <div className="text-[10px] text-slate-400 font-mono">
+                                              📥 {ss.grossRevenue} | 💸 {ss.refundExpense} | 💰 {ss.netRevenue} บ.
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleRefundMode(sr)}
+                                              className="px-2 py-0.5 rounded bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-500/40 text-[10px] font-bold cursor-pointer transition-all inline-flex items-center gap-1 shadow"
+                                              title="คลิกเพื่อปรับเป็นไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน • Dev Override)"
+                                            >
+                                              <span>💙 Dev: ไม่ต้องโอนคืน</span>
+                                            </button>
+                                          </div>
+                                        )
                                       ) : (
                                         <span className="text-slate-600">0 บ.</span>
                                       )}
@@ -6303,22 +6473,57 @@ export default function AdminDashboardView({
                                 )}
 
                                 {ss.overpaidAmount > 0 && (
-                                  <div className={`p-2.5 rounded-xl border text-xs flex items-start gap-2 ${
-                                    ss.isRefunded
-                                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-                                      : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
-                                  }`}>
-                                    <CreditCard className="w-4 h-4 shrink-0 mt-0.5" />
-                                    <div>
-                                      <span className="font-bold">เงินส่วนเกินที่ต้องโอนคืน: +{ss.overpaidAmount} บาท</span>
-                                      <span className="block text-[11px] mt-0.5">
-                                        สถานะ: <strong className={ss.isRefunded ? 'text-emerald-300' : 'text-amber-300'}>
-                                          {ss.isRefunded ? '✓ โอนคืนเรียบร้อยแล้ว' : '⏳ รอแอดมินโอนคืน'}
-                                        </strong>
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
+                                   ss.isNoRefund ? (
+                                     <div className="p-3 rounded-xl border border-sky-400/50 bg-sky-950/40 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                       <div className="flex items-start gap-2">
+                                         <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                                         <div>
+                                           <span className="font-bold text-sky-200">💙 Dev: ไม่ต้องโอนคืน (สมทบโครงการเต็ม)</span>
+                                           <div className="text-[11px] text-emerald-300 font-mono mt-0.5">
+                                             📥 สรุปยอดเงินโครงการทั้งหมด: {ss.actualSlipAmount} บาท
+                                           </div>
+                                         </div>
+                                       </div>
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleToggleRefundMode(sr);
+                                         }}
+                                         className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-bold cursor-pointer transition-all self-start sm:self-auto shrink-0 flex items-center gap-1"
+                                       >
+                                         <RotateCcw className="w-3 h-3 text-amber-400" />
+                                         <span>สลับเป็นต้องโอนคืน</span>
+                                       </button>
+                                     </div>
+                                   ) : (
+                                     <div className={`p-3 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                                       ss.isRefunded
+                                         ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                                         : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                                     }`}>
+                                       <div className="flex items-start gap-2">
+                                         <CreditCard className="w-4 h-4 shrink-0 mt-0.5" />
+                                         <div>
+                                           <span className="font-bold">เงินส่วนเกินที่ต้องโอนคืน: +{ss.overpaidAmount} บาท ({ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน'})</span>
+                                           <div className="text-[11px] text-slate-300 font-mono mt-0.5">
+                                             📥 รายรับ {ss.grossRevenue} | 💸 รายจ่ายโอนคืน {ss.refundExpense} | 💰 คงเหลือสุทธิ {ss.netRevenue} บ.
+                                           </div>
+                                         </div>
+                                       </div>
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleToggleRefundMode(sr);
+                                         }}
+                                         className="px-2.5 py-1 rounded-lg bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-500/40 text-[11px] font-bold cursor-pointer transition-all self-start sm:self-auto shrink-0"
+                                       >
+                                         💙 Dev: ไม่ต้องโอนคืน
+                                       </button>
+                                     </div>
+                                   )
+                                 )}
 
                                 {/* Status & Actions Footer */}
                                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
@@ -6428,6 +6633,16 @@ export default function AdminDashboardView({
 
                         {/* Bulk Action Buttons */}
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleBroadcastRound2UrgentDeadline}
+                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg cursor-pointer flex items-center gap-2 animate-pulse"
+                            title="ส่งแจ้งเตือนด่วน: วันนี้วันสุดท้ายสำหรับการชำระเงินรอบ 2 / ค่าที่พัก ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี"
+                          >
+                            <AlertCircle className="w-4 h-4 text-amber-200" />
+                            <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
+                          </button>
+
                           {dedicatedSubpage === 'round1-paid' && (
                             <button
                               type="button"
@@ -6435,7 +6650,7 @@ export default function AdminDashboardView({
                               className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-lg cursor-pointer flex items-center gap-2"
                             >
                               <Bell className="w-4 h-4" />
-                              <span>🔔 แจ้งเตือนงวด 2 ถึงทุกคน ({dedicatedList.length} คน)</span>
+                              <span>🔔 แจ้งเตือนงวด 2 รายชื่อในหน้านี้ ({dedicatedList.length} คน)</span>
                             </button>
                           )}
 
@@ -6446,7 +6661,7 @@ export default function AdminDashboardView({
                               className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg cursor-pointer flex items-center gap-2"
                             >
                               <Bell className="w-4 h-4" />
-                              <span>🔔 แจ้งเตือนยอดค้างถึงทุกคน ({dedicatedList.length} คน)</span>
+                              <span>🔔 แจ้งเตือนยอดค้างรายชื่อในหน้านี้ ({dedicatedList.length} คน)</span>
                             </button>
                           )}
                         </div>
@@ -8084,7 +8299,7 @@ export default function AdminDashboardView({
             onClick={handleCloseProfileModal}
           >
             <div 
-              className="bg-slate-900 border border-slate-700 w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[95vw] rounded-3xl p-5 sm:p-7 lg:p-8 shadow-2xl relative max-h-[94vh] overflow-y-auto transition-all"
+              className="bg-slate-900 border border-slate-700 w-full max-w-[97vw] 2xl:max-w-[98vw] rounded-3xl p-4 sm:p-6 lg:p-8 shadow-2xl relative max-h-[96vh] overflow-y-auto transition-all"
               onClick={e => e.stopPropagation()}
             >
             
@@ -9900,18 +10115,26 @@ export default function AdminDashboardView({
                     if (!staffPayInfo.isOverpaid && !profileModalReg.refund_slip_url) return null;
                     const overpaidAmt = staffPayInfo.overpaidAmount || Number(profileModalReg.overpaid_amount || 0);
                     return (
-                      <div className={`p-4 rounded-2xl border-2 space-y-4 ${
-                        staffPayInfo.isRefunded
+                      <div className={`p-4 sm:p-5 rounded-2xl border-2 space-y-4 ${
+                        staffPayInfo.isNoRefund
+                          ? 'bg-sky-950/20 border-sky-500/50'
+                          : staffPayInfo.isRefunded
                           ? 'bg-emerald-950/25 border-emerald-500/50'
                           : 'bg-amber-950/25 border-amber-500/50'
                       }`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                        {/* Header & Dev Override Toggle */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-sm font-black text-white flex items-center gap-1.5">
-                                💸 ระบบจัดการโอนเงินคืนส่วนเกินสำหรับ (STAFF)
+                                💸 ระบบจัดการโอนเงินคืนส่วนเกิน & ควบคุมยอดเงิน (STAFF)
                               </span>
-                              {staffPayInfo.isRefunded ? (
+                              {staffPayInfo.isNoRefund ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-slate-950 font-black text-[11px] flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  💙 ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็ม)
+                                </span>
+                              ) : staffPayInfo.isRefunded ? (
                                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[11px]">
                                   ✅ โอนเงินส่วนเกินคืนแล้ว (+{overpaidAmt} บ.)
                                 </span>
@@ -9925,42 +10148,112 @@ export default function AdminDashboardView({
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-300 mt-1">
-                              ผู้สมัครโอนมาจริง <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • หักยอดรวม STAFF <strong className="text-purple-300">{staffPayInfo.totalStaffFee} บาท</strong> • ยอดเงินส่วนเกินสุทธิที่ทางเราต้องโอนคืน: <strong className="text-amber-300 text-xs">+{overpaidAmt} บาท</strong>
+                            <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                              ผู้สมัครโอนมาจริง <strong className="text-white">{staffPayInfo.actualSlipAmount} บาท</strong> • หักค่าเสื้อ STAFF <strong className="text-purple-300">{staffPayInfo.totalStaffFee} บาท</strong> • ยอดโอนเกิน: <strong className="text-amber-300 font-bold">+{overpaidAmt} บาท</strong>
                             </p>
                           </div>
 
+                          {/* Dev / Admin Toggle Control */}
                           <div className="flex flex-wrap items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleRequestOverpaidRefundDocs(profileModalReg)}
-                              className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-400/50 rounded-xl text-[11px] font-bold cursor-pointer transition-all"
-                              title="ส่งคำขอ เลขที่บัญชี ชื่อธนาคาร และเลขบัตรประชาชน ไปยังหน้าตรวจสอบสถานะและกล่องข้อความของผู้สมัคร"
-                            >
-                              📨 ขอเอกสาร เลขบัญชี/ชื่อธนาคาร/เลขบัตร ปชช.
-                            </button>
+                            <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 shadow">
+                              <button
+                                type="button"
+                                onClick={() => handleSetRefundMode(profileModalReg, 'refund')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  !staffPayInfo.isNoRefund
+                                    ? 'bg-rose-600 text-white shadow-md'
+                                    : 'text-slate-400 hover:text-white'
+                                }`}
+                                title="ตั้งค่าให้ทางโครงการโอนเงินส่วนเกินคืน (+370 บ.)"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>💸 ต้องโอนคืน (+{overpaidAmt} บ.)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetRefundMode(profileModalReg, 'no_refund')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  staffPayInfo.isNoRefund
+                                    ? 'bg-sky-600 text-white shadow-md'
+                                    : 'text-slate-400 hover:text-white'
+                                }`}
+                                title="ตั้งค่าไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน)"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>💙 ไม่ต้องโอนคืน (สมทบเต็ม)</span>
+                              </button>
+                            </div>
 
-                            {!staffPayInfo.isRefunded ? (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'refunded' })}
-                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
-                              >
-                                ✅ ปรับสถานะ: คืนเงินส่วนเกินแล้ว
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'pending_refund' })}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
-                              >
-                                ↩️ ยกเลิกสถานะคืนเงินแล้ว
-                              </button>
+                            {!staffPayInfo.isNoRefund && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRequestOverpaidRefundDocs(profileModalReg)}
+                                  className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-400/50 rounded-xl text-[11px] font-bold cursor-pointer transition-all"
+                                  title="ส่งคำขอ เลขที่บัญชี ชื่อธนาคาร และเลขบัตรประชาชน ไปยังหน้าตรวจสอบสถานะและกล่องข้อความของผู้สมัคร"
+                                >
+                                  📨 ขอเลขบัญชีคืนเงิน
+                                </button>
+
+                                {!staffPayInfo.isRefunded ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'refunded' })}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
+                                  >
+                                    ✅ ปรับ: คืนเงินแล้ว
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'pending_refund' })}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
+                                  >
+                                    ↩️ ยกเลิกสถานะคืนเงิน
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
 
-                        {/* Bank Account, Bank Name, Citizen ID & Refund Slip Upload */}
+                        {/* Financial Breakdown Cards: Gross Revenue, Refund Expense, Net Revenue */}
+                        {staffPayInfo.isNoRefund ? (
+                          <div className="p-3.5 rounded-xl bg-sky-950/40 border border-sky-400/50 space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-sky-200">📊 สรุปยอดเงินโครงการ (โหมด Dev: ไม่ต้องโอนคืน • สมทบโครงการเต็มจำนวน)</span>
+                              <span className="px-2 py-0.5 rounded bg-sky-500/25 text-sky-200 border border-sky-400/40 text-[10px] font-black">สมทบโครงการ 100%</span>
+                            </div>
+                            <div className="text-lg sm:text-xl font-black text-white font-mono">
+                              📥 สรุปยอดเงินรายรับโครงการทั้งหมด: <span className="text-emerald-400">{staffPayInfo.actualSlipAmount} บาท</span>
+                            </div>
+                            <p className="text-[11px] text-slate-300">
+                              ผู้สมัครชำระมา {staffPayInfo.actualSlipAmount} บาท ได้รับการบันทึกเป็นรายรับโครงการเต็มจำนวน โดยไม่มีภาระยอดหนี้ที่โครงการต้องโอนเงินคืน
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                            <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                              <div className="text-[10px] text-slate-400 font-semibold">📥 1. รายรับรวม (Gross Revenue)</div>
+                              <div className="text-base sm:text-lg font-black text-white font-mono mt-0.5">{staffPayInfo.grossRevenue} บาท</div>
+                              <div className="text-[9px] text-slate-400">ยอดที่ผู้สมัครโอนมาจริงตามสลิป</div>
+                            </div>
+                            <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-500/40">
+                              <div className="text-[10px] text-rose-300 font-semibold">💸 2. รายจ่ายโอนคืน (Refund Expense)</div>
+                              <div className="text-base sm:text-lg font-black text-rose-300 font-mono mt-0.5">{staffPayInfo.refundExpense} บาท</div>
+                              <div className="text-[9px] text-rose-200/80">ยอดเงินโอนเกินที่ทางเราต้องโอนคืน</div>
+                            </div>
+                            <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40">
+                              <div className="text-[10px] text-emerald-300 font-semibold">💰 3. คงเหลือสุทธิ (Net Revenue)</div>
+                              <div className="text-base sm:text-lg font-black text-emerald-300 font-mono mt-0.5">{staffPayInfo.netRevenue} บาท</div>
+                              <div className="text-[9px] text-emerald-200/80">รายรับสุทธิที่โครงการได้รับไว้จริง</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Bank Account, Bank Name, Citizen ID & Refund Slip Upload (Only when refund is required) */}
+                        {!staffPayInfo.isNoRefund && (
+                        <>
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                           <div>
                             <label className="block text-[11px] font-bold text-slate-300 mb-1">ชื่อธนาคาร (สำหรับรับเงินคืน):</label>
@@ -10066,6 +10359,8 @@ export default function AdminDashboardView({
                             />
                           </label>
                         </div>
+                        </>
+                        )}
                       </div>
                     );
                   })()}

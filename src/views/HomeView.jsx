@@ -22,7 +22,8 @@ import {
   Eye,
   Maximize2,
   Tag,
-  UserCheck
+  UserCheck,
+  AlertCircle
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
@@ -235,6 +236,39 @@ export default function HomeView({
           </div>
 
         </div>
+      </section>
+
+      {/* Urgent Round 2 & Accommodation Final Deadline Banner */}
+      <section className="rounded-3xl border-2 border-rose-500/70 bg-gradient-to-r from-rose-950/90 via-red-950/85 to-amber-950/80 p-5 sm:p-6 shadow-2xl shadow-rose-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-600 to-red-600 flex items-center justify-center text-white shadow-lg shrink-0 animate-bounce">
+            <AlertCircle className="w-6 h-6 text-amber-200" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider animate-pulse">
+                🚨 แจ้งเตือนด่วนที่สุด
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/40 text-[10px] font-bold">
+                ชำระเงินรอบที่ 2 (งวดสุดท้าย)
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-white">
+              ⏳ กำหนดชำระเงินรอบที่ 2 วันนี้วันสุดท้าย (5 พ.ย.) • ช้าสุดไม่เกินพรุ่งนี้ทุกกรณี
+            </h3>
+            <p className="text-xs text-rose-100/90 leading-relaxed">
+              ขอให้ผู้สมัครที่เลือกแผนแบ่งจ่าย 2 งวด และ Staff ต่างมหาวิทยาลัยที่ค้างชำระค่าที่พัก โอนและแนบสลิปผ่านระบบตรวจสอบสถานะภายในวันนี้หรือช้าสุดพรุ่งนี้ เพื่อรักษาสิทธิ์การเข้าร่วมโครงการ JRE 2027 (SCB: 594-264865-5)
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onNavigateRegister}
+          className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-center cursor-pointer transition-all active:scale-95"
+        >
+          <span>📤 ไปที่หน้าแนบสลิปงวดที่ 2</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </section>
 
       {/* Mandatory Participant Group Chat Announcement Banner */}

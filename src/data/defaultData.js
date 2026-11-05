@@ -950,6 +950,11 @@ export const getStaffPaymentSummary = (reg) => {
       isAccommodationPendingReview: false,
       overpaidAmount: 0,
       isOverpaid: false,
+      isNoRefund: false,
+      grossRevenue: 0,
+      refundExpense: 0,
+      netRevenue: 0,
+      refundRequiredAmount: 0,
       refundStatus: 'none',
       isRefunded: false,
       refundSlipUrl: '',
@@ -1029,11 +1034,20 @@ export const getStaffPaymentSummary = (reg) => {
     }
   }
 
+  const isNoRefund = Boolean(
+    reg.refund_action_type === 'no_refund' ||
+    reg.refund_status === 'no_refund' ||
+    reg.no_refund === true ||
+    reg.keep_as_donation === true
+  );
+
   const isOverpaid = isStaff && overpaidAmount > 0;
   const hasBankInfo = Boolean((reg.refund_bank_account || '').trim() && (reg.refund_bank_name || '').trim());
   let refundStatus = 'none';
   if (isOverpaid) {
-    if (reg.refund_slip_url || reg.refund_status === 'refunded') {
+    if (isNoRefund) {
+      refundStatus = 'no_refund';
+    } else if (reg.refund_slip_url || reg.refund_status === 'refunded') {
       refundStatus = 'refunded';
     } else if (hasBankInfo || reg.refund_status === 'info_submitted') {
       refundStatus = 'info_submitted';
@@ -1042,12 +1056,22 @@ export const getStaffPaymentSummary = (reg) => {
     }
   }
 
+  // คำนวณยอดสรุปการเงิน: รายรับ, รายจ่าย (โอนคืน), และคงเหลือสุทธิ
+  const grossRevenue = actualSlipAmount > 0 ? actualSlipAmount : totalStaffFee;
+  const refundExpense = (isOverpaid && !isNoRefund) ? overpaidAmount : 0;
+  const netRevenue = Math.max(0, grossRevenue - refundExpense);
+  const refundRequiredAmount = (isOverpaid && !isNoRefund) ? overpaidAmount : 0;
+
   // สร้างข้อความสรุปและหมายเหตุชัดเจน
   let summaryNote = '';
   if (isStaff) {
     if (isMsu) {
       if (isOverpaid) {
-        summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) โอนมา ${actualSlipAmount} บ. -> โอนเกินสุทธิ +${overpaidAmount} บ. (${refundStatus === 'refunded' ? 'โอนคืนแล้ว' : 'ทางเราต้องโอนคืน'})`;
+        if (isNoRefund) {
+          summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) โอนมา ${actualSlipAmount} บ. • [Dev: ไม่ต้องโอนคืน] สรุปยอดเงินรายรับโครงการทั้งหมด: ${actualSlipAmount} บาท (สมทบเข้าโครงการ ไม่ต้องโอนคืน)`;
+        } else {
+          summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) โอนมา ${actualSlipAmount} บ. • สรุปการเงิน: 📥 รายรับ ${actualSlipAmount} บ. | 💸 รายจ่ายโอนคืน ${overpaidAmount} บ. | 💰 คงเหลือสุทธิ ${netRevenue} บ. (${refundStatus === 'refunded' ? 'โอนคืนแล้ว' : 'ทางเราต้องโอนคืน'})`;
+        }
       } else if (actualSlipAmount >= shirtFee) {
         summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) ชำระครบถ้วนแล้ว ${actualSlipAmount} บ. (ไม่ต้องโอนคืน)`;
       } else {
@@ -1056,7 +1080,11 @@ export const getStaffPaymentSummary = (reg) => {
     } else {
       // Staff ต่างมหาวิทยาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.)
       if (isOverpaid) {
-        summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนมา ${actualSlipAmount} บ. หักค่าเสื้อและค่าที่พักครบแล้ว -> เหลือยอดโอนเกินที่ต้องโอนคืน +${overpaidAmount} บ. (${refundStatus === 'refunded' ? 'โอนคืนแล้ว' : 'รอโอนคืน'})`;
+        if (isNoRefund) {
+          summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนมา ${actualSlipAmount} บ. • [Dev: ไม่ต้องโอนคืน] สรุปยอดเงินรายรับโครงการทั้งหมด: ${actualSlipAmount} บาท (สมทบเข้าโครงการ ไม่ต้องโอนคืน)`;
+        } else {
+          summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนมา ${actualSlipAmount} บ. • สรุปการเงิน: 📥 รายรับ ${actualSlipAmount} บ. | 💸 รายจ่ายโอนคืน ${overpaidAmount} บ. | 💰 คงเหลือสุทธิ ${netRevenue} บ. (${refundStatus === 'refunded' ? 'โอนคืนแล้ว' : 'รอโอนคืน'})`;
+        }
       } else if (isOffsetApplied && accommodationRemaining > 0) {
         summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนรอบแรกมา ${r1SlipAmount} บ. (เกินค่าเสื้อมา +${overpaidShirtAmount} บ. นำไปหักลบค่าที่พัก ${accommodationFee} บ.) -> คงเหลือต้องชำระค่าที่พักเพิ่ม ${accommodationRemaining} บ. (ไม่ต้องโอนเงินคืน)`;
       } else if (isOffsetApplied && accommodationRemaining === 0) {
@@ -1092,6 +1120,11 @@ export const getStaffPaymentSummary = (reg) => {
     isAccommodationPendingReview,
     overpaidAmount,
     isOverpaid,
+    isNoRefund,
+    grossRevenue,
+    refundExpense,
+    netRevenue,
+    refundRequiredAmount,
     refundStatus,
     isRefunded: isOverpaid && refundStatus === 'refunded',
     refundSlipUrl: isOverpaid ? (reg.refund_slip_url || '') : '',
@@ -1119,6 +1152,7 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
   const pendingRefundList = [];
   const infoSubmittedRefundList = [];
   const waitingBankInfoRefundList = [];
+  const noRefundList = [];
 
   (registrations || []).forEach(reg => {
     if (!reg) return;
@@ -1153,15 +1187,19 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
     }
 
     if (summary.isOverpaid && summary.overpaidAmount > 0) {
-      refundList.push(item);
-      if (summary.isRefunded) {
-        refundedList.push(item);
+      if (summary.isNoRefund) {
+        noRefundList.push(item);
       } else {
-        pendingRefundList.push(item);
-        if (summary.refundStatus === 'info_submitted') {
-          infoSubmittedRefundList.push(item);
+        refundList.push(item);
+        if (summary.isRefunded) {
+          refundedList.push(item);
         } else {
-          waitingBankInfoRefundList.push(item);
+          pendingRefundList.push(item);
+          if (summary.refundStatus === 'info_submitted') {
+            infoSubmittedRefundList.push(item);
+          } else {
+            waitingBankInfoRefundList.push(item);
+          }
         }
       }
     }
@@ -1178,6 +1216,13 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
   const refundedAmount = refundedList.reduce((sum, x) => sum + x.summary.overpaidAmount, 0);
   const pendingRefundPeopleCount = pendingRefundList.length;
   const pendingRefundAmount = pendingRefundList.reduce((sum, x) => sum + x.summary.overpaidAmount, 0);
+
+  // คำนวณสรุปยอดเงิน Staff รวมทั้งหมด: รายรับจริง, รายจ่าย (ยอดที่ต้องโอนคืน), และคงเหลือสุทธิ
+  const totalStaffGrossRevenue = allStaff.reduce((sum, x) => sum + (x.summary.actualSlipAmount || x.summary.totalStaffFee), 0);
+  const totalStaffRefundExpense = totalRefundAmount;
+  const totalStaffNetRevenue = Math.max(0, totalStaffGrossRevenue - totalStaffRefundExpense);
+  const noRefundPeopleCount = noRefundList.length;
+  const noRefundAmount = noRefundList.reduce((sum, x) => sum + x.summary.overpaidAmount, 0);
 
   return {
     allStaff,
@@ -1201,7 +1246,13 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
     pendingRefundPeopleCount,
     pendingRefundAmount,
     infoSubmittedRefundList,
-    waitingBankInfoRefundList
+    waitingBankInfoRefundList,
+    noRefundList,
+    noRefundPeopleCount,
+    noRefundAmount,
+    totalStaffGrossRevenue,
+    totalStaffRefundExpense,
+    totalStaffNetRevenue
   };
 };
 
