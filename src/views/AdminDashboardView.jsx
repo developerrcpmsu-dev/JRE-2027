@@ -212,11 +212,12 @@ export default function AdminDashboardView({
   const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   const getRoleBadgeLabel = (roleVal, isMsuRow) => {
-    if (roleVal === 'committee') return '🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)';
-    if (roleVal === 'dev') return '💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)';
-    if (roleVal === 'mc') return '🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)';
-    if (roleVal === 'photographer') return '📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)';
-    if (roleVal === 'staff') return '🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)';
+    const feeText = isMsuRow ? '280 บ.' : '480 บ.: เสื้อ 280 + ที่พัก 200';
+    if (roleVal === 'committee') return `🛠️ (STAFF) คณะกรรมการดำเนินงาน (${feeText})`;
+    if (roleVal === 'dev') return `💻 (STAFF) ผู้พัฒนาระบบ Dev (${feeText})`;
+    if (roleVal === 'mc') return `🎤 (STAFF) พิธีกรดำเนินรายการ (${feeText})`;
+    if (roleVal === 'photographer') return `📸 (STAFF) ช่างภาพ / โสตฯ (${feeText})`;
+    if (roleVal === 'staff') return `🛠️ (STAFF) สตาฟโครงการทั่วไป (${feeText})`;
     return isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)';
   };
 
@@ -2747,6 +2748,106 @@ export default function AdminDashboardView({
     }
   };
 
+  // Notify Non-MSU Staff about 200 THB Accommodation Fee (or 80 THB remaining after 120 THB overpayment offset)
+  const handleNotifyStaffAccommodation = async (reg, silent = false) => {
+    if (!reg) return;
+    const paySummary = getStaffPaymentSummary(reg);
+    if (!paySummary.isStaff || paySummary.isMsu || paySummary.accommodationRemaining <= 0) {
+      if (!silent) triggerToast('รายการนี้ไม่มีค่าที่พักค้างชำระ');
+      return;
+    }
+
+    const fullName = resolvePersonFullNameWithTitle(reg).fullName;
+    const uniShort = resolveUniversityInfo(reg).shortTag;
+    const bankName = paymentConfig?.bank_name || 'ธนาคารไทยพาณิชย์';
+    const bankAcc = paymentConfig?.bank_account_number || '594-264865-5';
+    const bankHolder = paymentConfig?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก';
+    const remAmt = paySummary.accommodationRemaining;
+
+    const msgTitle = paySummary.isOffsetApplied
+      ? `🏨 แจ้งยอดชำระค่าที่พัก Staff ต่างมหาวิทยาลัย (หลังหักลบยอดโอนเกิน คงเหลือชำระเพิ่ม ${remAmt} บาท)`
+      : `🏨 แจ้งเตือนชำระค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัย (${remAmt} บาท)`;
+
+    const msgBody = paySummary.isOffsetApplied
+      ? `เรียนคุณ ${fullName} (คณะกรรมการดำเนินงาน / STAFF สังกัด ${uniShort})\n\nขอแจ้งรายละเอียดค่าใช้จ่ายและการหักลบยอดโอนสำหรับ Staff ต่างมหาวิทยาลัย (ไม่ใช่ มมส) ดังนี้ครับ:\n• ค่าเสื้อฝึก Staff: 280 บาท\n• ค่าที่พักหอพักกุดรัง มมส: 200 บาท\n• รวมยอดที่ต้องชำระทั้งหมด: 480 บาท\n\n✅ ยอดที่ท่านโอนมาแล้วในรอบแรก: ${paySummary.r1SlipAmount} บาท\n🔄 หักค่าเสื้อ Staff 280 บาท (มีส่วนเกิน +${paySummary.overpaidShirtAmount} บาท ระบบได้นำไปหักลบกับค่าที่พัก 200 บาทให้อัตโนมัติแล้ว)\n💳 คงเหลือยอดค่าที่พักส่วนที่เหลือที่ต้องโอนเพิ่ม: ${remAmt} บาท (ไม่ต้องโอนเงินคืน)\n\n🏦 ช่องทางโอนชำระส่วนที่เหลือ (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\nเมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปค่าที่พัก (${remAmt} บาท) ในหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ขอบคุณครับ`
+      : `เรียนคุณ ${fullName} (คณะกรรมการดำเนินงาน / STAFF สังกัด ${uniShort})\n\nขอแจ้งรายละเอียดค่าใช้จ่ายสำหรับ Staff ต่างมหาวิทยาลัย (ไม่ใช่ มมส) ดังนี้ครับ:\n• ค่าเสื้อฝึก Staff: 280 บาท (ชำระเรียบร้อยแล้ว ✓)\n• ค่าที่พักหอพักกุดรัง มมส: 200 บาท (รอชำระ)\n• รวมยอดที่ต้องชำระทั้งหมด: 480 บาท\n\n💳 คงเหลือยอดค่าที่พักที่ต้องโอนชำระเพิ่ม: ${remAmt} บาท\n\n🏦 ช่องทางโอนชำระค่าที่พัก (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\nเมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปค่าที่พัก (${remAmt} บาท) ในหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ขอบคุณครับ`;
+
+    const existingMsgs = Array.isArray(reg.admin_messages) ? reg.admin_messages : [];
+    const cleanedMsgs = existingMsgs.filter(m =>
+      m?.id !== 'msg_staff_accom_200' &&
+      !(String(m?.text || '').includes('จำนวน 450 บาท')) &&
+      !(String(m?.title || '').includes('โอนเงินส่วนเกินคืน (+120'))
+    );
+
+    const newMsg = {
+      id: 'msg_staff_accom_200',
+      title: msgTitle,
+      text: msgBody,
+      read: false,
+      created_at: new Date().toISOString(),
+      sender_key: 'finance_coord',
+      sender_name: 'ฝ่ายประสานงาน & การเงิน JRE 2027',
+      sender_role: 'Admin การเงินและสวัสดิการที่พัก',
+      system_name: 'ระบบชำระค่าที่พักและหักลบยอดเงิน Staff ต่างมหาวิทยาลัย',
+      color_theme: 'amber',
+      payment_amount: remAmt,
+      payment_status: 'unpaid',
+      payment_bank_info: `${bankName} เลขที่ ${bankAcc} ชื่อบัญชี ${bankHolder}`,
+      action_url: 'https://jre-2027.vercel.app/register',
+      action_label: `📤 ไปที่หน้าชำระค่าที่พัก (${remAmt} บ.) & แนบสลิป`
+    };
+
+    const nextDocs = (Array.isArray(reg.requested_docs) ? reg.requested_docs : []).filter(
+      d => d?.id !== 'req_staff_overpaid_refund'
+    );
+
+    const updates = {
+      payment_plan: 'installment',
+      payment_status: 'unpaid',
+      payment_amount: remAmt,
+      installment_1_status: 'paid',
+      installment_1_amount: STAFF_SHIRT_FEE,
+      installment_2_status: 'unpaid',
+      installment_2_amount: paySummary.accommodationNetRequiredAfterOffset,
+      staff_accommodation_paid: false,
+      overpaid_amount: 0,
+      refund_amount: 0,
+      refund_status: 'none',
+      payment_notes: paySummary.summaryNote,
+      requested_docs: nextDocs,
+      admin_messages: [newMsg, ...cleanedMsgs]
+    };
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, updates);
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setModalPaymentPlan('installment');
+      setModalPaymentStatus('unpaid');
+      setModalPaymentAmount(remAmt);
+      setModalInstallment2Status('unpaid');
+      setModalInstallment2Amount(paySummary.accommodationNetRequiredAfterOffset);
+      setModalPaymentNotes(paySummary.summaryNote);
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    if (!silent) {
+      triggerToast(`🔔 ส่งแจ้งเตือนค้างชำระค่าที่พัก (${remAmt} บ.) ให้ ${fullName} เรียบร้อยแล้ว`);
+    }
+  };
+
+  const handleBulkNotifyStaffAccommodation = async () => {
+    const unpaidList = staffAndRefundMetrics.externalStaffUnpaidAccomList || [];
+    if (unpaidList.length === 0) {
+      triggerToast('Staff ต่างมหาวิทยาลัยชำระค่าที่พักครบทุกคนแล้ว');
+      return;
+    }
+    for (const item of unpaidList) {
+      await handleNotifyStaffAccommodation(item.reg, true);
+    }
+    triggerToast(`🔔 ส่งแจ้งเตือนค้างชำระค่าที่พักให้ Staff ต่างมหาวิทยาลัยครบทั้ง ${unpaidList.length} คน (รวม ฿${staffAndRefundMetrics.externalStaffUnpaidAccomAmount}) เรียบร้อยแล้ว!`);
+  };
+
   // Upload Attachment for Outgoing Admin Message
   const handleUploadMsgAttachment = async (e) => {
     const file = e.target.files?.[0];
@@ -5006,6 +5107,17 @@ export default function AdminDashboardView({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBulkNotifyStaffAccommodation}
+                    className="px-3.5 py-1.5 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                    title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักพร้อมรายละเอียดหักลบเงินโอนเกินให้ Staff ต่างมหาวิทยาลัยทุกคนที่ยังค้างชำระ"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>🔔 แจ้งเตือนค้างค่าที่พักครบทุกคน ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน)</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => { setFilterType('staff_accom_unpaid'); setRoleFilter('staff'); }}
@@ -5203,9 +5315,24 @@ export default function AdminDashboardView({
                             {ss.summaryNote}
                           </td>
                           <td className="py-2 px-3 text-right whitespace-nowrap">
-                            <span className="px-2.5 py-1 rounded-lg bg-purple-600/25 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-[10px] font-bold">
-                              เปิดจัดการ
-                            </span>
+                            <div className="inline-flex items-center gap-1.5">
+                              {!ss.isMsu && ss.accommodationRemaining > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNotifyStaffAccommodation(sr);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40 text-[10px] font-bold cursor-pointer"
+                                  title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักให้ผู้สมัครรายนี้ทันที"
+                                >
+                                  🔔 แจ้งจ่าย {ss.accommodationRemaining} บ.
+                                </button>
+                              )}
+                              <span className="px-2.5 py-1 rounded-lg bg-purple-600/25 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-[10px] font-bold">
+                                เปิดจัดการ
+                              </span>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -6872,19 +6999,19 @@ export default function AdminDashboardView({
                                 {isMsuModal ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
                               </option>
                               <option value="committee" className="bg-slate-900 text-purple-200">
-                                🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
+                                🛠️ (STAFF) คณะกรรมการดำเนินงาน ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                               </option>
                               <option value="dev" className="bg-slate-900 text-purple-200">
-                                💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
+                                💻 (STAFF) ผู้พัฒนาระบบ Dev ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                               </option>
                               <option value="mc" className="bg-slate-900 text-purple-200">
-                                🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
+                                🎤 (STAFF) พิธีกรดำเนินรายการ ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                               </option>
                               <option value="photographer" className="bg-slate-900 text-purple-200">
-                                📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
+                                📸 (STAFF) ช่างภาพ / โสตฯ ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                               </option>
                               <option value="staff" className="bg-slate-900 text-purple-200">
-                                🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
+                                🛠️ (STAFF) สตาฟโครงการทั่วไป ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                               </option>
                             </select>
 
@@ -6923,6 +7050,24 @@ export default function AdminDashboardView({
                           </div>
                         )}
 
+                        {staffPayInfo.isStaff && !staffPayInfo.isMsu && (
+                          <button
+                            type="button"
+                            onClick={() => setProfileModalTab('payment')}
+                            className={`px-2.5 py-1 rounded-full text-xs font-black border cursor-pointer transition-all inline-flex items-center gap-1 ${
+                              staffPayInfo.isAccommodationPaid
+                                ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60'
+                                : 'bg-sky-500/25 text-sky-200 border-sky-400/60'
+                            }`}
+                          >
+                            {staffPayInfo.isAccommodationPaid
+                              ? '🏨 ชำระค่าเสื้อ 280 + ค่าที่พัก 200 (ครบ 480 บ.) แล้ว ✓'
+                              : staffPayInfo.isOffsetApplied
+                              ? `🔄 โอนจริง ${staffPayInfo.r1SlipAmount} บ. (หักเสื้อ 280 • หักลบค่าที่พัก -${staffPayInfo.offsetToAccommodation} บ. • ค้างที่พักเพิ่ม ${staffPayInfo.accommodationRemaining} บ.)`
+                              : `🏨 ชำระค่าเสื้อ 280 บ. แล้ว • ค้างค่าที่พัก ${staffPayInfo.accommodationRemaining} บ.`}
+                          </button>
+                        )}
+
                         {staffPayInfo.isOverpaid && (
                           <button
                             type="button"
@@ -6935,7 +7080,7 @@ export default function AdminDashboardView({
                           >
                             {staffPayInfo.isRefunded
                               ? `💸 คืนเงินส่วนเกิน +${staffPayInfo.overpaidAmount} บ. แล้ว ✓`
-                              : `💸 โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกินค่าเสื้อ +${staffPayInfo.overpaidAmount} บ. • คลิกจัดการคืนเงิน)`}
+                              : `💸 โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกินเกณฑ์ +${staffPayInfo.overpaidAmount} บ. • คลิกจัดการคืนเงิน)`}
                           </button>
                         )}
                       </div>
@@ -6947,11 +7092,49 @@ export default function AdminDashboardView({
                     </span>
                   )}
                   {(() => {
-                    const isInstallment = modalIsStaff
-                      ? false
-                      : (profileModalReg.payment_plan 
-                          ? (profileModalReg.payment_plan === 'installment') 
-                          : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url));
+                    if (modalIsStaff) {
+                      const staffSummary = getStaffPaymentSummary(profileModalReg);
+                      return (
+                        <>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                            staffSummary.isMsu
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                              : 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                          }`}>
+                            {staffSummary.isMsu
+                              ? '🛠️ Staff มมส (ค่าเสื้อ 280 บ.)'
+                              : '🏨 Staff ต่างมหาลัย (เสื้อ 280 + ที่พัก 200 = 480 บ.)'}
+                          </span>
+                          {!staffSummary.isMsu ? (
+                            staffSummary.isAccommodationPaid ? (
+                              <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                                ✓ ชำระครบ 480 บ. แล้ว
+                              </span>
+                            ) : staffSummary.isAccommodationPendingReview ? (
+                              <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold animate-pulse">
+                                ⏳ รอตรวจสลิปค่าที่พัก ({staffSummary.accommodationRemaining} บ.)
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                                🔴 ค้างชำระค่าที่พัก ({staffSummary.accommodationRemaining} บ.)
+                              </span>
+                            )
+                          ) : staffSummary.isShirtPaid || modalPaymentStatus === 'paid' ? (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                              ✓ ชำระค่าเสื้อ 280 บ. แล้ว
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold">
+                              🔴 ค้างค่าเสื้อ Staff (280 บ.)
+                            </span>
+                          )}
+                        </>
+                      );
+                    }
+
+                    const isInstallment = (profileModalReg.payment_plan 
+                      ? (profileModalReg.payment_plan === 'installment') 
+                      : Boolean(profileModalReg.installment_1_slip_url || profileModalReg.installment_2_slip_url));
                     const isR1Paid = profileModalReg.installment_1_status === 'paid';
                     const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
                     const isBothPaid = isR1Paid && isR2Paid;
@@ -8304,19 +8487,19 @@ export default function AdminDashboardView({
                               👤 ผู้เข้าอบรมทั่วไป ({isMsuInstitution(profileModalReg.institution) ? 'มมส 650 บ.' : 'ต่างสถาบัน 850 บ.'})
                             </option>
                             <option value="committee" className="bg-slate-900 text-purple-200">
-                              🛠️ (STAFF) คณะกรรมการดำเนินงาน (ค่าเสื้อ 280 บ.)
+                              🛠️ (STAFF) คณะกรรมการดำเนินงาน ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                             </option>
                             <option value="dev" className="bg-slate-900 text-purple-200">
-                              💻 (STAFF) ผู้พัฒนาระบบ Dev (ค่าเสื้อ 280 บ.)
+                              💻 (STAFF) ผู้พัฒนาระบบ Dev ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                             </option>
                             <option value="mc" className="bg-slate-900 text-purple-200">
-                              🎤 (STAFF) พิธีกรดำเนินรายการ (ค่าเสื้อ 280 บ.)
+                              🎤 (STAFF) พิธีกรดำเนินรายการ ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                             </option>
                             <option value="photographer" className="bg-slate-900 text-purple-200">
-                              📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (ค่าเสื้อ 280 บ.)
+                              📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                             </option>
                             <option value="staff" className="bg-slate-900 text-purple-200">
-                              🛠️ (STAFF) สตาฟโครงการทั่วไป (ค่าเสื้อ 280 บ.)
+                              🛠️ (STAFF) สตาฟโครงการทั่วไป ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                             </option>
                           </select>
 
@@ -8399,34 +8582,45 @@ export default function AdminDashboardView({
 
                           <div className="flex flex-wrap items-center gap-2 shrink-0">
                             {!staffPayInfo.isAccommodationPaid ? (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffPayInfo.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffPayInfo.offsetToAccommodation} บ. + โอนเพิ่ม ${staffPayInfo.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
-                                  const updates = {
-                                    payment_plan: 'full',
-                                    payment_status: 'paid',
-                                    payment_amount: 0,
-                                    installment_1_status: 'paid',
-                                    installment_2_status: 'paid',
-                                    installment_2_amount: staffPayInfo.accommodationNetRequiredAfterOffset,
-                                    staff_accommodation_paid: true,
-                                    payment_notes: nextNote
-                                  };
-                                  setModalPaymentPlan('full');
-                                  setModalPaymentStatus('paid');
-                                  setModalPaymentAmount(0);
-                                  setModalInstallment1Status('paid');
-                                  setModalInstallment2Status('paid');
-                                  setModalPaymentNotes(nextNote);
-                                  await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
-                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                  triggerToast('อนุมัติการชำระค่าที่พัก Staff ต่างมหาลัยครบถ้วนแล้ว');
-                                }}
-                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
-                              >
-                                ✅ อนุมัติชำระค่าที่พักครบแล้ว
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await handleNotifyStaffAccommodation(profileModalReg);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all flex items-center gap-1"
+                                >
+                                  <span>🔔 ส่งแจ้งเตือนให้จ่ายค่าที่พัก ({staffPayInfo.accommodationRemaining} บ.)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffPayInfo.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffPayInfo.offsetToAccommodation} บ. + โอนเพิ่ม ${staffPayInfo.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
+                                    const updates = {
+                                      payment_plan: 'full',
+                                      payment_status: 'paid',
+                                      payment_amount: 0,
+                                      installment_1_status: 'paid',
+                                      installment_2_status: 'paid',
+                                      installment_2_amount: staffPayInfo.accommodationNetRequiredAfterOffset,
+                                      staff_accommodation_paid: true,
+                                      payment_notes: nextNote
+                                    };
+                                    setModalPaymentPlan('full');
+                                    setModalPaymentStatus('paid');
+                                    setModalPaymentAmount(0);
+                                    setModalInstallment1Status('paid');
+                                    setModalInstallment2Status('paid');
+                                    setModalPaymentNotes(nextNote);
+                                    await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                    setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                    triggerToast('อนุมัติการชำระค่าที่พัก Staff ต่างมหาลัยครบถ้วนแล้ว');
+                                  }}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
+                                >
+                                  ✅ อนุมัติชำระค่าที่พักครบแล้ว
+                                </button>
+                              </>
                             ) : (
                               <button
                                 type="button"
@@ -8948,16 +9142,21 @@ export default function AdminDashboardView({
                     const r1SlipUrl = profileModalReg.installment_1_slip_url || profileModalReg.payment_slip_url;
                     const r1SlipDate = profileModalReg.installment_1_slip_date || profileModalReg.payment_slip_date;
                     const r1Ocr = profileModalReg.slip_ocr_round1 || profileModalReg.slip_ocr_full;
+                    const staffModalSummary = isModalNonMsuStaff ? getStaffPaymentSummary(profileModalReg) : null;
 
                     return (
                       <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-4">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-indigo-400" />
-                            <h4 className="font-bold text-white text-sm">หลักฐานการชำระแบบแบ่งจ่าย 2 งวด (แยกตรวจทีละงวด ไม่ซ้ำซ้อน)</h4>
+                            <h4 className="font-bold text-white text-sm">
+                              {isModalNonMsuStaff
+                                ? '🛠️🏨 หลักฐานสลิป Staff ต่างมหาวิทยาลัย (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ. = 480 บ.)'
+                                : 'หลักฐานการชำระแบบแบ่งจ่าย 2 งวด (แยกตรวจทีละงวด ไม่ซ้ำซ้อน)'}
+                            </h4>
                           </div>
                           <span className="text-[11px] font-bold px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded border border-indigo-500/30">
-                            💳 แผนผ่อนชำระ 2 งวด
+                            {isModalNonMsuStaff ? '🏨 Staff ต่างมหาลัย (480 บ.)' : '💳 แผนผ่อนชำระ 2 งวด'}
                           </span>
                         </div>
 
@@ -8965,10 +9164,14 @@ export default function AdminDashboardView({
                           {/* ROUND 1 */}
                           <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
                             <div className="flex items-center justify-between">
-                              <span className="font-bold text-indigo-300 text-xs">งวดที่ 1: {paymentConfig?.installment_round1_amount || 400} บาท (ค่าเสื้อฝึก)</span>
+                              <span className="font-bold text-indigo-300 text-xs">
+                                {isModalNonMsuStaff
+                                  ? `รายการที่ 1: ค่าเสื้อ Staff 280 บ.${staffModalSummary?.isOffsetApplied ? ` (โอนจริง ${staffModalSummary.r1SlipAmount} บ. • หักลบที่พัก -${staffModalSummary.offsetToAccommodation} บ.)` : ''}`
+                                  : `งวดที่ 1: ${paymentConfig?.installment_round1_amount || 400} บาท (ค่าเสื้อฝึก)`}
+                              </span>
                               {profileModalReg.installment_1_status === 'paid' ? (
                                 <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
-                                  ✓ อนุมัติงวด 1 แล้ว
+                                  {isModalNonMsuStaff ? '✓ ชำระค่าเสื้อ 280 บ. แล้ว' : '✓ อนุมัติงวด 1 แล้ว'}
                                 </span>
                               ) : r1SlipUrl ? (
                                 <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
@@ -9207,19 +9410,23 @@ export default function AdminDashboardView({
                           <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
                             <div className="flex items-center justify-between">
                               <span className="font-bold text-purple-300 text-xs">
-                                งวดที่ 2: {isMsuInstitution(profileModalReg?.institution) ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท ({isMsuInstitution(profileModalReg?.institution) ? 'นิสิต มมส' : 'ต่างสถาบัน'})
+                                {isModalNonMsuStaff
+                                  ? `รายการที่ 2: ค่าที่พัก Staff ต่างมหาลัย 200 บ.${staffModalSummary?.isOffsetApplied ? ` (หลังหักลบ เหลือจ่ายเพิ่ม ${staffModalSummary.accommodationNetRequiredAfterOffset} บ.)` : ''}`
+                                  : `งวดที่ 2: ${isMsuInstitution(profileModalReg?.institution) ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450)} บาท (${isMsuInstitution(profileModalReg?.institution) ? 'นิสิต มมส' : 'ต่างสถาบัน'})`}
                               </span>
-                              {profileModalReg.installment_2_slip_url && profileModalReg.installment_2_status === 'paid' ? (
+                              {(profileModalReg.installment_2_slip_url && profileModalReg.installment_2_status === 'paid') || (isModalNonMsuStaff && staffModalSummary?.isAccommodationPaid) ? (
                                 <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
-                                  ✓ อนุมัติงวด 2 แล้ว
+                                  {isModalNonMsuStaff ? '✓ ชำระค่าที่พักครบแล้ว' : '✓ อนุมัติงวด 2 แล้ว'}
                                 </span>
                               ) : profileModalReg.installment_2_slip_url ? (
                                 <span className="text-[10px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded">
                                   ⏳ รอตรวจสอบ
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded">
-                                  ยังไม่ส่งสลิป
+                                <span className="text-[10px] text-rose-300 font-bold bg-rose-950/40 border border-rose-800 px-2 py-0.5 rounded">
+                                  {isModalNonMsuStaff
+                                    ? `ค้างค่าที่พัก ${staffModalSummary?.accommodationRemaining || 200} บ.`
+                                    : 'ยังไม่ส่งสลิป'}
                                 </span>
                               )}
                             </div>
@@ -9361,12 +9568,36 @@ export default function AdminDashboardView({
                                       type="button"
                                       onClick={() => {
                                         askConfirm({
-                                          title: 'ยืนยันการอนุมัติสลิปงวดที่ 2',
-                                          message: `ต้องการยืนยันอนุมัติสลิปงวดที่ 2 ของคุณ ${profileModalReg.first_name} ใช่หรือไม่?`,
-                                          confirmText: '✓ ยืนยันอนุมัติงวด 2',
+                                          title: isModalNonMsuStaff ? 'ยืนยันการอนุมัติสลิปค่าที่พัก Staff ต่างมหาลัย' : 'ยืนยันการอนุมัติสลิปงวดที่ 2',
+                                          message: `ต้องการยืนยันอนุมัติสลิป${isModalNonMsuStaff ? 'ค่าที่พัก Staff ต่างมหาลัย' : 'งวดที่ 2'} ของคุณ ${profileModalReg.first_name} ใช่หรือไม่?`,
+                                          confirmText: isModalNonMsuStaff ? '✓ ยืนยันอนุมัติค่าที่พัก' : '✓ ยืนยันอนุมัติงวด 2',
                                           cancelText: 'ยกเลิก',
                                           variant: 'info',
                                           onConfirm: async () => {
+                                            if (isModalNonMsuStaff) {
+                                              const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffModalSummary?.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffModalSummary.offsetToAccommodation} บ. + โอนเพิ่ม ${staffModalSummary.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
+                                              const updates = {
+                                                payment_plan: 'full',
+                                                payment_status: 'paid',
+                                                payment_amount: 0,
+                                                installment_1_status: 'paid',
+                                                installment_2_status: 'paid',
+                                                installment_2_notes: 'ตรวจสอบและอนุมัติค่าที่พัก Staff ต่างมหาลัยเรียบร้อย',
+                                                staff_accommodation_paid: true,
+                                                payment_notes: nextNote
+                                              };
+                                              setModalPaymentPlan('full');
+                                              setModalPaymentStatus('paid');
+                                              setModalPaymentAmount(0);
+                                              setModalInstallment1Status('paid');
+                                              setModalInstallment2Status('paid');
+                                              setModalPaymentNotes(nextNote);
+                                              await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                              setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                              triggerToast('อนุมัติสลิปค่าที่พัก Staff ต่างมหาลัยครบถ้วน 480 บ. แล้ว');
+                                              return;
+                                            }
+
                                             const round1Fee = paymentConfig?.installment_round1_amount || 400;
                                             const isR1Paid = profileModalReg.installment_1_status === 'paid';
                                             
@@ -9401,13 +9632,13 @@ export default function AdminDashboardView({
                                       }}
                                       className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                     >
-                                      ✓ อนุมัติงวด 2
+                                      {isModalNonMsuStaff ? '✓ อนุมัติค่าที่พัก' : '✓ อนุมัติงวด 2'}
                                     </button>
                                     <button
                                       type="button"
                                       onClick={async () => {
                                         const reason = await askPrompt({
-                                          title: 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
+                                          title: isModalNonMsuStaff ? 'ระบุเหตุผลที่ปฏิเสธสลิปค่าที่พัก Staff' : 'ระบุเหตุผลที่ปฏิเสธสลิปงวด 2',
                                           message: 'แจ้งเหตุผลเพื่อให้ผู้สมัครทราบและโอนเงินส่งสลิปใหม่:',
                                           defaultValue: 'ยอดเงินไม่ถูกต้อง กรุณาโอนใหม่',
                                           placeholder: 'ระบุเหตุผลที่ปฏิเสธสลิป...',
@@ -9416,6 +9647,25 @@ export default function AdminDashboardView({
                                           cancelText: 'ยกเลิก'
                                         });
                                         if (reason) {
+                                          if (isModalNonMsuStaff) {
+                                            const rem = staffModalSummary?.accommodationNetRequiredAfterOffset || 200;
+                                            const updates = {
+                                              installment_2_status: 'unpaid',
+                                              installment_2_notes: reason,
+                                              payment_status: 'unpaid',
+                                              payment_amount: rem,
+                                              staff_accommodation_paid: false,
+                                              payment_notes: `สลิปค่าที่พัก Staff ต่างมหาลัยไม่ถูกต้อง: ${reason} (คงเหลือต้องโอนเพิ่ม ${rem} บ.)`
+                                            };
+                                            setModalPaymentStatus('unpaid');
+                                            setModalPaymentAmount(rem);
+                                            setModalPaymentNotes(updates.payment_notes);
+                                            await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                            setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                            triggerToast('ปฏิเสธสลิปค่าที่พัก Staff เรียบร้อย');
+                                            return;
+                                          }
+
                                           const isMsu = isMsuInstitution(profileModalReg.institution);
                                           const round2Fee = isMsu 
                                             ? (paymentConfig?.installment_round2_amount_msu || 250) 
@@ -9446,9 +9696,26 @@ export default function AdminDashboardView({
                                 )}
                               </div>
                             ) : (
-                              <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
-                                <Clock className="w-6 h-6 mb-2 opacity-50" />
-                                <span>ยังไม่มีการส่งสลิปงวดที่ 2</span>
+                              <div className="h-44 flex flex-col items-center justify-center gap-2 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-400 text-xs p-3 text-center">
+                                <Clock className="w-6 h-6 opacity-50" />
+                                <span>
+                                  {isModalNonMsuStaff
+                                    ? staffModalSummary?.isAccommodationPaid
+                                      ? '✅ อนุมัติชำระค่าที่พักครบแล้ว'
+                                      : `ยังไม่มีการส่งสลิปค่าที่พัก Staff ต่างมหาลัย (ค้างชำระ ${staffModalSummary?.accommodationRemaining || 200} บ.)`
+                                    : 'ยังไม่มีการส่งสลิปงวดที่ 2'}
+                                </span>
+                                {isModalNonMsuStaff && !staffModalSummary?.isAccommodationPaid && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await handleNotifyStaffAccommodation(profileModalReg);
+                                    }}
+                                    className="mt-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black shadow cursor-pointer transition-all"
+                                  >
+                                    🔔 ส่งแจ้งเตือนให้จ่ายค่าที่พัก ({staffModalSummary?.accommodationRemaining || 200} บ.)
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
