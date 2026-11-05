@@ -69,7 +69,10 @@ import {
   Printer,
   LogOut,
   Crown,
-  MapPin
+  MapPin,
+  LayoutGrid,
+  Table,
+  ChevronRight
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -236,6 +239,11 @@ export default function AdminDashboardView({
 
   // In-app Popup Modal for Confirmations, Alerts & Prompts
   const { confirmModalProps, askConfirm, askAlert, askPrompt } = useConfirmModal();
+
+  // Dedicated Subpages UX States (Card vs Table View, Search, Sub-filters)
+  const [dedicatedViewMode, setDedicatedViewMode] = useState('auto'); // 'auto' | 'table' | 'card'
+  const [staffSubFilter, setStaffSubFilter] = useState('all'); // 'all' | 'unpaid' | 'offset' | 'refund' | 'msu' | 'external'
+  const [dedicatedSearchTerm, setDedicatedSearchTerm] = useState('');
 
   // Edit Safeguard States (Locked / View-Only by default to prevent accidental edits)
   const [isEditingProfileModal, setIsEditingProfileModal] = useState(false);
@@ -2943,6 +2951,73 @@ export default function AdminDashboardView({
     triggerToast(`🔔 ส่งแจ้งเตือนค้างชำระค่าที่พักให้ Staff ต่างมหาวิทยาลัยครบทั้ง ${unpaidList.length} คน (รวม ฿${staffAndRefundMetrics.externalStaffUnpaidAccomAmount}) เรียบร้อยแล้ว!`);
   };
 
+  const handleNotifyRound2 = async (reg, silent = false) => {
+    if (!reg) return;
+    const isStaff = isStaffRegistration(reg);
+    if (isStaff) {
+      await handleNotifyStaffAccommodation(reg, silent);
+      return;
+    }
+
+    const fullName = resolvePersonFullNameWithTitle(reg).fullName;
+    const isMsu = isMsuInstitution(reg.institution);
+    const remAmt = Number(reg.installment_2_amount) || (isMsu ? 250 : 450);
+    const bankName = paymentConfig?.bank_name || 'ธนาคารไทยพาณิชย์';
+    const bankAcc = paymentConfig?.bank_account_number || '594-264865-5';
+    const bankHolder = paymentConfig?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก';
+
+    const msgTitle = `⏳ แจ้งเตือนชำระเงินงวดที่ 2 (${remAmt} บาท) • ยืนยันสิทธิ์โครงการ JRE 2027`;
+    const msgBody = `เรียนคุณ ${fullName}\n\nขอแจ้งรายละเอียดและกำหนดการชำระเงินงวดที่ 2 เพื่อยืนยันสิทธิ์การเข้าร่วมโครงการฝึกซ้อมร่วมประจำปี JRE 2027 ดังนี้ครับ:\n\n• ยอดชำระงวดที่ 1: 400 บาท (ชำระแล้ว ✓)\n• ยอดชำระงวดที่ 2: ${remAmt} บาท (รอชำระ)\n\n🏦 ช่องทางโอนชำระเงินงวดที่ 2 (${remAmt} บาท):\n${bankName} เลขที่บัญชี ${bankAcc}\nชื่อบัญชี: ${bankHolder}\n\nเมื่อโอนเรียบร้อยแล้ว กรุณาแนบสลิปงวดที่ 2 ผ่านหน้าตรวจสอบสถานะที่ https://jre-2027.vercel.app/register ขอบคุณครับ`;
+
+    const existingMsgs = Array.isArray(reg.admin_messages) ? reg.admin_messages : [];
+    const newMsg = {
+      id: `msg_round2_${Date.now()}`,
+      title: msgTitle,
+      text: msgBody,
+      read: false,
+      created_at: new Date().toISOString(),
+      sender_key: 'finance_coord',
+      sender_name: 'ฝ่ายประสานงาน & การเงิน JRE 2027',
+      sender_role: 'Admin การเงิน',
+      system_name: 'ระบบแจ้งเตือนชำระเงินงวดที่ 2',
+      color_theme: 'amber',
+      payment_amount: remAmt,
+      payment_status: 'unpaid',
+      payment_bank_info: `${bankName} เลขที่ ${bankAcc} ชื่อบัญชี ${bankHolder}`,
+      action_url: 'https://jre-2027.vercel.app/register',
+      action_label: `📤 ไปที่หน้าชำระงวดที่ 2 (${remAmt} บ.) & แนบสลิป`
+    };
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, {
+      admin_messages: [newMsg, ...existingMsgs.filter(m => m?.id !== 'msg_round2_prompt')]
+    });
+
+    if (!silent) {
+      triggerToast(`🔔 ส่งแจ้งเตือนงวดที่ 2 (${remAmt} บ.) ให้ ${fullName} เรียบร้อยแล้ว`);
+    }
+  };
+
+  const handleBulkNotifyRound2 = async (list) => {
+    if (!list || list.length === 0) {
+      triggerToast('ไม่พบรายชื่อที่ต้องแจ้งเตือนงวดที่ 2');
+      return;
+    }
+    const ok = await askConfirm({
+      title: `🔔 ยืนยันส่งข้อความแจ้งเตือนงวดที่ 2 (${list.length} คน)`,
+      message: `ระบบจะส่งข้อความแจ้งเตือนพร้อมยอดเงินและเลขบัญชีให้ผู้สมัครที่รอชำระงวดที่ 2 / ค่าที่พัก ทั้งหมด ${list.length} คน คุณต้องการยืนยันหรือไม่?`,
+      confirmText: 'ส่งข้อความแจ้งเตือนทุกคน',
+      cancelText: 'ยกเลิก',
+      variant: 'primary'
+    });
+    if (!ok) return;
+
+    for (const reg of list) {
+      await handleNotifyRound2(reg, true);
+    }
+    triggerToast(`🔔 ส่งข้อความแจ้งเตือนงวดที่ 2 ครบทั้ง ${list.length} คน เรียบร้อยแล้ว!`);
+  };
+
   // Upload Attachment for Outgoing Admin Message
   const handleUploadMsgAttachment = async (e) => {
     const file = e.target.files?.[0];
@@ -4813,7 +4888,9 @@ export default function AdminDashboardView({
         </div>
       )}
 
-      {/* Header & Stats Banner */}
+      {/* Header & Stats Banner (Only rendered on main /admin dashboard) */}
+      {!dedicatedSubpage && (
+      <>
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
@@ -5521,433 +5598,1172 @@ export default function AdminDashboardView({
           </button>
         </div>
       </div>
+      </>
+      )}
 
       {/* TAB 1: APPLICANTS & ALLOCATION & PROFILE VIEWER */}
       {activeTab === 'applicants' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
 
-          {/* DEDICATED PAGE 1: /admin/staff-accommodation */}
-          {dedicatedSubpage === 'staff-accommodation' && (
-            <div className="p-4 sm:p-6 bg-gradient-to-br from-purple-950/45 via-slate-950 to-sky-950/40 border-2 border-purple-500/50 rounded-3xl space-y-5 shadow-2xl">
-              {/* Top URL & Navigation Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-purple-500/30">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-purple-500/25 border border-purple-400/50 text-purple-200 text-xs font-black">
-                    🔗 URL เฉพาะหน้านี้: /admin/staff-accommodation
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = `${window.location.origin}/admin/staff-accommodation`;
-                      navigator.clipboard?.writeText(url);
-                      triggerToast(`คัดลอกลิงก์ ${url} เรียบร้อยแล้ว`);
-                    }}
-                    className="px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>คัดลอก URL หน้านี้</span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleNavigateSubpage('applicants')}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-purple-300" />
-                  <span>⬅️ กลับหน้าผู้สมัครทั้งหมด (/admin)</span>
-                </button>
-              </div>
-
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
-                    <Building className="w-6 h-6" />
+          {/* ========================================================
+              DEDICATED SUBPAGES SECTION (When on /admin/<subpage>)
+              Fully responsive across Mobile, Tablet, and Desktop!
+              ======================================================== */}
+          {dedicatedSubpage && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              
+              {/* Top Chrome: Breadcrumb, Direct Canonical URL, View Toggle & Subpage Switcher */}
+              <div className="p-4 sm:p-6 bg-slate-950/90 border border-slate-800 rounded-3xl shadow-2xl space-y-4">
+                
+                {/* Row 1: Breadcrumb + Action Controls */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleNavigateSubpage('applicants')}
+                      className="text-slate-400 hover:text-white flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Admin Console</span>
+                    </button>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                    <span className="font-bold text-white">
+                      {dedicatedSubpage === 'staff-accommodation' && '🏨 ค่าที่พัก Staff & โอนเงินคืน'}
+                      {dedicatedSubpage === 'full-payment' && '💳 แผนจ่ายครบ 1 รอบ'}
+                      {dedicatedSubpage === 'round1-paid' && '⏳ ชำระงวด 1 (ค้างงวด 2)'}
+                      {dedicatedSubpage === 'unpaid' && '🔴 รายการค้างชำระทั้งหมด'}
+                      {dedicatedSubpage === 'installment-plan' && '📦 แผนแบ่งจ่าย 2 งวด'}
+                      {dedicatedSubpage === 'fully-paid' && '🟢 ชำระครบถ้วน 100%'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-slate-300 font-mono text-[11px] border border-slate-700">
+                      /admin/{dedicatedSubpage}
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-black text-white text-sm sm:text-base">
-                        🏨 สรุปค่าที่พัก Staff ต่างมหาวิทยาลัย (200 บ./คน) • หักลบเงินโอนเกิน • และสรุปยอดที่ทางเราต้องโอนคืน
-                      </h2>
-                      <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-400/30 text-xs font-bold">
-                        มมส 280 บ. ({staffAndRefundMetrics.msuStaff.length} คน) • ต่างมหาลัย 480 บ. ({staffAndRefundMetrics.externalStaff.length} คน)
-                      </span>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* View Switcher: Auto / Table / Card */}
+                    <div className="inline-flex rounded-xl bg-slate-900 p-1 border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setDedicatedViewMode('auto')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          dedicatedViewMode === 'auto'
+                            ? 'bg-purple-600 text-white shadow'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="โหมดอัตโนมัติ (มือถือ/แท็บเล็ตแสดงเป็นการ์ด • คอมพิวเตอร์แสดงเป็นตารางกว้าง)"
+                      >
+                        ✨ ออโต้
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDedicatedViewMode('card')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                          dedicatedViewMode === 'card'
+                            ? 'bg-purple-600 text-white shadow'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="มุมมองการ์ด (Card View)"
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>การ์ด</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDedicatedViewMode('table')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                          dedicatedViewMode === 'table'
+                            ? 'bg-purple-600 text-white shadow'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="มุมมองตาราง (Table View)"
+                      >
+                        <Table className="w-3.5 h-3.5" />
+                        <span>ตาราง</span>
+                      </button>
                     </div>
-                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                      เกณฑ์ Staff: <strong className="text-purple-200">มมส จ่ายเฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)</strong> • ส่วน <strong className="text-sky-300">Staff ทุกมหาวิทยาลัยที่ไม่ใช่ มมส มีค่าที่พักคนละ 200 บ. (รวมเป็น 480 บ.)</strong> โดยคนที่โอนเกินมาในรอบแรก ระบบได้นำไปหักลบค่าที่พักให้อัตโนมัติ และสรุปยอดคงเหลือพร้อมยอดที่ทางโครงการต้องโอนคืนด้านล่าง
-                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}/admin/${dedicatedSubpage}`;
+                        navigator.clipboard?.writeText(url);
+                        triggerToast(`คัดลอกลิงก์ ${url} เรียบร้อยแล้ว`);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-purple-400" />
+                      <span>คัดลอก URL</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleNavigateSubpage('applicants')}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-purple-300" />
+                      <span>⬅️ กลับหน้าหลัก Admin</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  {staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleBulkNotifyStaffAccommodation}
-                      className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                      title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักพร้อมรายละเอียดหักลบเงินโอนเกินให้ Staff ต่างมหาวิทยาลัยทุกคนที่ยังค้างชำระ"
-                    >
-                      <Bell className="w-4 h-4" />
-                      <span>🔔 แจ้งเตือนค้างค่าที่พักครบทุกคน ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน)</span>
-                    </button>
-                  )}
+                {/* Row 2: Subpage Switcher Pills */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                  <span className="text-[11px] font-bold text-slate-400 shrink-0">เมนูหน้าเฉพาะทาง:</span>
                   <button
                     type="button"
-                    onClick={() => { setFilterType('staff_accom_unpaid'); setRoleFilter('staff'); }}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      filterType === 'staff_accom_unpaid'
-                        ? 'bg-amber-500 text-slate-950 border-amber-300'
-                        : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border-amber-500/40'
+                    onClick={() => handleNavigateSubpage('staff-accommodation')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'staff-accommodation'
+                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
-                    🏨 กรองค้างค่าที่พัก Staff ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount})
+                    <Building className="w-3.5 h-3.5 text-purple-300" />
+                    <span>🏨 ค่าที่พัก Staff & โอนคืน ({staffAndRefundMetrics.allStaff.length})</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => { setFilterType('refund_needed'); setRoleFilter('staff'); }}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      filterType === 'refund_needed'
-                        ? 'bg-emerald-500 text-slate-950 border-emerald-300'
-                        : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40'
+                    onClick={() => handleNavigateSubpage('full-payment')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'full-payment'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400/40'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
-                    💸 กรองรายการต้องโอนคืน ({staffAndRefundMetrics.totalRefundPeopleCount} คน • ฿{staffAndRefundMetrics.totalRefundAmount})
+                    <CreditCard className="w-3.5 h-3.5 text-blue-300" />
+                    <span>💳 แผนจ่ายครบ 1 รอบ ({regMetrics.fullPlanCount})</span>
                   </button>
-                  {filterType !== 'staff' && (
-                    <button
-                      type="button"
-                      onClick={() => { setFilterType('staff'); setRoleFilter('staff'); }}
-                      className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-purple-200 border border-purple-500/40 cursor-pointer"
-                    >
-                      ดู Staff ทั้งหมด ({staffAndRefundMetrics.allStaff.length} คน)
-                    </button>
-                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSubpage('round1-paid')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'round1-paid'
+                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30 ring-2 ring-amber-400/40'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-300" />
+                    <span>⏳ ชำระงวด 1 ค้างงวด 2 ({regMetrics.partialPaidCount})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSubpage('unpaid')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'unpaid'
+                        ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-400/40'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-300" />
+                    <span>🔴 ค้างชำระทั้งหมด ({regMetrics.totalOutstandingCount})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSubpage('installment-plan')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'installment-plan'
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/40'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <span>📦 แผน 2 งวด ({regMetrics.installmentPlanCount})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSubpage('fully-paid')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'fully-paid'
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400/40'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <span>🟢 ชำระครบแล้ว ({regMetrics.fullyPaidCount})</span>
+                  </button>
                 </div>
               </div>
 
-              {/* 4 Key Summary Boxes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                {/* Box 1: Staff Breakdown */}
-                <div
-                  onClick={() => { setFilterType('staff'); setRoleFilter('staff'); }}
-                  className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-purple-400 space-y-1 cursor-pointer transition-all"
-                >
-                  <div className="text-[11px] text-slate-400 font-bold flex items-center justify-between">
-                    <span>1. จำนวน Staff แยกตามเกณฑ์</span>
-                    <span className="text-purple-300 font-mono">{staffAndRefundMetrics.allStaff.length} คน</span>
-                  </div>
-                  <p className="text-base font-black text-white">
-                    ต่างมหาลัย {staffAndRefundMetrics.externalStaff.length} คน <span className="text-xs font-normal text-sky-300">(480 บ./คน)</span>
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    • Staff มมส: <strong className="text-purple-300">{staffAndRefundMetrics.msuStaff.length} คน</strong> (ค่าเสื้อ 280 บ. ไม่มีค่าที่พัก)
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    • Staff ต่างมหาลัย: <strong className="text-sky-300">{staffAndRefundMetrics.externalStaff.length} คน</strong> (เสื้อ 280 + ที่พัก 200 บ.)
-                  </p>
-                </div>
+              {/* ========================================================
+                  PAGE 1: STAFF ACCOMMODATION & OVERPAY REFUND
+                  ======================================================== */}
+              {dedicatedSubpage === 'staff-accommodation' && (() => {
+                const filteredStaff = staffAndRefundMetrics.allStaff.filter(({ reg: sr, summary: ss }) => {
+                  if (staffSubFilter === 'unpaid_accom' && ss.accommodationRemaining <= 0) return false;
+                  if (staffSubFilter === 'offset' && ss.offsetToAccommodation <= 0) return false;
+                  if (staffSubFilter === 'refund' && ss.overpaidAmount <= 0) return false;
+                  if (staffSubFilter === 'msu' && !ss.isMsu) return false;
+                  if (staffSubFilter === 'external' && ss.isMsu) return false;
 
-                {/* Box 2: Automatic Offset to Accommodation */}
-                <div
-                  onClick={() => { setFilterType('staff_offset'); setRoleFilter('staff'); }}
-                  className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/40 hover:border-emerald-400 space-y-1 cursor-pointer transition-all"
-                >
-                  <div className="text-[11px] text-emerald-300 font-bold flex items-center justify-between">
-                    <span>2. หักลบเงินโอนเกินเข้าค่าที่พัก</span>
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-black">อัตโนมัติ</span>
-                  </div>
-                  <p className="text-base font-black text-emerald-300">
-                    {staffAndRefundMetrics.externalStaffOffsetList.length} คน <span className="text-xs font-bold text-emerald-200">(หักลบแล้วรวม ฿{staffAndRefundMetrics.externalStaffTotalOffsetAmount.toLocaleString()})</span>
-                  </p>
-                  <p className="text-[11px] text-emerald-100/80 leading-snug">
-                    โอนรอบแรกมา 400 บ. หักค่าเสื้อ 280 บ. เหลือส่วนเกิน +120 บ. นำไปหักค่าที่พัก 200 บ. → <strong className="text-amber-300">คงเหลือจ่ายเพิ่มคนละ 80 บ. (ไม่ต้องโอนคืน)</strong>
-                  </p>
-                </div>
+                  if (dedicatedSearchTerm.trim()) {
+                    const q = dedicatedSearchTerm.toLowerCase();
+                    const pName = resolvePersonFullNameWithTitle(sr).fullName.toLowerCase();
+                    const nick = (sr.nickname || '').toLowerCase();
+                    const callsign = (sr.callsign || '').toLowerCase();
+                    const uni = (resolveUniversityInfo(sr).shortTag || '').toLowerCase();
+                    const phone = (sr.phone || '').toLowerCase();
+                    if (!pName.includes(q) && !nick.includes(q) && !callsign.includes(q) && !uni.includes(q) && !phone.includes(q)) {
+                      return false;
+                    }
+                  }
+                  return true;
+                });
 
-                {/* Box 3: Remaining Accommodation Balance to Collect */}
-                <div
-                  onClick={() => { setFilterType('staff_accom_unpaid'); setRoleFilter('staff'); }}
-                  className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 hover:border-amber-400 space-y-1 cursor-pointer transition-all"
-                >
-                  <div className="text-[11px] text-amber-300 font-bold flex items-center justify-between">
-                    <span>3. คงเหลือค้างค่าที่พัก Staff ต่างมหาลัย</span>
-                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-[10px] font-black">
-                      จ่ายครบแล้ว {staffAndRefundMetrics.externalStaffPaidAccomList.length}/{staffAndRefundMetrics.externalStaff.length} คน
-                    </span>
-                  </div>
-                  <p className="text-base font-black text-amber-300">
-                    ค้าง {staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • รวม ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount.toLocaleString()}
-                  </p>
-                  <p className="text-[11px] text-amber-100/80 leading-snug">
-                    • ค้างเต็ม 200 บ.: {staffAndRefundMetrics.externalStaffUnpaidAccomList.filter(x => x.summary.accommodationRemaining === 200).length} คน
-                    {' '}• ค้างหลังหักลบ 80 บ.: {staffAndRefundMetrics.externalStaffUnpaidAccomList.filter(x => x.summary.accommodationRemaining === 80).length} คน
-                  </p>
-                </div>
-
-                {/* Box 4: Overpaid Refund Summary */}
-                <div
-                  onClick={() => { setFilterType('refund_needed'); setRoleFilter('staff'); }}
-                  className="p-3.5 rounded-xl bg-rose-950/25 border border-rose-500/40 hover:border-rose-400 space-y-1 cursor-pointer transition-all"
-                >
-                  <div className="text-[11px] text-rose-300 font-bold flex items-center justify-between">
-                    <span>4. สรุปยอดที่ทางเราต้องโอนคืน</span>
-                    <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 text-[10px] font-black">Refund Summary</span>
-                  </div>
-                  <p className="text-base font-black text-white">
-                    ต้องโอนคืนรวม: <span className="text-amber-300">{staffAndRefundMetrics.totalRefundPeopleCount} คน ({staffAndRefundMetrics.totalRefundAmount.toLocaleString()} บาท)</span>
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-                    <span className="text-emerald-300 font-bold">
-                      ✅ โอนคืนแล้ว: {staffAndRefundMetrics.refundedPeopleCount} คน ({staffAndRefundMetrics.refundedAmount.toLocaleString()} บ.)
-                    </span>
-                    <span className="text-rose-300 font-bold">
-                      ⏳ เหลือต้องโอนคืน: {staffAndRefundMetrics.pendingRefundPeopleCount} คน ({staffAndRefundMetrics.pendingRefundAmount.toLocaleString()} บ.)
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Per-Staff Breakdown & Remarks Table */}
-              <div className="bg-slate-950/90 border border-slate-800 rounded-xl overflow-hidden">
-                <div className="px-3.5 py-2.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="font-bold text-slate-200">
-                    📋 ตารางสรุปรายชื่อ Staff ทุกคน (การหักลบค่าเสื้อ 280 บ. • ค่าที่พัก 200 บ. • ยอดคงเหลือที่ต้องโอนเพิ่ม • และหมายเหตุยอดที่ทางเราต้องโอนคืน)
-                  </span>
-                  <span className="text-slate-400">คลิกที่รายชื่อเพื่อเปิดจัดการสลิปค่าที่พักหรือโอนเงินคืน</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-900/50 text-slate-400 border-b border-slate-800">
-                        <th className="py-2.5 px-3 font-bold">#</th>
-                        <th className="py-2.5 px-3 font-bold">ชื่อ-สกุล Staff</th>
-                        <th className="py-2.5 px-3 font-bold">มหาลัย</th>
-                        <th className="py-2.5 px-3 font-bold text-right">ค่าเสื้อ</th>
-                        <th className="py-2.5 px-3 font-bold text-right">ค่าที่พัก</th>
-                        <th className="py-2.5 px-3 font-bold text-right">รวมต้องจ่าย</th>
-                        <th className="py-2.5 px-3 font-bold text-right">โอนมาจริง</th>
-                        <th className="py-2.5 px-3 font-bold text-right">หักลบเข้าที่พัก</th>
-                        <th className="py-2.5 px-3 font-bold text-right">คงเหลือต้องโอนเพิ่ม</th>
-                        <th className="py-2.5 px-3 font-bold text-right">ทางเราต้องโอนคืน</th>
-                        <th className="py-2.5 px-3 font-bold">หมายเหตุสรุป & สถานะ</th>
-                        <th className="py-2.5 px-3 font-bold text-right">จัดการ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {staffAndRefundMetrics.allStaff.map(({ reg: sr, summary: ss }, idx) => {
-                        const pName = resolvePersonFullNameWithTitle(sr).fullName;
-                        const uShort = resolveUniversityInfo(sr).shortTag;
-                        const totalTransferred = (ss.r1SlipAmount || STAFF_SHIRT_FEE) + ss.r2SlipAmount;
-                        return (
-                          <tr
-                            key={sr.id || sr.user_id || idx}
-                            onClick={() => handleOpenProfileModal(sr, 'payment')}
-                            className="hover:bg-slate-900/70 cursor-pointer transition-colors"
-                          >
-                            <td className="py-2.5 px-3 font-mono text-slate-500">{idx + 1}</td>
-                            <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
-                              {pName} <span className="text-slate-400 font-normal">({sr.nickname || '-'})</span>
-                            </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                ss.isMsu
-                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                  : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                              }`}>
-                                {uShort}
+                return (
+                  <div className="space-y-5">
+                    {/* Header Banner */}
+                    <div className="p-5 sm:p-6 bg-gradient-to-br from-purple-950/60 via-slate-950 to-indigo-950/40 border-2 border-purple-500/50 rounded-3xl shadow-xl space-y-3">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0 shadow-lg">
+                            <Building className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-lg sm:text-xl font-black text-white">
+                                🏨 สรุปค่าที่พัก Staff ต่างมหาวิทยาลัย • หักลบเงินโอนเกิน • และยอดที่ทางเราต้องโอนคืน
+                              </h2>
+                              <span className="px-3 py-0.5 rounded-full bg-purple-500/25 text-purple-200 border border-purple-400/40 text-xs font-black">
+                                มมส 280 บ. ({staffAndRefundMetrics.msuStaff.length} คน) • ต่างมหาลัย 480 บ. ({staffAndRefundMetrics.externalStaff.length} คน)
                               </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-slate-300">280 บ.</td>
-                            <td className="py-2.5 px-3 text-right font-mono">
-                              {ss.isMsu ? (
-                                <span className="text-slate-500">0 บ. (มมส)</span>
-                              ) : (
-                                <span className="text-sky-300 font-bold">200 บ.</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-white">{ss.totalStaffFee} บ.</td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-300">{totalTransferred} บ.</td>
-                            <td className="py-2.5 px-3 text-right font-mono">
-                              {ss.offsetToAccommodation > 0 ? (
-                                <span className="text-emerald-400 font-bold">-{ss.offsetToAccommodation} บ.</span>
-                              ) : (
-                                <span className="text-slate-500">-</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-mono">
-                              {ss.accommodationRemaining > 0 ? (
-                                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black">
-                                  ค้าง {ss.accommodationRemaining} บ.
-                                </span>
-                              ) : (
-                                <span className="text-emerald-400 font-bold">0 บ. (ครบ)</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-mono">
-                              {ss.overpaidAmount > 0 ? (
-                                <span className={`px-2 py-0.5 rounded font-black ${
-                                  ss.isRefunded
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : 'bg-rose-500/25 text-rose-200 border border-rose-500/40'
-                                }`}>
-                                  +{ss.overpaidAmount} บ. ({ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน'})
-                                </span>
-                              ) : (
-                                <span className="text-slate-500">0 บ.</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-300 max-w-md truncate" title={ss.summaryNote}>
-                              {ss.summaryNote}
-                            </td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                              <div className="inline-flex items-center gap-1.5">
-                                {!ss.isMsu && ss.accommodationRemaining > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleNotifyStaffAccommodation(sr);
-                                    }}
-                                    className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40 text-[10px] font-bold cursor-pointer"
-                                    title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักให้ผู้สมัครรายนี้ทันที"
+                            </div>
+                            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                              เกณฑ์ Staff: <strong className="text-purple-200 font-bold">มมส จ่ายเฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)</strong> • ส่วน <strong className="text-sky-300 font-bold">Staff ทุกมหาวิทยาลัยที่ไม่ใช่ มมส มีค่าที่พักคนละ 200 บ. (รวมเป็น 480 บ.)</strong> โดยคนที่โอนเกินมาในรอบแรก ระบบได้นำไปหักลบค่าที่พักให้อัตโนมัติ และสรุปยอดคงเหลือพร้อมยอดที่ทางโครงการต้องโอนคืนด้านล่าง
+                            </p>
+                          </div>
+                        </div>
+
+                        {staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleBulkNotifyStaffAccommodation}
+                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-lg transition-all cursor-pointer flex items-center gap-2 shrink-0 self-start lg:self-auto"
+                            title="ส่งข้อความแจ้งเตือนค้างชำระค่าที่พักพร้อมรายละเอียดหักลบเงินโอนเกินให้ Staff ต่างมหาวิทยาลัยทุกคนที่ยังค้างชำระ"
+                          >
+                            <Bell className="w-4 h-4" />
+                            <span>🔔 แจ้งเตือนค้างค่าที่พักครบทุกคน ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount})</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 4 Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      {/* Box 1: Staff Breakdown */}
+                      <div
+                        onClick={() => setStaffSubFilter(staffSubFilter === 'external' ? 'all' : 'external')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
+                          staffSubFilter === 'external' || staffSubFilter === 'msu'
+                            ? 'bg-purple-950/40 border-purple-400 ring-2 ring-purple-500/30'
+                            : 'bg-slate-950/80 border-slate-800 hover:border-purple-500/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-slate-400 font-bold">
+                          <span>1. จำนวน Staff แยกตามเกณฑ์</span>
+                          <span className="font-mono text-purple-300 font-black">{staffAndRefundMetrics.allStaff.length} คน</span>
+                        </div>
+                        <p className="text-base sm:text-lg font-black text-white">
+                          ต่างมหาลัย {staffAndRefundMetrics.externalStaff.length} คน <span className="text-xs font-normal text-sky-300">(480 บ./คน)</span>
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          • Staff มมส: <strong className="text-purple-300 font-bold">{staffAndRefundMetrics.msuStaff.length} คน</strong> (ค่าเสื้อ 280 บ. ไม่มีค่าที่พัก)
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          • Staff ต่างมหาลัย: <strong className="text-sky-300 font-bold">{staffAndRefundMetrics.externalStaff.length} คน</strong> (เสื้อ 280 + ที่พัก 200 บ.)
+                        </p>
+                      </div>
+
+                      {/* Box 2: Automatic Offset */}
+                      <div
+                        onClick={() => setStaffSubFilter(staffSubFilter === 'offset' ? 'all' : 'offset')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
+                          staffSubFilter === 'offset'
+                            ? 'bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-500/30'
+                            : 'bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-emerald-300 font-bold">
+                          <span>2. หักลบเงินโอนเกินเข้าค่าที่พัก</span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-black">อัตโนมัติ</span>
+                        </div>
+                        <p className="text-base sm:text-lg font-black text-emerald-300">
+                          {staffAndRefundMetrics.externalStaffOffsetList.length} คน <span className="text-xs font-bold text-emerald-200">(หักลบแล้วรวม ฿{staffAndRefundMetrics.externalStaffTotalOffsetAmount.toLocaleString()})</span>
+                        </p>
+                        <p className="text-[11px] text-emerald-100/80 leading-snug">
+                          โอนรอบแรกมา 400 บ. หักค่าเสื้อ 280 บ. เหลือส่วนเกิน +120 บ. นำไปหักค่าที่พัก 200 บ. → <strong className="text-amber-300 font-bold">คงเหลือจ่ายเพิ่มคนละ 80 บ. (ไม่ต้องโอนคืน)</strong>
+                        </p>
+                      </div>
+
+                      {/* Box 3: Remaining Accommodation Unpaid */}
+                      <div
+                        onClick={() => setStaffSubFilter(staffSubFilter === 'unpaid_accom' ? 'all' : 'unpaid_accom')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
+                          staffSubFilter === 'unpaid_accom'
+                            ? 'bg-amber-950/40 border-amber-400 ring-2 ring-amber-500/30'
+                            : 'bg-amber-950/20 border-amber-500/40 hover:border-amber-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-amber-300 font-bold">
+                          <span>3. คงเหลือค้างค่าที่พัก Staff ต่างมหาลัย</span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-[10px] font-black">
+                            ค้าง {staffAndRefundMetrics.externalStaffUnpaidAccomList.length}/{staffAndRefundMetrics.externalStaff.length} คน
+                          </span>
+                        </div>
+                        <p className="text-base sm:text-lg font-black text-amber-300">
+                          ค้าง {staffAndRefundMetrics.externalStaffUnpaidAccomList.length} คน • รวม ฿{staffAndRefundMetrics.externalStaffUnpaidAccomAmount.toLocaleString()}
+                        </p>
+                        <p className="text-[11px] text-amber-100/80 leading-snug">
+                          • ค้างเต็ม 200 บ.: {staffAndRefundMetrics.externalStaffUnpaidAccomList.filter(x => x.summary.accommodationRemaining === 200).length} คน
+                          {' '}• ค้างหลังหักลบ 80 บ.: {staffAndRefundMetrics.externalStaffUnpaidAccomList.filter(x => x.summary.accommodationRemaining === 80).length} คน
+                        </p>
+                      </div>
+
+                      {/* Box 4: Overpaid Refund Summary */}
+                      <div
+                        onClick={() => setStaffSubFilter(staffSubFilter === 'refund' ? 'all' : 'refund')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
+                          staffSubFilter === 'refund'
+                            ? 'bg-rose-950/40 border-rose-400 ring-2 ring-rose-500/30'
+                            : 'bg-rose-950/20 border-rose-500/40 hover:border-rose-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-rose-300 font-bold">
+                          <span>4. สรุปยอดที่ทางเราต้องโอนคืน</span>
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 text-[10px] font-black">Refund Summary</span>
+                        </div>
+                        <p className="text-base sm:text-lg font-black text-white">
+                          ต้องโอนคืนรวม: <span className="text-amber-300 font-bold">{staffAndRefundMetrics.totalRefundPeopleCount} คน ({staffAndRefundMetrics.totalRefundAmount.toLocaleString()} บาท)</span>
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-2 text-[11px]">
+                          <span className="text-emerald-300 font-bold">
+                            ✅ โอนคืนแล้ว: {staffAndRefundMetrics.refundedPeopleCount} คน ({staffAndRefundMetrics.refundedAmount.toLocaleString()} บ.)
+                          </span>
+                          <span className="text-rose-300 font-bold">
+                            ⏳ รอโอนคืน: {staffAndRefundMetrics.pendingRefundPeopleCount} คน ({staffAndRefundMetrics.pendingRefundAmount.toLocaleString()} บ.)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filter Pills & Staff Search Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-950/80 border border-slate-800 rounded-2xl">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubFilter('all')}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                            staffSubFilter === 'all'
+                              ? 'bg-purple-600 text-white shadow'
+                              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          }`}
+                        >
+                          ทั้งหมด ({staffAndRefundMetrics.allStaff.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubFilter('unpaid_accom')}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                            staffSubFilter === 'unpaid_accom'
+                              ? 'bg-amber-500 text-slate-950 font-black shadow'
+                              : 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 border border-amber-500/40'
+                          }`}
+                        >
+                          🏨 ค้างค่าที่พัก ({staffAndRefundMetrics.externalStaffUnpaidAccomList.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubFilter('offset')}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                            staffSubFilter === 'offset'
+                              ? 'bg-emerald-500 text-slate-950 font-black shadow'
+                              : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 border border-emerald-500/40'
+                          }`}
+                        >
+                          ✨ หักลบอัตโนมัติ ({staffAndRefundMetrics.externalStaffOffsetList.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubFilter('refund')}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                            staffSubFilter === 'refund'
+                              ? 'bg-rose-500 text-white font-black shadow'
+                              : 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 border border-rose-500/40'
+                          }`}
+                        >
+                          💸 ต้องโอนคืน ({staffAndRefundMetrics.totalRefundPeopleCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubFilter('external')}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                            staffSubFilter === 'external'
+                              ? 'bg-sky-600 text-white shadow'
+                              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          }`}
+                        >
+                          🏛️ ต่างมหาลัย ({staffAndRefundMetrics.externalStaff.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubFilter('msu')}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                            staffSubFilter === 'msu'
+                              ? 'bg-purple-800 text-white shadow'
+                              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          }`}
+                        >
+                          🏛️ มมส ({staffAndRefundMetrics.msuStaff.length})
+                        </button>
+                      </div>
+
+                      <div className="relative min-w-[220px]">
+                        <Search className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={dedicatedSearchTerm}
+                          onChange={e => setDedicatedSearchTerm(e.target.value)}
+                          placeholder="🔍 ค้นหาชื่อ, นามเรียกขาน, มหาวิทยาลัย..."
+                          className="w-full pl-8 pr-7 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        {dedicatedSearchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setDedicatedSearchTerm('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CONTENT: Desktop Table View vs Mobile/Tablet Card View */}
+                    {/* 1. Desktop Table View (Wide, spacious, non-wrapping) */}
+                    {(dedicatedViewMode === 'table' || dedicatedViewMode === 'auto') && (
+                      <div className={`overflow-x-auto rounded-2xl border border-slate-800 shadow-2xl bg-slate-950/90 ${
+                        dedicatedViewMode === 'auto' ? 'hidden lg:block' : 'block'
+                      }`}>
+                        <div className="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="font-bold text-white flex items-center gap-2">
+                            <Table className="w-4 h-4 text-purple-400" />
+                            <span>ตารางสรุปรายชื่อ Staff ({filteredStaff.length} คน) • ค่าเสื้อ 280 บ. • ค่าที่พัก 200 บ. • หักลบส่วนเกิน • โอนคืน</span>
+                          </span>
+                          <span className="text-slate-400 text-[11px]">
+                            คลิกที่แถวหรือปุ่มจัดการ เพื่อดูสลิป ตรวจสอบ หรือจัดการการโอนเงินคืน
+                          </span>
+                        </div>
+                        <table className="w-full min-w-[1400px] text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-900/80 text-slate-300 font-bold border-b border-slate-800">
+                              <th className="py-3 px-3 w-12 text-center text-slate-400">#</th>
+                              <th className="py-3 px-3.5 min-w-[220px] whitespace-nowrap">ชื่อ-สกุล & บทบาท Staff</th>
+                              <th className="py-3 px-3 w-28 whitespace-nowrap">มหาวิทยาลัย</th>
+                              <th className="py-3 px-3 w-24 text-right whitespace-nowrap">ค่าเสื้อ</th>
+                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">ค่าที่พัก</th>
+                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">รวมต้องจ่าย</th>
+                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">โอนมาจริง</th>
+                              <th className="py-3 px-3 w-32 text-right whitespace-nowrap">หักลบเข้าที่พัก</th>
+                              <th className="py-3 px-3 w-36 text-right whitespace-nowrap">คงเหลือต้องโอนเพิ่ม</th>
+                              <th className="py-3 px-3 w-40 text-right whitespace-nowrap">ทางเราต้องโอนคืน</th>
+                              <th className="py-3 px-3.5 min-w-[300px]">หมายเหตุสรุป & สถานะ</th>
+                              <th className="py-3 px-3 w-44 text-right whitespace-nowrap">จัดการ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/70">
+                            {filteredStaff.length === 0 ? (
+                              <tr>
+                                <td colSpan={12} className="py-12 text-center text-slate-400 font-bold">
+                                  ไม่พบรายชื่อ Staff ที่ตรงกับตัวกรอง
+                                </td>
+                              </tr>
+                            ) : (
+                              filteredStaff.map(({ reg: sr, summary: ss }, idx) => {
+                                const pName = resolvePersonFullNameWithTitle(sr).fullName;
+                                const uShort = resolveUniversityInfo(sr).shortTag;
+                                const totalTransferred = (ss.r1SlipAmount || STAFF_SHIRT_FEE) + ss.r2SlipAmount;
+                                return (
+                                  <tr
+                                    key={sr.id || sr.user_id || idx}
+                                    onClick={() => handleOpenProfileModal(sr, 'payment')}
+                                    className="hover:bg-slate-900/75 cursor-pointer transition-colors"
                                   >
-                                    🔔 แจ้งจ่าย {ss.accommodationRemaining} บ.
-                                  </button>
+                                    <td className="py-3 px-3 text-center font-mono text-slate-500 font-bold">{idx + 1}</td>
+                                    
+                                    {/* Name & Callsign */}
+                                    <td className="py-3 px-3.5 whitespace-nowrap">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="w-8 h-8 rounded-xl bg-purple-950/60 border border-purple-500/40 flex items-center justify-center text-purple-300 font-black text-xs shrink-0">
+                                          {sr.nickname ? sr.nickname.slice(0, 2) : 'ST'}
+                                        </div>
+                                        <div>
+                                          <div className="font-bold text-white text-xs">
+                                            {pName} {sr.nickname && <span className="text-amber-300 font-normal">({sr.nickname})</span>}
+                                          </div>
+                                          <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
+                                            {sr.callsign && <span className="text-purple-300 font-bold">📡 {sr.callsign}</span>}
+                                            <span>• 👕 {sr.shirt_size || 'M'}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+
+                                    {/* University Badge */}
+                                    <td className="py-3 px-3 whitespace-nowrap">
+                                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border inline-block ${
+                                        ss.isMsu
+                                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                          : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                      }`}>
+                                        🏛️ {uShort}
+                                      </span>
+                                    </td>
+
+                                    {/* Shirt Fee (280 THB) */}
+                                    <td className="py-3 px-3 text-right font-mono text-slate-300 whitespace-nowrap">
+                                      280 บ.
+                                    </td>
+
+                                    {/* Accommodation Fee (0 THB for MSU, 200 THB for Non-MSU) */}
+                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                                      {ss.isMsu ? (
+                                        <span className="text-slate-500">0 บ. (มมส)</span>
+                                      ) : (
+                                        <span className="text-sky-300 font-bold">200 บ.</span>
+                                      )}
+                                    </td>
+
+                                    {/* Total Required */}
+                                    <td className="py-3 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                                      {ss.totalStaffFee} บ.
+                                    </td>
+
+                                    {/* Total Transferred */}
+                                    <td className="py-3 px-3 text-right font-mono font-black text-emerald-300 whitespace-nowrap">
+                                      {totalTransferred} บ.
+                                    </td>
+
+                                    {/* Offset to Accommodation */}
+                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                                      {ss.offsetToAccommodation > 0 ? (
+                                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                                          -{ss.offsetToAccommodation} บ.
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-600">-</span>
+                                      )}
+                                    </td>
+
+                                    {/* Remaining Accommodation Fee */}
+                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                                      {ss.accommodationRemaining > 0 ? (
+                                        <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black inline-flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          ค้าง {ss.accommodationRemaining} บ.
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold inline-flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3" />
+                                          0 บ. (ครบ)
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* Overpaid Refund */}
+                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                                      {ss.overpaidAmount > 0 ? (
+                                        <span className={`px-2.5 py-1 rounded-lg font-black inline-flex items-center gap-1 ${
+                                          ss.isRefunded
+                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                            : 'bg-rose-500/25 text-rose-200 border border-rose-500/40 animate-pulse'
+                                        }`}>
+                                          +{ss.overpaidAmount} บ. ({ss.isRefunded ? 'โอนคืนแล้ว' : 'รอโอนคืน'})
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-600">0 บ.</span>
+                                      )}
+                                    </td>
+
+                                    {/* Note & Status */}
+                                    <td className="py-3 px-3.5 text-xs text-slate-300 leading-relaxed min-w-[300px]">
+                                      {ss.summaryNote}
+                                    </td>
+
+                                    {/* Action Buttons */}
+                                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                                      <div className="inline-flex items-center gap-1.5">
+                                        {!ss.isMsu && ss.accommodationRemaining > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleNotifyStaffAccommodation(sr);
+                                            }}
+                                            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-[11px] font-black shadow cursor-pointer transition-all flex items-center gap-1"
+                                            title="ส่งข้อความแจ้งเตือนชำระค่าที่พักให้ผู้สมัครรายนี้ทันที"
+                                          >
+                                            <Bell className="w-3 h-3" />
+                                            <span>แจ้งจ่าย {ss.accommodationRemaining} บ.</span>
+                                          </button>
+                                        )}
+                                        <span className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[11px] font-bold">
+                                          เปิดจัดการ
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* 2. Mobile & Tablet Card View */}
+                    {(dedicatedViewMode === 'card' || dedicatedViewMode === 'auto') && (
+                      <div className={`space-y-3 ${dedicatedViewMode === 'auto' ? 'block lg:hidden' : 'block'}`}>
+                        <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                          <span className="font-bold text-slate-300">📱 แสดงผลแบบการ์ด ({filteredStaff.length} คน)</span>
+                          <span>แตะที่การ์ดเพื่อดูสลิปหรือจัดการ</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                          {filteredStaff.map(({ reg: sr, summary: ss }, idx) => {
+                            const pName = resolvePersonFullNameWithTitle(sr).fullName;
+                            const uShort = resolveUniversityInfo(sr).shortTag;
+                            const totalTransferred = (ss.r1SlipAmount || STAFF_SHIRT_FEE) + ss.r2SlipAmount;
+                            return (
+                              <div
+                                key={sr.id || sr.user_id || idx}
+                                onClick={() => handleOpenProfileModal(sr, 'payment')}
+                                className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 hover:border-purple-400 transition-all cursor-pointer shadow-lg space-y-3"
+                              >
+                                {/* Card Header */}
+                                <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-10 h-10 rounded-xl bg-purple-950/60 border border-purple-500/40 flex items-center justify-center text-purple-300 font-black text-sm shrink-0 shadow">
+                                      {sr.nickname ? sr.nickname.slice(0, 2) : idx + 1}
+                                    </div>
+                                    <div>
+                                      <div className="font-bold text-white text-sm">
+                                        {pName} {sr.nickname && <span className="text-amber-300 font-bold">({sr.nickname})</span>}
+                                      </div>
+                                      <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                        {sr.callsign && <span className="text-purple-300 font-bold">📡 {sr.callsign}</span>}
+                                        <span>• 👕 ไซส์ {sr.shirt_size || 'M'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <span className={`px-2.5 py-0.5 rounded-lg text-xs font-black border shrink-0 ${
+                                    ss.isMsu
+                                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                      : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                  }`}>
+                                    🏛️ {uShort}
+                                  </span>
+                                </div>
+
+                                {/* Financial 4-Box Grid */}
+                                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">ค่าเสื้อ</div>
+                                    <div className="font-mono font-bold text-slate-200 mt-0.5">280 บ.</div>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">ค่าที่พัก</div>
+                                    <div className="font-mono font-bold text-sky-300 mt-0.5">
+                                      {ss.isMsu ? '0 บ.' : '200 บ.'}
+                                    </div>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">รวมต้องจ่าย</div>
+                                    <div className="font-mono font-black text-white mt-0.5">{ss.totalStaffFee} บ.</div>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">โอนมาจริง</div>
+                                    <div className="font-mono font-black text-emerald-400 mt-0.5">{totalTransferred} บ.</div>
+                                  </div>
+                                </div>
+
+                                {/* Callout for Offset or Overpaid */}
+                                {ss.offsetToAccommodation > 0 && (
+                                  <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 text-emerald-200 text-xs flex items-start gap-2">
+                                    <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="font-bold">หักลบส่วนเกิน -{ss.offsetToAccommodation} บ. อัตโนมัติ:</span>
+                                      <span className="text-emerald-100/90 ml-1">
+                                        โอนรอบแรกมา {ss.r1SlipAmount} บ. หักค่าเสื้อ 280 บ. เหลือ +{ss.overpaidShirtAmount} บ. นำไปหักค่าที่พัก 200 บ. → คงเหลือชำระเพิ่มเพียง {ss.accommodationRemaining} บ. (ไม่ต้องโอนคืน)
+                                      </span>
+                                    </div>
+                                  </div>
                                 )}
-                                <span className="px-2.5 py-1 rounded-lg bg-purple-600/25 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-[10px] font-bold">
-                                  เปิดจัดการ
-                                </span>
+
+                                {ss.overpaidAmount > 0 && (
+                                  <div className={`p-2.5 rounded-xl border text-xs flex items-start gap-2 ${
+                                    ss.isRefunded
+                                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                                      : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                                  }`}>
+                                    <CreditCard className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="font-bold">เงินส่วนเกินที่ต้องโอนคืน: +{ss.overpaidAmount} บาท</span>
+                                      <span className="block text-[11px] mt-0.5">
+                                        สถานะ: <strong className={ss.isRefunded ? 'text-emerald-300' : 'text-amber-300'}>
+                                          {ss.isRefunded ? '✓ โอนคืนเรียบร้อยแล้ว' : '⏳ รอแอดมินโอนคืน'}
+                                        </strong>
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Status & Actions Footer */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                                  <div>
+                                    {ss.accommodationRemaining > 0 ? (
+                                      <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black inline-flex items-center gap-1">
+                                        <Clock className="w-3.5 h-3.5" />
+                                        คงเหลือค้างจ่าย: {ss.accommodationRemaining} บ.
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold inline-flex items-center gap-1">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        ชำระครบถ้วนแล้ว
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    {!ss.isMsu && ss.accommodationRemaining > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleNotifyStaffAccommodation(sr);
+                                        }}
+                                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-xs font-black flex items-center gap-1 cursor-pointer shadow"
+                                      >
+                                        <Bell className="w-3.5 h-3.5" />
+                                        <span>แจ้งจ่าย {ss.accommodationRemaining} บ.</span>
+                                      </button>
+                                    )}
+                                    <span className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-200 border border-purple-500/40 text-xs font-bold">
+                                      จัดการ
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
-          {/* DEDICATED PAGES 2, 3, 4: /admin/full-payment, /admin/round1-paid, /admin/unpaid, /admin/installment-plan, /admin/fully-paid */}
-          {dedicatedSubpage && dedicatedSubpage !== 'staff-accommodation' && (
-            <div className={`p-5 sm:p-6 rounded-3xl border-2 space-y-4 shadow-2xl ${
-              dedicatedSubpage === 'full-payment'
-                ? 'bg-gradient-to-br from-blue-950/45 via-slate-950 to-indigo-950/35 border-blue-500/50'
-                : dedicatedSubpage === 'round1-paid'
-                ? 'bg-gradient-to-br from-amber-950/45 via-slate-950 to-orange-950/35 border-amber-500/50'
-                : dedicatedSubpage === 'unpaid'
-                ? 'bg-gradient-to-br from-rose-950/45 via-slate-950 to-red-950/35 border-rose-500/50'
-                : 'bg-gradient-to-br from-emerald-950/45 via-slate-950 to-teal-950/35 border-emerald-500/50'
-            }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono font-bold">
-                    🔗 URL หน้านี้: /admin/{dedicatedSubpage}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = `${window.location.origin}/admin/${dedicatedSubpage}`;
-                      navigator.clipboard?.writeText(url);
-                      triggerToast(`คัดลอกลิงก์ ${url} เรียบร้อยแล้ว`);
-                    }}
-                    className="px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>คัดลอก URL หน้านี้</span>
-                  </button>
-                </div>
+              {/* ========================================================
+                  PAGES 2-6: FULL PAYMENT, ROUND 1 PAID, UNPAID, INSTALLMENT
+                  ======================================================== */}
+              {dedicatedSubpage && dedicatedSubpage !== 'staff-accommodation' && (() => {
+                const dedicatedList = filteredRegs.filter(reg => {
+                  if (dedicatedSearchTerm.trim()) {
+                    const q = dedicatedSearchTerm.toLowerCase();
+                    const pName = resolvePersonFullNameWithTitle(reg).fullName.toLowerCase();
+                    const nick = (reg.nickname || '').toLowerCase();
+                    const callsign = (reg.callsign || '').toLowerCase();
+                    const uni = (resolveUniversityInfo(reg).shortTag || '').toLowerCase();
+                    const phone = (reg.phone || '').toLowerCase();
+                    return pName.includes(q) || nick.includes(q) || callsign.includes(q) || uni.includes(q) || phone.includes(q);
+                  }
+                  return true;
+                });
 
-                <button
-                  type="button"
-                  onClick={() => handleNavigateSubpage('applicants')}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
-                  <span>⬅️ กลับหน้าผู้สมัครทั้งหมด (/admin)</span>
-                </button>
-              </div>
+                return (
+                  <div className="space-y-5">
+                    {/* Header Banner */}
+                    <div className={`p-5 sm:p-6 rounded-3xl border-2 shadow-2xl space-y-4 ${
+                      dedicatedSubpage === 'full-payment'
+                        ? 'bg-gradient-to-br from-blue-950/50 via-slate-950 to-indigo-950/40 border-blue-500/50'
+                        : dedicatedSubpage === 'round1-paid'
+                        ? 'bg-gradient-to-br from-amber-950/50 via-slate-950 to-orange-950/40 border-amber-500/50'
+                        : dedicatedSubpage === 'unpaid'
+                        ? 'bg-gradient-to-br from-rose-950/50 via-slate-950 to-red-950/40 border-rose-500/50'
+                        : 'bg-gradient-to-br from-emerald-950/50 via-slate-950 to-teal-950/40 border-emerald-500/50'
+                    }`}>
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black mb-1.5 border bg-slate-950/70">
+                            {dedicatedSubpage === 'full-payment' && <CreditCard className="w-3.5 h-3.5 text-blue-400" />}
+                            {dedicatedSubpage === 'round1-paid' && <Clock className="w-3.5 h-3.5 text-amber-400" />}
+                            {dedicatedSubpage === 'unpaid' && <AlertCircle className="w-3.5 h-3.5 text-rose-400" />}
+                            <span>
+                              {dedicatedSubpage === 'full-payment' && 'แผนจ่ายครบ 1 รอบ (Full Payment Plan)'}
+                              {dedicatedSubpage === 'round1-paid' && 'ชำระงวด 1 แล้ว • รอชำระงวดที่ 2 (Installment Round 1 Paid)'}
+                              {dedicatedSubpage === 'unpaid' && 'รายการค้างชำระทั้งหมด (Outstanding / Unpaid)'}
+                              {dedicatedSubpage === 'installment-plan' && 'แผนแบ่งจ่าย 2 งวด (Installment Plan)'}
+                              {dedicatedSubpage === 'fully-paid' && 'ชำระเงินครบถ้วน 100% (Fully Paid)'}
+                            </span>
+                          </div>
 
-              {dedicatedSubpage === 'full-payment' && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/40 text-xs font-black mb-1">
-                      <CreditCard className="w-3.5 h-3.5" />
-                      <span>แผนจ่ายครบ 1 รอบ (Full Payment Plan)</span>
+                          <h2 className="text-xl sm:text-2xl font-black text-white">
+                            {dedicatedSubpage === 'full-payment' && `💳 แผนจ่ายครบ 1 รอบ (${regMetrics.fullPlanCount} คน)`}
+                            {dedicatedSubpage === 'round1-paid' && `⏳ ชำระงวด 1 ค้างงวด 2 (${regMetrics.partialPaidCount} คน)`}
+                            {dedicatedSubpage === 'unpaid' && `🔴 รายการค้างชำระทั้งหมด (${regMetrics.totalOutstandingCount} คน)`}
+                            {dedicatedSubpage === 'installment-plan' && `📦 แผนแบ่งจ่าย 2 งวด (${regMetrics.installmentPlanCount} คน)`}
+                            {dedicatedSubpage === 'fully-paid' && `🟢 ชำระครบถ้วนแล้ว (${regMetrics.fullyPaidCount} คน)`}
+                          </h2>
+
+                          <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                            {dedicatedSubpage === 'full-payment' && 'แสดงรายชื่อผู้สมัครและ Staff ที่เลือกแผนชำระครบครั้งเดียวในรอบเดียว คลิกที่รายชื่อเพื่อดูสลิปหรือจัดการข้อมูล'}
+                            {dedicatedSubpage === 'round1-paid' && 'แสดงรายชื่อผู้ที่ชำระเงินงวดที่ 1 แล้ว และอยู่ระหว่างรอชำระงวดที่ 2 หรือค่าที่พัก สามารถกดส่งแจ้งเตือนรายคนหรือส่งให้ทุกคนได้ทันที'}
+                            {dedicatedSubpage === 'unpaid' && `แสดงรายชื่อผู้ที่มียอดค้างชำระในระบบทั้งหมด (ยอดค้างรับรวม ฿${regMetrics.totalOutstandingBalance.toLocaleString()})`}
+                            {dedicatedSubpage === 'installment-plan' && 'แสดงรายชื่อผู้สมัครที่เลือกแผนแบ่งจ่าย 2 งวด'}
+                            {dedicatedSubpage === 'fully-paid' && 'แสดงรายชื่อผู้สมัครที่ชำระเงินครบถ้วนเรียบร้อยแล้ว'}
+                          </p>
+                        </div>
+
+                        {/* Bulk Action Buttons */}
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          {dedicatedSubpage === 'round1-paid' && (
+                            <button
+                              type="button"
+                              onClick={() => handleBulkNotifyRound2(dedicatedList)}
+                              className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-lg cursor-pointer flex items-center gap-2"
+                            >
+                              <Bell className="w-4 h-4" />
+                              <span>🔔 แจ้งเตือนงวด 2 ถึงทุกคน ({dedicatedList.length} คน)</span>
+                            </button>
+                          )}
+
+                          {dedicatedSubpage === 'unpaid' && (
+                            <button
+                              type="button"
+                              onClick={() => handleBulkNotifyRound2(dedicatedList)}
+                              className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg cursor-pointer flex items-center gap-2"
+                            >
+                              <Bell className="w-4 h-4" />
+                              <span>🔔 แจ้งเตือนยอดค้างถึงทุกคน ({dedicatedList.length} คน)</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white">
-                      💳 แผนจ่ายครบ 1 รอบ ({regMetrics.fullPlanCount} คน • ชำระครบ {regMetrics.fullPlanPaidCount} คน)
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-1">
-                      แสดงรายชื่อผู้สมัครและคณะทำงานที่เลือกแผนชำระครบครั้งเดียวในรอบเดียว ({filteredRegs.length} คน) คลิกที่รายชื่อเพื่อดูสลิปหรือจัดการข้อมูลการเงินได้ทันที
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-blue-500/40 text-right shrink-0">
-                    <div className="text-xs text-blue-300 font-bold">จำนวนผู้เลือกแผนจ่ายครบ 1 รอบ</div>
-                    <div className="text-2xl sm:text-3xl font-black text-blue-400">{regMetrics.fullPlanCount} <span className="text-sm font-normal text-blue-200">คน</span></div>
-                    <div className="text-xs text-emerald-400 font-bold mt-0.5">✓ ชำระครบ {regMetrics.fullPlanPaidCount} คน</div>
-                  </div>
-                </div>
-              )}
 
-              {dedicatedSubpage === 'round1-paid' && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs font-black mb-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>ชำระงวด 1 แล้ว • รอชำระงวดที่ 2 (Installment Round 1 Paid)</span>
+                    {/* Search Bar for this list */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-950/80 border border-slate-800 rounded-2xl">
+                      <div className="text-xs text-slate-300 font-bold">
+                        แสดงข้อมูล {dedicatedList.length} คน
+                      </div>
+
+                      <div className="relative min-w-[260px]">
+                        <Search className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={dedicatedSearchTerm}
+                          onChange={e => setDedicatedSearchTerm(e.target.value)}
+                          placeholder="🔍 ค้นหาชื่อ, นามเรียกขาน, มหาวิทยาลัย, เบอร์โทร..."
+                          className="w-full pl-8 pr-7 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        {dedicatedSearchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setDedicatedSearchTerm('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white">
-                      ⏳ ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน • รอชำระงวดที่ 2)
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-1">
-                      แสดงรายชื่อผู้ที่ชำระเงินงวดที่ 1 แล้ว และอยู่ระหว่างรอชำระเงินงวดที่ 2 / ค่าที่พัก ({filteredRegs.length} คน) สามารถติ๊กเลือกเพื่อส่งข้อความแจ้งเตือนแบบกลุ่มหรือคลิกดูรายบุคคลได้ทันที
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-amber-500/40 text-right shrink-0">
-                    <div className="text-xs text-amber-300 font-bold">ชำระงวด 1 (ค้างงวด 2)</div>
-                    <div className="text-2xl sm:text-3xl font-black text-amber-400">{regMetrics.partialPaidCount} <span className="text-sm font-normal text-amber-200">คน</span></div>
-                    <div className="text-xs text-amber-300/90 font-bold mt-0.5">⏳ รอชำระงวดที่ 2</div>
-                  </div>
-                </div>
-              )}
 
-              {dedicatedSubpage === 'unpaid' && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 text-xs font-black mb-1">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      <span>รายการค้างชำระทั้งหมด (Outstanding / Unpaid)</span>
-                    </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white">
-                      🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน • ค้างงวด 2: {regMetrics.partialPaidCount} คน)
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-1">
-                      แสดงรายชื่อผู้ที่มียอดค้างชำระในระบบทั้งหมด ({filteredRegs.length} คน • ยอดค้างรับรวม ฿{regMetrics.totalOutstandingBalance.toLocaleString()})
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-rose-500/40 text-right shrink-0">
-                    <div className="text-xs text-rose-300 font-bold">ค้างชำระรวม</div>
-                    <div className="text-2xl sm:text-3xl font-black text-rose-400">{regMetrics.totalOutstandingCount} <span className="text-sm font-normal text-rose-200">คน</span></div>
-                    <div className="text-xs text-rose-300/90 font-bold mt-0.5">ค้างงวด 2: {regMetrics.partialPaidCount} คน • รวม ฿{regMetrics.totalOutstandingBalance.toLocaleString()}</div>
-                  </div>
-                </div>
-              )}
+                    {/* Desktop Table View */}
+                    {(dedicatedViewMode === 'table' || dedicatedViewMode === 'auto') && (
+                      <div className={`overflow-x-auto rounded-2xl border border-slate-800 shadow-2xl bg-slate-950/90 ${
+                        dedicatedViewMode === 'auto' ? 'hidden lg:block' : 'block'
+                      }`}>
+                        <table className="w-full min-w-[1250px] text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-900/80 text-slate-300 font-bold border-b border-slate-800">
+                              <th className="py-3 px-3 w-12 text-center text-slate-400">#</th>
+                              <th className="py-3 px-3.5 min-w-[220px] whitespace-nowrap">ผู้สมัคร & สังกัด</th>
+                              <th className="py-3 px-3 w-28 whitespace-nowrap">มหาวิทยาลัย</th>
+                              <th className="py-3 px-3 w-32 whitespace-nowrap">บทบาท / แผน</th>
+                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">ยอดที่ต้องชำระ</th>
+                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">ชำระแล้ว</th>
+                              <th className="py-3 px-3 w-32 text-right whitespace-nowrap">ยอดค้างชำระ</th>
+                              <th className="py-3 px-3.5 whitespace-nowrap">สถานะชำระเงิน</th>
+                              <th className="py-3 px-3 w-24 text-center whitespace-nowrap">สลิป</th>
+                              <th className="py-3 px-3 w-40 text-right whitespace-nowrap">จัดการ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/70">
+                            {dedicatedList.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} className="py-12 text-center text-slate-400 font-bold">
+                                  ไม่พบรายชื่อผู้สมัครที่ตรงกับเงื่อนไข
+                                </td>
+                              </tr>
+                            ) : (
+                              dedicatedList.map((reg, idx) => {
+                                const isStaff = isStaffRegistration(reg);
+                                const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
+                                const pName = resolvePersonFullNameWithTitle(reg).fullName;
+                                const uniInfo = resolveUniversityInfo(reg);
+                                const isMsu = uniInfo.isMsu;
+                                const totalFee = isStaff
+                                  ? staffSum.totalStaffFee
+                                  : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || 850));
+                                
+                                const r1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
+                                const r2Paid = isStaff
+                                  ? staffSum.isAccommodationPaid
+                                  : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url));
+                                
+                                const paidAmt = isStaff
+                                  ? ((r1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal)
+                                  : (r1Paid && r2Paid ? totalFee : r1Paid ? 400 : 0);
+                                
+                                const outAmt = Math.max(0, totalFee - paidAmt);
+                                const slipUrl = reg.payment_slip_url || reg.installment_1_slip_url || reg.installment_2_slip_url;
 
-              {(dedicatedSubpage === 'installment-plan' || dedicatedSubpage === 'fully-paid') && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white">
-                      {dedicatedSubpage === 'installment-plan'
-                        ? `📦 แผนแบ่งจ่าย 2 งวด (${regMetrics.installmentPlanCount} คน)`
-                        : `🟢 ชำระเงินครบแล้ว 100% (${regMetrics.fullyPaidCount} คน)`}
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-1">
-                      แสดงรายชื่อผู้สมัครที่ตรงตามเงื่อนไข ({filteredRegs.length} คน)
-                    </p>
+                                return (
+                                  <tr
+                                    key={reg.id || reg.user_id || idx}
+                                    onClick={() => handleOpenProfileModal(reg, 'payment')}
+                                    className="hover:bg-slate-900/75 cursor-pointer transition-colors"
+                                  >
+                                    <td className="py-3 px-3 text-center font-mono text-slate-500 font-bold">{idx + 1}</td>
+                                    
+                                    <td className="py-3 px-3.5 whitespace-nowrap">
+                                      <div className="font-bold text-white text-xs">
+                                        {pName} {reg.nickname && <span className="text-amber-300 font-normal">({reg.nickname})</span>}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                        {reg.callsign && <span className="text-sky-300 font-bold">📡 {reg.callsign}</span>}
+                                        <span>• 👕 {reg.shirt_size || 'M'}</span>
+                                      </div>
+                                    </td>
+
+                                    <td className="py-3 px-3 whitespace-nowrap">
+                                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
+                                        isMsu
+                                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                          : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                                      }`}>
+                                        🏛️ {uniInfo.shortTag}
+                                      </span>
+                                    </td>
+
+                                    <td className="py-3 px-3 whitespace-nowrap">
+                                      {isStaff ? (
+                                        <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold text-[10px]">
+                                          🛠️ STAFF ({totalFee} บ.)
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
+                                          {reg.payment_plan === 'installment' ? '📦 แบ่งจ่าย 2 งวด' : '💳 จ่ายครบ 1 รอบ'}
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    <td className="py-3 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                                      {totalFee} บ.
+                                    </td>
+
+                                    <td className="py-3 px-3 text-right font-mono font-black text-emerald-300 whitespace-nowrap">
+                                      {paidAmt} บ.
+                                    </td>
+
+                                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                                      {outAmt > 0 ? (
+                                        <span className="px-2 py-0.5 rounded bg-rose-500/25 text-rose-200 border border-rose-500/40 font-black">
+                                          ค้าง {outAmt} บ.
+                                        </span>
+                                      ) : (
+                                        <span className="text-emerald-400 font-bold">0 บ. (ครบ)</span>
+                                      )}
+                                    </td>
+
+                                    <td className="py-3 px-3.5 whitespace-nowrap">
+                                      {outAmt === 0 ? (
+                                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[10px]">
+                                          ✓ ชำระครบถ้วนแล้ว
+                                        </span>
+                                      ) : r1Paid ? (
+                                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-[10px]">
+                                          ⏳ ชำระงวด 1 แล้ว • ค้างงวด 2
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold text-[10px]">
+                                          🔴 ยังไม่ชำระเงิน
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                                      {slipUrl ? (
+                                        <a
+                                          href={slipUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-purple-400 hover:text-purple-300 underline font-bold"
+                                        >
+                                          ดูสลิป
+                                        </a>
+                                      ) : (
+                                        <span className="text-slate-600">-</span>
+                                      )}
+                                    </td>
+
+                                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                                      <div className="inline-flex items-center gap-1.5">
+                                        {outAmt > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleNotifyRound2(reg);
+                                            }}
+                                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                          >
+                                            <Bell className="w-3 h-3" />
+                                            <span>แจ้งเตือน</span>
+                                          </button>
+                                        )}
+                                        <span className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[11px] font-bold">
+                                          เปิดจัดการ
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Mobile Card View */}
+                    {(dedicatedViewMode === 'card' || dedicatedViewMode === 'auto') && (
+                      <div className={`space-y-3 ${dedicatedViewMode === 'auto' ? 'block lg:hidden' : 'block'}`}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                          {dedicatedList.map((reg, idx) => {
+                            const isStaff = isStaffRegistration(reg);
+                            const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
+                            const pName = resolvePersonFullNameWithTitle(reg).fullName;
+                            const uniInfo = resolveUniversityInfo(reg);
+                            const isMsu = uniInfo.isMsu;
+                            const totalFee = isStaff
+                              ? staffSum.totalStaffFee
+                              : (isMsu ? 650 : 850);
+                            const r1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
+                            const r2Paid = isStaff
+                              ? staffSum.isAccommodationPaid
+                              : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url));
+                            const paidAmt = isStaff
+                              ? ((r1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal)
+                              : (r1Paid && r2Paid ? totalFee : r1Paid ? 400 : 0);
+                            const outAmt = Math.max(0, totalFee - paidAmt);
+                            const slipUrl = reg.payment_slip_url || reg.installment_1_slip_url || reg.installment_2_slip_url;
+
+                            return (
+                              <div
+                                key={reg.id || reg.user_id || idx}
+                                onClick={() => handleOpenProfileModal(reg, 'payment')}
+                                className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 hover:border-purple-400 transition-all cursor-pointer shadow-lg space-y-3"
+                              >
+                                <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                                  <div>
+                                    <div className="font-bold text-white text-sm">
+                                      {pName} {reg.nickname && <span className="text-amber-300">({reg.nickname})</span>}
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                      {reg.callsign && <span className="text-sky-300 font-bold">📡 {reg.callsign} • </span>}
+                                      <span>👕 ไซส์ {reg.shirt_size || 'M'}</span>
+                                    </div>
+                                  </div>
+                                  <span className={`px-2.5 py-0.5 rounded-lg text-xs font-black border shrink-0 ${
+                                    isMsu ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                                  }`}>
+                                    🏛️ {uniInfo.shortTag}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">ยอดรวม</div>
+                                    <div className="font-mono font-bold text-slate-200 mt-0.5">{totalFee} บ.</div>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">ชำระแล้ว</div>
+                                    <div className="font-mono font-black text-emerald-400 mt-0.5">{paidAmt} บ.</div>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">คงเหลือค้าง</div>
+                                    <div className="font-mono font-black text-rose-300 mt-0.5">{outAmt} บ.</div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                                  <div>
+                                    {outAmt === 0 ? (
+                                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold inline-flex items-center gap-1">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        ชำระครบถ้วนแล้ว
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-black inline-flex items-center gap-1">
+                                        <Clock className="w-3.5 h-3.5" />
+                                        ค้าง {outAmt} บ.
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    {slipUrl && (
+                                      <a
+                                        href={slipUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold border border-slate-700"
+                                      >
+                                        สลิป
+                                      </a>
+                                    )}
+                                    {outAmt > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleNotifyRound2(reg);
+                                        }}
+                                        className="px-2.5 py-1 rounded-xl bg-amber-500 text-slate-950 text-xs font-black flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Bell className="w-3 h-3" />
+                                        <span>แจ้งเตือน</span>
+                                      </button>
+                                    )}
+                                    <span className="px-3 py-1 rounded-xl bg-purple-600/30 text-purple-200 border border-purple-500/40 text-xs font-bold">
+                                      จัดการ
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -6359,6 +7175,8 @@ export default function AdminDashboardView({
           </div>
           )}
           
+          {/* General Search, Filters & Full Applicant Table (Only rendered on main /admin dashboard) */}
+          {!dedicatedSubpage && (<>
           {/* Search & Filters (Clean 2-Tier Layout so Search Box is Full-Width & Never Squished) */}
           <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 shadow-inner">
             {/* Row 1: Prominent Full-Width Search Input + Advanced Mode Toggle */}
@@ -6385,7 +7203,7 @@ export default function AdminDashboardView({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {(searchTerm || uniFilter !== 'all' || memberTypeFilter !== 'all' || genderFilter !== 'all' || roleFilter !== 'all' || filterType !== 'all' || bloodFilter !== 'all') && (
+                {(searchTerm || uniFilter !== 'all' || memberTypeFilter !== 'all' || genderFilter !== 'all' || bloodFilter !== 'all' || (!dedicatedSubpage && (roleFilter !== 'all' || filterType !== 'all'))) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -6393,9 +7211,13 @@ export default function AdminDashboardView({
                       setUniFilter('all');
                       setMemberTypeFilter('all');
                       setGenderFilter('all');
-                      setRoleFilter('all');
-                      setFilterType('all');
                       setBloodFilter('all');
+                      if (dedicatedSubpage) {
+                        handleNavigateSubpage(dedicatedSubpage);
+                      } else {
+                        setRoleFilter('all');
+                        setFilterType('all');
+                      }
                     }}
                     className="px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
@@ -6491,8 +7313,7 @@ export default function AdminDashboardView({
                 onChange={e => setFilterType(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
               >
-                <option value="all">สถานะทั้งหมด ({regMetrics.total} คน)</option>
-                <option value="staff">🛠️ เฉพาะ Staff 280 บ. ({regMetrics.staffCount} คน)</option>
+                <option value="all">สถานะชำระเงิน & เงื่อนไข ({regMetrics.total} คน)</option>
                 <option value="full_plan">💳 แผนจ่ายครบ ({regMetrics.fullPlanCount} คน)</option>
                 <option value="installment_plan">📦 แผนแบ่งจ่าย 2 งวด ({regMetrics.installmentPlanCount} คน)</option>
                 <option value="fully_paid">🟢 ชำระครบถ้วนแล้ว ({regMetrics.fullyPaidCount} คน)</option>
@@ -7250,6 +8071,7 @@ export default function AdminDashboardView({
               </tbody>
             </table>
           </div>
+          </>)}
 
         </div>
       )}
