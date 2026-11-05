@@ -96,6 +96,20 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'shirt-roster', canonicalPath: '/admin/shirt-roster' };
   }
 
+  // Standalone shortcuts for Staff Accommodation & Payment Filter Pages
+  if (first === 'staff-accommodation' || first === 'staff-hotel' || first === 'staff-refund') {
+    return { mainTab: 'admin', subRoute: 'staff-accommodation', canonicalPath: '/admin/staff-accommodation' };
+  }
+  if (first === 'full-payment' || first === 'full-plan') {
+    return { mainTab: 'admin', subRoute: 'full-payment', canonicalPath: '/admin/full-payment' };
+  }
+  if (first === 'round1-paid' || first === 'partial-paid' || first === 'installment-round1') {
+    return { mainTab: 'admin', subRoute: 'round1-paid', canonicalPath: '/admin/round1-paid' };
+  }
+  if (first === 'unpaid' || first === 'outstanding') {
+    return { mainTab: 'admin', subRoute: 'unpaid', canonicalPath: '/admin/unpaid' };
+  }
+
   // Standalone shortcuts for announcements
   if (first === 'pr') {
     const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
@@ -184,6 +198,28 @@ export function parseCurrentRoute() {
       'food': 'catering',
       'welfare': 'catering',
 
+      'staff-accommodation': 'staff-accommodation',
+      'staff_accommodation': 'staff-accommodation',
+      'staff-hotel': 'staff-accommodation',
+      'staff-refund': 'staff-accommodation',
+
+      'full-payment': 'full-payment',
+      'full-plan': 'full-payment',
+      'full_plan': 'full-payment',
+
+      'round1-paid': 'round1-paid',
+      'partial-paid': 'round1-paid',
+      'partial_paid': 'round1-paid',
+      'installment-round1': 'round1-paid',
+
+      'unpaid': 'unpaid',
+      'outstanding': 'unpaid',
+
+      'installment-plan': 'installment-plan',
+      'installment_plan': 'installment-plan',
+      'fully-paid': 'fully-paid',
+      'fully_paid': 'fully-paid',
+
       'scanner': 'scanner',
       'qr': 'scanner'
     };
@@ -202,6 +238,12 @@ export function parseCurrentRoute() {
     else if (targetSub === 'team') canonicalPath = '/admin/team';
     else if (targetSub === 'users') canonicalPath = '/admin/users';
     else if (targetSub === 'catering') canonicalPath = '/admin/catering';
+    else if (targetSub === 'staff-accommodation') canonicalPath = '/admin/staff-accommodation';
+    else if (targetSub === 'full-payment') canonicalPath = '/admin/full-payment';
+    else if (targetSub === 'round1-paid') canonicalPath = '/admin/round1-paid';
+    else if (targetSub === 'unpaid') canonicalPath = '/admin/unpaid';
+    else if (targetSub === 'installment-plan') canonicalPath = '/admin/installment-plan';
+    else if (targetSub === 'fully-paid') canonicalPath = '/admin/fully-paid';
     else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
     else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
     else canonicalPath = '/admin';
@@ -292,6 +334,12 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
       if (subRoute === 'catering' || subRoute === 'health' || subRoute === 'catering-health' || subRoute === 'food' || subRoute === 'welfare') return '/admin/catering';
+      if (subRoute === 'staff-accommodation' || subRoute === 'staff_accommodation' || subRoute === 'staff-hotel' || subRoute === 'staff-refund') return '/admin/staff-accommodation';
+      if (subRoute === 'full-payment' || subRoute === 'full_plan' || subRoute === 'full-plan') return '/admin/full-payment';
+      if (subRoute === 'round1-paid' || subRoute === 'partial_paid' || subRoute === 'partial-paid' || subRoute === 'installment-round1') return '/admin/round1-paid';
+      if (subRoute === 'unpaid' || subRoute === 'outstanding') return '/admin/unpaid';
+      if (subRoute === 'installment-plan' || subRoute === 'installment_plan') return '/admin/installment-plan';
+      if (subRoute === 'fully-paid' || subRoute === 'fully_paid') return '/admin/fully-paid';
       if (subRoute === 'scanner' || subRoute === 'qr') return '/admin/scanner';
       if (subRoute === 'applicants' || subRoute === 'registrations') return '/admin/applicants';
       if (subRoute && subRoute !== 'applicants') return `/admin/${subRoute}`;
