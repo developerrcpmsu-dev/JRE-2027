@@ -99,7 +99,7 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
         onClick={onClose}
       >
         <div 
-          className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative"
+          className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-5xl xl:max-w-6xl 2xl:max-w-[90vw] max-h-[94vh] flex flex-col shadow-2xl overflow-hidden relative transition-all"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Header Bar */}

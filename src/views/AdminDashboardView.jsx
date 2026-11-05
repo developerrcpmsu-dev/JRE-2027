@@ -8084,7 +8084,7 @@ export default function AdminDashboardView({
             onClick={handleCloseProfileModal}
           >
             <div 
-              className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto"
+              className="bg-slate-900 border border-slate-700 w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[95vw] rounded-3xl p-5 sm:p-7 lg:p-8 shadow-2xl relative max-h-[94vh] overflow-y-auto transition-all"
               onClick={e => e.stopPropagation()}
             >
             
@@ -8442,7 +8442,7 @@ export default function AdminDashboardView({
                   }
 
                   return (
-                    <div className="mt-3.5 pt-3 border-t border-slate-800/80 space-y-2 text-xs">
+                    <div className="mt-3.5 pt-3 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5 text-xs">
                       {/* บรรทัด 1: ชื่อ-สกุล (ไทย) */}
                       <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
                         <span className="text-slate-400 font-medium shrink-0 min-w-[130px] flex items-center gap-1.5">
@@ -16664,7 +16664,7 @@ export default function AdminDashboardView({
             onClick={() => setSelectedUserDetail(null)}
           >
             <div 
-              className="bg-slate-900 border border-slate-700 max-w-3xl w-full rounded-3xl p-5 sm:p-7 shadow-2xl relative space-y-6 max-h-[92vh] overflow-y-auto text-left"
+              className="bg-slate-900 border border-slate-700 w-full max-w-5xl xl:max-w-6xl 2xl:max-w-[90vw] rounded-3xl p-5 sm:p-7 lg:p-8 shadow-2xl relative space-y-6 max-h-[94vh] overflow-y-auto text-left transition-all"
               onClick={e => e.stopPropagation()}
             >
               {/* Close Button */}
@@ -18191,7 +18191,7 @@ export default function AdminDashboardView({
             onClick={() => setPreviewSlipUrl(null)}
           >
             <div 
-              className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-5 shadow-2xl relative"
+              className="bg-slate-900 border border-slate-700 max-w-2xl xl:max-w-3xl w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative"
               onClick={e => e.stopPropagation()}
             >
               <button
