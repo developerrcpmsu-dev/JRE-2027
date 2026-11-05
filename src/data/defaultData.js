@@ -835,6 +835,7 @@ export const OFFICIAL_COMMITTEE_NAMES = [
   { match: 'วุฒิชัย ช้อยชด', role: 'committee' },
   { match: 'ฐิติภูมิ สิงหาปัด', role: 'committee' },
   { match: 'วัชราภา จำปาโพธิ์', role: 'committee' },
+  { match: 'วชิราภา จำปาโพธิ์', role: 'committee' },
   { match: 'วารัทยา เรืองเวทย์วัฒนา', role: 'committee' },
   { match: 'พงศ์ภรณ์ ทองศิริ', role: 'dev' }
 ];
