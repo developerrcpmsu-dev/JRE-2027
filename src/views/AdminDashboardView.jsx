@@ -15809,157 +15809,192 @@ export default function AdminDashboardView({
 
                           {/* Payment Plan & Unified Slip Status */}
                           <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-950 border border-purple-500/30 rounded-2xl space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                              <div>
-                                <span className="text-xs text-slate-400">แผนการชำระเงินที่เลือก:</span>
-                                <div className="text-sm font-black text-white">
-                                  {reg.is_staff
-                                    ? '🛠️ คณะทำงาน / Staff (เฉพาะค่าเสื้อ 280 บ. • ไม่แบ่ง 2 งวด)'
-                                    : reg.payment_plan === 'installment'
-                                    ? '⚡ แผนแบ่งจ่าย 2 งวด'
-                                    : '💎 ชำระครบเต็มจำนวน 1 รอบ (Full Payment)'}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="text-xs text-slate-400">สถานะรวม:</span>
-                                <div>
-                                  {reg.payment_status === 'paid' || reg.payment_status === 'verified' ? (
-                                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
-                                      ชำระครบแล้ว
-                                    </span>
-                                  ) : !reg.is_staff && reg.payment_status === 'partial_paid' ? (
-                                    <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-bold">
-                                      ชำระงวดที่ 1 แล้ว (ค้างงวดที่ 2)
-                                    </span>
-                                  ) : reg.payment_status === 'pending_review' ? (
-                                    <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
-                                      รอตรวจสลิป
-                                    </span>
+                            {(() => {
+                              const rowStaffSum = getStaffPaymentSummary(reg);
+                              const isRowStaff = rowStaffSum.isStaff;
+                              const isRowNonMsuStaff = isRowStaff && !rowStaffSum.isMsu;
+                              return (
+                                <>
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                                    <div>
+                                      <span className="text-xs text-slate-400">แผนการชำระเงินที่เลือก:</span>
+                                      <div className="text-sm font-black text-white">
+                                        {isRowStaff
+                                          ? (rowStaffSum.isMsu
+                                              ? '🛠️ คณะทำงาน / Staff มมส (เฉพาะค่าเสื้อ 280 บ. • ไม่มีแบ่งจ่าย 2 งวด)'
+                                              : '🛠️🏨 คณะทำงาน / Staff ต่างมหาลัย (งวดแรกค่าเสื้อ 280 บ. + งวด 2 ค่าที่พัก 200 บ. = 480 บ.)')
+                                          : reg.payment_plan === 'installment'
+                                          ? '⚡ แผนแบ่งจ่าย 2 งวด'
+                                          : '💎 ชำระครบเต็มจำนวน 1 รอบ (Full Payment)'}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-xs text-slate-400">สถานะรวม:</span>
+                                      <div>
+                                        {isRowNonMsuStaff ? (
+                                          rowStaffSum.isAccommodationPaid ? (
+                                            <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                                              ชำระครบ 480 บ. แล้ว
+                                            </span>
+                                          ) : rowStaffSum.isAccommodationPendingReview ? (
+                                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
+                                              รอตรวจสลิปค่าที่พัก ({rowStaffSum.accommodationRemaining} บ.)
+                                            </span>
+                                          ) : (
+                                            <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-xs font-bold">
+                                              ค้างชำระค่าที่พัก ({rowStaffSum.accommodationRemaining} บ.)
+                                            </span>
+                                          )
+                                        ) : reg.payment_status === 'paid' || reg.payment_status === 'verified' ? (
+                                          <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
+                                            ชำระครบแล้ว
+                                          </span>
+                                        ) : !isRowStaff && reg.payment_status === 'partial_paid' ? (
+                                          <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-bold">
+                                            ชำระงวดที่ 1 แล้ว (ค้างงวดที่ 2)
+                                          </span>
+                                        ) : reg.payment_status === 'pending_review' ? (
+                                          <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold">
+                                            รอตรวจสลิป
+                                          </span>
+                                        ) : (
+                                          <span className="px-2.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-full text-xs font-bold">
+                                            ยังไม่ชำระ
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {(isRowStaff && rowStaffSum.isMsu) || (!isRowStaff && reg.payment_plan !== 'installment') ? (
+                                    <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-white">
+                                          {isRowStaff ? 'ยอดชำระเฉพาะค่าเสื้อ Staff มมส' : 'ยอดชำระเต็มจำนวน (1 รอบ)'}
+                                        </span>
+                                        <span className="text-xs font-black text-purple-300">
+                                          {isRowStaff ? '280 บ.' : `${reg.payment_amount || (displayStudentId ? 650 : 850)} บ.`}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-slate-400">สถานะ:</span>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                          reg.payment_status === 'paid' || reg.payment_status === 'verified'
+                                            ? 'bg-emerald-500/20 text-emerald-300'
+                                            : reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review'
+                                            ? 'bg-amber-500/20 text-amber-300'
+                                            : 'bg-rose-500/20 text-rose-300'
+                                        }`}>
+                                          {reg.payment_status === 'paid' || reg.payment_status === 'verified'
+                                            ? 'ชำระแล้ว'
+                                            : reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review'
+                                            ? 'รอตรวจสอบ'
+                                            : 'ค้างชำระ'}
+                                        </span>
+                                      </div>
+                                      {(reg.payment_slip_url || reg.installment_1_slip_url) && (
+                                        <div className="pt-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => setPreviewSlipUrl(reg.payment_slip_url || reg.installment_1_slip_url)}
+                                            className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                          >
+                                            <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                            <span>ดูหลักฐานสลิปโอนเงิน</span>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                   ) : (
-                                    <span className="px-2.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-full text-xs font-bold">
-                                      ยังไม่ชำระ
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                      {/* Round 1 */}
+                                      <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs font-bold text-white">
+                                            {isRowNonMsuStaff ? 'งวดที่ 1 (ค่าเสื้อ Staff)' : 'งวดที่ 1 (มัดจำเสื้อ)'}
+                                          </span>
+                                          <span className="text-xs font-black text-purple-300">
+                                            {isRowNonMsuStaff
+                                              ? `280 บ.${rowStaffSum.isOffsetApplied ? ` (โอนจริง ${rowStaffSum.r1SlipAmount} บ.)` : ''}`
+                                              : '400 บ.'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-slate-400">สถานะ:</span>
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                            reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                              ? 'bg-emerald-500/20 text-emerald-300'
+                                              : reg.installment_1_status === 'pending_review'
+                                              ? 'bg-amber-500/20 text-amber-300'
+                                              : 'bg-rose-500/20 text-rose-300'
+                                          }`}>
+                                            {reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
+                                              ? 'ชำระแล้ว'
+                                              : reg.installment_1_status === 'pending_review'
+                                              ? 'รอตรวจสอบ'
+                                              : 'ค้างชำระ'}
+                                          </span>
+                                        </div>
+                                        {(reg.installment_1_slip_url || reg.payment_slip_url) && (
+                                          <div className="pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => setPreviewSlipUrl(reg.installment_1_slip_url || reg.payment_slip_url)}
+                                              className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                            >
+                                              <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                              <span>ดูสลิปงวดที่ 1</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
 
-                            {reg.is_staff || reg.payment_plan !== 'installment' ? (
-                              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white">
-                                    {reg.is_staff ? 'ยอดชำระเฉพาะค่าเสื้อ Staff' : 'ยอดชำระเต็มจำนวน (1 รอบ)'}
-                                  </span>
-                                  <span className="text-xs font-black text-purple-300">
-                                    {reg.is_staff ? '280 บ.' : `${reg.payment_amount || (displayStudentId ? 650 : 850)} บ.`}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-400">สถานะ:</span>
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    reg.payment_status === 'paid' || reg.payment_status === 'verified'
-                                      ? 'bg-emerald-500/20 text-emerald-300'
-                                      : reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review'
-                                      ? 'bg-amber-500/20 text-amber-300'
-                                      : 'bg-rose-500/20 text-rose-300'
-                                  }`}>
-                                    {reg.payment_status === 'paid' || reg.payment_status === 'verified'
-                                      ? 'ชำระแล้ว'
-                                      : reg.payment_status === 'pending_review' || reg.installment_1_status === 'pending_review'
-                                      ? 'รอตรวจสอบ'
-                                      : 'ค้างชำระ'}
-                                  </span>
-                                </div>
-                                {(reg.payment_slip_url || reg.installment_1_slip_url) && (
-                                  <div className="pt-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => setPreviewSlipUrl(reg.payment_slip_url || reg.installment_1_slip_url)}
-                                      className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                                    >
-                                      <Eye className="w-3.5 h-3.5 text-purple-400" />
-                                      <span>ดูหลักฐานสลิปโอนเงิน</span>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                {/* Round 1 */}
-                                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-white">งวดที่ 1 (มัดจำเสื้อ)</span>
-                                    <span className="text-xs font-black text-purple-300">400 บ.</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400">สถานะ:</span>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
-                                        ? 'bg-emerald-500/20 text-emerald-300'
-                                        : reg.installment_1_status === 'pending_review'
-                                        ? 'bg-amber-500/20 text-amber-300'
-                                        : 'bg-rose-500/20 text-rose-300'
-                                    }`}>
-                                      {reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || reg.payment_status === 'partial_paid'
-                                        ? 'ชำระแล้ว'
-                                        : reg.installment_1_status === 'pending_review'
-                                        ? 'รอตรวจสอบ'
-                                        : 'ค้างชำระ'}
-                                    </span>
-                                  </div>
-                                  {(reg.installment_1_slip_url || reg.payment_slip_url) && (
-                                    <div className="pt-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => setPreviewSlipUrl(reg.installment_1_slip_url || reg.payment_slip_url)}
-                                        className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                                      >
-                                        <Eye className="w-3.5 h-3.5 text-purple-400" />
-                                        <span>ดูสลิปงวดที่ 1</span>
-                                      </button>
+                                      {/* Round 2 */}
+                                      <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs font-bold text-white">
+                                            {isRowNonMsuStaff ? 'งวดที่ 2 (ค่าห้องพัก Staff)' : 'งวดที่ 2 (ส่วนที่เหลือ)'}
+                                          </span>
+                                          <span className="text-xs font-black text-purple-300">
+                                            {isRowNonMsuStaff
+                                              ? `${rowStaffSum.accommodationNetRequiredAfterOffset} บ.${rowStaffSum.isOffsetApplied ? ' (หลังหักลบ)' : ' (ค่าที่พัก)'}`
+                                              : displayStudentId ? '250 บ. (มมส)' : '450 บ. (บุคคลภายนอก)'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-slate-400">สถานะ:</span>
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                            reg.installment_2_status === 'paid' || (isRowNonMsuStaff && rowStaffSum.isAccommodationPaid)
+                                              ? 'bg-emerald-500/20 text-emerald-300'
+                                              : reg.installment_2_status === 'pending_review'
+                                              ? 'bg-amber-500/20 text-amber-300'
+                                              : 'bg-rose-500/20 text-rose-300'
+                                          }`}>
+                                            {reg.installment_2_status === 'paid' || (isRowNonMsuStaff && rowStaffSum.isAccommodationPaid)
+                                              ? 'ชำระแล้ว'
+                                              : reg.installment_2_status === 'pending_review'
+                                              ? 'รอตรวจสอบ'
+                                              : `ค้างชำระ ${isRowNonMsuStaff ? `(${rowStaffSum.accommodationRemaining} บ.)` : ''}`}
+                                          </span>
+                                        </div>
+                                        {reg.installment_2_slip_url && (
+                                          <div className="pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => setPreviewSlipUrl(reg.installment_2_slip_url)}
+                                              className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                            >
+                                              <Eye className="w-3.5 h-3.5 text-purple-400" />
+                                              <span>ดูสลิปงวดที่ 2</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
-                                </div>
-
-                                {/* Round 2 */}
-                                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-white">งวดที่ 2 (ส่วนที่เหลือ)</span>
-                                    <span className="text-xs font-black text-purple-300">
-                                      {displayStudentId ? '250 บ. (มมส)' : '450 บ. (บุคคลภายนอก)'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400">สถานะ:</span>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      reg.installment_2_status === 'paid'
-                                        ? 'bg-emerald-500/20 text-emerald-300'
-                                        : reg.installment_2_status === 'pending_review'
-                                        ? 'bg-amber-500/20 text-amber-300'
-                                        : 'bg-slate-800 text-slate-400'
-                                    }`}>
-                                      {reg.installment_2_status === 'paid'
-                                        ? 'ชำระแล้ว'
-                                        : reg.installment_2_status === 'pending_review'
-                                        ? 'รอตรวจสอบ'
-                                        : 'ค้างชำระ'}
-                                    </span>
-                                  </div>
-                                  {reg.installment_2_slip_url && (
-                                    <div className="pt-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => setPreviewSlipUrl(reg.installment_2_slip_url)}
-                                        className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                                      >
-                                        <Eye className="w-3.5 h-3.5 text-purple-400" />
-                                        <span>ดูสลิปงวดที่ 2</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       ) : (

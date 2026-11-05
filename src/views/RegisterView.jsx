@@ -429,11 +429,16 @@ export default function RegisterView({
 
   const handleToggleStaffMode = (nextStaffState) => {
     const enabled = Boolean(nextStaffState);
+    const isCurrentMsu = isMsuInstitution(institution);
     setIsStaff(enabled);
     if (enabled) {
-      setPaymentPlan('full');
-      if (currentFormStep === 4) setCurrentFormStep(3);
-      triggerToast(`เลือกสถานะ: Staff โครงการ (จ่ายเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บ. ครั้งเดียว • ไม่มีแบ่งจ่าย 2 งวด)`, 'info');
+      if (isCurrentMsu) {
+        setPaymentPlan('full');
+        if (currentFormStep === 4) setCurrentFormStep(3);
+        triggerToast(`เลือกสถานะ: Staff มมส (จ่ายเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บาท • ที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด)`, 'info');
+      } else {
+        triggerToast(`เลือกสถานะ: Staff ต่างมหาวิทยาลัย (ค่าเสื้อ ${STAFF_SHIRT_FEE} บ. + ค่าห้องพัก ${STAFF_ACCOMMODATION_FEE} บ. = ${STAFF_EXTERNAL_TOTAL_FEE} บ. • แบ่งจ่าย 2 งวดได้: งวดแรกค่าเสื้อ 280 บ. / งวด 2 ค่าที่พัก 200 บ.)`, 'info');
+      }
     } else {
       triggerToast('เปลี่ยนเป็นสถานะ: ผู้เข้าร่วมโครงการทั่วไป', 'info');
     }
@@ -452,7 +457,12 @@ export default function RegisterView({
     } else {
       setUnit(selectedInstitution?.club || '');
     }
-    setInstitution(selectedInstitution?.university || instName);
+    const nextInst = selectedInstitution?.university || instName;
+    setInstitution(nextInst);
+    if (isStaff && isMsuInstitution(nextInst)) {
+      setPaymentPlan('full');
+      if (currentFormStep === 4) setCurrentFormStep(3);
+    }
     clearFieldError('institution');
     if (mapped) {
       setInstitutionAbbrTh(mapped.th);
@@ -816,7 +826,9 @@ export default function RegisterView({
           if (d.gender) setGender(d.gender);
           if (typeof d.isStaff === 'boolean') {
             setIsStaff(d.isStaff);
-            if (d.isStaff) setPaymentPlan('full');
+            if (d.isStaff && isMsuInstitution(d.institution || institution)) {
+              setPaymentPlan('full');
+            }
           }
           if (d.idCardPhoto) {
             setIdCardPhoto(d.idCardPhoto);
@@ -873,7 +885,7 @@ export default function RegisterView({
         previousTraining,
         gender,
         isStaff,
-        paymentPlan: isStaff ? 'full' : paymentPlan,
+        paymentPlan: (isStaff && isMsuInstitution(institution)) ? 'full' : paymentPlan,
         idCardPhoto,
         idCardFileName,
         formSlipRound1,
@@ -1078,15 +1090,21 @@ export default function RegisterView({
           const ocr = await evaluateSlipWithRegistry(rawOcr, targetAmount, slipOcrRound2?.transRef);
           setSlipOcrRound1(ocr);
 
-          // If 280 THB Staff slip is detected, auto-switch to Staff Full Payment (280 THB)
+          // If 280 THB Staff slip is detected
           if (ocr?.isStaffAmountDetected) {
+            const isMsuCurrent = isMsuInstitution(institution);
             setIsStaff(true);
-            setPaymentPlan('full');
-            setFormSlipFull(uploadResult.url);
-            setFormSlipFullFileName(file.name);
-            setSlipOcrFull(ocr);
-            if (currentFormStep === 4) setCurrentFormStep(3);
-            triggerToast(`✓ ตรวจพบสลิป Staff (${ocr.amountFormatted}) ระบบปรับสถานะเป็น Staff (ชำระค่าเสื้อ 280 บ. ครั้งเดียว) อัตโนมัติ!`, 'success');
+            if (isMsuCurrent) {
+              setPaymentPlan('full');
+              setFormSlipFull(uploadResult.url);
+              setFormSlipFullFileName(file.name);
+              setSlipOcrFull(ocr);
+              if (currentFormStep === 4) setCurrentFormStep(3);
+              triggerToast(`✓ ตรวจพบสลิป Staff มมส (${ocr.amountFormatted}) ระบบปรับเป็น Staff มมส (ชำระเฉพาะค่าเสื้อ 280 บ. ครั้งเดียว) อัตโนมัติ!`, 'success');
+            } else {
+              setPaymentPlan('installment');
+              triggerToast(`✓ ตรวจพบสลิปงวดแรกค่าเสื้อ Staff ต่างมหาลัย (${ocr.amountFormatted}) • งวดที่ 2 ค่าห้องพัก 200 บาท`, 'success');
+            }
           } else if (ocr.isFullyVerified) {
             triggerToast(`✓ สลิปมัดจำรอบ 1 ถูกต้องสมบูรณ์ (${ocr.amountFormatted}) พร้อมยืนยันสิทธิ์ทันที`, 'success');
           } else if (ocr.isDuplicate) {
@@ -1180,9 +1198,15 @@ export default function RegisterView({
           setSlipOcrRound1(ocr);
 
           if (ocr?.isStaffAmountDetected && !isStaff) {
+            const isMsuCurrent = isMsuInstitution(institution);
             setIsStaff(true);
-            setPaymentPlan('full');
-            triggerToast(`✓ ตรวจพบสลิปยอด 280.00 บาท — ระบบปรับสถานะเป็น Staff (ชำระเฉพาะค่าเสื้อ 280 บ.) และยืนยันสิทธิ์ทันที!`, 'success');
+            if (isMsuCurrent) {
+              setPaymentPlan('full');
+              triggerToast(`✓ ตรวจพบสลิปยอด 280.00 บาท — ระบบปรับสถานะเป็น Staff มมส (ชำระเฉพาะค่าเสื้อ 280 บ.) และยืนยันสิทธิ์ทันที!`, 'success');
+            } else {
+              setPaymentPlan('installment');
+              triggerToast(`✓ ตรวจพบสลิปยอด 280.00 บาท — ระบบปรับสถานะเป็น Staff ต่างมหาลัย แบ่งจ่าย 2 งวด (งวดแรกค่าเสื้อ 280 บ. / งวด 2 ค่าที่พัก 200 บ.)`, 'success');
+            }
           } else if (ocr.isFullyVerified) {
             triggerToast(`✓ สลิป${isStaff || ocr?.isStaffAmountDetected ? 'ค่าเสื้อ Staff (280 บ.)' : 'เต็มจำนวน'}ถูกต้องสมบูรณ์ (${ocr.amountFormatted}) พร้อมยืนยันสิทธิ์ทันที`, 'success');
           } else if (ocr.isDuplicate) {
@@ -1275,9 +1299,10 @@ export default function RegisterView({
     setMedicalHistory(reg.medical_history || '');
     setFoodAllergy(reg.food_allergy || '');
     const staffDetected = isStaffRegistration(reg);
+    const isMsuDetected = isMsuInstitution(inferredAffiliation || reg.institution || reg.affiliation);
     setIsStaff(staffDetected);
     setGender(resolveGender(reg) === 'หญิง' ? 'หญิง' : 'ชาย');
-    setPaymentPlan(staffDetected ? 'full' : (reg.payment_plan ? reg.payment_plan : ((reg.installment_1_slip_url || reg.installment_2_slip_url) ? 'installment' : 'full')));
+    setPaymentPlan((staffDetected && isMsuDetected) ? 'full' : (reg.payment_plan ? reg.payment_plan : ((reg.installment_1_slip_url || reg.installment_2_slip_url) ? 'installment' : 'full')));
     
     // Parse relation if present
     if (reg.emergency_name && reg.emergency_name.includes('(')) {
@@ -1593,8 +1618,8 @@ export default function RegisterView({
       slipOcrRound1?.isStaffAmountDetected ||
       (myRegistration && isStaffRegistration(myRegistration))
     );
-    const effectivePlan = effectiveIsStaff ? 'full' : paymentPlan;
     const feeInfo = getRegistrationFeeDetails(institution, effectiveIsStaff);
+    const effectivePlan = (effectiveIsStaff && feeInfo.isMsu) ? 'full' : paymentPlan;
 
     if (effectivePlan === 'full') {
       const hasFullSlip = Boolean(formSlipFull || formSlipRound1 || (isEditing && (myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url || myRegistration?.slip_url)));
@@ -1602,7 +1627,9 @@ export default function RegisterView({
         setCurrentFormStep(3);
         const err = {
           slipFull: effectiveIsStaff
-            ? `กรุณาอัปโหลดรูปภาพสลิปโอนเงินค่าเสื้อสำหรับ Staff (${STAFF_SHIRT_FEE} บาท) เพื่อส่งใบสมัครและยืนยันสิทธิ์`
+            ? (feeInfo.isMsu
+                ? `กรุณาอัปโหลดรูปภาพสลิปโอนเงินค่าเสื้อสำหรับ Staff มมส (${STAFF_SHIRT_FEE} บาท) เพื่อส่งใบสมัครและยืนยันสิทธิ์`
+                : `กรุณาอัปโหลดรูปภาพสลิปโอนเงินสำหรับ Staff ต่างมหาลัย (${feeInfo.totalFee} บาท: ค่าเสื้อ 280 + ค่าห้องพัก 200) เพื่อส่งใบสมัคร`)
             : `กรุณาอัปโหลดรูปภาพสลิปโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท) เพื่อส่งใบสมัครและยืนยันสิทธิ์เข้าร่วมโครงการ (ระบบไม่อนุญาตให้ส่งใบสมัครโดยไม่มีสลิปการชำระเงิน)`
         };
         setFieldErrors(prev => ({ ...prev, ...err }));
@@ -1618,10 +1645,11 @@ export default function RegisterView({
       const hasRound1Slip = Boolean(formSlipRound1 || (isEditing && (myRegistration?.installment_1_slip_url || myRegistration?.payment_slip_url || myRegistration?.slip_url)));
       if (!hasRound1Slip) {
         setCurrentFormStep(3);
-        const err = { slipRound1: 'กรุณาอัปโหลดรูปภาพสลิปโอนเงินรอบที่ 1 (มัดจำค่าจัดทำเสื้อฝึกอบรม 400 บาท) เพื่อส่งใบสมัคร (ระบบไม่อนุญาตให้ส่งใบสมัครโดยไม่มีสลิปการชำระเงิน)' };
+        const r1Label = effectiveIsStaff ? `งวดแรก (ค่าเสื้อ Staff ${feeInfo.round1Amount} บาท)` : `รอบที่ 1 (มัดจำค่าจัดทำเสื้อฝึกอบรม ${feeInfo.round1Amount} บาท)`;
+        const err = { slipRound1: `กรุณาอัปโหลดรูปภาพสลิปโอนเงิน${r1Label} เพื่อส่งใบสมัคร (ระบบไม่อนุญาตให้ส่งใบสมัครโดยไม่มีสลิปการชำระเงิน)` };
         setFieldErrors(prev => ({ ...prev, ...err }));
         setStatusMessage({ type: 'error', text: err.slipRound1 });
-        triggerToast('กรุณาแนบสลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ก่อนส่งใบสมัคร', 'error');
+        triggerToast(`กรุณาแนบสลิปโอนเงิน${r1Label} ก่อนส่งใบสมัคร`, 'error');
         setTimeout(() => {
           const el = document.getElementById('field-slip-upload-step3');
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1633,10 +1661,11 @@ export default function RegisterView({
       if (currentFormStep === 4) {
         const hasRound2Slip = Boolean(formSlipRound2 || (isEditing && myRegistration?.installment_2_slip_url));
         if (!hasRound2Slip) {
-          const err = { slipRound2: `กรุณาอัปโหลดรูปภาพสลิปโอนเงินรอบที่ 2 (${feeInfo.round2Amount} บาท) เพื่อยืนยันสิทธิ์ หรือกดย้อนกลับไปขั้นตอนที่ 3 หากต้องการส่งเฉพาะสลิปรอบแรก (มัดจำเสื้อ) ก่อน` };
+          const r2Label = effectiveIsStaff ? `งวดที่ 2 (ค่าห้องพัก Staff ${feeInfo.round2Amount} บาท)` : `รอบที่ 2 (${feeInfo.round2Amount} บาท)`;
+          const err = { slipRound2: `กรุณาอัปโหลดรูปภาพสลิปโอนเงิน${r2Label} เพื่อยืนยันสิทธิ์ หรือกดย้อนกลับไปขั้นตอนที่ 3 หากต้องการส่งเฉพาะสลิปงวดแรกก่อน` };
           setFieldErrors(prev => ({ ...prev, ...err }));
           setStatusMessage({ type: 'error', text: err.slipRound2 });
-          triggerToast(`กรุณาแนบสลิปโอนเงินรอบที่ 2 (${feeInfo.round2Amount} บ.) หรือกดย้อนกลับไปขั้นตอนที่ 3`, 'error');
+          triggerToast(`กรุณาแนบสลิปโอนเงิน${r2Label} หรือกดย้อนกลับไปขั้นตอนที่ 3`, 'error');
           setTimeout(() => {
             const el = document.getElementById('field-slip-upload-step4');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -5456,14 +5485,18 @@ export default function RegisterView({
                     : 'bg-sky-500/15 text-sky-300 border-sky-500/30'
               }`}>
                 {isStaff
-                  ? `🛠️ Staff โครงการ: ชำระเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บ. (ไม่มีแบ่งจ่าย 2 งวด)`
+                  ? (feeInfo.isMsu
+                      ? `🛠️ Staff มมส: จ่ายเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บ. (ไม่มีแบ่งจ่าย 2 งวด)`
+                      : paymentPlan === 'installment'
+                        ? `🛠️💳 Staff ต่างมหาลัย: แบ่งจ่าย 2 งวด (งวดแรกค่าเสื้อ ${STAFF_SHIRT_FEE} • งวด 2 ค่าที่พัก ${STAFF_ACCOMMODATION_FEE} บ.)`
+                        : `🛠️🏨 Staff ต่างมหาลัย: จ่ายครบ ${STAFF_EXTERNAL_TOTAL_FEE} บ. (ค่าเสื้อ ${STAFF_SHIRT_FEE} + ค่าห้องพัก ${STAFF_ACCOMMODATION_FEE})`)
                   : paymentPlan === 'full'
                     ? '🌟 จ่ายครบครั้งเดียว (3 ขั้นตอน)'
                     : '💳 แบ่งจ่าย 2 รอบ (4 ขั้นตอน)'}
               </span>
             </div>
 
-            {/* 🛠️ STAFF CHECKBOX OPTION (280 THB Shirt Only - Single Payment, No 2-Round Installments) */}
+            {/* 🛠️ STAFF CHECKBOX OPTION */}
             <div
               onClick={() => handleToggleStaffMode(!isStaff)}
               className={`p-4 rounded-2xl border-2 transition-all cursor-pointer select-none flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
@@ -5486,14 +5519,17 @@ export default function RegisterView({
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-black text-white text-xs sm:text-sm">
-                      🛠️ ติ๊กเลือก: สมัครในนาม Staff / คณะทำงานโครงการ (ทุกมหาวิทยาลัย ทั้ง มมส, มข และเครือข่าย)
+                      🛠️ ติ๊กเลือก: สมัครในนาม Staff / คณะทำงานโครงการ
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-fuchsia-500 text-white shadow">
-                      ชำระเฉพาะค่าเสื้อ {STAFF_SHIRT_FEE} บาท
+                      {feeInfo.isMsu
+                        ? `Staff มมส: เฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บาท`
+                        : `Staff ต่างมหาลัย (เช่น มข): เสื้อ ${STAFF_SHIRT_FEE} + ห้องพัก ${STAFF_ACCOMMODATION_FEE} = ${STAFF_EXTERNAL_TOTAL_FEE} บ.`}
                     </span>
                   </div>
                   <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed">
-                    สำหรับ <strong className="text-fuchsia-300">Staff โครงการ</strong> จ่ายเฉพาะค่าเสื้อโครงการ <strong className="text-amber-300">{STAFF_SHIRT_FEE} บาท</strong> (ค่าอาหารและที่พักส่วนที่เหลือโครงการออกให้ทั้งหมด) • <strong className="text-emerald-300 underline">ชำระครั้งเดียว {STAFF_SHIRT_FEE} บาท จึงไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข</strong> (ระบบตรวจสลิปจะตรวจจับยอด 280 บาทเป็น Staff อัตโนมัติ)
+                    • <strong className="text-fuchsia-300">Staff มมส:</strong> จ่ายเฉพาะค่าเสื้อ <strong className="text-amber-300">{STAFF_SHIRT_FEE} บาท</strong> (ที่เหลือโครงการออกให้) <strong className="text-emerald-300 underline">จึงไม่มีแบ่งจ่าย 2 งวด มมส</strong><br />
+                    • <strong className="text-sky-300">Staff ต่างมหาวิทยาลัย (เช่น มข):</strong> จ่ายเฉพาะค่าเสื้อ <strong className="text-amber-300">{STAFF_SHIRT_FEE} บาท</strong> + ค่าห้องพัก <strong className="text-sky-300">{STAFF_ACCOMMODATION_FEE} บาท</strong> = <strong className="text-white">{STAFF_EXTERNAL_TOTAL_FEE} บาท</strong> • <strong className="text-emerald-300 underline">มีแบ่งจ่าย 2 งวดได้ (งวดแรกค่าเสื้อ 280 บ. / งวด 2 ค่าที่พัก 200 บ.)</strong>
                   </p>
                 </div>
               </div>
@@ -5503,7 +5539,9 @@ export default function RegisterView({
                     ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow'
                     : 'bg-slate-800 text-slate-300 border-slate-700'
                 }`}>
-                  {isStaff ? '✓ เลือกเป็น Staff (280 บ.) แล้ว' : 'คลิกเพื่อเลือกเป็น Staff (280 บ.)'}
+                  {isStaff
+                    ? (feeInfo.isMsu ? '✓ Staff มมส (280 บ.)' : '✓ Staff ต่างมหาลัย (280+200 บ.)')
+                    : 'คลิกเพื่อเลือกเป็น Staff'}
                 </span>
               </div>
             </div>
@@ -5519,7 +5557,14 @@ export default function RegisterView({
                   }
                   setPaymentPlan('full');
                   if (currentFormStep === 4) setCurrentFormStep(3);
-                  triggerToast(isStaff ? `Staff ชำระค่าเสื้อครั้งเดียว (${STAFF_SHIRT_FEE} บาท)` : 'เลือกรูปแบบ: จ่ายครบเต็มจำนวน (3 ขั้นตอน)', 'info');
+                  triggerToast(
+                    isStaff
+                      ? (feeInfo.isMsu
+                          ? `Staff มมส ชำระเฉพาะค่าเสื้อครั้งเดียว (${STAFF_SHIRT_FEE} บาท)`
+                          : `Staff ต่างมหาลัย ชำระครบครั้งเดียว (${STAFF_EXTERNAL_TOTAL_FEE} บาท: ค่าเสื้อ 280 + ค่าห้องพัก 200)`)
+                      : 'เลือกรูปแบบ: จ่ายครบเต็มจำนวน (3 ขั้นตอน)',
+                    'info'
+                  );
                 }}
                 className={`p-4 sm:p-4.5 rounded-2xl border transition-all space-y-2.5 select-none ${
                   !isStaff && isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'installment'
@@ -5533,7 +5578,9 @@ export default function RegisterView({
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-lg shrink-0">{isStaff ? '🛠️' : '🌟'}</span>
                     <span className="font-black text-white text-sm truncate">
-                      {isStaff ? `ชำระค่าเสื้อ Staff (${STAFF_SHIRT_FEE} บ.)` : 'จ่ายครบเต็มจำนวน'}
+                      {isStaff
+                        ? (feeInfo.isMsu ? `ชำระเฉพาะค่าเสื้อ Staff มมส (${STAFF_SHIRT_FEE} บ.)` : `จ่ายครบครั้งเดียว Staff (${STAFF_EXTERNAL_TOTAL_FEE} บ.)`)
+                        : 'จ่ายครบเต็มจำนวน'}
                     </span>
                   </div>
                   <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
@@ -5546,7 +5593,9 @@ export default function RegisterView({
                 </div>
                 <p className="text-slate-300 text-xs leading-relaxed">
                   {isStaff
-                    ? `สำหรับคณะทำงาน/Staff โครงการ (ทุกมหาวิทยาลัย ทั้ง มมส และ มข) ชำระเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บาท ครั้งเดียว ค่าใช้จ่ายส่วนที่เหลือโครงการออกให้`
+                    ? (feeInfo.isMsu
+                        ? `สำหรับ Staff มมส จ่ายเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บาท ครั้งเดียว (ที่เหลือโครงการออกให้ จึงไม่มีแบ่งจ่าย 2 งวด มมส)`
+                        : `สำหรับ Staff ต่างมหาลัย (เช่น มข) จ่ายเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บาท + ค่าห้องพัก ${STAFF_ACCOMMODATION_FEE} บาท รวม ${STAFF_EXTERNAL_TOTAL_FEE} บาท ในคราวเดียว`)
                     : `ชำระค่าลงทะเบียนและค่าเสื้อเต็มจำนวนในคราวเดียว (${feeInfo.isMsu ? 'นิสิต มมส 650 บ.' : 'ต่างมหาวิทยาลัย 850 บ.'}) รวดเร็ว สบายใจ ยืนยันสิทธิ์ทันที`}
                 </p>
                 {isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'full' && (
@@ -5560,7 +5609,9 @@ export default function RegisterView({
                   </div>
                 )}
                 <div className="text-[11px] text-amber-300 font-semibold pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
-                  <span>💵 {isStaff ? 'ยอดชำระเฉพาะค่าเสื้อ Staff:' : 'ยอดชำระเต็มจำนวน:'}</span>
+                  <span>
+                    💵 {isStaff ? (feeInfo.isMsu ? 'ยอดชำระเฉพาะค่าเสื้อ Staff มมส:' : 'ยอดชำระรวม (เสื้อ 280 + ห้องพัก 200):') : 'ยอดชำระเต็มจำนวน:'}
+                  </span>
                   <span className="font-black text-sm text-white">{feeInfo.totalFee} บาท</span>
                 </div>
               </div>
@@ -5568,8 +5619,8 @@ export default function RegisterView({
               {/* Option 2: แบ่งจ่าย 2 งวด (Installments: 4 Steps) */}
               <div 
                 onClick={() => {
-                  if (isStaff) {
-                    triggerToast('🔒 สำหรับ Staff โครงการ จ่ายเฉพาะค่าเสื้อ 280 บาท (ที่เหลือโครงการออกให้) จึงไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข', 'warning');
+                  if (isStaff && feeInfo.isMsu) {
+                    triggerToast('🔒 สำหรับ Staff โครงการ จ่ายเฉพาะค่าเสื้อ 280 บาท (ที่เหลือโครงการออกให้) จึงไม่มีแบ่งจ่าย 2 งวด มมส', 'warning');
                     return;
                   }
                   if (isEditing && hasTransferredOrPaid && myRegistration?.payment_plan !== 'installment') {
@@ -5577,10 +5628,15 @@ export default function RegisterView({
                     return;
                   }
                   setPaymentPlan('installment');
-                  triggerToast('เลือกรูปแบบ: แบ่งจ่าย 2 งวด (4 ขั้นตอน)', 'info');
+                  triggerToast(
+                    isStaff
+                      ? 'เลือกรูปแบบ Staff ต่างมหาลัย แบ่งจ่าย 2 งวด: งวดแรกค่าเสื้อ 280 บาท / งวด 2 ค่าที่พัก 200 บาท'
+                      : 'เลือกรูปแบบ: แบ่งจ่าย 2 งวด (4 ขั้นตอน)',
+                    'info'
+                  );
                 }}
                 className={`p-4 sm:p-4.5 rounded-2xl border transition-all space-y-2.5 select-none ${
-                  isStaff || (isEditing && hasTransferredOrPaid && myRegistration?.payment_plan !== 'installment')
+                  (isStaff && feeInfo.isMsu) || (isEditing && hasTransferredOrPaid && myRegistration?.payment_plan !== 'installment')
                     ? 'bg-slate-900/40 border-slate-800 opacity-50 cursor-not-allowed'
                     : paymentPlan === 'installment'
                       ? 'bg-sky-500/15 border-sky-500 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10 cursor-pointer'
@@ -5589,25 +5645,36 @@ export default function RegisterView({
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-lg shrink-0">{isStaff ? '🔒' : '💳'}</span>
-                    <span className="font-black text-white text-sm truncate">แบ่งจ่าย 2 งวด</span>
+                    <span className="text-lg shrink-0">{(isStaff && feeInfo.isMsu) ? '🔒' : '💳'}</span>
+                    <span className="font-black text-white text-sm truncate">
+                      {isStaff && !feeInfo.isMsu ? 'แบ่งจ่าย 2 งวด (งวดแรกค่าเสื้อ • งวด 2 ค่าที่พัก)' : 'แบ่งจ่าย 2 งวด'}
+                    </span>
                   </div>
                   <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
-                    !isStaff && paymentPlan === 'installment' 
+                    !(isStaff && feeInfo.isMsu) && paymentPlan === 'installment' 
                       ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sm' 
                       : 'bg-slate-800 text-sky-300 border-slate-700'
                   }`}>
-                    {isStaff ? 'เฉพาะผู้เข้าอบรมทั่วไป' : 'มัดจำ (4 ขั้นตอน)'}
+                    {isStaff
+                      ? (feeInfo.isMsu ? 'ไม่มีแบ่งจ่าย 2 งวด (มมส)' : '2 งวด (เสื้อ 280 • ที่พัก 200)')
+                      : 'มัดจำ (4 ขั้นตอน)'}
                   </span>
                 </div>
                 <p className="text-slate-300 text-xs leading-relaxed">
                   {isStaff
-                    ? 'Staff โครงการชำระเฉพาะค่าเสื้อ 280 บ. ครั้งเดียว (ส่วนที่เหลือโครงการออกให้ทั้งหมด) จึงไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข'
+                    ? (feeInfo.isMsu
+                        ? 'สำหรับ Staff โครงการ จ่ายเฉพาะค่าเสื้อ 280 บาท (ที่เหลือโครงการออกให้) จึงไม่มีแบ่งจ่าย 2 งวด มมส'
+                        : 'สำหรับ Staff ต่างมหาลัย (เช่น มข) แบ่งจ่าย 2 งวดได้: งวดแรกจ่ายค่าเสื้อ 280 บาท และงวดที่ 2 จ่ายค่าที่พัก 200 บาท (รวม 480 บาท)')
                     : `งวดที่ 1 มัดจำค่าเสื้อ 400 บ. (15–20 ต.ค. 69) และงวดที่ 2 ชำระส่วนที่เหลือ (${feeInfo.round2Amount} บ. วันที่ 1–5 พ.ย. 69)`}
                 </p>
-                {isStaff && (
+                {isStaff && feeInfo.isMsu && (
                   <div className="text-[11px] text-fuchsia-300 font-bold flex items-center gap-1">
-                    <Lock className="w-3.5 h-3.5 text-fuchsia-400" /> ปิดใช้งานสำหรับ Staff (จ่ายครั้งเดียว 280 บ.)
+                    <Lock className="w-3.5 h-3.5 text-fuchsia-400" /> ปิดใช้งานสำหรับ Staff มมส (จ่ายเฉพาะค่าเสื้อครั้งเดียว 280 บ.)
+                  </div>
+                )}
+                {isStaff && !feeInfo.isMsu && (
+                  <div className="text-[11px] text-sky-300 font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-sky-400" /> Staff ต่างมหาลัย (เช่น มข) แบ่งจ่าย 2 งวดได้: งวดแรกค่าเสื้อ 280 บ. / งวด 2 ค่าที่พัก 200 บ.
                   </div>
                 )}
                 {!isStaff && isEditing && hasTransferredOrPaid && myRegistration?.payment_plan === 'installment' && (
@@ -5621,8 +5688,17 @@ export default function RegisterView({
                   </div>
                 )}
                 <div className="text-[11px] text-sky-300 font-semibold pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1">
-                  {isStaff ? (
-                    <span className="text-slate-400">Staff โอนครั้งเดียว 280 บาท (ไม่มีงวดที่ 2)</span>
+                  {isStaff && feeInfo.isMsu ? (
+                    <span className="text-slate-400">Staff มมส โอนครั้งเดียวเฉพาะค่าเสื้อ 280 บาท (ไม่มีงวดที่ 2)</span>
+                  ) : isStaff && !feeInfo.isMsu ? (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <span>งวด 1 (ค่าเสื้อ): {STAFF_SHIRT_FEE} บ.</span>
+                        <span className="text-slate-500">•</span>
+                        <span>งวด 2 (ค่าที่พัก): {STAFF_ACCOMMODATION_FEE} บ.</span>
+                      </div>
+                      <span className="text-white font-bold">(รวม {STAFF_EXTERNAL_TOTAL_FEE} บ.)</span>
+                    </>
                   ) : (
                     <>
                       <div className="flex items-center gap-1.5">
@@ -5644,7 +5720,8 @@ export default function RegisterView({
                 <p className="text-white font-bold leading-relaxed">
                   • ต่างมหาวิทยาลัย: <span className="text-amber-400 font-black">850 บาท/คน</span> (รวมค่าที่พักหอพักกุดรัง มมส & เสื้อ)<br className="hidden sm:inline" />
                   • นิสิตมหาวิทยาลัยมหาสารคาม (มมส): <span className="text-emerald-400 font-black">650 บาท/คน</span> (ไม่มีค่าใช้จ่ายด้านที่พัก & รวมเสื้อ)<br className="hidden sm:inline" />
-                  • <span className="text-fuchsia-300 font-black">Staff / คณะทำงานโครงการ (ทุกมหาลัย ทั้ง มมส และ มข): 280 บาท/คน</span> (จ่ายเฉพาะค่าเสื้อ • ที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด)
+                  • <span className="text-fuchsia-300 font-black">Staff มมส: 280 บาท/คน</span> (จ่ายเฉพาะค่าเสื้อ 280 บ. ที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด)<br className="hidden sm:inline" />
+                  • <span className="text-sky-300 font-black">Staff ต่างมหาวิทยาลัย (เช่น มข): 480 บาท/คน</span> (จ่ายเฉพาะค่าเสื้อ 280 บ. + ค่าห้องพัก 200 บ. • แบ่งจ่าย 2 งวดได้: งวดแรกค่าเสื้อ 280 บ. / งวด 2 ค่าที่พัก 200 บ.)
                 </p>
               </div>
               <div className="text-left sm:text-right shrink-0">
@@ -6470,7 +6547,7 @@ export default function RegisterView({
                             handleInstitutionSelect('ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)');
                             triggerToast(
                               isStaff
-                                ? `เลือกสังกัด: มมส (ในนาม Staff ชำระเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บ.)`
+                                ? `เลือกสังกัด: มมส (ในนาม Staff มมส จ่ายเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บ. • ที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด)`
                                 : 'เลือกสังกัด: นิสิตมหาวิทยาลัยมหาสารคาม (ยอดรวม 650 บ. / ไม่มีค่าที่พัก)',
                               'info'
                             );
@@ -6489,15 +6566,15 @@ export default function RegisterView({
                             <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
                               isCurrentMsu ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-800 text-slate-400 border-slate-700'
                             }`}>
-                              {isStaff ? `Staff ${STAFF_SHIRT_FEE} บ.` : '650 บาท'}
+                              {isStaff ? `Staff มมส ${STAFF_SHIRT_FEE} บ.` : '650 บาท'}
                             </span>
                           </div>
                           <p className="text-[11px] text-emerald-300/80 leading-snug">
-                            {isStaff ? 'Staff มมส: ชำระเฉพาะค่าเสื้อ 280 บ. (ไม่มีแบ่งจ่าย 2 งวด)' : 'ไม่มีค่าใช้จ่ายด้านที่พัก • รวมค่าเสื้อโครงการ'}
+                            {isStaff ? 'Staff มมส: จ่ายเฉพาะค่าเสื้อ 280 บาท (ที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด)' : 'ไม่มีค่าใช้จ่ายด้านที่พัก • รวมค่าเสื้อโครงการ'}
                           </p>
                           <div className="text-[10px] text-slate-300 pt-1 border-t border-slate-800/80 flex justify-between">
                             {isStaff ? (
-                              <span className="text-fuchsia-300 font-bold">🛠️ โอนครั้งเดียว 280 บ. (โครงการออกส่วนที่เหลือให้)</span>
+                              <span className="text-fuchsia-300 font-bold">🛠️ โอนครั้งเดียวเฉพาะค่าเสื้อ 280 บ. (ไม่มีแบ่งจ่าย 2 งวด)</span>
                             ) : (
                               <>
                                 <span>รอบ 1: 400 บ. (ค่าเสื้อ)</span>
@@ -6514,7 +6591,7 @@ export default function RegisterView({
                               handleInstitutionSelect('TSI - Tactic of Special Services and Investigation มหาวิทยาลัยขอนแก่น (มข)');
                               triggerToast(
                                 isStaff
-                                  ? `เลือกสังกัด: ต่างมหาวิทยาลัย (ในนาม Staff ชำระเฉพาะค่าเสื้อ ${STAFF_SHIRT_FEE} บ.)`
+                                  ? `เลือกสังกัด: ต่างมหาวิทยาลัย (Staff ต่างมหาลัย จ่ายค่าเสื้อ ${STAFF_SHIRT_FEE} บ. + ค่าห้องพัก ${STAFF_ACCOMMODATION_FEE} บ. • แบ่งจ่าย 2 งวดได้)`
                                   : 'เลือกสังกัด: ต่างมหาวิทยาลัย (ยอดรวม 850 บ. / รวมที่พักหอกุดรัง มมส)',
                                 'info'
                               );
@@ -6534,15 +6611,18 @@ export default function RegisterView({
                             <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
                               !isCurrentMsu ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-slate-800 text-slate-400 border-slate-700'
                             }`}>
-                              {isStaff ? `Staff ${STAFF_SHIRT_FEE} บ.` : '850 บาท'}
+                              {isStaff ? `Staff ${STAFF_EXTERNAL_TOTAL_FEE} บ. (280+200)` : '850 บาท'}
                             </span>
                           </div>
                           <p className="text-[11px] text-indigo-300/80 leading-snug">
-                            {isStaff ? 'Staff ต่างสถาบัน (เช่น มข): ชำระเฉพาะค่าเสื้อ 280 บ. (ไม่มีแบ่งจ่าย 2 งวด)' : 'รวมค่าที่พักหอพักกุดรัง มมส & ค่าเสื้อโครงการ'}
+                            {isStaff ? 'Staff ต่างมหาลัย (เช่น มข): จ่ายเฉพาะค่าเสื้อ 280 บาท + ค่าห้องพัก 200 บาท' : 'รวมค่าที่พักหอพักกุดรัง มมส & ค่าเสื้อโครงการ'}
                           </p>
                           <div className="text-[10px] text-slate-300 pt-1 border-t border-slate-800/80 flex justify-between">
                             {isStaff ? (
-                              <span className="text-fuchsia-300 font-bold">🛠️ โอนครั้งเดียว 280 บ. (โครงการออกส่วนที่เหลือให้)</span>
+                              <>
+                                <span className="text-sky-300 font-bold">งวด 1: 280 บ. (ค่าเสื้อ)</span>
+                                <span className="text-amber-300 font-bold">งวด 2: 200 บ. (ค่าที่พัก)</span>
+                              </>
                             ) : (
                               <>
                                 <span>รอบ 1: 400 บ. (ค่าเสื้อ)</span>
@@ -6568,17 +6648,19 @@ export default function RegisterView({
                           />
                           <div>
                             <span className="text-xs font-black text-white block">
-                              🛠️ ฉันเป็น Staff / คณะทำงานโครงการ (โอนเฉพาะค่าเสื้อ {STAFF_SHIRT_FEE} บาท • ที่เหลือโครงการออกให้ • ไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข)
+                              🛠️ ฉันเป็น Staff / คณะทำงานโครงการ (Staff มมส จ่ายเฉพาะค่าเสื้อ 280 บ. ไม่มีแบ่งจ่าย 2 งวด • Staff มข/ต่างมหาลัย จ่ายเฉพาะค่าเสื้อ 280 บ. + ค่าห้องพัก 200 บ. แบ่งจ่าย 2 งวดได้)
                             </span>
                             <span className="text-[11px] text-slate-400 block">
-                              เมื่อติ๊กเลือกเป็น Staff ระบบจะปรับยอดโอนเป็น 280 บาท (ชำระครั้งเดียว) และตรวจสอบสลิป 280 บาทให้อัตโนมัติ
+                              Staff มมส ชำระครั้งเดียว 280 บ. • ส่วน Staff ต่างมหาลัย (เช่น มข) แบ่งจ่าย 2 งวดได้ (งวดแรกค่าเสื้อ 280 บ. / งวด 2 ค่าที่พัก 200 บ.) หรือจ่ายครบ 480 บ.
                             </span>
                           </div>
                         </div>
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-black shrink-0 ${
                           isStaff ? 'bg-fuchsia-500 text-white' : 'bg-slate-800 text-slate-400'
                         }`}>
-                          {isStaff ? '✓ Staff 280 บ.' : '280 บาท'}
+                          {isStaff
+                            ? (isCurrentMsu ? '✓ Staff มมส 280 บ.' : '✓ Staff 280+200 บ.')
+                            : (isCurrentMsu ? '280 บาท' : '280 + 200 บ.')}
                         </span>
                       </label>
                     </div>
@@ -7314,7 +7396,11 @@ export default function RegisterView({
                       </div>
                       <span className="text-[11px] text-orange-300 font-bold bg-orange-500/20 px-3 py-1.5 rounded-full border border-orange-500/30 whitespace-nowrap shrink-0 self-start sm:self-auto">
                         {isStaff
-                          ? `💵 ค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บ. (จ่ายครั้งเดียว)`
+                          ? (feeInfo.isMsu
+                              ? `💵 ค่าเสื้อ Staff มมส ${STAFF_SHIRT_FEE} บ. (จ่ายครั้งเดียว)`
+                              : paymentPlan === 'installment'
+                                ? `💵 งวดแรกค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บ. (งวด 2 ค่าที่พัก ${STAFF_ACCOMMODATION_FEE} บ.)`
+                                : `💵 ค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บ. (รวมค่าห้องพัก ${STAFF_ACCOMMODATION_FEE} = ${STAFF_EXTERNAL_TOTAL_FEE} บ.)`)
                           : paymentPlan === 'full' 
                           ? '💵 ค่าเสื้อ 400 บ. (รวมในยอดเต็มจำนวนแล้ว)' 
                           : '💵 ค่าเสื้อ 400 บ. (รวมในงวดที่ 1)'}
@@ -7486,14 +7572,26 @@ export default function RegisterView({
 
                 <div className="bg-slate-900/90 p-3 rounded-xl border border-amber-500/40">
                   <span className="text-[10px] text-amber-300 block mb-0.5 font-semibold">
-                    {isStaff ? 'ยอดชำระสำหรับ Staff:' : paymentPlan === 'full' ? 'ยอดชำระเต็มจำนวน:' : 'ยอดรอบที่ 1 / ยอดรวม:'}
+                    {isStaff
+                      ? (feeInfo.isMsu ? 'ยอดชำระสำหรับ Staff มมส:' : paymentPlan === 'installment' ? 'งวดแรก (ค่าเสื้อ Staff):' : 'ยอดชำระรวม Staff ต่างมหาลัย:')
+                      : paymentPlan === 'full' ? 'ยอดชำระเต็มจำนวน:' : 'ยอดรอบที่ 1 / ยอดรวม:'}
                   </span>
                   <p className="font-black text-amber-300 text-sm">
-                    💵 {isStaff ? `${STAFF_SHIRT_FEE} บาท (ค่าเสื้อ Staff)` : paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : '400 บาท'}
+                    💵 {isStaff
+                      ? (feeInfo.isMsu
+                          ? `${STAFF_SHIRT_FEE} บาท (ค่าเสื้อ Staff)`
+                          : paymentPlan === 'installment'
+                            ? `${STAFF_SHIRT_FEE} บาท (งวดแรกค่าเสื้อ)`
+                            : `${STAFF_EXTERNAL_TOTAL_FEE} บาท (เสื้อ 280 + ห้องพัก 200)`)
+                      : paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : '400 บาท'}
                   </p>
                   <p className="text-[10px] text-slate-400 mt-0.5">
                     {isStaff
-                      ? 'ชำระครั้งเดียว (ไม่มีแบ่งจ่าย 2 งวด)'
+                      ? (feeInfo.isMsu
+                          ? 'ชำระครั้งเดียว (ไม่มีแบ่งจ่าย 2 งวด มมส)'
+                          : paymentPlan === 'installment'
+                            ? `งวด 2 ค่าที่พัก: ${STAFF_ACCOMMODATION_FEE} บ. (รวม ${STAFF_EXTERNAL_TOTAL_FEE} บ.)`
+                            : 'ชำระครบทั้งค่าเสื้อและค่าห้องพักในรอบเดียว')
                       : paymentPlan === 'full' 
                         ? 'ชำระครบถ้วนในรอบเดียว' 
                         : `รอบ 2 คงค้าง: ${feeInfo.round2Amount} บ. (รวม ${feeInfo.totalFee} บ.)`}
@@ -7515,13 +7613,13 @@ export default function RegisterView({
                     className="w-4 h-4 rounded border-slate-600 text-fuchsia-500 focus:ring-fuchsia-500 cursor-pointer accent-fuchsia-500 shrink-0"
                   />
                   <span className="text-xs font-bold text-white">
-                    🛠️ ติ๊กเลือกหากท่านเป็น <strong className="text-fuchsia-300">Staff โครงการ</strong> (โอนเฉพาะค่าเสื้อ <strong className="text-amber-300">280 บาท</strong> ครั้งเดียว • ไม่มีแบ่งจ่าย 2 งวด ทั้ง มมส และ มข)
+                    🛠️ ติ๊กเลือกหากท่านเป็น <strong className="text-fuchsia-300">Staff โครงการ</strong> (Staff มมส จ่ายเฉพาะค่าเสื้อ <strong className="text-amber-300">280 บาท</strong> ไม่มีแบ่งจ่าย 2 งวด • Staff มข/ต่างมหาลัย จ่ายค่าเสื้อ <strong className="text-amber-300">280 บาท</strong> + ค่าห้องพัก <strong className="text-sky-300">200 บาท</strong> แบ่งจ่าย 2 งวดได้)
                   </span>
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
                   isStaff ? 'bg-fuchsia-500 text-white' : 'bg-slate-800 text-slate-400'
                 }`}>
-                  {isStaff ? '✓ Staff 280 บ.' : '280 บ.'}
+                  {isStaff ? (feeInfo.isMsu ? '✓ Staff 280 บ.' : '✓ Staff 280+200 บ.') : (feeInfo.isMsu ? '280 บ.' : '280+200 บ.')}
                 </span>
               </label>
             </div>
@@ -7535,11 +7633,13 @@ export default function RegisterView({
                   <span>
                     {paymentPlan === 'full' 
                       ? `บัญชีธนาคาร & หลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท)` 
-                      : 'บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 1 (400 บาท)'}
+                      : isStaff
+                        ? `บัญชีธนาคาร & หลักฐานการโอนเงิน งวดที่ 1 ค่าเสื้อ Staff (${feeInfo.round1Amount} บาท)`
+                        : `บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 1 (${feeInfo.round1Amount} บาท)`}
                   </span>
                 </h3>
                 <span className="text-[11px] text-amber-300 font-bold self-start sm:self-auto shrink-0">
-                  ยอดชำระ: {paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : '400 บาท'}
+                  ยอดชำระ: {paymentPlan === 'full' ? `${feeInfo.totalFee} บาท` : `${feeInfo.round1Amount} บาท`}
                 </span>
               </div>
 
@@ -7550,7 +7650,11 @@ export default function RegisterView({
                     <span>🏦</span> บัญชีธนาคารสำหรับโอนเงินค่าลงทะเบียน:
                   </span>
                   <span className="text-[10px] text-amber-300 font-bold self-start sm:self-auto shrink-0">
-                    {paymentPlan === 'full' ? `ยอดเต็มจำนวน: ${feeInfo.totalFee} บาท` : 'รอบที่ 1: 400 บาท (15–20 ต.ค. 2569)'}
+                    {paymentPlan === 'full'
+                      ? `ยอดเต็มจำนวน: ${feeInfo.totalFee} บาท`
+                      : isStaff
+                        ? `งวดที่ 1 (ค่าเสื้อ Staff): ${feeInfo.round1Amount} บาท`
+                        : `รอบที่ 1: ${feeInfo.round1Amount} บาท (15–20 ต.ค. 2569)`}
                   </span>
                 </div>
 
@@ -7629,10 +7733,10 @@ export default function RegisterView({
                   ) : (
                     <>
                       <p>
-                        • <strong className="text-amber-400">แบ่งชำระรอบที่ 1 (400 บาท):</strong> จำเป็นต้องแนบสลิปเพื่อ <strong className="text-white underline">มัดจำค่าจัดทำเสื้อฝึกอบรม & ล็อคไซส์เสื้อ</strong> ในขั้นตอนแรกนี้
+                        • <strong className="text-amber-400">แบ่งชำระ{isStaff ? `งวดที่ 1 (ค่าเสื้อ Staff ${feeInfo.round1Amount} บาท)` : `รอบที่ 1 (${feeInfo.round1Amount} บาท)`}:</strong> จำเป็นต้องแนบสลิปเพื่อ <strong className="text-white underline">จัดทำเสื้อฝึกอบรม & ล็อคไซส์เสื้อ</strong> ในขั้นตอนแรกนี้
                       </p>
                       <p>
-                        • <strong className="text-sky-400">การยืนยันสิทธิ์สมบูรณ์:</strong> จะเสร็จสิ้นเมื่อท่านแนบสลิปชำระรอบที่ 2 (ส่วนที่เหลือ {feeInfo.round2Amount} บาท) ครบถ้วน
+                        • <strong className="text-sky-400">การยืนยันสิทธิ์สมบูรณ์:</strong> จะเสร็จสิ้นเมื่อท่านแนบสลิปชำระ{isStaff ? `งวดที่ 2 (ค่าที่พัก Staff ${feeInfo.round2Amount} บาท)` : `รอบที่ 2 (ส่วนที่เหลือ ${feeInfo.round2Amount} บาท)`} ครบถ้วน
                       </p>
                     </>
                   )}
@@ -7662,7 +7766,9 @@ export default function RegisterView({
                     <span>
                       {paymentPlan === 'full' 
                         ? `แนบสลิปหลักฐานการโอนเงินเต็มจำนวน (${feeInfo.totalFee} บาท) *` 
-                        : 'แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (มัดจำเสื้อฝึก 400 บาท) *'}
+                        : isStaff
+                          ? `แนบสลิปหลักฐานการโอนเงิน งวดที่ 1 (ค่าเสื้อ Staff ${feeInfo.round1Amount} บาท) *`
+                          : `แนบสลิปหลักฐานการโอนเงิน รอบที่ 1 (มัดจำเสื้อฝึก ${feeInfo.round1Amount} บาท) *`}
                     </span>
                   </label>
                   <span className="text-[10px] text-amber-400 font-semibold">
@@ -7709,7 +7815,7 @@ export default function RegisterView({
                             <span>
                               {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) 
                                 ? 'เปลี่ยนไฟล์สลิป' 
-                                : `อัปโหลดสลิปโอนเงิน (${paymentPlan === 'full' ? `${feeInfo.totalFee} บ.` : '400 บ.'})`}
+                                : `อัปโหลดสลิปโอนเงิน (${paymentPlan === 'full' ? `${feeInfo.totalFee} บ.` : `${feeInfo.round1Amount} บ.`})`}
                             </span>
                           </>
                         )}
@@ -7755,7 +7861,7 @@ export default function RegisterView({
                 {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD */}
                 {((paymentPlan === 'full' ? slipOcrFull : slipOcrRound1)) && (() => {
                   const ocr = paymentPlan === 'full' ? slipOcrFull : slipOcrRound1;
-                  const expectedAmount = paymentPlan === 'full' ? feeInfo.totalFee : 400;
+                  const expectedAmount = paymentPlan === 'full' ? feeInfo.totalFee : feeInfo.round1Amount;
                   const isFullyVerified = Boolean(ocr?.isFullyVerified);
                   const isDuplicate = Boolean(ocr?.isDuplicate);
                   const isMismatch = Boolean(ocr?.isDetected && ocr?.matchExpected === false);
@@ -8125,14 +8231,14 @@ export default function RegisterView({
                                     ? `ยืนยันและส่งใบสมัคร + สลิปชำระเต็มจำนวน (${feeInfo.totalFee} บ.) 💾` 
                                     : `⚠️ กรุณาแนบสลิปโอนเงินเต็มจำนวน (${feeInfo.totalFee} บ.) ก่อนส่งใบสมัคร`))
                         : (slipOcrRound1?.isFullyVerified
-                            ? `✓ ยืนยันมัดจำเสื้อทันทีและส่งใบสมัคร (400 บ.) 🚀`
+                            ? `✓ ยืนยันงวดแรกทันทีและส่งใบสมัคร (${feeInfo.round1Amount} บ.) 🚀`
                             : slipOcrRound1?.isDuplicate
                               ? `⚠️ ยืนยันส่งใบสมัคร (พบสลิปซ้ำ - รอแอดมินตรวจ) 📋`
                               : slipOcrRound1?.matchExpected === false
                                 ? `⚠️ ยืนยันส่งใบสมัคร (ยอดเงินไม่ตรง - รอแอดมินตรวจ) 📋`
                                 : (formSlipRound1 || myRegistration?.installment_1_slip_url
-                                    ? 'ยืนยันและส่งใบสมัคร + สลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ไปยัง Admin 💾'
-                                    : '⚠️ กรุณาแนบสลิปมัดจำค่าเสื้อรอบที่ 1 (400 บ.) ก่อนส่งใบสมัคร'))}
+                                    ? `ยืนยันและส่งใบสมัคร + สลิป${isStaff ? 'งวดแรกค่าเสื้อ Staff' : 'มัดจำค่าเสื้อรอบที่ 1'} (${feeInfo.round1Amount} บ.) ไปยัง Admin 💾`
+                                    : `⚠️ กรุณาแนบสลิป${isStaff ? 'งวดแรกค่าเสื้อ Staff' : 'มัดจำค่าเสื้อรอบที่ 1'} (${feeInfo.round1Amount} บ.) ก่อนส่งใบสมัคร`))}
                     </span>
                   </>
                 )}
@@ -8159,7 +8265,11 @@ export default function RegisterView({
                     onClick={handleNextToStep4}
                     className="px-6 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-2xl border border-sky-400/40 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-sky-600/20 transition-colors"
                   >
-                    <span>หรือแนบสลิปชำระรอบที่ 2 (คงค้าง)</span>
+                    <span>
+                      {isStaff
+                        ? `หรือแนบสลิปงวดที่ 2 ค่าห้องพัก (${feeInfo.round2Amount} บ.)`
+                        : 'หรือแนบสลิปชำระรอบที่ 2 (คงค้าง)'}
+                    </span>
                     <ArrowRight className="w-4 h-4 shrink-0" />
                   </button>
                 )}
@@ -8189,7 +8299,9 @@ export default function RegisterView({
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-sky-400 shrink-0" />
                   <h3 className="text-sm sm:text-base font-black text-white leading-tight">
-                    สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 ({feeInfo.round2Amount} บาท)
+                    {isStaff
+                      ? `สรุปยอดคงค้าง & ชำระเงินงวดที่ 2 ค่าห้องพัก Staff (${feeInfo.round2Amount} บาท)`
+                      : `สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 (${feeInfo.round2Amount} บาท)`}
                   </h3>
                 </div>
                 <span className="text-[11px] text-sky-300 bg-sky-500/20 px-3 py-1 rounded-full font-bold border border-sky-500/30 self-start sm:self-auto shrink-0 whitespace-nowrap">
@@ -8199,20 +8311,24 @@ export default function RegisterView({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div className="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/30 space-y-1">
-                  <span className="text-[10px] text-slate-400 block font-medium">รอบที่ 1 (มัดจำเสื้อโครงการ):</span>
-                  <p className="font-black text-amber-300 text-sm">💵 400 บาท</p>
+                  <span className="text-[10px] text-slate-400 block font-medium">
+                    {isStaff ? 'งวดที่ 1 (ค่าเสื้อ Staff):' : 'รอบที่ 1 (มัดจำเสื้อโครงการ):'}
+                  </span>
+                  <p className="font-black text-amber-300 text-sm">💵 {feeInfo.round1Amount} บาท</p>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
                     formSlipRound1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                   }`}>
-                    {formSlipRound1 ? '✓ แนบสลิปรอบ 1 แล้ว' : 'รอแนบสลิป'}
+                    {formSlipRound1 ? '✓ แนบสลิปงวด 1 แล้ว' : 'รอแนบสลิป'}
                   </span>
                 </div>
 
                 <div className="bg-slate-900/90 p-3.5 rounded-xl border border-sky-500/40 space-y-1">
-                  <span className="text-[10px] text-sky-300 block font-semibold">รอบที่ 2 (ชำระรอบนี้):</span>
+                  <span className="text-[10px] text-sky-300 block font-semibold">
+                    {isStaff ? 'งวดที่ 2 (ค่าห้องพัก Staff):' : 'รอบที่ 2 (ชำระรอบนี้):'}
+                  </span>
                   <p className="font-black text-sky-400 text-sm">💵 {feeInfo.round2Amount} บาท</p>
                   <span className="text-[10px] text-slate-300 block">
-                    📅 กำหนดชำระ: วันที่ 1–5 พ.ย. 2569 (ค่าที่พักและอาหาร)
+                    {isStaff ? '🏨 ค่าห้องพักสำหรับ Staff ต่างมหาวิทยาลัย' : '📅 กำหนดชำระ: วันที่ 1–5 พ.ย. 2569 (ค่าที่พักและอาหาร)'}
                   </span>
                 </div>
 
@@ -8220,7 +8336,9 @@ export default function RegisterView({
                   <span className="text-[10px] text-slate-400 block font-medium">💵 ยอดรวมทั้งโครงการ:</span>
                   <p className="font-black text-white text-sm">{feeInfo.totalFee} บาท</p>
                   <span className="text-[10px] text-emerald-400 font-bold block">
-                    {feeInfo.isMsu ? 'นิสิต มมส (ไม่มีค่าที่พัก)' : 'ต่างสถาบัน (รวมที่พักหอกุดรัง มมส)'}
+                    {isStaff
+                      ? 'Staff ต่างมหาลัย (ค่าเสื้อ 280 + ค่าห้องพัก 200)'
+                      : feeInfo.isMsu ? 'นิสิต มมส (ไม่มีค่าที่พัก)' : 'ต่างสถาบัน (รวมที่พักหอกุดรัง มมส)'}
                   </span>
                 </div>
               </div>
@@ -8231,7 +8349,11 @@ export default function RegisterView({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
                 <h3 className="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 2 ({feeInfo.round2Amount} บาท)</span>
+                  <span>
+                    {isStaff
+                      ? `บัญชีธนาคาร & หลักฐานการโอนเงิน งวดที่ 2 ค่าห้องพัก (${feeInfo.round2Amount} บาท)`
+                      : `บัญชีธนาคาร & หลักฐานการโอนเงิน รอบที่ 2 (${feeInfo.round2Amount} บาท)`}
+                  </span>
                 </h3>
                 <span className="text-[11px] text-sky-300 font-bold self-start sm:self-auto shrink-0">
                   ยอดชำระ: {feeInfo.round2Amount} บาท
@@ -8314,17 +8436,17 @@ export default function RegisterView({
               <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-500/40 text-sky-200 text-xs space-y-2 shadow-lg">
                 <div className="flex items-center gap-2 font-black text-sky-300 text-sm">
                   <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>ขั้นตอนที่ 4: ชำระเงินรอบที่ 2 เพื่อยืนยันสิทธิ์เข้าร่วมโครงการฉบับสมบูรณ์</span>
+                  <span>ขั้นตอนที่ 4: ชำระเงิน{isStaff ? 'งวดที่ 2 (ค่าห้องพัก Staff)' : 'รอบที่ 2'} เพื่อยืนยันสิทธิ์เข้าร่วมโครงการฉบับสมบูรณ์</span>
                 </div>
                 <div className="text-slate-300 leading-relaxed text-[11px] sm:text-xs space-y-1">
                   <p>
-                    • <strong className="text-amber-400">รอบที่ 1 (400 บาท):</strong> ได้แนบสลิปเพื่อมัดจำค่าจัดทำเสื้อและล็อคไซส์เสื้อเรียบร้อยแล้ว
+                    • <strong className="text-amber-400">{isStaff ? `งวดที่ 1 (ค่าเสื้อ Staff ${feeInfo.round1Amount} บาท)` : `รอบที่ 1 (${feeInfo.round1Amount} บาท)`}:</strong> ได้แนบสลิปเพื่อจัดทำเสื้อและล็อคไซส์เสื้อเรียบร้อยแล้ว
                   </p>
                   <p>
-                    • <strong className="text-emerald-400">รอบที่ 2 ({feeInfo.round2Amount} บาท):</strong> เมื่อแนบสลิปและเจ้าหน้าที่ตรวจสอบแล้ว <strong className="text-white underline">จะเป็นการยืนยันสิทธิ์เข้าร่วมโครงการโดยสมบูรณ์ทันที</strong>
+                    • <strong className="text-emerald-400">{isStaff ? `งวดที่ 2 (ค่าห้องพัก ${feeInfo.round2Amount} บาท)` : `รอบที่ 2 (${feeInfo.round2Amount} บาท)`}:</strong> เมื่อแนบสลิปและเจ้าหน้าที่ตรวจสอบแล้ว <strong className="text-white underline">จะเป็นการยืนยันสิทธิ์เข้าร่วมโครงการโดยสมบูรณ์ทันที</strong>
                   </p>
                   <p className="text-slate-400 text-[10px]">
-                    * หากต้องการส่งเฉพาะสลิปรอบแรก (มัดจำเสื้อ) ก่อน สามารถกดย้อนกลับไปขั้นตอนที่ 3 ด้านล่างได้
+                    * หากต้องการส่งเฉพาะสลิปงวดแรก (ค่าเสื้อ) ก่อน สามารถกดย้อนกลับไปขั้นตอนที่ 3 ด้านล่างได้
                   </p>
                 </div>
               </div>
