@@ -58,7 +58,7 @@ export default function Navbar({
 
   return (
     <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full">
-      <div className="w-full max-w-[1536px] mx-auto px-3 sm:px-4 lg:px-4 xl:px-6">
+      <div className="w-full max-w-[1850px] 2xl:max-w-[99%] mx-auto px-3 sm:px-4 lg:px-5 xl:px-6">
         <div className="flex items-center justify-between h-16 sm:h-18 lg:h-20 gap-1.5 lg:gap-2">
           
           {/* Logo & Brand */}

@@ -1219,8 +1219,12 @@ export default function App() {
       {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
       {user && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={user} />}
 
-      {/* Main Content Pages */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12 overflow-x-hidden">
+      {/* Main Content Pages - Full Screen Width on Admin Dashboard for Effortless Table Management */}
+      <main className={`flex-1 w-full mx-auto py-4 sm:py-6 md:py-8 transition-all ${
+        currentTab === 'admin'
+          ? 'w-full max-w-[99%] 2xl:max-w-[99.5%] px-1.5 sm:px-3 lg:px-5 2xl:px-6'
+          : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
+      }`}>
         {currentTab === 'home' && (
           <HomeView
             teamMembers={teamMembers}

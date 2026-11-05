@@ -4878,7 +4878,7 @@ export default function AdminDashboardView({
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
+    <div className="w-full space-y-6 animate-in fade-in duration-300">
       
       {/* Toast Alert */}
       {alertToast && (
@@ -5603,7 +5603,7 @@ export default function AdminDashboardView({
 
       {/* TAB 1: APPLICANTS & ALLOCATION & PROFILE VIEWER */}
       {activeTab === 'applicants' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-3.5 sm:p-5 lg:p-6 shadow-xl space-y-6">
 
           {/* ========================================================
               DEDICATED SUBPAGES SECTION (When on /admin/<subpage>)
@@ -6056,21 +6056,21 @@ export default function AdminDashboardView({
                             คลิกที่แถวหรือปุ่มจัดการ เพื่อดูสลิป ตรวจสอบ หรือจัดการการโอนเงินคืน
                           </span>
                         </div>
-                        <table className="w-full min-w-[1400px] text-left border-collapse text-xs">
+                        <table className="w-full min-w-[1100px] 2xl:min-w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="bg-slate-900/80 text-slate-300 font-bold border-b border-slate-800">
-                              <th className="py-3 px-3 w-12 text-center text-slate-400">#</th>
-                              <th className="py-3 px-3.5 min-w-[220px] whitespace-nowrap">ชื่อ-สกุล & บทบาท Staff</th>
-                              <th className="py-3 px-3 w-28 whitespace-nowrap">มหาวิทยาลัย</th>
-                              <th className="py-3 px-3 w-24 text-right whitespace-nowrap">ค่าเสื้อ</th>
-                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">ค่าที่พัก</th>
-                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">รวมต้องจ่าย</th>
-                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">โอนมาจริง</th>
-                              <th className="py-3 px-3 w-32 text-right whitespace-nowrap">หักลบเข้าที่พัก</th>
-                              <th className="py-3 px-3 w-36 text-right whitespace-nowrap">คงเหลือต้องโอนเพิ่ม</th>
-                              <th className="py-3 px-3 w-40 text-right whitespace-nowrap">ทางเราต้องโอนคืน</th>
-                              <th className="py-3 px-3.5 min-w-[300px]">หมายเหตุสรุป & สถานะ</th>
-                              <th className="py-3 px-3 w-44 text-right whitespace-nowrap">จัดการ</th>
+                              <th className="py-3 px-2 w-10 text-center text-slate-400">#</th>
+                              <th className="py-3 px-3 min-w-[180px] xl:min-w-[220px] whitespace-nowrap">ชื่อ-สกุล & บทบาท Staff</th>
+                              <th className="py-3 px-2.5 w-24 whitespace-nowrap">มหาวิทยาลัย</th>
+                              <th className="py-3 px-2.5 w-20 text-right whitespace-nowrap">ค่าเสื้อ</th>
+                              <th className="py-3 px-2.5 w-24 text-right whitespace-nowrap">ค่าที่พัก</th>
+                              <th className="py-3 px-2.5 w-24 text-right whitespace-nowrap">รวมต้องจ่าย</th>
+                              <th className="py-3 px-2.5 w-24 text-right whitespace-nowrap">โอนมาจริง</th>
+                              <th className="py-3 px-2.5 w-28 text-right whitespace-nowrap">หักลบเข้าที่พัก</th>
+                              <th className="py-3 px-2.5 w-32 text-right whitespace-nowrap">คงเหลือต้องโอนเพิ่ม</th>
+                              <th className="py-3 px-2.5 w-32 text-right whitespace-nowrap">ทางเราต้องโอนคืน</th>
+                              <th className="py-3 px-3 min-w-[220px]">หมายเหตุสรุป & สถานะ</th>
+                              <th className="py-3 px-3 w-36 text-right whitespace-nowrap">จัดการ</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/70">
@@ -6485,19 +6485,19 @@ export default function AdminDashboardView({
                       <div className={`overflow-x-auto rounded-2xl border border-slate-800 shadow-2xl bg-slate-950/90 ${
                         dedicatedViewMode === 'auto' ? 'hidden lg:block' : 'block'
                       }`}>
-                        <table className="w-full min-w-[1250px] text-left border-collapse text-xs">
+                        <table className="w-full min-w-[1050px] 2xl:min-w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="bg-slate-900/80 text-slate-300 font-bold border-b border-slate-800">
-                              <th className="py-3 px-3 w-12 text-center text-slate-400">#</th>
-                              <th className="py-3 px-3.5 min-w-[220px] whitespace-nowrap">ผู้สมัคร & สังกัด</th>
-                              <th className="py-3 px-3 w-28 whitespace-nowrap">มหาวิทยาลัย</th>
-                              <th className="py-3 px-3 w-32 whitespace-nowrap">บทบาท / แผน</th>
-                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">ยอดที่ต้องชำระ</th>
-                              <th className="py-3 px-3 w-28 text-right whitespace-nowrap">ชำระแล้ว</th>
-                              <th className="py-3 px-3 w-32 text-right whitespace-nowrap">ยอดค้างชำระ</th>
-                              <th className="py-3 px-3.5 whitespace-nowrap">สถานะชำระเงิน</th>
-                              <th className="py-3 px-3 w-24 text-center whitespace-nowrap">สลิป</th>
-                              <th className="py-3 px-3 w-40 text-right whitespace-nowrap">จัดการ</th>
+                              <th className="py-3 px-2 w-10 text-center text-slate-400">#</th>
+                              <th className="py-3 px-3 min-w-[200px] whitespace-nowrap">ผู้สมัคร & สังกัด</th>
+                              <th className="py-3 px-2.5 w-24 whitespace-nowrap">มหาวิทยาลัย</th>
+                              <th className="py-3 px-2.5 w-28 whitespace-nowrap">บทบาท / แผน</th>
+                              <th className="py-3 px-2.5 w-24 text-right whitespace-nowrap">ยอดที่ต้องชำระ</th>
+                              <th className="py-3 px-2.5 w-24 text-right whitespace-nowrap">ชำระแล้ว</th>
+                              <th className="py-3 px-2.5 w-28 text-right whitespace-nowrap">ยอดค้างชำระ</th>
+                              <th className="py-3 px-3 whitespace-nowrap">สถานะชำระเงิน</th>
+                              <th className="py-3 px-2.5 w-20 text-center whitespace-nowrap">สลิป</th>
+                              <th className="py-3 px-3 w-36 text-right whitespace-nowrap">จัดการ</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/70">
@@ -6905,23 +6905,23 @@ export default function AdminDashboardView({
 
             {/* University x Gender (Room Allocation) & Shirt Size Matrix Table */}
             <div className="overflow-x-auto rounded-2xl border border-slate-800">
-              <table className="w-full min-w-[980px] text-left text-xs text-slate-200">
+              <table className="w-full min-w-[960px] 2xl:min-w-full text-left text-xs text-slate-200">
                 <thead className="bg-slate-900 text-slate-300 text-[11px] font-bold border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-3">มหาวิทยาลัย / สังกัด</th>
-                    <th className="py-3 px-2.5 text-center bg-slate-950/60">รวม (คน)</th>
-                    <th className="py-3 px-2.5 text-center bg-indigo-950/30 text-indigo-300">📡 องค์กร/ชมรม (มีนามเรียกขาน)</th>
-                    <th className="py-3 px-2.5 text-center bg-teal-950/30 text-teal-300">🙋 อาสา (นิสิต/นักศึกษาทั่วไป)</th>
-                    <th className="py-3 px-2.5 text-center bg-sky-950/30 text-sky-300">👨 ชาย (จัดห้อง)</th>
-                    <th className="py-3 px-2.5 text-center bg-pink-950/30 text-pink-300">👩 หญิง (จัดห้อง)</th>
-                    <th className="py-3 px-2.5 text-center bg-purple-950/30 text-purple-300">🛠️ Staff (280 บ.)</th>
-                    <th className="py-3 px-2.5 text-center bg-amber-950/30 text-amber-300">👕 รวมเสื้อ</th>
+                    <th className="py-3 px-3 whitespace-nowrap">มหาวิทยาลัย / สังกัด</th>
+                    <th className="py-3 px-2 text-center bg-slate-950/60 whitespace-nowrap">รวม (คน)</th>
+                    <th className="py-3 px-2 text-center bg-indigo-950/30 text-indigo-300 whitespace-nowrap">📡 ชมรม (มีนาม)</th>
+                    <th className="py-3 px-2 text-center bg-teal-950/30 text-teal-300 whitespace-nowrap">🙋 อาสาทั่วไป</th>
+                    <th className="py-3 px-2 text-center bg-sky-950/30 text-sky-300 whitespace-nowrap">👨 ชาย</th>
+                    <th className="py-3 px-2 text-center bg-pink-950/30 text-pink-300 whitespace-nowrap">👩 หญิง</th>
+                    <th className="py-3 px-2 text-center bg-purple-950/30 text-purple-300 whitespace-nowrap">🛠️ Staff (280)</th>
+                    <th className="py-3 px-2 text-center bg-amber-950/30 text-amber-300 whitespace-nowrap">👕 รวมเสื้อ</th>
                     {universitySummary.STANDARD_SIZES.map(sz => (
-                      <th key={sz} className="py-3 px-1.5 text-center font-mono text-[10px] text-amber-200 bg-slate-950/40">
+                      <th key={sz} className="py-3 px-1 text-center font-mono text-[10px] text-amber-200 bg-slate-950/40 w-8 whitespace-nowrap">
                         {sz}
                       </th>
                     ))}
-                    <th className="py-3 px-3 text-right bg-emerald-950/20 text-emerald-300">รับเงินแล้ว / ค้างรับ</th>
+                    <th className="py-3 px-3 text-right bg-emerald-950/20 text-emerald-300 whitespace-nowrap">รับเงินแล้ว / ค้างรับ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/70">
@@ -6949,10 +6949,10 @@ export default function AdminDashboardView({
                               {u.shortTag}
                             </span>
                             <div className="min-w-0">
-                              <div className="font-bold text-white truncate max-w-[210px]" title={u.university}>
+                              <div className="font-bold text-white truncate max-w-[260px] xl:max-w-[360px] 2xl:max-w-none" title={u.university}>
                                 {u.university}
                               </div>
-                              <div className="text-[10px] text-slate-400 truncate max-w-[210px]">
+                              <div className="text-[10px] text-slate-400 truncate max-w-[260px] xl:max-w-[360px] 2xl:max-w-none">
                                 {u.club}
                               </div>
                             </div>
@@ -7108,7 +7108,7 @@ export default function AdminDashboardView({
                         })}
 
                         {/* Financial Summary per University */}
-                        <td className="py-2.5 px-3 text-right font-mono bg-emerald-950/10">
+                        <td className="py-2.5 px-3 text-right font-mono bg-emerald-950/10 whitespace-nowrap">
                           <div className="text-emerald-400 font-bold text-xs">
                             ฿{u.collectedAmount.toLocaleString()}
                           </div>
@@ -7162,7 +7162,7 @@ export default function AdminDashboardView({
                         </td>
                       );
                     })}
-                    <td className="py-3 px-3 text-right font-mono">
+                    <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
                       <span className="text-emerald-400">฿{regMetrics.totalCollectedAmount.toLocaleString()}</span>
                       {regMetrics.totalOutstandingBalance > 0 && (
                         <span className="block text-[10px] text-rose-400">ค้าง ฿{regMetrics.totalOutstandingBalance.toLocaleString()}</span>
@@ -7370,10 +7370,10 @@ export default function AdminDashboardView({
 
           {/* Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-800 scrollbar-none">
-            <table className="w-full min-w-[800px] text-left text-xs text-slate-300">
+            <table className="w-full min-w-[1050px] 2xl:min-w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
                 <tr>
-                  <th className="py-4 px-3 text-center">
+                  <th className="py-3.5 px-3 text-center w-12">
                     <input
                       type="checkbox"
                       aria-label="เลือกผู้สมัครที่แสดงทั้งหมด"
@@ -7384,17 +7384,17 @@ export default function AdminDashboardView({
                       title="เลือกหรือยกเลิกการเลือกผู้สมัครที่ผ่านตัวกรองทั้งหมด"
                     />
                   </th>
-                  <th className="py-4 px-4">ผู้สมัคร & สังกัด</th>
-                  <th className="py-4 px-3">สถานะชำระเงิน / สลิป</th>
-                  <th className="py-4 px-3">เอกสารแนบ</th>
-                  <th className="py-4 px-3 min-w-[210px]">สุขภาพ / อาหาร / หมายเหตุ</th>
-                  <th className="py-4 px-4 bg-indigo-950/40 text-indigo-300">
+                  <th className="py-3.5 px-3.5 min-w-[260px] whitespace-nowrap">ผู้สมัคร & สังกัด</th>
+                  <th className="py-3.5 px-3 min-w-[180px] whitespace-nowrap">สถานะชำระเงิน / สลิป</th>
+                  <th className="py-3.5 px-3 min-w-[130px] whitespace-nowrap">เอกสารแนบ</th>
+                  <th className="py-3.5 px-3 min-w-[180px]">สุขภาพ / อาหาร / หมายเหตุ</th>
+                  <th className="py-3.5 px-3 bg-indigo-950/40 text-indigo-300 min-w-[130px] whitespace-nowrap">
                     กลุ่มฝึก (Group)
                   </th>
-                  <th className="py-4 px-4 bg-amber-950/40 text-amber-300">
+                  <th className="py-3.5 px-3 bg-amber-950/40 text-amber-300 min-w-[130px] whitespace-nowrap">
                     ห้องนอน (Room)
                   </th>
-                  <th className="py-4 px-3 text-center">ดูประวัติ / จัดการ</th>
+                  <th className="py-3.5 px-3 text-center min-w-[120px] whitespace-nowrap">ดูประวัติ / จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -13502,14 +13502,14 @@ export default function AdminDashboardView({
             </div>
 
             <div className="overflow-x-auto rounded-2xl border border-slate-800">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full min-w-[780px] 2xl:min-w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-900 text-slate-300 border-b border-slate-800 text-[11px]">
-                    <th className="py-2.5 px-3 font-bold">มหาวิทยาลัย / สถาบัน</th>
-                    <th className="py-2.5 px-2 text-center font-bold text-sky-300 bg-sky-950/20">👨 ชาย</th>
-                    <th className="py-2.5 px-2 text-center font-bold text-pink-300 bg-pink-950/20">👩 หญิง</th>
-                    <th className="py-2.5 px-2 text-center font-bold text-purple-300 bg-purple-950/20">🛠️ Staff (280 บ.)</th>
-                    <th className="py-2.5 px-2.5 text-center font-black text-amber-300 bg-amber-950/20 border-x border-slate-800">รวมเสื้อ</th>
+                    <th className="py-2.5 px-3 font-bold whitespace-nowrap">มหาวิทยาลัย / สถาบัน</th>
+                    <th className="py-2.5 px-2 text-center font-bold text-sky-300 bg-sky-950/20 whitespace-nowrap">👨 ชาย</th>
+                    <th className="py-2.5 px-2 text-center font-bold text-pink-300 bg-pink-950/20 whitespace-nowrap">👩 หญิง</th>
+                    <th className="py-2.5 px-2 text-center font-bold text-purple-300 bg-purple-950/20 whitespace-nowrap">🛠️ Staff (280)</th>
+                    <th className="py-2.5 px-2.5 text-center font-black text-amber-300 bg-amber-950/20 border-x border-slate-800 whitespace-nowrap">รวมเสื้อ</th>
                     {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ'].map(sz => (
                       <th
                         key={sz}
@@ -16322,19 +16322,19 @@ export default function AdminDashboardView({
 
           {/* Users Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-800 scrollbar-none">
-            <table className="w-full min-w-[1050px] text-left text-xs border-collapse">
+            <table className="w-full min-w-[1050px] 2xl:min-w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">#</th>
-                  <th className="py-3 px-4">ผู้ใช้งาน (User Info)</th>
-                  <th className="py-3 px-4">เบอร์โทรศัพท์ (Phone)</th>
-                  <th className="py-3 px-4">อีเมล & สถานะ (Email)</th>
-                  <th className="py-3 px-4">สถาบัน / สังกัด & สถานะสมัคร</th>
-                  <th className="py-3 px-4">ช่องทางยืนยันตัวตน</th>
-                  <th className="py-3 px-4">Credential status (ไม่แสดง hash/salt)</th>
-                  <th className="py-3 px-4">บทบาท (Role)</th>
-                  <th className="py-3 px-4">วันที่สมัคร</th>
-                  <th className="py-3 px-4 text-center">จัดการ</th>
+                  <th className="py-3 px-3 text-center w-10 whitespace-nowrap">#</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap">ผู้ใช้งาน (User Info)</th>
+                  <th className="py-3 px-3 whitespace-nowrap">เบอร์โทรศัพท์ (Phone)</th>
+                  <th className="py-3 px-3 whitespace-nowrap">อีเมล & สถานะ (Email)</th>
+                  <th className="py-3 px-3 whitespace-nowrap">สถาบัน / สังกัด & สถานะสมัคร</th>
+                  <th className="py-3 px-3 whitespace-nowrap">ช่องทางยืนยันตัวตน</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Credential Status</th>
+                  <th className="py-3 px-3 whitespace-nowrap">บทบาท (Role)</th>
+                  <th className="py-3 px-3 whitespace-nowrap">วันที่สมัคร</th>
+                  <th className="py-3 px-3 text-center whitespace-nowrap">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
