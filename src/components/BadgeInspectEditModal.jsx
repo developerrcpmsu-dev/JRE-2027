@@ -192,7 +192,7 @@ export default function BadgeInspectEditModal({
                       ? 'border-yellow-400/80 bg-yellow-500/20 text-yellow-300' 
                       : 'border-sky-400/80 bg-sky-500/20 text-sky-300'
                   }`}>
-                    {formData.badgeRole === 'DEV' ? '💻 BESTCYNIX DEV' : formData.badgeRole === 'STAFF' ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
+                    {formData.badgeRole === 'DEV' ? '💻 DEVRCPMSU' : formData.badgeRole === 'STAFF' ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
@@ -301,7 +301,7 @@ export default function BadgeInspectEditModal({
                         : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
                     }`}
                   >
-                    <span>💻 BESTCYNIX DEV</span>
+                    <span>💻 DEVRCPMSU</span>
                   </button>
 
                   {/* STAFF Button */}

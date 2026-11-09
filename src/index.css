@@ -70,12 +70,45 @@ body.modal-scroll-locked {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 8mm 10mm 8mm;
+    margin: 0mm !important;
   }
 
   /* Hide everything outside of print containers by default */
   body > * {
     visibility: hidden !important;
+  }
+
+  /* Directory batch print: activate whole root hierarchy */
+  body.directory-print-active {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body.directory-print-active > *:not(#root) {
+    display: none !important;
+  }
+
+  body.directory-print-active #root,
+  body.directory-print-active #root > div,
+  body.directory-print-active main,
+  body.directory-print-active main > div,
+  body.directory-print-active .animate-in {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 210mm !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    background: transparent !important;
+  }
+
+  body.directory-print-active #printable-id-cards-directory,
+  body.directory-print-active #printable-id-cards-directory * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Hide elements marked with .no-print */

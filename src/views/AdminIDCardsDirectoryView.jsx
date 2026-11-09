@@ -93,9 +93,20 @@ export default function AdminIDCardsDirectoryView({
     }
   };
 
-  // Group raw registrations into DEV, Staff, University, and General
+  // Add body class for print styling
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('directory-print-active');
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('directory-print-active');
+      }
+    };
+  }, []);
+
+  // Group raw registrations into Staff, University, and General (Classic 2-tier classification)
   const categorizedData = useMemo(() => {
-    const devList = [];
     const staffList = [];
     const universityMap = {};
     const generalList = [];
@@ -109,21 +120,15 @@ export default function AdminIDCardsDirectoryView({
 
     (registrations || []).forEach((reg) => {
       const cardData = getRegistrationCardData(reg);
-      const badgeRole = cardData.badgeRole || resolveBadgeRole(reg);
+      const isStaff = isStaffRegistration(reg) || reg.is_staff || cardData.isStaff || cardData.badgeRole === 'STAFF' || cardData.badgeRole === 'DEV';
 
-      // 1. DEV (BestCyniX Dev / System Admin)
-      if (badgeRole === 'DEV') {
-        devList.push({ reg, cardData });
-        return;
-      }
-
-      // 2. STAFF (Organizing Staff / Committee)
-      if (badgeRole === 'STAFF') {
+      // 1. STAFF (Organizing Staff / Committee / Dev)
+      if (isStaff) {
         staffList.push({ reg, cardData });
         return;
       }
 
-      // 3. Participants (Group by University or General)
+      // 2. Participants (Group by University or General)
       const uniInfo = resolveUniversityInfo(reg);
       const shortTag = uniInfo.shortTag;
 
@@ -149,7 +154,6 @@ export default function AdminIDCardsDirectoryView({
       .sort((a, b) => a.meta.fullName.localeCompare(b.meta.fullName, 'th'));
 
     return {
-      devList,
       staffList,
       universityGroups,
       generalList,
@@ -184,13 +188,8 @@ export default function AdminIDCardsDirectoryView({
       return searchable.some((val) => val.includes(q));
     };
 
-    let matchedDev = categorizedData.devList.filter(matchesQuery);
-    if (activeCategory === 'staff' || activeCategory === 'university' || activeCategory === 'general') {
-      matchedDev = [];
-    }
-
     let matchedStaff = categorizedData.staffList.filter(matchesQuery);
-    if (activeCategory === 'dev' || activeCategory === 'university' || activeCategory === 'general') {
+    if (activeCategory === 'university' || activeCategory === 'general') {
       matchedStaff = [];
     }
 
@@ -208,23 +207,21 @@ export default function AdminIDCardsDirectoryView({
       })
       .filter(Boolean);
 
-    if (activeCategory === 'dev' || activeCategory === 'staff' || activeCategory === 'general') {
+    if (activeCategory === 'staff' || activeCategory === 'general') {
       matchedUniversities = [];
     }
 
     let matchedGeneral = categorizedData.generalList.filter(matchesQuery);
-    if (activeCategory === 'dev' || activeCategory === 'staff' || activeCategory === 'university') {
+    if (activeCategory === 'staff' || activeCategory === 'university') {
       matchedGeneral = [];
     }
 
     const totalVisible =
-      matchedDev.length +
       matchedStaff.length +
       matchedUniversities.reduce((acc, g) => acc + g.items.length, 0) +
       matchedGeneral.length;
 
     return {
-      dev: matchedDev,
       staff: matchedStaff,
       universities: matchedUniversities,
       general: matchedGeneral,
@@ -235,7 +232,6 @@ export default function AdminIDCardsDirectoryView({
   // Flatten currently visible items for A4 pagination (2 people per sheet)
   const visibleCardList = useMemo(() => {
     const list = [];
-    filteredDataset.dev.forEach((item) => list.push({ ...item, groupType: 'dev', groupLabel: '💻 BestCyniX Dev / System Admin' }));
     filteredDataset.staff.forEach((item) => list.push({ ...item, groupType: 'staff', groupLabel: '⭐ Staff คณะทำงาน' }));
     filteredDataset.universities.forEach((g) => {
       g.items.forEach((item) => list.push({ ...item, groupType: 'university', groupLabel: `🏫 ${g.meta.fullName}`, uniTag: g.tag }));
@@ -345,7 +341,15 @@ export default function AdminIDCardsDirectoryView({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 6mm 6mm 6mm 6mm;
+            margin: 0mm !important;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
           }
           body > *:not(#root) {
             display: none !important;
@@ -358,17 +362,16 @@ export default function AdminIDCardsDirectoryView({
           button:not(.print-include) {
             display: none !important;
           }
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-          html, body {
-            width: 210mm !important;
-            height: 297mm !important;
+          #root,
+          #root > div,
+          main,
+          main > div,
+          .animate-in {
             margin: 0 !important;
             padding: 0 !important;
-            background: #ffffff !important;
-            color: #000000 !important;
+            max-width: none !important;
+            width: 210mm !important;
+            overflow: visible !important;
           }
           #printable-id-cards-directory {
             display: block !important;
@@ -383,25 +386,35 @@ export default function AdminIDCardsDirectoryView({
             print-color-adjust: exact !important;
           }
           .a4-print-sheet {
+            page-break-before: always !important;
+            break-before: page !important;
             page-break-after: always !important;
             break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
             width: 210mm !important;
-            height: 297mm !important;
-            max-height: 297mm !important;
+            height: 296mm !important;
+            max-height: 296mm !important;
             box-sizing: border-box !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
             padding: 0 !important;
             background: #ffffff !important;
             box-shadow: none !important;
             border: none !important;
             display: block !important;
+            overflow: hidden !important;
+          }
+          .a4-print-sheet:first-child {
+            page-break-before: auto !important;
+            break-before: auto !important;
           }
           .a4-grid-4cell {
             width: 210mm !important;
-            height: 297mm !important;
+            height: 296mm !important;
+            max-height: 296mm !important;
             display: grid !important;
             grid-template-columns: 105mm 105mm !important;
-            grid-template-rows: 148.5mm 148.5mm !important;
+            grid-template-rows: 148mm 148mm !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box !important;
@@ -411,7 +424,8 @@ export default function AdminIDCardsDirectoryView({
           }
           .a6-quadrant {
             width: 105mm !important;
-            height: 148.5mm !important;
+            height: 148mm !important;
+            max-height: 148mm !important;
             box-sizing: border-box !important;
             display: flex !important;
             flex-direction: column !important;
@@ -425,13 +439,17 @@ export default function AdminIDCardsDirectoryView({
           .a6-card-wrapper {
             width: 96mm !important;
             height: 120mm !important;
+            max-height: 120mm !important;
             box-sizing: border-box !important;
             border-radius: 4.5mm !important;
             overflow: hidden !important;
             box-shadow: none !important;
             border: 1px solid #334155 !important;
+            margin: 0 auto !important;
           }
           .a6-card-wrapper > div {
+            width: 480px !important;
+            height: 600px !important;
             transform: scale(0.7559) !important;
             transform-origin: top left !important;
           }
@@ -442,13 +460,20 @@ export default function AdminIDCardsDirectoryView({
             top: 0 !important;
             bottom: 0 !important;
             width: 0 !important;
-            border-left: 1px dashed #64748b !important;
+            border-left: 1.5px dashed #f97316 !important;
             z-index: 30 !important;
           }
           .print-center-cut-line {
             display: block !important;
             position: absolute !important;
-            top: 148.5mm !important;
+            top: 148mm !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 0 !important;
+            border-top: 1.5px dashed #64748b !important;
+            z-index: 30 !important;
+          }
+        }
             left: 0 !important;
             right: 0 !important;
             height: 0 !important;
@@ -697,20 +722,6 @@ export default function AdminIDCardsDirectoryView({
             ทั้งหมด ({categorizedData.totalCount} คน • {Math.ceil(categorizedData.totalCount / 2)} แผ่น)
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCategory('dev');
-              setSelectedUniversity('all');
-            }}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeCategory === 'dev'
-                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white font-black shadow-md shadow-purple-500/30'
-                : 'border border-purple-500/40 bg-purple-950/40 text-purple-200 hover:border-purple-400/60'
-            }`}
-          >
-            <span>💻 ฝ่ายพัฒนาระบบ DEV ({categorizedData.devList.length} คน)</span>
-          </button>
 
           <button
             type="button"
@@ -813,68 +824,6 @@ export default function AdminIDCardsDirectoryView({
             ======================================================== */}
         {viewLayout === 'grid' && (
           <div className="space-y-10">
-            {/* GROUP 0: 💻 DEV (BESTCYNIX DEV / SYSTEM ADMIN) */}
-            {filteredDataset.dev.length > 0 && (
-              <section className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-purple-500/40 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300 border border-purple-400/50 shadow-sm shadow-purple-500/20">
-                      💻
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-black text-white sm:text-xl flex items-center gap-2">
-                        <span>คณะทำงานฝ่ายพัฒนาระบบ (BestCyniX Dev / System Admin)</span>
-                        <span className="rounded-full bg-purple-500/20 border border-purple-400/40 px-2 py-0.5 text-[10px] font-mono text-purple-300">
-                          CYBER OPS
-                        </span>
-                      </h2>
-                      <p className="text-xs text-purple-300/80">
-                        รวม {filteredDataset.dev.length} ท่าน • {Math.ceil(filteredDataset.dev.length / 2)} แผ่น A4 • BestCyniX Full-Stack Engineering
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredDataset.dev.map(({ reg, cardData }) => (
-                    <div key={cardData.cardCode} className="flex flex-col items-center gap-2 w-full max-w-sm mx-auto">
-                      <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-purple-950/40 border border-purple-500/40 shadow-sm">
-                        <span className="text-[11px] font-mono font-bold text-cyan-300">
-                          {cardData.cardCode}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setInspectingPerson(reg)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-purple-500/40 bg-purple-900/60 px-2 py-1 text-[10.5px] font-bold text-purple-200 hover:text-white hover:border-purple-300 cursor-pointer"
-                            title="ตรวจสอบข้อมูลและแก้ไขบัตร DEV"
-                          >
-                            <Edit3 className="h-3 w-3 text-cyan-400" />
-                            <span>ตรวจ / แก้</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCroppingPerson(reg)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[10.5px] font-bold text-cyan-200 hover:bg-cyan-500/20 cursor-pointer"
-                            title="ครอปรูปถ่ายประจำตัว"
-                          >
-                            <Scissors className="h-3 w-3" />
-                            <span>ครอปรูป</span>
-                          </button>
-                        </div>
-                      </div>
-                      <IDCardPreview
-                        registration={reg}
-                        user={user}
-                        defaultOrientation={cardOrientation}
-                        allowOrientationToggle={false}
-                        showActions={true}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
 
             {/* GROUP 1: ⭐ STAFF */}
             {filteredDataset.staff.length > 0 && (

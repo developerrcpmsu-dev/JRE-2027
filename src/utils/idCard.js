@@ -238,7 +238,7 @@ export function getRegistrationCardData(registration) {
   const isDev = badgeRole === 'DEV';
   const isStaff = isDev || badgeRole === 'STAFF';
   const roleBadge = isDev 
-    ? 'BESTCYNIX DEV' 
+    ? 'DEVRCPMSU' 
     : isStaff 
     ? 'ORGANIZING STAFF' 
     : 'PARTICIPANT';

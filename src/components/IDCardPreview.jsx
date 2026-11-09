@@ -119,7 +119,7 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
   ctx.scale(scale, scale);
 
   const [bannerImg, logoImg, userImg, fallbackImg, qrImg] = await Promise.all([
-    loadCanvasImage('/images/logo/jre_header_banner.png'),
+    loadCanvasImage('/images/logo/jre_header_canva.png'),
     loadCanvasImage('/images/logo/jre_logo_square.png'),
     loadCanvasImage(photo),
     loadCanvasImage(FALLBACK_PHOTO),
@@ -179,92 +179,46 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.stroke();
     ctx.restore();
 
-    // 2. Top Header Bar (Height 52px)
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, 52);
-
-    const headerLineGrad = ctx.createLinearGradient(0, 49, W, 49);
-    if (isDev) {
-      headerLineGrad.addColorStop(0, '#a855f7');
-      headerLineGrad.addColorStop(0.5, '#06b6d4');
-      headerLineGrad.addColorStop(1, '#6366f1');
-    } else if (isStaff) {
-      headerLineGrad.addColorStop(0, '#f59e0b');
-      headerLineGrad.addColorStop(0.5, '#fbbf24');
-      headerLineGrad.addColorStop(1, '#ea580c');
+    // 2. Top Header Banner (Official Canva Banner: USIVN Seal Left + 4 Uni Logos Right)
+    if (bannerImg) {
+      ctx.drawImage(bannerImg, 0, 0, W, 62);
     } else {
-      headerLineGrad.addColorStop(0, '#0284c7');
-      headerLineGrad.addColorStop(0.5, '#38bdf8');
-      headerLineGrad.addColorStop(1, '#1d4ed8');
-    }
-    ctx.fillStyle = headerLineGrad;
-    ctx.fillRect(0, 49, W, 3);
-
-    // Header Left: USIVN Logo & Event Title
-    if (logoImg) {
-      drawImageContain(ctx, logoImg, 14, 8, 34, 34);
-    }
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#0f172a';
-    ctx.font = `900 11px ${fontStack}`;
-    ctx.fillText('JOINT RESPONSE EXERCISE', 54, 20);
-
-    ctx.fillStyle = isDev ? '#9333ea' : isStaff ? '#ea580c' : '#0284c7';
-    ctx.font = `800 8.5px ${fontStack}`;
-    ctx.fillText('JRE 2027 • 14-15 NOV 2026', 54, 34);
-
-    // Header Right: Role Pill Badge
-    const rolePillW = isDev ? 122 : isStaff ? 132 : 104;
-    const rolePillH = 22;
-    const rolePillX = W - 14 - rolePillW;
-    const rolePillY = 10;
-    ctx.save();
-    drawRoundedRectPath(ctx, rolePillX, rolePillY, rolePillW, rolePillH, 11);
-    if (isDev) {
-      ctx.fillStyle = '#9333ea';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(6, 182, 212, 0.8)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
       ctx.fillStyle = '#ffffff';
-      ctx.font = `900 8.5px ${fontStack}`;
-      ctx.textAlign = 'center';
-      ctx.fillText('💻 BESTCYNIX DEV', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
-    } else if (isStaff) {
-      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(0, 0, W, 52);
+      if (logoImg) {
+        drawImageContain(ctx, logoImg, 14, 8, 34, 34);
+      }
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0f172a';
+      ctx.font = `900 11px ${fontStack}`;
+      ctx.fillText('JOINT RESPONSE EXERCISE', 54, 20);
+
+      ctx.fillStyle = isDev ? '#9333ea' : isStaff ? '#ea580c' : '#0284c7';
+      ctx.font = `800 8.5px ${fontStack}`;
+      ctx.fillText('JRE 2027 • 14-15 NOV 2026', 54, 34);
+
+      // Header Right: Role Pill Badge
+      const rolePillW = isDev ? 110 : isStaff ? 132 : 104;
+      const rolePillH = 22;
+      const rolePillX = W - 14 - rolePillW;
+      const rolePillY = 10;
+      ctx.save();
+      drawRoundedRectPath(ctx, rolePillX, rolePillY, rolePillW, rolePillH, 11);
+      ctx.fillStyle = isDev ? '#9333ea' : isStaff ? '#f59e0b' : '#0284c7';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = '#020617';
+      ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
       ctx.font = `900 8.5px ${fontStack}`;
       ctx.textAlign = 'center';
-      ctx.fillText('⭐ ORGANIZING STAFF', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
-    } else {
-      ctx.fillStyle = '#0284c7';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.8)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `900 8.5px ${fontStack}`;
-      ctx.textAlign = 'center';
-      ctx.fillText('🎓 PARTICIPANT', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
+      ctx.fillText(isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
+      ctx.restore();
     }
-    ctx.restore();
 
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#64748b';
-    ctx.font = `700 7.5px ${fontStack}`;
-    ctx.fillText('Mahasarakham Univ.', W - 14, 42);
-
-    // 3. Centered 4:5 Photo Frame (pw=138, ph=168)
+    // 3. Centered 4:5 Photo Frame (pw=138, ph=168) - Clean with NO bottom strip
     const pw = 138;
     const ph = 168;
     const px = Math.round((W - pw) / 2);
-    const py = 66;
+    const py = 72;
 
     ctx.save();
     drawRoundedRectPath(ctx, px, py, pw, ph, 16);
@@ -274,22 +228,6 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     if (portraitImg) {
       drawImageCover(ctx, portraitImg, px, py, pw, ph);
     }
-    // Bottom role label bar inside photo
-    ctx.fillStyle = isDev
-      ? 'rgba(126, 34, 206, 0.95)'
-      : isStaff 
-      ? 'rgba(245, 158, 11, 0.95)' 
-      : 'rgba(2, 132, 199, 0.95)';
-    ctx.fillRect(px, py + ph - 22, pw, 22);
-    ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
-    ctx.font = `900 8.5px ${fontStack}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(
-      isDev ? 'BESTCYNIX DEV' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT',
-      px + pw / 2,
-      py + ph - 11
-    );
     ctx.restore();
 
     ctx.save();
@@ -303,16 +241,16 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.stroke();
     ctx.restore();
 
-    // 4. Neon Lime Callsign Banner (#d9f929) - directly below photo
+    // 4. Neon Lime Callsign Banner (#d9f929) - Clean Positive Margin, Zero Overlap!
     const rawCallsign = cardData.callsign && cardData.callsign !== '-' 
-      ? cardData.callsign 
-      : (isDev ? 'BESTCYNIX DEV' : isStaff ? 'STAFF CALLSIGN' : 'JRE-2027');
+      ? `${cardData.callsign}${isDev ? ' (DEVRCPMSU)' : isStaff ? ' (STAFF)' : ''}`
+      : (isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'JRE-2027');
 
     ctx.font = `900 13px ${monoStack}`;
     const callTextW = ctx.measureText(rawCallsign).width;
     const callW = Math.min(W - 48, Math.max(140, callTextW + 36));
     const callX = Math.round((W - callW) / 2);
-    const callY = py + ph - 10;
+    const callY = py + ph + 8;
     const callH = 26;
 
     ctx.save();
@@ -332,9 +270,10 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
 
     // 5. Royal Blue Hero Name Block (#1d4ed8) - matching Canva reference
     const heroX = 24;
-    const heroY = callY + callH + 5;
+    const heroY = callY + callH + 7;
     const heroW = W - 48;
-    const heroH = 50;
+    const hasNickname = Boolean(cardData.nickname && cardData.nickname !== '-');
+    const heroH = hasNickname ? 66 : 52;
 
     ctx.save();
     drawRoundedRectPath(ctx, heroX, heroY, heroW, heroH, 12);
@@ -357,7 +296,7 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       enNameFontSize -= 0.5;
       ctx.font = `900 ${enNameFontSize}px ${fontStack}`;
     }
-    ctx.fillText(fitTextWithEllipsis(ctx, displayEnName.toUpperCase(), heroW - 20), W / 2, heroY + 18);
+    ctx.fillText(fitTextWithEllipsis(ctx, displayEnName.toUpperCase(), heroW - 20), W / 2, heroY + 16);
 
     // Lower Line: Clean Thai Full Name (#ffffff)
     ctx.fillStyle = '#ffffff';
@@ -367,7 +306,14 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       thaiNameFontSize -= 0.5;
       ctx.font = `700 ${thaiNameFontSize}px ${fontStack}`;
     }
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.thaiName, heroW - 20), W / 2, heroY + 36);
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.thaiName, heroW - 20), W / 2, heroY + (hasNickname ? 33 : 36));
+
+    // Prominent Nickname badge inside Hero box
+    if (hasNickname) {
+      ctx.fillStyle = '#fef08a';
+      ctx.font = `900 11.5px ${fontStack}`;
+      ctx.fillText(`⭐ ชื่อเล่น: ${cardData.nickname}`, W / 2, heroY + 51);
+    }
     ctx.restore();
 
     // 6. Organizational Credentials
@@ -512,7 +458,7 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.fillStyle = '#a7f3d0';
     ctx.font = `800 8.5px ${fontStack}`;
     ctx.fillText(
-      isDev ? 'BESTCYNIX DEV' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT',
+      isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT',
       vx + vw / 2,
       botY + 82
     );
@@ -1614,38 +1560,13 @@ export function CardInnerContentPortrait({
       </svg>
 
       <div className="relative z-10 flex h-full flex-col justify-between">
-        {/* Top Header Section (USIVN Logo Left + Title + Role Badge Right) */}
-        <div className="relative shrink-0 overflow-hidden bg-white/95 px-3 py-1.5 shadow-md flex items-center justify-between border-b border-slate-700/60">
-          <div className="flex items-center gap-2">
-            <img
-              src="/images/logo/jre_logo_square.png"
-              alt="USIVN"
-              className="h-8 w-8 shrink-0 rounded-lg border border-orange-400/40 bg-white object-contain p-0.5 shadow-sm"
-            />
-            <div className="leading-tight">
-              <h1 className="text-[10.5px] font-black uppercase tracking-wider text-slate-900 font-sans">
-                Joint Response
-              </h1>
-              <p className="text-[9px] font-bold text-orange-600 leading-none">
-                Exercise (JRE 2027)
-              </p>
-            </div>
-          </div>
-
-          <div className="text-right leading-tight">
-            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider shadow-sm border ${
-              isDev
-                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white border-cyan-300 ring-1 ring-cyan-400/40'
-                : isStaff
-                ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 border-yellow-300 ring-1 ring-yellow-400/40'
-                : 'bg-gradient-to-r from-sky-500 to-blue-600 text-white border-sky-300 ring-1 ring-sky-400/40'
-            }`}>
-              {isDev ? '💻 BESTCYNIX DEV' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
-            </span>
-            <p className="text-[7.5px] font-semibold text-slate-500 mt-0.5">
-              14-15 Nov 2026 • Mahasarakham Univ.
-            </p>
-          </div>
+        {/* Top Header Banner using user's uploaded Canva banner asset */}
+        <div className="relative shrink-0 overflow-hidden bg-[#0c1830] border-b border-white/10 shadow-md">
+          <img
+            src="/images/logo/jre_header_canva.png"
+            alt="Joint Response Exercise (JRE 2027)"
+            className="w-full h-[62px] object-cover object-center block"
+          />
         </div>
 
         {/* Card Body */}
@@ -1668,31 +1589,26 @@ export function CardInnerContentPortrait({
                   event.currentTarget.src = FALLBACK_PHOTO;
                 }}
               />
-              <div className={`absolute inset-x-0 bottom-0 px-1 py-0.5 text-center text-[8px] font-black tracking-wider uppercase shadow-md whitespace-nowrap truncate overflow-hidden ${
-                isDev
-                  ? 'bg-gradient-to-r from-purple-700 via-indigo-800 to-cyan-800 text-cyan-200'
-                  : isStaff 
-                  ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black' 
-                  : 'bg-gradient-to-r from-sky-600 to-blue-700 text-white font-black'
-              }`}>
-                {isDev ? '💻 BESTCYNIX DEV' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
-              </div>
             </div>
 
-            {/* Neon Lime / Yellow Callsign Banner (e.g. RCP 16-37, TSI..., อาสา...) */}
-            {cardData.callsign && cardData.callsign !== '-' && (
-              <div className="-mt-2.5 z-20">
-                <div className="rounded-md bg-[#d9f929] px-4 py-0.5 shadow-xl border border-[#c2e420] text-center">
-                  <span className="font-black text-[#07172f] text-[13px] tracking-widest font-mono">
-                    {cardData.callsign}
-                  </span>
-                </div>
+            {/* Neon Lime / Yellow Callsign Banner (e.g. RCP 16-37 (STAFF) or RCP 16-37) - Clean Positive Margin, Zero Overlap! */}
+            <div className="mt-2.5 z-10">
+              <div className="rounded-md bg-[#d9f929] px-4 py-0.5 shadow-xl border border-[#c2e420] text-center">
+                <span className="font-black text-[#07172f] text-[13px] tracking-widest font-mono">
+                  {cardData.callsign && cardData.callsign !== '-'
+                    ? `${cardData.callsign}${isDev ? ' (DEVRCPMSU)' : isStaff ? ' (STAFF)' : ''}`
+                    : isDev
+                    ? 'DEVRCPMSU'
+                    : isStaff
+                    ? 'ORGANIZING STAFF'
+                    : 'JRE 2027'}
+                </span>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Royal Blue Hero Name Block with Large Neon Text (matching user reference) */}
-          <div className="w-full rounded-xl bg-[#1d4ed8] px-3 py-1.5 text-center shadow-xl border border-blue-400/50 my-1">
+          <div className="w-full rounded-xl bg-[#1d4ed8] px-3 py-2 text-center shadow-xl border border-blue-400/50 my-1">
             <span className="block font-black tracking-tight text-[#d9f929] text-[15px] sm:text-[16px] leading-tight uppercase truncate" title={cardData.englishName}>
               {cardData.englishName && cardData.englishName !== '-' ? cardData.englishName : cardData.thaiName}
             </span>
@@ -1700,9 +1616,12 @@ export function CardInnerContentPortrait({
               {cardData.thaiName}
             </span>
             {cardData.nickname && cardData.nickname !== '-' && (
-              <span className="block text-[8.5px] font-bold text-amber-200 mt-0.5">
-                ⭐ ชื่อเล่น: {cardData.nickname}
-              </span>
+              <div className="mt-1 flex items-center justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/25 px-3 py-0.5 text-[13px] font-black text-amber-200 border border-amber-300/50 shadow-sm">
+                  <span>⭐ ชื่อเล่น:</span>
+                  <span className="text-white font-black">{cardData.nickname}</span>
+                </span>
+              </div>
             )}
           </div>
 
@@ -1754,7 +1673,7 @@ export function CardInnerContentPortrait({
               <span className={`text-[7.5px] font-black tracking-wider uppercase leading-none mt-0.5 ${
                 isDev ? 'text-purple-600' : isStaff ? 'text-amber-600' : 'text-sky-600'
               }`}>
-                {isDev ? 'DEV ADMIN SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN'}
+                {isDev ? 'DEVRCPMSU SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN'}
               </span>
             </div>
 
@@ -1781,7 +1700,7 @@ export function CardInnerContentPortrait({
                 ✓ VERIFIED
               </strong>
               <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-wider text-emerald-200/90 leading-tight">
-                {isDev ? 'BESTCYNIX DEV' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT'}
+                {isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT'}
               </span>
             </div>
           </div>
