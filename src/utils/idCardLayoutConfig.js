@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 
-export const MASTER_LAYOUT_STORAGE_KEY = 'jre2027_master_id_card_layout_v2';
+export const MASTER_LAYOUT_STORAGE_KEY = 'jre2027_master_id_card_layout_v3';
 export const MASTER_LAYOUT_EVENT = 'jre-idcard-layout-updated';
 
 /**
@@ -8,20 +8,20 @@ export const MASTER_LAYOUT_EVENT = 'jre-idcard-layout-updated';
  * Every coordinate is in the 480 x 600 base space.
  */
 export const DEFAULT_MASTER_CARD_LAYOUT = {
-  version: 2,
-  // 1. Top Header Banner
+  version: 3,
+  // 1. Top Header Banner (1920 x 312 native HD -> 480 x 78 exact aspect ratio, zero distortion)
   headerBanner: {
     x: 0,
     y: 0,
     width: 480,
-    height: 74,
-    fit: 'fill' // 'fill' | 'cover' | 'contain'
+    height: 78,
+    fit: 'contain' // 'fill' | 'cover' | 'contain'
   },
   // 2. Optional Floating Role Pill (Default hidden so header university logos are 100% clear)
   rolePill: {
     visible: false,
     x: 332,
-    y: 82,
+    y: 84,
     width: 132,
     height: 22,
     fontSize: 8.5
@@ -29,7 +29,7 @@ export const DEFAULT_MASTER_CARD_LAYOUT = {
   // 3. Portrait Photo Frame (Centered at x = (480 - 138) / 2 = 171)
   photoFrame: {
     x: 171,
-    y: 84,
+    y: 86,
     width: 138,
     height: 168,
     borderRadius: 16,

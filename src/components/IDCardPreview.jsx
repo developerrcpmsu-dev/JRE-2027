@@ -165,10 +165,13 @@ export async function renderNativeIdCardCanvas({
   canvas.width = Math.round(W * scale);
   canvas.height = Math.round(H * scale);
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.scale(scale, scale);
 
-  const [bannerImg, logoImg, userImg, fallbackImg, qrImg] = await Promise.all([
-    loadCanvasImage('/images/logo/jre_header_canva.png'),
+  const [shieldImg, fourLogosImg, logoImg, userImg, fallbackImg, qrImg] = await Promise.all([
+    loadCanvasImage('/images/logo/jre_shield_transparent.png'),
+    loadCanvasImage('/images/logo/jre_four_logos_hd.png'),
     loadCanvasImage('/images/logo/jre_logo_square.png'),
     loadCanvasImage(photo),
     loadCanvasImage(FALLBACK_PHOTO),
@@ -226,38 +229,78 @@ export async function renderNativeIdCardCanvas({
     ctx.stroke();
     ctx.restore();
 
-    // 2. Top Header Banner (Official Canva Banner: Full width edge-to-edge, no white bars)
+    // 2. Top Header Banner (Native Vector Text + High-Res Proportional Logos, zero squishing!)
     const hb = L.headerBanner;
     ctx.save();
-    ctx.fillStyle = '#0c1830';
-    ctx.fillRect(hb.x, hb.y, hb.width, hb.height);
-    if (bannerImg) {
-      if (hb.fit === 'cover') {
-        drawImageCover(ctx, bannerImg, hb.x, hb.y, hb.width, hb.height);
-      } else if (hb.fit === 'contain') {
-        drawImageContain(ctx, bannerImg, hb.x, hb.y, hb.width, hb.height);
-      } else {
-        ctx.drawImage(bannerImg, hb.x, hb.y, hb.width, hb.height);
-      }
-    } else {
-      if (logoImg) {
-        drawImageContain(ctx, logoImg, hb.x + 14, hb.y + 16, 36, 36);
-      }
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `900 11px ${fontStack}`;
-      ctx.fillText('JOINT RESPONSE EXERCISE', hb.x + 56, hb.y + 26);
+    ctx.beginPath();
+    ctx.rect(hb.x, hb.y, hb.width, hb.height);
+    ctx.clip();
 
-      ctx.fillStyle = isDev ? '#a855f7' : isStaff ? '#f59e0b' : '#38bdf8';
-      ctx.font = `800 8.5px ${fontStack}`;
-      ctx.fillText('JRE 2027 • 14-15 NOV 2026', hb.x + 56, hb.y + 42);
+    const headerGrad = ctx.createLinearGradient(hb.x, hb.y, hb.x + hb.width, hb.y + hb.height);
+    headerGrad.addColorStop(0, '#132a4f');
+    headerGrad.addColorStop(0.55, '#0e3666');
+    headerGrad.addColorStop(1, '#262b44');
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(hb.x, hb.y, hb.width, hb.height);
+
+    // Subtle warm ambient glow on right of header (matching Canva design)
+    const hdrGlow = ctx.createRadialGradient(
+      hb.x + hb.width - 90,
+      hb.y + 18,
+      6,
+      hb.x + hb.width - 90,
+      hb.y + 18,
+      140
+    );
+    hdrGlow.addColorStop(0, 'rgba(245, 158, 11, 0.25)');
+    hdrGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = hdrGlow;
+    ctx.fillRect(hb.x, hb.y, hb.width, hb.height);
+
+    // Left: High-Res USIVN Shield (proportional contain, never squished)
+    const shieldH = Math.max(36, Math.round(hb.height * 0.78));
+    const shieldW = Math.round(shieldH * (500 / 640));
+    const shieldX = hb.x + 14;
+    const shieldY = hb.y + Math.round((hb.height - shieldH) / 2);
+    if (shieldImg || logoImg) {
+      drawImageContain(ctx, shieldImg || logoImg, shieldX, shieldY, shieldW, shieldH);
     }
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+
+    // Left: Crisp Vector Event Title
+    const titleX = shieldX + shieldW + 8;
+    const centerY = hb.y + hb.height / 2;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 13.5px ${fontStack}`;
+    ctx.fillText('Joint Response', titleX, centerY - 8);
+    ctx.fillText('Exercise (JRE 2027)', titleX, centerY + 9);
+
+    // Right: 4 High-Res University/Agency Logos (1:1 aspect ratio preserved, never squished)
+    const logosH = Math.max(24, Math.round(hb.height * 0.49));
+    const logosW = Math.round(logosH * (783 / 180));
+    const rightEdge = hb.x + hb.width - 14;
+    const logosX = rightEdge - logosW;
+    const logosY = hb.y + Math.max(5, Math.round(hb.height * 0.09));
+    if (fourLogosImg) {
+      drawImageContain(ctx, fourLogosImg, logosX, logosY, logosW, logosH);
+    }
+
+    // Right: Crisp Vector Date & Venue below the 4 logos
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = `800 8px ${fontStack}`;
+    ctx.fillText('14–15 November 2026', rightEdge, logosY + logosH + 8);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = `700 7.5px ${fontStack}`;
+    ctx.fillText('At Mahasarakham University', rightEdge, logosY + logosH + 18);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(hb.x, hb.y + hb.height);
-    ctx.lineTo(hb.x + hb.width, hb.y + hb.height);
+    ctx.moveTo(hb.x, hb.y + hb.height - 0.5);
+    ctx.lineTo(hb.x + hb.width, hb.y + hb.height - 0.5);
     ctx.stroke();
     ctx.restore();
 
@@ -1755,7 +1798,7 @@ export function CardInnerContentPortrait({
       )}
 
       <div className="relative z-10 h-full w-full">
-        {/* 1. Top Header Banner (Full width edge-to-edge, zero white margins) */}
+        {/* 1. Top Header Banner (Native Vector Text + High-Res Proportional Logos, zero squishing!) */}
         <div
           style={{
             position: 'absolute',
@@ -1765,16 +1808,44 @@ export function CardInnerContentPortrait({
             height: `${hb.height}px`
           }}
           onMouseDown={getZoneInteractiveProps('headerBanner').onMouseDown}
-          className={`overflow-hidden bg-[#0c1830] border-b border-white/10 shadow-md ${getZoneInteractiveProps('headerBanner').className || ''}`}
+          className={`overflow-hidden bg-gradient-to-r from-[#132a4f] via-[#0e3666] to-[#262b44] border-b border-white/15 shadow-md px-3.5 flex items-center justify-between ${getZoneInteractiveProps('headerBanner').className || ''}`}
         >
-          <img
-            src="/images/logo/jre_header_canva.png"
-            alt="Joint Response Exercise (JRE 2027)"
-            style={{
-              objectFit: hb.fit === 'cover' ? 'cover' : hb.fit === 'contain' ? 'contain' : 'fill'
-            }}
-            className="w-full h-full object-center block pointer-events-none"
-          />
+          {/* Ambient warm glow on right */}
+          <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-44 rounded-full bg-amber-500/20 blur-2xl" />
+
+          {/* Left: High-Res USIVN Shield + Vector Title */}
+          <div className="relative z-10 flex items-center gap-2 pointer-events-none">
+            <img
+              src="/images/logo/jre_shield_transparent.png"
+              alt="USIVN Shield"
+              style={{ height: `${Math.max(36, Math.round(hb.height * 0.78))}px` }}
+              className="w-auto object-contain shrink-0 drop-shadow"
+            />
+            <div className="leading-tight">
+              <span className="block text-[13.5px] font-black tracking-tight text-white">
+                Joint Response
+              </span>
+              <span className="block text-[13.5px] font-black tracking-tight text-white">
+                Exercise (JRE 2027)
+              </span>
+            </div>
+          </div>
+
+          {/* Right: 4 High-Res University/Agency Seals + Vector Date & Venue */}
+          <div className="relative z-10 flex flex-col items-end justify-center text-right pointer-events-none">
+            <img
+              src="/images/logo/jre_four_logos_hd.png"
+              alt="Partner University Logos"
+              style={{ height: `${Math.max(24, Math.round(hb.height * 0.49))}px` }}
+              className="w-auto object-contain shrink-0 drop-shadow-sm"
+            />
+            <span className="mt-1 block text-[8px] font-extrabold text-slate-200 leading-none">
+              14–15 November 2026
+            </span>
+            <span className="mt-0.5 block text-[7.5px] font-bold text-slate-400 leading-none">
+              At Mahasarakham University
+            </span>
+          </div>
         </div>
 
         {/* 2. Optional Floating Role Pill Badge */}
