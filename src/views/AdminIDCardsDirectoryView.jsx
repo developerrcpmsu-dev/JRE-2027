@@ -593,6 +593,53 @@ export default function AdminIDCardsDirectoryView({
           </div>
         </div>
 
+        {/* Dedicated Staff Self-Registration & ID Card Portal URL Card */}
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-400/50 bg-amber-500/20 text-amber-300 text-lg">
+              ⭐
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">
+                ลิงก์เฉพาะสำหรับให้ Staff สมัครสมาชิก & กรอกข้อมูลทำบัตร ID Card (เปิดตลอดเวลา)
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                <code className="rounded bg-black/50 px-2.5 py-0.5 font-mono text-xs font-black text-amber-200 border border-amber-500/30">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/staff-register` : 'https://jre-2027.vercel.app/staff-register'}
+                </code>
+                <span className="text-[11px] text-slate-300">
+                  (ส่งลิงก์นี้ให้ Staff ที่ยังไม่มีชื่อในระบบ เพื่อล็อกอินกรอกข้อมูลและอัปโหลดรูปทำบัตรได้ทันที)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const staffUrl = typeof window !== 'undefined' ? `${window.location.origin}/staff-register` : 'https://jre-2027.vercel.app/staff-register';
+                navigator.clipboard?.writeText(staffUrl);
+                alert(`คัดลอกลิงก์สำหรับ Staff เรียบร้อยแล้ว:\n${staffUrl}`);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300/60 bg-gradient-to-r from-amber-400 to-orange-500 px-3.5 py-2 text-xs font-black text-slate-950 shadow-md transition-all hover:brightness-110 cursor-pointer"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              คัดลอกลิงก์สำหรับ Staff (/staff-register)
+            </button>
+
+            <a
+              href="/staff-register"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-slate-950 px-3 py-2 text-xs font-bold text-amber-200 transition-colors hover:border-amber-400 hover:text-white cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              เปิดหน้าสมัคร Staff
+            </a>
+          </div>
+        </div>
+
         {/* Statistical Summary Counters */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">

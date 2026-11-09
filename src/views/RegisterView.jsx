@@ -359,17 +359,29 @@ export default function RegisterView({
   );
 
   const scheduleStatus = getRegistrationScheduleStatus(effectivePaymentConfig);
-  const isRegistrationClosed = scheduleStatus.isClosed;
-  const isRegistrationUpcoming = scheduleStatus.isUpcoming;
-  const isRegistrationOpen = scheduleStatus.isOpen;
+  const isStaffPortal = Boolean(
+    subRoute === 'staff' ||
+    (typeof window !== 'undefined' && (
+      window.location.pathname.toLowerCase().includes('staff-register') ||
+      window.location.pathname.toLowerCase().includes('staff-signup') ||
+      window.location.pathname.toLowerCase().includes('staff-id-card') ||
+      window.location.pathname.toLowerCase().includes('/register/staff') ||
+      new URLSearchParams(window.location.search).get('role')?.toLowerCase() === 'staff'
+    ))
+  );
+  const isRegistrationClosed = isStaffPortal ? false : scheduleStatus.isClosed;
+  const isRegistrationUpcoming = isStaffPortal ? false : scheduleStatus.isUpcoming;
+  const isRegistrationOpen = isStaffPortal ? true : scheduleStatus.isOpen;
 
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (subRoute === 'dashboard') {
       setIsEditing(false);
+    } else if (subRoute === 'staff' && myRegistration) {
+      setIsEditing(true);
     } else if (subRoute === 'form' && myRegistration) {
-      if (isSuperEditor) {
+      if (isSuperEditor || isStaffPortal || isStaffRegistration(myRegistration)) {
         setIsEditing(true);
       } else if (isApplicantFullyPaid) {
         setIsEditing(false);
@@ -383,7 +395,7 @@ export default function RegisterView({
         setIsEditing(true);
       }
     }
-  }, [subRoute, myRegistration, isApplicantFullyPaid, isRegistrationClosed, isSuperEditor]);
+  }, [subRoute, myRegistration, isApplicantFullyPaid, isRegistrationClosed, isSuperEditor, isStaffPortal]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -405,7 +417,13 @@ export default function RegisterView({
 
   // Gender ('ชาย' | 'หญิง') for dormitory room allocation & Staff status (280 THB shirt only)
   const [gender, setGender] = useState('ชาย');
-  const [isStaff, setIsStaff] = useState(false);
+  const [isStaff, setIsStaff] = useState(() => isStaffPortal);
+
+  useEffect(() => {
+    if (isStaffPortal && !isStaff) {
+      setIsStaff(true);
+    }
+  }, [isStaffPortal, isStaff]);
 
   const [isManualFullName, setIsManualFullName] = useState(false);
 
@@ -1405,11 +1423,14 @@ export default function RegisterView({
     if (phone.length !== 10 || !/^0\d{9}$/.test(phone)) {
       errs.phone = 'กรุณาระบุเบอร์โทรศัพท์มือถือให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)';
     }
-    if (!emergencyName.trim()) {
+    if (!emergencyName.trim() && !isStaffPortal) {
       errs.emergencyName = 'กรุณาระบุชื่อ-สกุล บุคคลติดต่อฉุกเฉิน';
     }
-    if (emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) {
+    if ((emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) && !isStaffPortal) {
       errs.emergencyPhone = 'กรุณาระบุเบอร์โทรศัพท์ติดต่อฉุกเฉินให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)';
+    }
+    if (isStaffPortal && !idCardPhoto && !(myRegistration?.id_card_photo || myRegistration?.user_avatar || user?.avatar)) {
+      errs.idCardPhoto = 'กรุณาอัปโหลดรูปถ่ายสำหรับทำบัตรประจำตัว Staff ID Card';
     }
     return errs;
   };
@@ -1533,6 +1554,132 @@ export default function RegisterView({
     triggerToast('ไปยังขั้นตอนที่ 4: สรุปยอดคงค้าง & ชำระเงินรอบที่ 2 (ยืนยันสิทธิ์สมบูรณ์)', 'info');
   };
 
+  const handleDirectStaffSave = async () => {
+    if (!user) {
+      onOpenGoogleLogin();
+      return;
+    }
+
+    const step1Errs = validateStep1();
+    if (Object.keys(step1Errs).length > 0) {
+      setCurrentFormStep(1);
+      setFieldErrors(step1Errs);
+      const firstKey = focusAndScrollToFirstError(step1Errs);
+      setStatusMessage({ type: 'error', text: step1Errs[firstKey] || 'กรุณากรอกข้อมูลสำหรับทำบัตรประจำตัว Staff ให้ครบถ้วน' });
+      triggerToast(step1Errs[firstKey] || 'กรุณากรอกข้อมูลให้ครบถ้วน', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage(null);
+
+    const formattedDob = `${birthYearBE}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`;
+    let finalFirstName = firstName.trim() || firstNameTh.trim();
+    let finalLastName = lastName.trim() || lastNameTh.trim();
+    if (!finalFirstName && fullNameAffiliation) {
+      const parts = fullNameAffiliation.trim().split(' ');
+      finalFirstName = parts[0] || fullNameAffiliation;
+      finalLastName = parts.slice(1).join(' ') || '-';
+    }
+
+    const resolvedFinalGender = gender || resolveGender({ title_th: titleTh === 'อื่นๆ' ? titleOtherTh.trim() : titleTh, title_en: titleEn });
+    const staffFeeInfo = getRegistrationFeeDetails(institution, true);
+    const effectivePlan = staffFeeInfo.isMsu ? 'full' : paymentPlan;
+
+    const payload = {
+      user_id: user.id,
+      user_email: user.email,
+      user_avatar: user.avatar,
+      first_name: finalFirstName,
+      last_name: finalLastName,
+      title_th: titleTh === 'อื่นๆ' ? titleOtherTh.trim() : titleTh,
+      title_other_th: titleOtherTh.trim(),
+      first_name_th: firstNameTh.trim(),
+      last_name_th: lastNameTh.trim(),
+      institution_abbr_th: institutionAbbrTh.trim(),
+      title_en: titleEn === 'อื่นๆ' ? titleOtherEn.trim() : titleEn,
+      title_other_en: titleOtherEn.trim(),
+      first_name_en: firstNameEn.trim(),
+      last_name_en: lastNameEn.trim(),
+      institution_abbr_en: institutionAbbrEn.trim(),
+      full_name_affiliation: fullNameAffiliation.trim() || `${finalFirstName} ${finalLastName}`.trim(),
+      nickname: buildNicknameString(nicknameTh, nicknameEn) || nickname.trim(),
+      nickname_th: nicknameTh.trim(),
+      nickname_en: nicknameEn.trim(),
+      callsign: callsign.trim(),
+      member_type: memberType,
+      unit: unit.trim() || (staffFeeInfo.isMsu ? 'ชมรมกู้ภัยราชพฤกษ์' : ''),
+      affiliation: institution.trim(),
+      gender: resolvedFinalGender,
+      is_staff: true,
+      registration_type: 'staff',
+      shirt_size: shirtSize || myRegistration?.shirt_size || 'L',
+      custom_shirt_note: customShirtNote.trim(),
+      id_card_photo: idCardPhoto || myRegistration?.id_card_photo || user.avatar || '',
+      id_card_url: idCardPhoto || myRegistration?.id_card_url || idCardPhoto || user.avatar || '',
+      dob: formattedDob,
+      age_years: ageResult.years,
+      age_months: ageResult.months,
+      age_days: ageResult.days,
+      blood_group: bloodGroup,
+      phone: phone.trim(),
+      institution: institution.trim(),
+      emergency_name: emergencyName.trim() ? `${emergencyName.trim()} (${emergencyRelation})` : (myRegistration?.emergency_name || `- (${emergencyRelation})`),
+      emergency_phone: emergencyPhone.trim() || myRegistration?.emergency_phone || phone.trim(),
+      medical_history: medicalHistory.trim() || myRegistration?.medical_history || 'ไม่มี',
+      food_allergy: foodAllergy.trim() || myRegistration?.food_allergy || 'ไม่มี',
+      previous_training: previousTraining.trim() || myRegistration?.previous_training || '',
+      group_assigned: myRegistration?.group_assigned || '',
+      room_assigned: myRegistration?.room_assigned || '',
+      is_special_care: myRegistration?.is_special_care || false,
+      special_notes: myRegistration?.special_notes || '',
+      admin_private_notes: myRegistration?.admin_private_notes || '',
+      payment_plan: myRegistration?.payment_plan || effectivePlan,
+      payment_status: myRegistration?.payment_status || 'unpaid',
+      payment_amount: myRegistration?.payment_amount ?? staffFeeInfo.totalFee,
+      payment_bank_info: `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
+      payment_slip_url: formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || '',
+      payment_slip_date: myRegistration?.payment_slip_date || '',
+      installment_1_status: myRegistration?.installment_1_status || 'unpaid',
+      installment_1_amount: staffFeeInfo.round1Amount,
+      installment_1_due: staffFeeInfo.round1Due,
+      installment_1_slip_url: formSlipRound1 || myRegistration?.installment_1_slip_url || '',
+      installment_1_slip_date: myRegistration?.installment_1_slip_date || '',
+      installment_2_status: myRegistration?.installment_2_status || 'unpaid',
+      installment_2_amount: staffFeeInfo.round2Amount,
+      installment_2_due: staffFeeInfo.round2Due,
+      installment_2_slip_url: formSlipRound2 || myRegistration?.installment_2_slip_url || '',
+      installment_2_slip_date: myRegistration?.installment_2_slip_date || '',
+      slip_ocr_round1: slipOcrRound1 || myRegistration?.slip_ocr_round1 || null,
+      slip_ocr_round2: slipOcrRound2 || myRegistration?.slip_ocr_round2 || null,
+      slip_ocr_full: slipOcrFull || myRegistration?.slip_ocr_full || null,
+      admin_messages: myRegistration?.admin_messages || [],
+      requested_docs: myRegistration?.requested_docs || [],
+      status: 'confirmed'
+    };
+
+    try {
+      await onSaveRegistration(payload);
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraftRestored(false);
+      setIsEditing(false);
+      if (onSubRouteChange) onSubRouteChange('dashboard');
+      setStatusMessage({
+        type: 'success',
+        text: '🎉 บันทึกข้อมูลคณะทำงาน (ORGANIZING STAFF) และสร้างบัตรประจำตัว ID Card เรียบร้อยแล้ว!'
+      });
+      triggerToast('✓ บันทึกข้อมูล Staff และออกบัตรประจำตัว ID Card เรียบร้อยแล้ว!', 'success');
+      try {
+        confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
+      } catch (err) {}
+    } catch (err) {
+      setStatusMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล Staff กรุณาลองใหม่' });
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล Staff', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
@@ -1540,14 +1687,14 @@ export default function RegisterView({
       return;
     }
 
-    // Registration Schedule Open/Close Enforcement
+    // Registration Schedule Open/Close Enforcement (Bypassed for Staff Portal & Super Editor)
     const currentSchedule = getRegistrationScheduleStatus(effectivePaymentConfig);
-    if (!myRegistration && currentSchedule.isClosed) {
+    if (!myRegistration && currentSchedule.isClosed && !isStaffPortal && !isStaff && !isSuperEditor) {
       triggerToast('ขออภัย โครงการ JRE 2027 ได้ปิดรับสมัครแล้วอย่างเป็นทางการ ไม่สามารถส่งใบสมัครใหม่ได้', 'error');
       setStatusMessage({ type: 'error', text: 'โครงการ JRE 2027 ได้ปิดรับสมัครแล้วอย่างเป็นทางการ ไม่สามารถส่งใบสมัครใหม่ได้' });
       return;
     }
-    if (!myRegistration && currentSchedule.isUpcoming) {
+    if (!myRegistration && currentSchedule.isUpcoming && !isStaffPortal && !isStaff && !isSuperEditor) {
       triggerToast('ขออภัย ระบบรับสมัคร JRE 2027 ยังไม่เปิดให้บริการในขณะนี้', 'warning');
       setStatusMessage({ type: 'warning', text: 'ระบบรับสมัคร JRE 2027 ยังไม่เปิดให้บริการ กรุณารอนับเวลาเปิดรับสมัคร' });
       return;
@@ -1621,7 +1768,7 @@ export default function RegisterView({
     const feeInfo = getRegistrationFeeDetails(institution, effectiveIsStaff);
     const effectivePlan = (effectiveIsStaff && feeInfo.isMsu) ? 'full' : paymentPlan;
 
-    if (effectivePlan === 'full') {
+    if (effectivePlan === 'full' && !isStaffPortal) {
       const hasFullSlip = Boolean(formSlipFull || formSlipRound1 || (isEditing && (myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url || myRegistration?.slip_url)));
       if (!hasFullSlip) {
         setCurrentFormStep(3);
@@ -1641,7 +1788,7 @@ export default function RegisterView({
         }, 150);
         return;
       }
-    } else if (effectivePlan === 'installment') {
+    } else if (effectivePlan === 'installment' && !isStaffPortal) {
       const hasRound1Slip = Boolean(formSlipRound1 || (isEditing && (myRegistration?.installment_1_slip_url || myRegistration?.payment_slip_url || myRegistration?.slip_url)));
       if (!hasRound1Slip) {
         setCurrentFormStep(3);
@@ -2227,17 +2374,31 @@ export default function RegisterView({
             </svg>
           </div>
 
-          <span className="px-3 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider mb-3 inline-block">
-            ระบบความปลอดภัยและการยืนยันตัวตน
+          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 inline-block border ${
+            isStaffPortal
+              ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+              : 'bg-rescue-500/20 text-rescue-400 border-rescue-500/30'
+          }`}>
+            {isStaffPortal ? '⭐ ระบบเฉพาะคณะทำงาน (STAFF ONLY • /staff-register)' : 'ระบบความปลอดภัยและการยืนยันตัวตน'}
           </span>
 
           <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">
-            เข้าสู่ระบบด้วย Google ก่อนสมัครเข้าร่วมโครงการ
+            {isStaffPortal
+              ? 'เข้าสู่ระบบสำหรับ Staff เพื่อกรอกข้อมูล & ทำบัตรประจำตัว ID Card'
+              : 'เข้าสู่ระบบด้วย Google ก่อนสมัครเข้าร่วมโครงการ'}
           </h2>
           
           <p className="text-slate-300 text-sm max-w-xl mx-auto mb-6 leading-relaxed">
-            ระบบ <span className="text-white font-bold">เข้าสู่ระบบด้วย Google</span> และระบบ <span className="text-white font-bold">สมัครเข้าร่วมโครงการ</span> เป็นคนละระบบกัน
-            ผู้สมัครทุกคนต้องเข้าสู่ระบบด้วยบัญชี Google เพื่อสร้างบัญชีและยืนยันตัวตน โดยระบบจะดึงชื่อ นามสกุล อีเมล และรูปโปรไฟล์จาก Google อัตโนมัติ ท่านจึงไม่ต้องกรอกชื่อ อีเมล หรือตั้งรหัสผ่านใหม่
+            {isStaffPortal ? (
+              <>
+                หน้านี้เป็น <span className="text-amber-300 font-bold">ลิงก์เฉพาะสำหรับคณะทำงาน (ORGANIZING STAFF)</span> เพื่อเข้าสู่ระบบ/สร้างบัญชี แล้วกรอกข้อมูล ชื่อ-นามสกุล นามเรียกขาน สังกัด และ <span className="text-white font-bold">อัปโหลดรูปถ่ายสำหรับจัดทำบัตรประจำตัว Staff ID Card</span> เข้าสู่ระบบกลางโดยตรง
+              </>
+            ) : (
+              <>
+                ระบบ <span className="text-white font-bold">เข้าสู่ระบบด้วย Google</span> และระบบ <span className="text-white font-bold">สมัครเข้าร่วมโครงการ</span> เป็นคนละระบบกัน
+                ผู้สมัครทุกคนต้องเข้าสู่ระบบด้วยบัญชี Google เพื่อสร้างบัญชีและยืนยันตัวตน โดยระบบจะดึงชื่อ นามสกุล อีเมล และรูปโปรไฟล์จาก Google อัตโนมัติ ท่านจึงไม่ต้องกรอกชื่อ อีเมล หรือตั้งรหัสผ่านใหม่
+              </>
+            )}
           </p>
 
           {/* 2-System Distinction Boxes */}
@@ -2289,7 +2450,7 @@ export default function RegisterView({
   }
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
-  if (myRegistration && (!isEditing || !isSuperEditor)) {
+  if (myRegistration && (!isEditing || (!isSuperEditor && !isStaffPortal && !isStaffRegistration(myRegistration)))) {
     const paymentStatus = myRegistration.payment_status || 'unpaid';
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
     const unreadMessagesCount = adminMessages.filter(m => !m.read).length;
@@ -2720,11 +2881,11 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-              {/* EDIT REGISTRATION BUTTON: Locked for regular users (only Admin/Developer can edit now that registration & shirt orders are closed) */}
-              {!isSuperEditor ? (
+              {/* EDIT REGISTRATION BUTTON: Unlocked for Staff / Staff Portal / Admin / Dev */}
+              {(!isSuperEditor && !isStaffPortal && !isStaffReg) ? (
                 <div
                   className="px-4 py-2.5 bg-slate-900/90 text-slate-400 border border-slate-700/60 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
-                  title="โครงการได้ปิดรับสมัครและส่งผลิตเสื้อแล้ว การแก้ไขข้อมูลสงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin / Dev) เท่านั้น"
+                  title="โครงการได้ปิดรับสมัครและส่งผลิตเสื้อแล้ว การแก้ไขข้อมูลสงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin / Dev) และ Staff เท่านั้น"
                 >
                   <Lock className="w-3.5 h-3.5 text-slate-400" />
                   <span>ล็อคการแก้ไขแล้ว (เฉพาะ Admin / Dev)</span>
@@ -2734,13 +2895,13 @@ export default function RegisterView({
                   type="button"
                   onClick={() => {
                     setIsEditing(true);
-                    if (onSubRouteChange) onSubRouteChange('form');
+                    if (onSubRouteChange) onSubRouteChange(isStaffPortal || isStaffReg ? 'staff' : 'form');
                   }}
-                  className="px-4 py-2.5 bg-gradient-to-r from-rescue-600 to-orange-600 hover:from-rescue-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
-                  title="แก้ไขข้อมูลใบสมัคร (สิทธิ์เฉพาะ Admin / Dev)"
+                  className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
+                  title="แก้ไขข้อมูลประวัติ และอัปโหลด/เปลี่ยนรูปถ่ายทำบัตร ID Card"
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  <span>แก้ไขข้อมูล (สิทธิ์ Admin / Dev)</span>
+                  <span>{isStaffPortal || isStaffReg ? '✏️ แก้ไขข้อมูล Staff & เปลี่ยนรูปทำบัตร ID Card' : 'แก้ไขข้อมูล (สิทธิ์ Admin / Dev)'}</span>
                 </button>
               )}
 
@@ -5383,17 +5544,61 @@ export default function RegisterView({
       <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" className="mb-4" />
 
       <div className="text-center space-y-2 mb-4">
-        <div className="inline-flex items-center gap-2 px-4 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
+        <div className={`inline-flex items-center gap-2 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+          isStaffPortal
+            ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+            : 'bg-rescue-500/20 text-rescue-400 border-rescue-500/30'
+        }`}>
           <FileText className="w-4 h-4" />
-          {isEditing ? (hasAnyPaymentApproved ? 'แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม' : 'แก้ไขข้อมูลประวัติผู้สมัคร') : 'ระบบรับสมัครเข้าร่วมโครงการ'}
+          {isStaffPortal
+            ? '⭐ ระบบลงทะเบียนและทำบัตรประจำตัวสำหรับ Staff เท่านั้น (/staff-register)'
+            : isEditing
+              ? (hasAnyPaymentApproved ? 'แก้ไขข้อมูลผู้เข้ารับการฝึกอบรม' : 'แก้ไขข้อมูลประวัติผู้สมัคร')
+              : 'ระบบรับสมัครเข้าร่วมโครงการ'}
         </div>
         <h1 className="text-3xl font-black text-white">
-          {isEditing ? (hasAnyPaymentApproved ? 'แก้ไขข้อมูลและประวัติการฝึกอบรม' : 'แก้ไขข้อมูลใบสมัครโครงการ JRE 2027') : 'ใบสมัครโครงการฝึกอบรมเชิงปฏิบัติการ JRE 2027'}
+          {isStaffPortal
+            ? 'ลงทะเบียนข้อมูล Staff & จัดทำบัตรประจำตัว ID Card (JRE 2027)'
+            : isEditing
+              ? (hasAnyPaymentApproved ? 'แก้ไขข้อมูลและประวัติการฝึกอบรม' : 'แก้ไขข้อมูลใบสมัครโครงการ JRE 2027')
+              : 'ใบสมัครโครงการฝึกอบรมเชิงปฏิบัติการ JRE 2027'}
         </h1>
         <p className="text-slate-400 text-xs sm:text-sm">
-          กรอกข้อมูลตามความเป็นจริงเพื่อใช้ในการทำประกันอุบัติเหตุ สวัสดิการความปลอดภัย จัดสรรกลุ่ม และจัดห้องนอน
+          {isStaffPortal
+            ? 'สำหรับคณะทำงาน (ORGANIZING STAFF): กรอกชื่อ-นามสกุล นามเรียกขาน สังกัด และอัปโหลดรูปถ่ายเพื่อออกบัตรประจำตัว Staff ID Card ได้ทันที'
+            : 'กรอกข้อมูลตามความเป็นจริงเพื่อใช้ในการทำประกันอุบัติเหตุ สวัสดิการความปลอดภัย จัดสรรกลุ่ม และจัดห้องนอน'}
         </p>
       </div>
+
+      {isStaffPortal && (
+        <div className="bg-gradient-to-r from-amber-950/70 via-slate-900 to-amber-950/60 border-2 border-amber-400/60 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black uppercase tracking-wider">
+                ⭐ ORGANIZING STAFF PORTAL
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
+                ✓ เปิดให้ Staff ลงทะเบียนและอัปโหลดรูปบัตรได้ตลอดเวลา
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-white">
+              หน้าสำหรับคณะทำงาน (Staff) กรอกข้อมูล & อัปโหลดรูปทำบัตร ID Card
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              กรอกข้อมูลชื่อ-นามสกุล (ไทย/อังกฤษ), ชื่อเล่น, นามเรียกขาน (เช่น <code className="text-amber-300 font-bold">RCP 16-xx</code>), เลือกมหาวิทยาลัย/สังกัด และอัปโหลดรูปถ่ายด้านล่าง แล้วกดปุ่ม <strong className="text-amber-300">"💾 บันทึกข้อมูล Staff & ออกบัตร ID Card ทันที"</strong> ได้เลยโดยไม่ต้องรอแนบสลิป
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleDirectStaffSave}
+            disabled={isSubmitting}
+            className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูล Staff & ออกบัตรทันที'}</span>
+          </button>
+        </div>
+      )}
 
       {statusMessage && (
         <div className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-xs sm:text-sm border shadow-lg animate-in fade-in duration-200 ${
@@ -7135,8 +7340,67 @@ export default function RegisterView({
                         <span className="truncate max-w-xs">{idCardFileName}</span>
                       </p>
                     )}
+                    {fieldErrors.idCardPhoto && (
+                      <p className="text-[11px] text-rose-400 font-bold flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{fieldErrors.idCardPhoto}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
+
+                {/* Live Real-Time ID Card Preview while filling out form */}
+                {(isStaffPortal || isStaff || idCardPhoto || firstNameTh || firstNameEn) && (
+                  <div className="mt-4 pt-4 border-t border-slate-800/90 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        ตัวอย่างบัตรประจำตัวของคุณแบบ Real-Time ({isStaff || isStaffPortal ? 'ORGANIZING STAFF' : 'PARTICIPANT'})
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        ตรวจสอบความถูกต้องของชื่อ นามเรียกขาน และรูปถ่ายบนบัตรได้ทันที
+                      </span>
+                    </div>
+                    <IDCardPreview
+                      registration={{
+                        ...(myRegistration || {}),
+                        id: myRegistration?.id || user?.id || 'STAFF-PREVIEW',
+                        user_id: user?.id || myRegistration?.user_id || 'STAFF-PREVIEW',
+                        user_email: user?.email || myRegistration?.user_email || '',
+                        title_th: titleTh === 'อื่นๆ' ? titleOtherTh : titleTh,
+                        first_name: firstNameTh || firstName,
+                        last_name: lastNameTh || lastName,
+                        first_name_th: firstNameTh || firstName,
+                        last_name_th: lastNameTh || lastName,
+                        institution_abbr_th: institutionAbbrTh,
+                        title_en: titleEn === 'อื่นๆ' ? titleOtherEn : titleEn,
+                        first_name_en: firstNameEn,
+                        last_name_en: lastNameEn,
+                        institution_abbr_en: institutionAbbrEn,
+                        full_name_affiliation: fullNameAffiliation,
+                        nickname: buildNicknameString(nicknameTh, nicknameEn) || nickname,
+                        nickname_th: nicknameTh,
+                        nickname_en: nicknameEn,
+                        callsign: callsign,
+                        member_type: memberType,
+                        unit: unit || (isMsuInstitution(institution) ? 'ชมรมกู้ภัยราชพฤกษ์' : ''),
+                        institution: institution,
+                        affiliation: institution,
+                        blood_group: bloodGroup,
+                        phone: phone,
+                        shirt_size: shirtSize,
+                        id_card_photo: idCardPhoto || myRegistration?.id_card_photo || user?.avatar || '',
+                        user_avatar: user?.avatar || '',
+                        is_staff: Boolean(isStaff || isStaffPortal),
+                        registration_type: (isStaff || isStaffPortal) ? 'staff' : 'participant',
+                        status: 'confirmed'
+                      }}
+                      user={user}
+                      defaultOrientation="portrait"
+                      allowOrientationToggle={false}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -7286,7 +7550,7 @@ export default function RegisterView({
             </div>
 
             {/* Step 1 Bottom Action Button */}
-            <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="pt-4 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-3">
               {isEditing ? (
                 <button
                   type="button"
@@ -7296,14 +7560,29 @@ export default function RegisterView({
                   ❌ ยกเลิกการแก้ไข (คืนค่าเดิม)
                 </button>
               ) : <div />}
-              <button
-                type="button"
-                onClick={handleNextToStep2}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-rescue-600 to-orange-500 hover:from-rescue-500 hover:to-orange-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>ถัดไป: สั่งเสื้อโครงการ JRE 2027 (ขั้นตอนที่ 2)</span>
-                <ArrowRight className="w-5 h-5" />
-              </button>
+
+              <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+                {(isStaffPortal || isStaff) && (
+                  <button
+                    type="button"
+                    onClick={handleDirectStaffSave}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-2xl shadow-xl shadow-amber-500/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-5 h-5" />
+                    <span>{isSubmitting ? 'กำลังบันทึกข้อมูล Staff...' : '💾 บันทึกข้อมูล Staff & ออกบัตร ID Card ทันที'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleNextToStep2}
+                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rescue-600 to-orange-500 hover:from-rescue-500 hover:to-orange-400 text-white font-black rounded-2xl shadow-xl shadow-rescue-600/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>{isStaffPortal || isStaff ? 'หรือ ถัดไป: เลือกไซส์เสื้อ Staff / แนบสลิป (ขั้นตอนที่ 2)' : 'ถัดไป: สั่งเสื้อโครงการ JRE 2027 (ขั้นตอนที่ 2)'}</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         )}

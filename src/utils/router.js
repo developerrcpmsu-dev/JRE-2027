@@ -28,6 +28,9 @@ export function parseCurrentRoute() {
   if (queryOrHash) {
     if (queryOrHash === 'home') return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
     if (queryOrHash === 'schedule') return { mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' };
+    if (queryOrHash === 'staff-register' || queryOrHash === 'staff-signup' || queryOrHash === 'staff-id-card') {
+      return { mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' };
+    }
     if (queryOrHash === 'register' || queryOrHash === 'profile') return { mainTab: 'register', subRoute: null, canonicalPath: '/register' };
     if (queryOrHash === 'dashboard') return { mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' };
     if (queryOrHash === 'chat') return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
@@ -95,7 +98,20 @@ export function parseCurrentRoute() {
   if (first === 'id-card' || first === 'badge' || first === 'badge-card') {
     return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
   }
+  if (
+    first === 'staff-register' ||
+    first === 'staff-signup' ||
+    first === 'staff-id-card' ||
+    first === 'staff-badge' ||
+    (first === 'register' && second === 'staff') ||
+    (first === 'staff' && (second === 'register' || second === 'signup' || second === 'id-card' || !second))
+  ) {
+    return { mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' };
+  }
   if (first === 'register' || first === 'signup' || first === 'apply') {
+    if (url.searchParams.get('role')?.toLowerCase() === 'staff' || url.searchParams.get('staff') === '1') {
+      return { mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' };
+    }
     return { mainTab: 'register', subRoute: 'form', canonicalPath: '/register' };
   }
   if (first === 'dashboard' || first === 'profile' || first === 'account') {
@@ -324,7 +340,11 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'schedule':
       return '/schedule';
     case 'register':
-      return subRoute === 'dashboard' ? '/dashboard' : '/register';
+      if (subRoute === 'dashboard') return '/dashboard';
+      if (subRoute === 'staff') return '/staff-register';
+      return '/register';
+    case 'staff-register':
+      return '/staff-register';
     case 'dashboard':
       return '/dashboard';
     case 'chat':
