@@ -971,8 +971,19 @@ export const getStaffPaymentSummary = (reg) => {
   const staffRoleType = isStaff ? resolveStaffRoleType(reg) : 'participant';
   const matchedOption = STAFF_ROLE_OPTIONS.find(o => o.value === staffRoleType) || STAFF_ROLE_OPTIONS[1];
 
-  const shirtFee = STAFF_SHIRT_FEE; // 280 บาท
-  const accommodationFee = isStaff ? (isMsu ? 0 : STAFF_ACCOMMODATION_FEE) : 0; // มมส = 0 บาท, ต่างมหาลัย = 200 บาท
+  const isIdCardOnlyStaff = Boolean(
+    isStaff && (
+      reg.staff_id_card_only === true ||
+      ((!reg.shirt_size || reg.shirt_size === '-') &&
+       Number(reg.payment_amount || 0) === 0 &&
+       !reg.payment_slip_url &&
+       !reg.installment_1_slip_url &&
+       !reg.installment_2_slip_url)
+    )
+  );
+
+  const shirtFee = isIdCardOnlyStaff ? 0 : STAFF_SHIRT_FEE; // 280 บาท (หรือ 0 บ. กรณีสำรวจทำบัตรอย่างเดียว)
+  const accommodationFee = isIdCardOnlyStaff ? 0 : (isStaff ? (isMsu ? 0 : STAFF_ACCOMMODATION_FEE) : 0); // มมส = 0 บาท, ต่างมหาลัย = 200 บาท
   const totalStaffFee = shirtFee + accommodationFee; // มมส = 280 บาท, ต่างมหาลัย = 480 บาท
 
   const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
@@ -982,7 +993,7 @@ export const getStaffPaymentSummary = (reg) => {
   // ยอดสลิปรอบแรก / สลิปหลัก
   const primarySlipDetected = ocrR1 > 0 ? ocrR1 : (ocrFull > 0 ? ocrFull : 0);
   const isR1MarkedPaid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || primarySlipDetected >= shirtFee;
-  const r1SlipAmount = primarySlipDetected > 0 ? primarySlipDetected : (isR1MarkedPaid ? shirtFee : 0);
+  const r1SlipAmount = isIdCardOnlyStaff ? 0 : (primarySlipDetected > 0 ? primarySlipDetected : (isR1MarkedPaid ? shirtFee : 0));
 
   // คำนวณส่วนเกินจากค่าเสื้อ 280 บ. และนำไปหักลบกับค่าที่พัก 200 บ. (เฉพาะ Staff ต่างมหาวิทยาลัยที่ไม่ใช่ มมส)
   const overpaidShirtAmount = isStaff ? Math.max(0, r1SlipAmount - shirtFee) : 0;
