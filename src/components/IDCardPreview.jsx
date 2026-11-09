@@ -100,6 +100,26 @@ function fitTextWithEllipsis(ctx, text, maxWidth) {
   return `${cut}…`;
 }
 
+export function formatSingleBadgeCallsign(rawCallsign, isDev, isStaff) {
+  let str = String(rawCallsign || '').trim();
+  if (!str || str === '-') {
+    if (isDev) return 'DEVRCPMSU';
+    if (isStaff) return 'ORGANIZING STAFF';
+    return 'JRE 2027';
+  }
+
+  // Remove any pre-existing duplicate tags like (STAFF), (DEVRCPMSU), (DEV), etc.
+  str = str.replace(/\s*\((?:staff|dev|devrcpmsu|คณะทำงาน)\)/gi, '').trim();
+
+  if (isDev) {
+    return `${str} (DEVRCPMSU)`;
+  }
+  if (isStaff) {
+    return `${str} (STAFF)`;
+  }
+  return str;
+}
+
 /**
  * Universal Native ID Card Canvas Generator (FRONT SIDE)
  * Supports:
@@ -181,44 +201,48 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
 
     // 2. Top Header Banner (Official Canva Banner: USIVN Seal Left + 4 Uni Logos Right)
     if (bannerImg) {
-      ctx.drawImage(bannerImg, 0, 0, W, 62);
+      ctx.drawImage(bannerImg, 0, 0, W, 68);
     } else {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, W, 52);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, W, 68);
       if (logoImg) {
-        drawImageContain(ctx, logoImg, 14, 8, 34, 34);
+        drawImageContain(ctx, logoImg, 14, 16, 36, 36);
       }
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#ffffff';
       ctx.font = `900 11px ${fontStack}`;
-      ctx.fillText('JOINT RESPONSE EXERCISE', 54, 20);
+      ctx.fillText('JOINT RESPONSE EXERCISE', 56, 26);
 
-      ctx.fillStyle = isDev ? '#9333ea' : isStaff ? '#ea580c' : '#0284c7';
+      ctx.fillStyle = isDev ? '#a855f7' : isStaff ? '#f59e0b' : '#38bdf8';
       ctx.font = `800 8.5px ${fontStack}`;
-      ctx.fillText('JRE 2027 • 14-15 NOV 2026', 54, 34);
-
-      // Header Right: Role Pill Badge
-      const rolePillW = isDev ? 110 : isStaff ? 132 : 104;
-      const rolePillH = 22;
-      const rolePillX = W - 14 - rolePillW;
-      const rolePillY = 10;
-      ctx.save();
-      drawRoundedRectPath(ctx, rolePillX, rolePillY, rolePillW, rolePillH, 11);
-      ctx.fillStyle = isDev ? '#9333ea' : isStaff ? '#f59e0b' : '#0284c7';
-      ctx.fill();
-      ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
-      ctx.font = `900 8.5px ${fontStack}`;
-      ctx.textAlign = 'center';
-      ctx.fillText(isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
-      ctx.restore();
+      ctx.fillText('JRE 2027 • 14-15 NOV 2026', 56, 42);
     }
+
+    // Role Pill Badge (Top Right of Banner)
+    const rolePillW = isDev ? 116 : isStaff ? 136 : 106;
+    const rolePillH = 22;
+    const rolePillX = W - 14 - rolePillW;
+    const rolePillY = 12;
+    ctx.save();
+    drawRoundedRectPath(ctx, rolePillX, rolePillY, rolePillW, rolePillH, 11);
+    ctx.fillStyle = isDev ? '#7c3aed' : isStaff ? '#f59e0b' : '#0284c7';
+    ctx.fill();
+    ctx.strokeStyle = isDev ? '#22d3ee' : isStaff ? '#fbbf24' : '#38bdf8';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
+    ctx.font = `900 8.5px ${fontStack}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
+    ctx.restore();
 
     // 3. Centered 4:5 Photo Frame (pw=138, ph=168) - Clean with NO bottom strip
     const pw = 138;
     const ph = 168;
     const px = Math.round((W - pw) / 2);
-    const py = 72;
+    const py = 80;
 
     ctx.save();
     drawRoundedRectPath(ctx, px, py, pw, ph, 16);
@@ -237,27 +261,25 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       : isStaff 
       ? 'rgba(250, 204, 21, 0.95)' 
       : 'rgba(56, 189, 248, 0.95)';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
 
-    // 4. Neon Lime Callsign Banner (#d9f929) - Clean Positive Margin, Zero Overlap!
-    const rawCallsign = cardData.callsign && cardData.callsign !== '-' 
-      ? `${cardData.callsign}${isDev ? ' (DEVRCPMSU)' : isStaff ? ' (STAFF)' : ''}`
-      : (isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'JRE-2027');
+    // 4. Role-Specific Callsign Banner - Clean Positive Margin, Zero Overlap!
+    const rawCallsign = formatSingleBadgeCallsign(cardData.callsign, isDev, isStaff);
 
     ctx.font = `900 13px ${monoStack}`;
     const callTextW = ctx.measureText(rawCallsign).width;
-    const callW = Math.min(W - 48, Math.max(140, callTextW + 36));
+    const callW = Math.min(W - 48, Math.max(148, callTextW + 36));
     const callX = Math.round((W - callW) / 2);
     const callY = py + ph + 8;
-    const callH = 26;
+    const callH = 28;
 
     ctx.save();
     drawRoundedRectPath(ctx, callX, callY, callW, callH, 8);
-    ctx.fillStyle = '#d9f929';
+    ctx.fillStyle = isDev ? '#06b6d4' : isStaff ? '#f59e0b' : '#d9f929';
     ctx.fill();
-    ctx.strokeStyle = '#c2e420';
+    ctx.strokeStyle = isDev ? '#22d3ee' : isStaff ? '#fbbf24' : '#c2e420';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -268,26 +290,45 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.fillText(fitTextWithEllipsis(ctx, rawCallsign, callW - 12), callX + callW / 2, callY + callH / 2 + 0.5);
     ctx.restore();
 
-    // 5. Royal Blue Hero Name Block (#1d4ed8) - matching Canva reference
+    // 5. Hero Name Block - distinct theme per role
     const heroX = 24;
-    const heroY = callY + callH + 7;
+    const heroY = callY + callH + 8;
     const heroW = W - 48;
     const hasNickname = Boolean(cardData.nickname && cardData.nickname !== '-');
-    const heroH = hasNickname ? 66 : 52;
+    const heroH = hasNickname ? 74 : 58;
 
     ctx.save();
     drawRoundedRectPath(ctx, heroX, heroY, heroW, heroH, 12);
-    ctx.fillStyle = '#1d4ed8';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(96, 165, 250, 0.6)';
-    ctx.lineWidth = 1.5;
+    if (isDev) {
+      const devGrad = ctx.createLinearGradient(heroX, heroY, heroX + heroW, heroY + heroH);
+      devGrad.addColorStop(0, '#3b0764');
+      devGrad.addColorStop(1, '#1e1b4b');
+      ctx.fillStyle = devGrad;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
+      ctx.lineWidth = 1.5;
+    } else if (isStaff) {
+      const staffGrad = ctx.createLinearGradient(heroX, heroY, heroX + heroW, heroY + heroH);
+      staffGrad.addColorStop(0, '#c2410c'); // Flame orange
+      staffGrad.addColorStop(0.5, '#b45309'); // Amber gold
+      staffGrad.addColorStop(1, '#78350f'); // Deep warm amber
+      ctx.fillStyle = staffGrad;
+      ctx.fill();
+      ctx.strokeStyle = '#fde047'; // Bright gold border
+      ctx.lineWidth = 2;
+    } else {
+      ctx.fillStyle = '#1d4ed8'; // Royal Blue for Participant
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(96, 165, 250, 0.6)';
+      ctx.lineWidth = 1.5;
+    }
     ctx.stroke();
 
-    // Upper Line: Large Neon Lime English Typography (#d9f929)
+    // Upper Line: Large Typography (Cyan for Dev, Bright Warm Gold for Staff, Neon Lime for Participant)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#d9f929';
-    let enNameFontSize = 15;
+    ctx.fillStyle = isStaff ? '#fef08a' : isDev ? '#67e8f9' : '#d9f929';
+    let enNameFontSize = 16;
     ctx.font = `900 ${enNameFontSize}px ${fontStack}`;
     const displayEnName = (cardData.englishName && cardData.englishName !== '-')
       ? cardData.englishName
@@ -296,31 +337,31 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       enNameFontSize -= 0.5;
       ctx.font = `900 ${enNameFontSize}px ${fontStack}`;
     }
-    ctx.fillText(fitTextWithEllipsis(ctx, displayEnName.toUpperCase(), heroW - 20), W / 2, heroY + 16);
+    ctx.fillText(fitTextWithEllipsis(ctx, displayEnName.toUpperCase(), heroW - 20), W / 2, heroY + 19);
 
-    // Lower Line: Clean Thai Full Name (#ffffff)
-    ctx.fillStyle = '#ffffff';
-    let thaiNameFontSize = 12;
+    // Lower Line: Thai Full Name
+    ctx.fillStyle = isStaff ? '#fef3c7' : '#ffffff';
+    let thaiNameFontSize = 12.5;
     ctx.font = `700 ${thaiNameFontSize}px ${fontStack}`;
     while (thaiNameFontSize > 10 && ctx.measureText(cardData.thaiName || '').width > (heroW - 24)) {
       thaiNameFontSize -= 0.5;
       ctx.font = `700 ${thaiNameFontSize}px ${fontStack}`;
     }
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.thaiName, heroW - 20), W / 2, heroY + (hasNickname ? 33 : 36));
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.thaiName, heroW - 20), W / 2, heroY + (hasNickname ? 39 : 41));
 
     // Prominent Nickname badge inside Hero box
     if (hasNickname) {
-      ctx.fillStyle = '#fef08a';
-      ctx.font = `900 11.5px ${fontStack}`;
-      ctx.fillText(`⭐ ชื่อเล่น: ${cardData.nickname}`, W / 2, heroY + 51);
+      ctx.fillStyle = isStaff ? '#fde047' : isDev ? '#a5f3fc' : '#fef08a';
+      ctx.font = `900 12px ${fontStack}`;
+      ctx.fillText(`⭐ ชื่อเล่น: ${cardData.nickname}`, W / 2, heroY + 58);
     }
     ctx.restore();
 
     // 6. Organizational Credentials
     const affX = 24;
-    const affY = heroY + heroH + 6;
+    const affY = heroY + heroH + 8;
     const affW = W - 48;
-    const affH = 40;
+    const affH = hasNickname ? 40 : 44;
 
     ctx.save();
     drawRoundedRectPath(ctx, affX, affY, affW, affH, 10);
@@ -338,13 +379,13 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
 
     ctx.fillStyle = '#ffffff';
     ctx.font = `800 13px ${fontStack}`;
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.affiliation, affW - 24), affX + 12, affY + 28);
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.affiliation, affW - 24), affX + 12, affY + (affH - 12));
     ctx.restore();
 
     const row2Y = affY + affH + 6;
     const colGap = 8;
     const colW = (affW - colGap) / 2;
-    const row2H = 40;
+    const row2H = hasNickname ? 40 : 44;
 
     // Unit Box
     ctx.save();
@@ -363,7 +404,7 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
 
     ctx.fillStyle = '#ffffff';
     ctx.font = `800 12px ${fontStack}`;
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.unit, colW - 24), affX + 12, row2Y + 28);
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.unit, colW - 24), affX + 12, row2Y + (row2H - 12));
     ctx.restore();
 
     // Badge ID Box
@@ -384,16 +425,16 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
 
     ctx.fillStyle = '#fde047';
     ctx.font = `900 12px ${monoStack}`;
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.cardCode, colW - 24), idX + 12, row2Y + 28);
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.cardCode, colW - 24), idX + 12, row2Y + (row2H - 12));
     ctx.restore();
 
-    // 7. Bottom Section: QR Code, Blood Group & Verified Bar
-    const botY = row2Y + row2H + 6;
-    const botH = 102;
+    // 7. Bottom Section: QR Code, Blood Group & Verified Bar (botH=106, bottoms out at 576, leaving balanced 24px bottom space)
+    const botY = 470;
+    const botH = 106;
 
     // QR Code Box (Left)
     const qx = 24;
-    const qw = 100;
+    const qw = 104;
     ctx.save();
     drawRoundedRectPath(ctx, qx, botY, qw, botH, 12);
     ctx.fillStyle = '#ffffff';
@@ -405,12 +446,12 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textBaseline = 'middle';
     ctx.fillStyle = isDev ? '#7e22ce' : isStaff ? '#d97706' : '#0284c7';
     ctx.font = `900 7.5px ${fontStack}`;
-    ctx.fillText(isDev ? 'DEV ADMIN SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN', qx + qw / 2, botY + botH - 10);
+    ctx.fillText(isDev ? 'DEVRCPMSU SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN', qx + qw / 2, botY + botH - 10);
     ctx.restore();
 
     // Blood Group Box with Blood Droplet (Middle)
     const bx = qx + qw + colGap;
-    const bw = 100;
+    const bw = 104;
     ctx.save();
     drawRoundedRectPath(ctx, bx, botY, bw, botH, 12);
     ctx.fillStyle = 'rgba(244, 63, 94, 0.14)';
@@ -423,45 +464,68 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fecdd3';
     ctx.font = `900 8.5px ${fontStack}`;
-    ctx.fillText('🩸 หมู่เลือด', bx + bw / 2, botY + 18);
+    ctx.fillText('🩸 หมู่เลือด', bx + bw / 2, botY + 20);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `900 34px ${monoStack}`;
-    ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, botY + 54);
+    ctx.font = `900 36px ${monoStack}`;
+    ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, botY + 58);
 
     ctx.fillStyle = '#fda4af';
     ctx.font = `800 7.5px ${fontStack}`;
-    ctx.fillText('BLOOD TYPE', bx + bw / 2, botY + 88);
+    ctx.fillText('BLOOD TYPE', bx + bw / 2, botY + 92);
     ctx.restore();
 
-    // Verified Official Badge Box (Right)
+    // Verified Official Badge Box (Right) - Role specific colors
     const vx = bx + bw + colGap;
     const vw = affW - qw - bw - colGap * 2;
     ctx.save();
     drawRoundedRectPath(ctx, vx, botY, vw, botH, 12);
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.14)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#34d399';
-    ctx.font = `900 24px ${fontStack}`;
-    ctx.fillText('🛡️', vx + vw / 2, botY + 30);
-
-    ctx.fillStyle = '#6ee7b7';
-    ctx.font = `900 13px ${fontStack}`;
-    ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
-
-    ctx.fillStyle = '#a7f3d0';
-    ctx.font = `800 8.5px ${fontStack}`;
-    ctx.fillText(
-      isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT',
-      vx + vw / 2,
-      botY + 82
-    );
+    if (isDev) {
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.16)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#a855f7';
+      ctx.font = `900 24px ${fontStack}`;
+      ctx.fillText('🛡️', vx + vw / 2, botY + 30);
+      ctx.fillStyle = '#c084fc';
+      ctx.font = `900 13px ${fontStack}`;
+      ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = `800 8.5px ${fontStack}`;
+      ctx.fillText('DEVRCPMSU', vx + vw / 2, botY + 84);
+    } else if (isStaff) {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.16)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = `900 24px ${fontStack}`;
+      ctx.fillText('⭐', vx + vw / 2, botY + 30);
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = `900 13px ${fontStack}`;
+      ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
+      ctx.fillStyle = '#fde047';
+      ctx.font = `800 8.5px ${fontStack}`;
+      ctx.fillText('ORGANIZING STAFF', vx + vw / 2, botY + 84);
+    } else {
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.14)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#34d399';
+      ctx.font = `900 24px ${fontStack}`;
+      ctx.fillText('🛡️', vx + vw / 2, botY + 30);
+      ctx.fillStyle = '#6ee7b7';
+      ctx.font = `900 13px ${fontStack}`;
+      ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = `800 8.5px ${fontStack}`;
+      ctx.fillText('PARTICIPANT', vx + vw / 2, botY + 84);
+    }
     ctx.restore();
 
     // 8. Bottom Accent Gradient Line & Outer Border
@@ -1565,20 +1629,32 @@ export function CardInnerContentPortrait({
           <img
             src="/images/logo/jre_header_canva.png"
             alt="Joint Response Exercise (JRE 2027)"
-            className="w-full h-[62px] object-cover object-center block"
+            className="w-full h-[64px] object-cover object-center block"
           />
+          {/* Floating Role Pill Badge (Top Right of Banner) */}
+          <div className="absolute right-3 top-3 z-20">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[9px] font-black shadow-md border ${
+              isDev
+                ? 'bg-purple-600 text-white border-cyan-400'
+                : isStaff
+                ? 'bg-amber-400 text-slate-950 border-amber-300'
+                : 'bg-sky-600 text-white border-sky-300'
+            }`}>
+              {isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
+            </span>
+          </div>
         </div>
 
         {/* Card Body */}
-        <div className="flex flex-1 flex-col justify-between px-5 pb-3 pt-1.5">
+        <div className="flex flex-1 flex-col justify-between px-5 pb-3.5 pt-2">
           {/* Centered Photo Section with Callsign Banner (matching user reference) */}
           <div className="flex flex-col items-center justify-center my-0.5">
-            <div className={`relative h-[156px] w-[128px] shrink-0 overflow-hidden rounded-2xl border-2 shadow-2xl ${
+            <div className={`relative h-[164px] w-[134px] shrink-0 overflow-hidden rounded-2xl border-[3px] shadow-2xl ${
               isDev
                 ? 'border-cyan-400 ring-2 ring-purple-500/60 shadow-purple-500/30'
                 : isStaff 
-                ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-amber-500/25' 
-                : 'border-sky-400 ring-2 ring-sky-400/50 shadow-sky-500/25'
+                ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-amber-500/30' 
+                : 'border-sky-400 ring-2 ring-sky-400/60 shadow-sky-500/30'
             }`}>
               <img
                 src={photo}
@@ -1591,35 +1667,51 @@ export function CardInnerContentPortrait({
               />
             </div>
 
-            {/* Neon Lime / Yellow Callsign Banner (e.g. RCP 16-37 (STAFF) or RCP 16-37) - Clean Positive Margin, Zero Overlap! */}
+            {/* Role-Specific Callsign Banner - Clean Positive Margin, Zero Overlap! */}
             <div className="mt-2.5 z-10">
-              <div className="rounded-md bg-[#d9f929] px-4 py-0.5 shadow-xl border border-[#c2e420] text-center">
-                <span className="font-black text-[#07172f] text-[13px] tracking-widest font-mono">
-                  {cardData.callsign && cardData.callsign !== '-'
-                    ? `${cardData.callsign}${isDev ? ' (DEVRCPMSU)' : isStaff ? ' (STAFF)' : ''}`
-                    : isDev
-                    ? 'DEVRCPMSU'
-                    : isStaff
-                    ? 'ORGANIZING STAFF'
-                    : 'JRE 2027'}
+              <div className={`rounded-md px-4 py-0.5 shadow-xl border text-center ${
+                isDev
+                  ? 'bg-cyan-400 border-cyan-300 text-slate-950'
+                  : isStaff
+                  ? 'bg-amber-400 border-amber-300 text-slate-950'
+                  : 'bg-[#d9f929] border-[#c2e420] text-[#07172f]'
+              }`}>
+                <span className="font-black text-[13px] tracking-widest font-mono">
+                  {formatSingleBadgeCallsign(cardData.callsign, isDev, isStaff)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Royal Blue Hero Name Block with Large Neon Text (matching user reference) */}
-          <div className="w-full rounded-xl bg-[#1d4ed8] px-3 py-2 text-center shadow-xl border border-blue-400/50 my-1">
-            <span className="block font-black tracking-tight text-[#d9f929] text-[15px] sm:text-[16px] leading-tight uppercase truncate" title={cardData.englishName}>
+          {/* Hero Name Block with Distinct Role Theme */}
+          <div className={`w-full rounded-xl px-3 py-2 text-center shadow-xl border-2 my-1 ${
+            isDev
+              ? 'bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 border-cyan-400/60 shadow-purple-950/50'
+              : isStaff
+              ? 'bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 border-yellow-300 shadow-amber-950/50'
+              : 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 border-blue-400/60 shadow-blue-950/50'
+          }`}>
+            <span className={`block font-black tracking-tight text-[15px] sm:text-[16px] leading-tight uppercase truncate ${
+              isDev ? 'text-cyan-300' : isStaff ? 'text-yellow-100' : 'text-[#d9f929]'
+            }`} title={cardData.englishName}>
               {cardData.englishName && cardData.englishName !== '-' ? cardData.englishName : cardData.thaiName}
             </span>
-            <span className="block text-[11.5px] font-bold text-white leading-tight mt-0.5 truncate" title={cardData.thaiName}>
+            <span className={`block text-[11.5px] font-bold leading-tight mt-0.5 truncate ${
+              isStaff ? 'text-amber-100' : 'text-white'
+            }`} title={cardData.thaiName}>
               {cardData.thaiName}
             </span>
             {cardData.nickname && cardData.nickname !== '-' && (
               <div className="mt-1 flex items-center justify-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/25 px-3 py-0.5 text-[13px] font-black text-amber-200 border border-amber-300/50 shadow-sm">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[12px] font-black border shadow-sm ${
+                  isDev
+                    ? 'bg-purple-500/30 border-purple-400/50 text-cyan-200'
+                    : isStaff
+                    ? 'bg-yellow-400/30 border-yellow-200 text-yellow-100'
+                    : 'bg-sky-400/25 border-sky-300/50 text-sky-100'
+                }`}>
                   <span>⭐ ชื่อเล่น:</span>
-                  <span className="text-white font-black">{cardData.nickname}</span>
+                  <span className="font-black">{cardData.nickname}</span>
                 </span>
               </div>
             )}
@@ -1627,7 +1719,7 @@ export function CardInnerContentPortrait({
 
           {/* Organizational Credentials */}
           <div className="space-y-1.5 pt-0.5">
-            <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-1.5 shadow-inner">
+            <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 shadow-inner">
               <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
                 สังกัดสถาบัน / Affiliation
               </span>
@@ -1637,7 +1729,7 @@ export function CardInnerContentPortrait({
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
-              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-1.5 shadow-inner">
+              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 shadow-inner">
                 <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
                   หน่วย / Unit
                 </span>
@@ -1646,7 +1738,7 @@ export function CardInnerContentPortrait({
                 </span>
               </div>
 
-              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-1.5 shadow-inner">
+              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 shadow-inner">
                 <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
                   รหัสบัตร / Badge ID
                 </span>
@@ -1678,14 +1770,14 @@ export function CardInnerContentPortrait({
             </div>
 
             {/* Blood Type Box with Blood Drop Icon */}
-            <div className="flex w-[104px] shrink-0 flex-col justify-between rounded-xl border border-rose-500/50 bg-rose-500/15 p-1.5 text-center shadow-sm">
+            <div className="flex w-[104px] shrink-0 flex-col justify-between rounded-xl border border-rose-500/50 bg-rose-500/15 p-2 text-center shadow-sm">
               <div className="flex items-center justify-center gap-1">
                 <Droplet className="w-3.5 h-3.5 fill-rose-500 text-rose-400 shrink-0" />
                 <span className="block text-[8.5px] font-black uppercase tracking-wider text-rose-200 leading-none">
                   หมู่เลือด
                 </span>
               </div>
-              <strong className="block text-[30px] font-black leading-none text-white my-auto font-mono">
+              <strong className="block text-[32px] font-black leading-none text-white my-auto font-mono">
                 {cardData.bloodGroup || '-'}
               </strong>
               <span className="block text-[7.5px] font-bold text-rose-300 uppercase leading-none">
@@ -1694,12 +1786,24 @@ export function CardInnerContentPortrait({
             </div>
 
             {/* Clean Official Verified Box with Role tag */}
-            <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-2 text-center shadow-sm">
-              <ShieldCheck className="h-6 w-6 text-emerald-400 shrink-0" />
-              <strong className="mt-1 block text-[13px] font-black tracking-wider text-emerald-300 leading-tight">
+            <div className={`flex flex-1 flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm ${
+              isDev
+                ? 'border-purple-500/50 bg-purple-500/15'
+                : isStaff
+                ? 'border-amber-500/50 bg-amber-500/15'
+                : 'border-emerald-500/40 bg-emerald-500/15'
+            }`}>
+              <ShieldCheck className={`h-6 w-6 shrink-0 ${
+                isDev ? 'text-purple-400' : isStaff ? 'text-amber-400' : 'text-emerald-400'
+              }`} />
+              <strong className={`mt-1 block text-[13px] font-black tracking-wider leading-tight ${
+                isDev ? 'text-purple-300' : isStaff ? 'text-amber-300' : 'text-emerald-300'
+              }`}>
                 ✓ VERIFIED
               </strong>
-              <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-wider text-emerald-200/90 leading-tight">
+              <span className={`mt-0.5 block text-[8px] font-bold uppercase tracking-wider leading-tight ${
+                isDev ? 'text-cyan-300' : isStaff ? 'text-yellow-300' : 'text-emerald-200/90'
+              }`}>
                 {isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT'}
               </span>
             </div>
