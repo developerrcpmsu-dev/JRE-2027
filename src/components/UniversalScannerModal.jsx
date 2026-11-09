@@ -34,6 +34,7 @@ import IDCardPreview from './IDCardPreview';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode, parseIdCardPayload } from '../utils/idCard';
+import { resolveFullAgeDetail } from '../utils/ageCalculator';
 import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, resolvePersonFullNameWithTitle, resolveUniversityInfo } from '../data/defaultData';
 
 /**
@@ -1443,6 +1444,9 @@ export default function UniversalScannerModal({
                               </span>
                               <span className="rounded-md border border-rose-400/40 bg-rose-500/15 px-2 py-0.5 text-[11px] font-black text-rose-200">
                                 🩸 หมู่เลือด: {participantCardData?.bloodGroup || '-'}
+                              </span>
+                              <span className="rounded-md border border-sky-400/40 bg-sky-500/15 px-2 py-0.5 text-[11px] font-bold text-sky-200">
+                                🎂 อายุ: {resolveFullAgeDetail(p).formatted}
                               </span>
                             </div>
 

@@ -129,7 +129,7 @@ import {
 } from '../utils/registrationSchedule';
 import * as XLSX from 'xlsx';
 import { resolveUserExtraDetails } from '../utils/userUtils';
-import { calculateAgeDetailed } from '../utils/ageCalculator';
+import { calculateAgeDetailed, resolveFullAgeDetail } from '../utils/ageCalculator';
 import {
   TITLE_THAI_OPTIONS,
   TITLE_ENGLISH_OPTIONS,
@@ -2322,10 +2322,11 @@ export default function AdminDashboardView({
     setModalEmail(reg.user_email || reg.email || '');
     setModalUnit(resolvedMemberTypeInfo.unitDisplay || reg.unit || '');
     setModalAffiliation(reg.affiliation || resolvedAbbrTh || reg.institution || '');
+    const resolvedAge = resolveFullAgeDetail(reg);
     setModalDob(reg.dob || '');
-    setModalAgeYears(Number(reg.age_years) || 0);
-    setModalAgeMonths(Number(reg.age_months) || 0);
-    setModalAgeDays(Number(reg.age_days) || 0);
+    setModalAgeYears(resolvedAge.years);
+    setModalAgeMonths(resolvedAge.months);
+    setModalAgeDays(resolvedAge.days);
     setModalBloodGroup(reg.blood_group || 'O');
     setModalEmergencyName(reg.emergency_name || '');
     setModalEmergencyPhone(reg.emergency_phone || '');
@@ -4501,7 +4502,7 @@ export default function AdminDashboardView({
         esc(idPhoto || 'ยังไม่แนบ'),
         esc(r.user_email || '-'),
         esc(r.dob || '-'),
-        esc(`${r.age_years || 0} ปี ${r.age_months || 0} เดือน`),
+        esc(resolveFullAgeDetail(r).formatted),
         esc(r.blood_group || '-'),
         esc(r.installment_1_status || '-'),
         esc(s1 ? `=IMAGE("${s1}")` : 'ยังไม่แนบ'),
@@ -9476,8 +9477,8 @@ export default function AdminDashboardView({
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-semibold text-rescue-300 mb-1">อายุ (ปี / เดือน)</label>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <label className="block text-[11px] font-semibold text-rescue-300 mb-1">อายุ (ปี / เดือน / วัน)</label>
+                      <div className="grid grid-cols-3 gap-1">
                         <input
                           type="number"
                           min="0"
@@ -9486,7 +9487,7 @@ export default function AdminDashboardView({
                           onChange={e => setModalAgeYears(e.target.value)}
                           placeholder="ปี"
                           title="อายุ (ปี)"
-                          className={`w-full px-2 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
+                          className={`w-full px-1.5 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
                             !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
                           }`}
                         />
@@ -9499,11 +9500,27 @@ export default function AdminDashboardView({
                           onChange={e => setModalAgeMonths(e.target.value)}
                           placeholder="เดือน"
                           title="อายุ (เดือน)"
-                          className={`w-full px-2 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
+                          className={`w-full px-1.5 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
+                            !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
+                          }`}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max="31"
+                          disabled={!isEditingProfileModal}
+                          value={modalAgeDays}
+                          onChange={e => setModalAgeDays(e.target.value)}
+                          placeholder="วัน"
+                          title="อายุ (วัน)"
+                          className={`w-full px-1.5 py-2 rounded-xl text-xs text-white font-mono text-center transition-all ${
                             !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' : 'bg-slate-900 border border-slate-700'
                           }`}
                         />
                       </div>
+                      <span className="block text-[10px] text-emerald-400 font-bold mt-1">
+                        {modalAgeYears || 0} ปี {modalAgeMonths || 0} เดือน {modalAgeDays || 0} วัน
+                      </span>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-[11px] font-semibold text-rose-300 mb-1">กรุ๊ปเลือด</label>

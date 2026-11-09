@@ -59,7 +59,7 @@ import {
   Tag
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { calculateAgeDetailed } from '../utils/ageCalculator';
+import { calculateAgeDetailed, resolveFullAgeDetail } from '../utils/ageCalculator';
 import { DataService, ensureHostedUrl } from '../supabase';
 import PDPAModal from '../components/PDPAModal';
 import Toast from '../components/Toast';
@@ -3550,7 +3550,7 @@ export default function RegisterView({
                   <div className="min-w-0 text-[10px] text-slate-400 space-y-0.5">
                     <span className="font-mono text-sky-300 block truncate font-bold">📡 {myRegistration.callsign || '-'}</span>
                     <span className="text-amber-300 block">ชื่อเล่น: {myRegistration.nickname || '-'}</span>
-                    <span className="text-slate-400 block">อายุ: {myRegistration.age_years || 0} ปี ({myRegistration.blood_group})</span>
+                    <span className="text-slate-400 block">อายุ: {resolveFullAgeDetail(myRegistration).formatted} ({myRegistration.blood_group || '-'})</span>
                   </div>
                 </div>
               </div>
@@ -4901,7 +4901,7 @@ export default function RegisterView({
               <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                 <span className="text-slate-400 block mb-0.5">อายุที่คำนวณได้:</span>
                 <span className="font-bold text-rescue-400 text-sm">
-                  {myRegistration.age_years || 0} ปี {myRegistration.age_months || 0} เดือน {myRegistration.age_days || 0} วัน
+                  {resolveFullAgeDetail(myRegistration).formatted}
                 </span>
                 <span className="text-[10px] text-slate-500 block mt-0.5">
                   เกิดวันที่: {myRegistration.dob || '-'} (พ.ศ.)

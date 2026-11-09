@@ -18,6 +18,7 @@ import {
   resolvePersonFullNameWithTitle
 } from '../data/defaultData';
 import { DataService, ensureHostedUrl } from '../supabase';
+import { resolveFullAgeDetail } from './ageCalculator';
 
 const THAI_HONORIFIC_TITLES = [
   'นาย', 'นางสาว', 'นาง', 'ด.ช.', 'ด.ญ.', 'ว่าที่ ร.ต.', 'ว่าที่ร้อยตรี',
@@ -518,7 +519,7 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       nickname: r.nickname || (r.nickname_th && r.nickname_en ? `${r.nickname_th} / ${r.nickname_en}` : (r.nickname_th || r.nickname_en || '-')),
       email: r.user_email || '-',
       dob: r.dob || '-',
-      age_full: `${r.age_years || 0} ปี ${r.age_months || 0} เดือน ${r.age_days || 0} วัน`,
+      age_full: resolveFullAgeDetail(r).formatted,
       blood_group: r.blood_group || '-',
       emergency_relation: r.emergency_relation || '-',
       institution_tier: isStaff ? `Staff ${uniInfo.shortTag} (${staffSum.isMsu ? 'เสื้อ 280 บ.' : 'เสื้อ 280 + ที่พัก 200 = 480 บ.'})` : (isMsu ? 'นิสิต มมส (650 บาท)' : 'สถาบันภายนอก (850 บาท)'),

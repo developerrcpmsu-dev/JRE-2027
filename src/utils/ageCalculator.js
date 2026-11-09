@@ -5,6 +5,29 @@
  */
 
 export function calculateAgeDetailed(birthYear, birthMonth, birthDay) {
+  // Support passing a single date string ("DD/MM/YYYY" or "YYYY-MM-DD")
+  if (typeof birthYear === 'string' && !birthMonth && !birthDay) {
+    const raw = birthYear.trim();
+    if (raw.includes('/')) {
+      const parts = raw.split('/').map((p) => parseInt(p.trim(), 10));
+      if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+        // Check if format is DD/MM/YYYY or YYYY/MM/DD
+        if (parts[0] > 31) {
+          return calculateAgeDetailed(parts[0], parts[1], parts[2]);
+        }
+        return calculateAgeDetailed(parts[2], parts[1], parts[0]);
+      }
+    } else if (raw.includes('-')) {
+      const parts = raw.split('-').map((p) => parseInt(p.trim(), 10));
+      if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+        if (parts[0] > 31) {
+          return calculateAgeDetailed(parts[0], parts[1], parts[2]);
+        }
+        return calculateAgeDetailed(parts[2], parts[1], parts[0]);
+      }
+    }
+  }
+
   if (!birthYear || !birthMonth || !birthDay) {
     return { years: 0, months: 0, days: 0, formatted: '-' };
   }
@@ -40,6 +63,36 @@ export function calculateAgeDetailed(birthYear, birthMonth, birthDay) {
     years--;
     months += 12;
   }
+
+  return {
+    years,
+    months,
+    days,
+    formatted: `${years} ปี ${months} เดือน ${days} วัน`
+  };
+}
+
+/**
+ * Resolve full age (years, months, days) from a registration record.
+ * Computes live from `dob` when available so months & days are always accurate,
+ * and falls back to stored `age_years`, `age_months`, `age_days`.
+ */
+export function resolveFullAgeDetail(reg = {}) {
+  if (!reg || typeof reg !== 'object') {
+    return { years: 0, months: 0, days: 0, formatted: '0 ปี 0 เดือน 0 วัน' };
+  }
+
+  if (reg.dob && typeof reg.dob === 'string' && reg.dob.trim() && reg.dob.trim() !== '-') {
+    const fromDob = calculateAgeDetailed(reg.dob.trim());
+    if (fromDob && fromDob.years > 0) {
+      // If stored age_months or age_days were explicitly provided and non-zero, or if they were 0/missing, fromDob gives exact years/months/days
+      return fromDob;
+    }
+  }
+
+  const years = Number(reg.age_years) || 0;
+  const months = Number(reg.age_months) || 0;
+  const days = Number(reg.age_days) || 0;
 
   return {
     years,
