@@ -42,19 +42,9 @@ export default function IDCardView({
             </span>
           </div>
           <h1 className="mt-3 text-2xl font-black text-white sm:text-3xl">บัตรประจำตัวผู้เข้าร่วมโครงการ</h1>
-          <p className="mt-1 text-xs leading-relaxed text-slate-400 sm:text-sm">
-            ใช้รูปถ่ายและข้อมูลจากใบสมัครจริง • บัตรขนาดแนวตั้ง 1200 × 1500 PX (CR100 Standard) และ CR80 • QR Code สำหรับเจ้าหน้าที่ Admin สแกนตรวจสอบ (Universal Scanner)
-          </p>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <a
-            href="/admin/id-cards"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-2.5 text-xs font-bold text-orange-200 transition-colors hover:bg-orange-500/20"
-          >
-            🪪 รวมบัตรทุกคน (/admin/id-cards)
-          </a>
-
           {onNavigateDashboard && (
             <button
               type="button"

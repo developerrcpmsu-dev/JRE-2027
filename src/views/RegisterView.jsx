@@ -2657,21 +2657,10 @@ export default function RegisterView({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">JRE 2027 Participant Badge</p>
-                <span className="rounded-full border border-orange-500/35 bg-orange-500/15 px-2 py-0.5 text-[9px] font-black text-orange-300 font-mono">
-                  แนวตั้ง 1200 × 1500 PX
-                </span>
               </div>
               <h2 className="mt-1 text-lg font-black text-white sm:text-xl">บัตรประจำตัวดิจิทัลของฉัน</h2>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">บัตรนี้สร้างจากข้อมูลผู้สมัครจริงและใช้ QR สำหรับ Admin ตรวจสอบประวัติ (Universal Scanner)</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <a
-                href="/admin/id-cards"
-                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-orange-500/40 bg-orange-500/15 px-3 py-1.5 text-[10.5px] font-bold text-orange-200 hover:bg-orange-500/30 transition-colors"
-                title="หน้ารวมบัตร ID Card ของทุกคนเรียงตาม Staff และ มหาวิทยาลัย"
-              >
-                🪪 รวมบัตรทุกคน (/admin/id-cards)
-              </a>
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold text-emerald-300">
                 <CheckCircle2 className="h-3.5 w-3.5" /> ข้อมูลเชื่อมต่อแล้ว
               </span>
@@ -3033,7 +3022,7 @@ export default function RegisterView({
                     🎉 ข้อมูลและบัตรประจำตัว Staff (ORGANIZING STAFF) พร้อมใช้งานแล้ว
                   </h2>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    ข้อมูลของท่านถูกซิงก์เข้าสู่ระบบรวมบัตรประจำตัวทุกคน (<code className="text-amber-300">/admin/id-cards</code>) และระบบสแกน QR ตรวจสอบสถานะเรียบร้อยแล้ว (รอบนี้ไม่มีการชำระเงินและไม่มีการสั่งเสื้อ)
+                    ข้อมูลของท่านถูกซิงก์เข้าสู่ระบบและออกบัตรประจำตัวพร้อม QR ตรวจสอบสถานะเรียบร้อยแล้ว (รอบนี้ไม่มีการชำระเงินและไม่มีการสั่งเสื้อ)
                   </p>
                 </div>
               </div>

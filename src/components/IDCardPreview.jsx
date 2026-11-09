@@ -1448,15 +1448,7 @@ export default function IDCardPreview({
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
                 Online Sync
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[9px] font-bold font-mono">
-                {isPortrait ? 'แนวตั้ง 1200×1500 PX' : 'แนวนอน CR80'}
-              </span>
             </div>
-            <p className="mt-0.5 text-[11px] text-slate-400">
-              {isPortrait
-                ? 'บัตรจริงเชื่อมกับข้อมูลใบสมัครของบุคคลนี้โดยตรง (แนวตั้ง 1200 × 1500 PX / CR100 Standard)'
-                : 'บัตรจริงเชื่อมกับข้อมูลใบสมัครของบุคคลนี้โดยตรง (CR80 Standard แนวนอน)'}
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1594,17 +1586,6 @@ export default function IDCardPreview({
               <Printer className="h-3.5 w-3.5" />
               พิมพ์ / PDF
             </button>
-
-            {(cardData.isDev || user?.role === 'admin' || user?.role === 'dev' || user?.is_admin) && (
-              <a
-                href="/admin/id-cards?studio=1"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/50 bg-gradient-to-r from-purple-600/80 to-cyan-600/80 px-3 py-2 text-[11px] font-black text-white shadow-md shadow-purple-500/20 hover:brightness-110 cursor-pointer"
-                title="เปิดสตูดิโอปรับแต่งรูปแบบบัตรกลางสำหรับ Dev (ขยับตำแหน่ง ย่อ-ขยายขนาด ทุกจุด)"
-              >
-                <Edit3 className="h-3.5 w-3.5" />
-                ตั้งค่ารูปแบบบัตรกลาง (Dev)
-              </a>
-            )}
           </div>
         </div>
       )}
