@@ -114,11 +114,14 @@ import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
 import CateringHealthModal from '../components/CateringHealthModal';
 import CateringHealthView from './CateringHealthView';
+import AdminIDCardsDirectoryView from './AdminIDCardsDirectoryView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import ShirtOrderPrintModal from '../components/ShirtOrderPrintModal';
 import RegistrationCountdown from '../components/RegistrationCountdown';
+import SlipGalleryModal from '../components/SlipGalleryModal';
+import { collectRegistrationSlips } from '../utils/slipGallery';
 import { 
   formatDateTimeLocalInput, 
   formatThaiDateTime, 
@@ -165,6 +168,7 @@ export default function AdminDashboardView({
   onAdminLogout
 }) {
   const resolveDedicatedSubpage = (tab) => {
+    if (tab === 'id-cards' || tab === 'id-card' || tab === 'idcards' || tab === 'badges' || tab === 'badge' || tab === 'all-badges') return 'id-cards';
     if (tab === 'staff-accommodation' || tab === 'staff_accommodation' || tab === 'staff-hotel' || tab === 'staff-refund') return 'staff-accommodation';
     if (tab === 'full-payment' || tab === 'full-plan' || tab === 'full_plan') return 'full-payment';
     if (tab === 'round1-paid' || tab === 'partial-paid' || tab === 'partial_paid' || tab === 'installment-round1') return 'round1-paid';
@@ -282,7 +286,10 @@ export default function AdminDashboardView({
       return;
     }
     setDedicatedSubpage(subKey);
-    if (subKey === 'staff-accommodation') {
+    if (subKey === 'id-cards' || subKey === 'id-card' || subKey === 'badges') {
+      setDedicatedSubpage('id-cards');
+      if (onTabChange) onTabChange('id-cards');
+    } else if (subKey === 'staff-accommodation') {
       setFilterType('staff');
       setRoleFilter('staff');
       if (onTabChange) onTabChange('staff-accommodation');
@@ -1204,6 +1211,107 @@ export default function AdminDashboardView({
 
   // Preview Slip Modal
   const [previewSlipUrl, setPreviewSlipUrl] = useState(null);
+  // Multi-slip gallery (รองรับผู้สมัครที่มีสลิป 2-3 รูป)
+  const [slipGallery, setSlipGallery] = useState(null);
+  const openSlipGallery = (reg, slips) => {
+    const list = slips || collectRegistrationSlips(reg);
+    if (!list.length) return;
+    const uniInfo = resolveUniversityInfo(reg);
+    setSlipGallery({
+      title: resolvePersonFullNameWithTitle(reg).fullName + (reg.nickname ? ` (${reg.nickname})` : ''),
+      subtitle: uniInfo?.shortTag ? `🏛️ ${uniInfo.shortTag}` : '',
+      slips: list
+    });
+  };
+  // ปุ่มเปิดแกลเลอรีสลิป (ใช้ซ้ำได้ทุกตาราง / การ์ด / modal) แสดงจำนวนรูปเมื่อมี 1, 2 หรือ 3 รูปขึ้นไป
+  const renderSlipGalleryButton = (reg, variant = 'chip') => {
+    const slips = collectRegistrationSlips(reg);
+    if (!slips.length) return null;
+    const count = slips.length;
+
+    if (variant === 'block') {
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openSlipGallery(reg, slips);
+          }}
+          title={slips.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}
+          className="w-full justify-center py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-600/30 via-indigo-600/30 to-purple-600/30 hover:from-purple-600/50 hover:to-indigo-600/50 text-white border border-purple-400/50 text-xs font-black flex items-center gap-2 cursor-pointer shadow-lg transition-all"
+        >
+          <Eye className="w-4 h-4 text-purple-300" />
+          <span>ดูสลิปทั้งหมดของผู้สมัคร ({count} รูป)</span>
+          {count > 1 && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              count >= 3 ? 'bg-amber-400 text-slate-950' : 'bg-purple-500 text-white'
+            }`}>
+              {count >= 3 ? `${count} รูป (3 รอบ)` : '2 รูป (2 รอบ)'}
+            </span>
+          )}
+        </button>
+      );
+    }
+
+    if (variant === 'table') {
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openSlipGallery(reg, slips);
+          }}
+          title={slips.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black cursor-pointer transition-all shadow-sm ${
+            count >= 3
+              ? 'bg-gradient-to-r from-amber-500/25 via-rose-500/25 to-purple-500/25 hover:from-amber-500/40 hover:to-purple-500/40 text-amber-200 border border-amber-400/60 ring-1 ring-amber-400/30'
+              : count === 2
+              ? 'bg-gradient-to-r from-purple-500/25 to-indigo-500/25 hover:from-purple-500/40 hover:to-indigo-500/40 text-purple-200 border border-purple-400/60 ring-1 ring-purple-400/30'
+              : 'bg-slate-800/80 hover:bg-slate-700/80 text-purple-300 border border-slate-700 hover:border-purple-400/40'
+          }`}
+        >
+          <Eye className={`w-3.5 h-3.5 ${count >= 3 ? 'text-amber-400' : count === 2 ? 'text-purple-300' : 'text-purple-400'}`} />
+          <span>ดูสลิป</span>
+          {count > 1 ? (
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black leading-none ${
+              count >= 3 ? 'bg-amber-400 text-slate-950 shadow' : 'bg-purple-500 text-white shadow'
+            }`}>
+              {count} รูป
+            </span>
+          ) : (
+            <span className="text-[10px] text-slate-400 font-normal">(1)</span>
+          )}
+        </button>
+      );
+    }
+
+    // Default 'chip'
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          openSlipGallery(reg, slips);
+        }}
+        title={slips.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold cursor-pointer transition-all ${
+          count >= 2
+            ? 'bg-purple-600/30 hover:bg-purple-600/50 text-white border border-purple-400/50 shadow-sm'
+            : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700'
+        }`}
+      >
+        <Eye className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+        <span>สลิป</span>
+        {count > 1 && (
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black leading-none ${
+            count >= 3 ? 'bg-amber-400 text-slate-950' : 'bg-purple-500 text-white'
+          }`}>
+            {count} รูป
+          </span>
+        )}
+      </button>
+    );
+  };
 
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [handoverLoadingId, setHandoverLoadingId] = useState(null);
@@ -5501,6 +5609,7 @@ export default function AdminDashboardView({
               className="w-full px-4 py-3 bg-slate-900 border-2 border-purple-500/60 rounded-2xl text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 shadow-xl shadow-purple-950/40 cursor-pointer"
             >
               <option value="applicants">📋 จัดการผู้สมัครทั้งหมด ({registrations.length} คน)</option>
+              <option value="sub_id-cards">🪪 รวมบัตร ID Card แนวตั้ง 1200×1500 & ส่งออกปริ้น ({registrations.length} ใบ)</option>
               <option value="sub_staff-accommodation">🏨 สรุปค่าที่พัก Staff & โอนเงินคืน ({staffAndRefundMetrics.allStaff.length} คน)</option>
               <option value="sub_full-payment">💳 แผนจ่ายครบ 1 รอบ ({regMetrics.fullPlanCount} คน • ชำระครบ {regMetrics.fullPlanPaidCount} คน)</option>
               <option value="sub_round1-paid">⏳ ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน)</option>
@@ -5531,6 +5640,17 @@ export default function AdminDashboardView({
           >
             <Users className="w-4 h-4 shrink-0" />
             <span>จัดการผู้สมัคร ({registrations.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleNavigateSubpage('id-cards')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              dedicatedSubpage === 'id-cards'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-lg shadow-orange-500/30 ring-2 ring-orange-400/40 font-black'
+                : 'text-orange-300 hover:text-white bg-orange-950/30 hover:bg-orange-900/40 border border-orange-500/40'
+            }`}
+          >
+            <span>🪪 รวมบัตร ID Card ({registrations.length})</span>
           </button>
 
           <button
@@ -5735,6 +5855,7 @@ export default function AdminDashboardView({
                     </button>
                     <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                     <span className="font-bold text-white">
+                      {dedicatedSubpage === 'id-cards' && '🪪 รวมบัตรประจำตัว CR100 (1200×1500 PX) & ส่งออกปริ้น'}
                       {dedicatedSubpage === 'staff-accommodation' && '🏨 ค่าที่พัก Staff & โอนเงินคืน'}
                       {dedicatedSubpage === 'full-payment' && '💳 แผนจ่ายครบ 1 รอบ'}
                       {dedicatedSubpage === 'round1-paid' && '⏳ ชำระงวด 1 (ค้างงวด 2)'}
@@ -5819,6 +5940,18 @@ export default function AdminDashboardView({
                   <span className="text-[11px] font-bold text-slate-400 shrink-0">เมนูหน้าเฉพาะทาง:</span>
                   <button
                     type="button"
+                    onClick={() => handleNavigateSubpage('id-cards')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      dedicatedSubpage === 'id-cards'
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-black shadow-lg shadow-orange-500/30 ring-2 ring-orange-400/40'
+                        : 'bg-slate-900/90 text-orange-300 hover:text-white border border-orange-500/30'
+                    }`}
+                  >
+                    <span>🪪 รวมบัตร ID Card ({registrations.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => handleNavigateSubpage('staff-accommodation')}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                       dedicatedSubpage === 'staff-accommodation'
@@ -5894,6 +6027,19 @@ export default function AdminDashboardView({
                   </button>
                 </div>
               </div>
+
+              {/* ========================================================
+                  PAGE 0: ID CARDS & BADGES DIRECTORY (1200 x 1500 PX)
+                  ======================================================== */}
+              {dedicatedSubpage === 'id-cards' && (
+                <AdminIDCardsDirectoryView
+                  registrations={registrations}
+                  user={user}
+                  isAdmin={true}
+                  onNavigateBack={() => handleNavigateSubpage('applicants')}
+                  onOpenScanner={() => setShowUniversalScanner(true)}
+                />
+              )}
 
               {/* ========================================================
                   PAGE 1: STAFF ACCOMMODATION & OVERPAY REFUND
@@ -6379,6 +6525,7 @@ export default function AdminDashboardView({
                                             <span>แจ้งจ่าย {ss.accommodationRemaining} บ.</span>
                                           </button>
                                         )}
+                                        {renderSlipGalleryButton(sr)}
                                         <span className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[11px] font-bold">
                                           เปิดจัดการ
                                         </span>
@@ -6555,6 +6702,7 @@ export default function AdminDashboardView({
                                         <span>แจ้งจ่าย {ss.accommodationRemaining} บ.</span>
                                       </button>
                                     )}
+                                    {renderSlipGalleryButton(sr)}
                                     <span className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-200 border border-purple-500/40 text-xs font-bold">
                                       จัดการ
                                     </span>
@@ -6743,7 +6891,7 @@ export default function AdminDashboardView({
                                   : (r1Paid && r2Paid ? totalFee : r1Paid ? 400 : 0);
                                 
                                 const outAmt = Math.max(0, totalFee - paidAmt);
-                                const slipUrl = reg.payment_slip_url || reg.installment_1_slip_url || reg.installment_2_slip_url;
+                                const rowSlips = collectRegistrationSlips(reg);
 
                                 return (
                                   <tr
@@ -6820,16 +6968,23 @@ export default function AdminDashboardView({
                                     </td>
 
                                     <td className="py-3 px-3 text-center whitespace-nowrap">
-                                      {slipUrl ? (
-                                        <a
-                                          href={slipUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="text-purple-400 hover:text-purple-300 underline font-bold"
+                                      {rowSlips.length > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openSlipGallery(reg, rowSlips);
+                                          }}
+                                          title={rowSlips.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}
+                                          className="inline-flex items-center gap-1 text-purple-400 hover:text-purple-300 underline font-bold cursor-pointer"
                                         >
-                                          ดูสลิป
-                                        </a>
+                                          <span>ดูสลิป</span>
+                                          {rowSlips.length > 1 && (
+                                            <span className="no-underline px-1.5 py-0.5 rounded-full bg-purple-600/40 text-purple-100 border border-purple-500/50 text-[10px] font-black">
+                                              {rowSlips.length} รูป
+                                            </span>
+                                          )}
+                                        </button>
                                       ) : (
                                         <span className="text-slate-600">-</span>
                                       )}
@@ -6885,7 +7040,7 @@ export default function AdminDashboardView({
                               ? ((r1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal)
                               : (r1Paid && r2Paid ? totalFee : r1Paid ? 400 : 0);
                             const outAmt = Math.max(0, totalFee - paidAmt);
-                            const slipUrl = reg.payment_slip_url || reg.installment_1_slip_url || reg.installment_2_slip_url;
+                            const cardSlips = collectRegistrationSlips(reg);
 
                             return (
                               <div
@@ -6941,16 +7096,17 @@ export default function AdminDashboardView({
                                   </div>
 
                                   <div className="flex items-center gap-1.5">
-                                    {slipUrl && (
-                                      <a
-                                        href={slipUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        onClick={e => e.stopPropagation()}
-                                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold border border-slate-700"
+                                    {cardSlips.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openSlipGallery(reg, cardSlips);
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold border border-slate-700 cursor-pointer"
                                       >
-                                        สลิป
-                                      </a>
+                                        สลิป{cardSlips.length > 1 ? ` (${cardSlips.length} รูป)` : ''}
+                                      </button>
                                     )}
                                     {outAmt > 0 && (
                                       <button
@@ -8037,6 +8193,7 @@ export default function AdminDashboardView({
                               </button>
                             );
                           })()}
+                          <div className="mt-1.5">{renderSlipGalleryButton(reg)}</div>
                         </td>
 
                         {/* Documents Status & Quick Message Trigger */}
@@ -18501,6 +18658,9 @@ export default function AdminDashboardView({
           </div>
         </ModalPortal>
       )}
+
+      {/* MULTI-SLIP GALLERY MODAL (แสดงสลิปครบทุกรอบ 1-3 รูป) */}
+      <SlipGalleryModal gallery={slipGallery} onClose={() => setSlipGallery(null)} />
 
       {/* IN-APP DOCUMENT & SLIP PREVIEW MODAL */}
       <DocumentPreviewModal

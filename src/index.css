@@ -142,7 +142,7 @@ body.modal-scroll-locked {
     print-color-adjust: exact !important;
   }
 
-  /* JRE digital ID card: print the badge itself at CR80 proportions. */
+  /* JRE digital ID card print styling */
   .jre-id-card-print-root,
   .jre-id-card-print-root * {
     visibility: visible !important;
@@ -150,17 +150,33 @@ body.modal-scroll-locked {
     print-color-adjust: exact !important;
   }
 
-  .jre-id-card-print-root {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 85.6mm !important;
-    max-width: 85.6mm !important;
-    margin: 0 !important;
+  /* Single standalone card print (when not inside batch directory) */
+  body:not(.directory-print-active) .jre-id-card-print-root:not(#printable-id-cards-directory *) {
+    position: static !important;
+    margin: 0 auto !important;
     padding: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
   }
 
-  .jre-id-card-print-root .jre-id-card {
+  /* CR100 Vertical Badge (2.63" x 3.88" / 66.8mm x 98.5mm) */
+  .jre-id-card-print-root[data-orientation="portrait"] .jre-id-card,
+  .cr100-print-card-box .jre-id-card[data-orientation="portrait"] {
+    width: 66.8mm !important;
+    min-width: 66.8mm !important;
+    max-width: 66.8mm !important;
+    height: 98.5mm !important;
+    min-height: 98.5mm !important;
+    max-height: 98.5mm !important;
+    border-radius: 3.5mm !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* CR80 Landscape Badge (85.6mm x 54mm) */
+  .jre-id-card-print-root[data-orientation="landscape"] .jre-id-card {
     width: 85.6mm !important;
     min-width: 85.6mm !important;
     max-width: 85.6mm !important;
@@ -169,6 +185,31 @@ body.modal-scroll-locked {
     max-height: 54mm !important;
     border-radius: 3mm !important;
     box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Directory batch print: container and cards layout */
+  #printable-id-cards-directory {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #printable-id-cards-directory .jre-id-card-print-root {
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  #printable-id-cards-directory .cr100-print-card-box {
+    display: inline-block !important;
+    margin: 3mm 4mm !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   .jre-id-card-print-root .no-print {

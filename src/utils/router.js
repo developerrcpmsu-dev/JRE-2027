@@ -76,6 +76,10 @@ export function parseCurrentRoute() {
     return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
   }
 
+  if (first === 'id-cards' || first === 'idcards' || first === 'badges' || first === 'all-badges' || (first === 'id-card' && (second === 'all' || second === 'directory' || second === 'admin'))) {
+    return { mainTab: 'admin', subRoute: 'id-cards', canonicalPath: '/admin/id-cards' };
+  }
+
   if (first === 'id-card' || first === 'badge' || first === 'badge-card') {
     return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
   }
@@ -221,7 +225,14 @@ export function parseCurrentRoute() {
       'fully_paid': 'fully-paid',
 
       'scanner': 'scanner',
-      'qr': 'scanner'
+      'qr': 'scanner',
+
+      'id-cards': 'id-cards',
+      'id-card': 'id-cards',
+      'idcards': 'id-cards',
+      'badges': 'id-cards',
+      'badge': 'id-cards',
+      'cards': 'id-cards'
     };
 
     const targetSub = second ? (adminMap[second] || 'applicants') : 'applicants';
@@ -229,6 +240,7 @@ export function parseCurrentRoute() {
     let canonicalPath = '/admin';
     if (targetSub === 'shirts') canonicalPath = '/admin/shirts';
     else if (targetSub === 'shirt-roster') canonicalPath = '/admin/shirt-roster';
+    else if (targetSub === 'id-cards') canonicalPath = '/admin/id-cards';
     else if (targetSub === 'payment') canonicalPath = '/admin/payment';
     else if (targetSub === 'forms') canonicalPath = '/admin/forms';
     else if (targetSub === 'announcements') canonicalPath = '/admin/announcements';
@@ -323,6 +335,7 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'my_orders' || subRoute === 'orders' || subRoute === 'cart') return '/merchandise/orders';
       return '/merchandise';
     case 'admin':
+      if (subRoute === 'id-cards' || subRoute === 'idcard' || subRoute === 'idcards' || subRoute === 'badges' || subRoute === 'badge') return '/admin/id-cards';
       if (subRoute === 'payment' || subRoute === 'payment_settings' || subRoute === 'finance') return '/admin/payment';
       if (subRoute === 'shirt-roster' || subRoute === 'shirt-print' || subRoute === 'print-shirts' || subRoute === 'roster') return '/admin/shirt-roster';
       if (subRoute === 'shirts' || subRoute === 'merchandise' || subRoute === 'shirt' || subRoute === 'merch') return '/admin/shirts';
