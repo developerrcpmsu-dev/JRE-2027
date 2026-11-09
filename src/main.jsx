@@ -3,6 +3,19 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 
+// Automatically recover if a lazy chunk fails to load after a new deployment
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    const reloadKey = 'jre2027_chunk_reload_ts';
+    const lastReload = Number(sessionStorage.getItem(reloadKey) || 0);
+    if (Date.now() - lastReload > 10000) {
+      sessionStorage.setItem(reloadKey, String(Date.now()));
+      window.location.reload();
+    }
+  });
+}
+
 // Developer Console Branding (BestCyniX Dev)
 console.log(
   `%c⚡ BESTCYNIX DEV • FULL-STACK ENGINEERING ⚡`,

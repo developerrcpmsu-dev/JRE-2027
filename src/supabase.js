@@ -60,37 +60,123 @@ const STORAGE_KEYS = {
   SPEAKERS: 'jre2027_speakers'
 };
 
+// In-memory session cache so full objects (including base64 photos) remain accessible
+// even when localStorage has a 5MB quota limit.
+const MEMORY_STORAGE_CACHE = new Map();
+
+/**
+ * Strip bulky inline base64 strings or oversized fields so registration lists fit inside localStorage (5MB limit)
+ */
+function compactJsonForLocalStorage(jsonString) {
+  try {
+    const parsed = JSON.parse(jsonString);
+    const stripLargeStrings = (val) => {
+      if (typeof val === 'string') {
+        if (val.startsWith('data:') && val.length > 512) return '';
+        if (val.length > 4096) return val.slice(0, 4096);
+        return val;
+      }
+      if (Array.isArray(val)) {
+        return val.map(stripLargeStrings);
+      }
+      if (val && typeof val === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(val)) {
+          if (k === 'special_notes' && typeof v === 'string' && v.startsWith('{') && v.length > 1024) {
+            try {
+              const inner = JSON.parse(v);
+              out[k] = JSON.stringify(stripLargeStrings(inner));
+              continue;
+            } catch (e) {}
+          }
+          out[k] = stripLargeStrings(v);
+        }
+        return out;
+      }
+      return val;
+    };
+    return JSON.stringify(stripLargeStrings(parsed));
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Clear old base64 file cache entries (`jre_file_*`) from localStorage so they don't exhaust the 5MB quota
+ */
+function purgeLocalStorageFileBlobs() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('jre_file_')) {
+        keysToRemove.push(k);
+      }
+    }
+    for (const k of keysToRemove) {
+      localStorage.removeItem(k);
+    }
+  } catch (e) {}
+}
+
 /**
  * Safely writes to localStorage without throwing QuotaExceededError
  */
 export function safeSetLocalStorage(key, value) {
+  MEMORY_STORAGE_CACHE.set(key, value);
+  if (typeof localStorage === 'undefined') return false;
+
   try {
+    // Proactively compact if payload is over 1.5MB to avoid hitting browser 5MB quota
+    if (typeof value === 'string' && value.length > 1_500_000) {
+      purgeLocalStorageFileBlobs();
+      const compacted = compactJsonForLocalStorage(value);
+      if (compacted) {
+        localStorage.setItem(key, compacted);
+        return true;
+      }
+    }
     localStorage.setItem(key, value);
     return true;
   } catch (err) {
-    console.warn(`[safeSetLocalStorage] Failed to cache key "${key}" (quota limit exceeded or storage unavailable):`, err?.message || err);
+    try {
+      purgeLocalStorageFileBlobs();
+      const compacted = compactJsonForLocalStorage(value);
+      if (compacted) {
+        localStorage.setItem(key, compacted);
+        return true;
+      }
+    } catch (retryErr) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {}
+    }
     return false;
   }
 }
 
 // Initialize LocalStorage defaults if empty
 function initializeLocalStorage() {
-  if (!localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS)) {
-    localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(DEFAULT_ANNOUNCEMENTS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.FORMS_CONFIG)) {
-    localStorage.setItem(STORAGE_KEYS.FORMS_CONFIG, JSON.stringify(DEFAULT_FORMS_CONFIG));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.REGISTRATIONS)) {
-    // Start with empty real registrations
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify([]));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG)) {
-    localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(DEFAULT_PAYMENT_CONFIG));
-  }
+  purgeLocalStorageFileBlobs();
+  try {
+    if (!localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS)) {
+      safeSetLocalStorage(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(DEFAULT_ANNOUNCEMENTS));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.FORMS_CONFIG)) {
+      safeSetLocalStorage(STORAGE_KEYS.FORMS_CONFIG, JSON.stringify(DEFAULT_FORMS_CONFIG));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.REGISTRATIONS)) {
+      // Start with empty real registrations
+      safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify([]));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_CONFIG)) {
+      safeSetLocalStorage(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(DEFAULT_PAYMENT_CONFIG));
+    }
+  } catch (e) {}
   const rawMerch = localStorage.getItem(STORAGE_KEYS.MERCHANDISE_CONFIG);
   if (!rawMerch) {
-    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
+    safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
   } else {
     try {
       const parsed = JSON.parse(rawMerch);
@@ -108,10 +194,10 @@ function initializeLocalStorage() {
             description: DEFAULT_MERCHANDISE_CONFIG.products[0].description
           } : p);
         }
-        localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(parsed));
+        safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(parsed));
       }
     } catch {
-      localStorage.setItem(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
+      safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_CONFIG, JSON.stringify(DEFAULT_MERCHANDISE_CONFIG));
     }
   }
   // Start with empty real merchandise orders & purge any legacy mock orders
@@ -121,21 +207,21 @@ function initializeLocalStorage() {
       const parsed = JSON.parse(existingOrders);
       if (Array.isArray(parsed)) {
         const filteredReal = parsed.filter(o => o.id !== 'order_jre_01' && o.id !== 'order_jre_02');
-        localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(filteredReal));
+        safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(filteredReal));
       } else {
-        localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
+        safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
       }
     } catch (e) {
-      localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
+      safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
     }
   } else {
-    localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
+    safeSetLocalStorage(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify([]));
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEAM)) {
-    localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
+    safeSetLocalStorage(STORAGE_KEYS.TEAM, JSON.stringify(DEFAULT_TEAM_MEMBERS));
   }
   if (!localStorage.getItem(STORAGE_KEYS.SPEAKERS)) {
-    localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(DEFAULT_SPEAKERS));
+    safeSetLocalStorage(STORAGE_KEYS.SPEAKERS, JSON.stringify(DEFAULT_SPEAKERS));
   }
 }
 
@@ -531,6 +617,11 @@ function projectAccountForClient(account) {
 
 function readCachedRegistrations() {
   try {
+    const inMem = MEMORY_STORAGE_CACHE.get(STORAGE_KEYS.REGISTRATIONS);
+    if (inMem) {
+      const parsedMem = JSON.parse(inMem);
+      if (Array.isArray(parsedMem)) return parsedMem;
+    }
     const raw = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
@@ -725,13 +816,7 @@ export const DataService = {
     if (!userId) return false;
 
     // 1. Read from local cache for instant zero-latency lookup
-    let regs = [];
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
-      regs = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      regs = [];
-    }
+    const regs = readCachedRegistrations();
 
     let target = regs.find(r => 
       r.user_id === userId || 
@@ -1219,10 +1304,8 @@ export const DataService = {
       }
     }
 
-    // Cache locally as well
-    try {
-      localStorage.setItem(`jre_file_${fileId}`, base64Data);
-    } catch (e) {}
+    // Cache in session memory (avoid filling 5MB localStorage quota with base64 blobs)
+    MEMORY_STORAGE_CACHE.set(`jre_file_${fileId}`, base64Data);
 
     return {
       url: hostedUrl,
@@ -1246,6 +1329,8 @@ export const DataService = {
     const fileId = idMatch ? idMatch[1] : (str.startsWith('file_') ? str : null);
 
     if (fileId) {
+      const memCached = MEMORY_STORAGE_CACHE.get(`jre_file_${fileId}`);
+      if (memCached) return memCached;
       const cached = localStorage.getItem(`jre_file_${fileId}`);
       if (cached) return cached;
 
@@ -1259,7 +1344,7 @@ export const DataService = {
             .maybeSingle();
 
           if (data?.value?.data) {
-            try { localStorage.setItem(`jre_file_${fileId}`, data.value.data); } catch (e) {}
+            MEMORY_STORAGE_CACHE.set(`jre_file_${fileId}`, data.value.data);
             return data.value.data;
           }
         } catch (e) {}

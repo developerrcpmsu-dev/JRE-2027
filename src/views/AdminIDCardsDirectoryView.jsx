@@ -38,7 +38,7 @@ import {
   resolveUniversityInfo,
   OFFICIAL_NETWORK_INSTITUTIONS
 } from '../data/defaultData';
-import { getRegistrationCardData } from '../utils/idCard';
+import { getRegistrationCardData, getIdCardQrPayload } from '../utils/idCard';
 import QRCode from 'qrcode';
 
 export default function AdminIDCardsDirectoryView({
@@ -282,8 +282,6 @@ export default function AdminIDCardsDirectoryView({
     setExportProgress({ current: 0, total: visibleCardList.length });
 
     try {
-      const { getIdCardQrPayload } = await import('../utils/idCard');
-
       for (let i = 0; i < visibleCardList.length; i++) {
         const item = visibleCardList[i];
         const cardData = item.cardData;
