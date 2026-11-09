@@ -45,6 +45,8 @@ export default function BadgeInspectEditModal({
     affiliation: '',
     unit: '',
     bloodGroup: 'O',
+    badgeRole: 'PARTICIPANT', // 'DEV' | 'STAFF' | 'PARTICIPANT'
+    isDev: false,
     isStaff: false,
     idCardPhoto: ''
   });
@@ -56,7 +58,9 @@ export default function BadgeInspectEditModal({
   useEffect(() => {
     if (isOpen && reg) {
       const cardData = getRegistrationCardData(reg);
-      const isStaff = Boolean(isStaffRegistration(reg) || reg.is_staff || cardData.isStaff);
+      const badgeRole = cardData.badgeRole || resolveBadgeRole(reg);
+      const isDev = badgeRole === 'DEV';
+      const isStaff = isDev || badgeRole === 'STAFF';
 
       setFormData({
         prefix: reg.prefix || cardData.prefix || '',
@@ -68,6 +72,8 @@ export default function BadgeInspectEditModal({
         affiliation: reg.affiliation || reg.institution || cardData.affiliation || '',
         unit: reg.unit || cardData.unit || '',
         bloodGroup: reg.blood_group || cardData.bloodGroup || 'O',
+        badgeRole,
+        isDev,
         isStaff,
         idCardPhoto: reg.id_card_photo || cardData.photo || ''
       });
@@ -90,9 +96,12 @@ export default function BadgeInspectEditModal({
     institution: formData.affiliation,
     unit: formData.unit,
     blood_group: formData.bloodGroup,
-    is_staff: formData.isStaff,
-    admin_staff_override: formData.isStaff,
-    registration_type: formData.isStaff ? 'staff' : 'participant',
+    badge_role: formData.badgeRole,
+    is_dev: formData.badgeRole === 'DEV',
+    is_staff: formData.badgeRole === 'DEV' || formData.badgeRole === 'STAFF',
+    admin_staff_override: formData.badgeRole === 'DEV' || formData.badgeRole === 'STAFF',
+    registration_type: formData.badgeRole === 'DEV' ? 'dev' : formData.badgeRole === 'STAFF' ? 'staff' : 'participant',
+    staff_role: formData.badgeRole === 'DEV' ? 'BestCyniX Dev / System Admin' : (reg.staff_role || 'Staff คณะทำงาน'),
     id_card_photo: formData.idCardPhoto
   };
 
@@ -111,9 +120,12 @@ export default function BadgeInspectEditModal({
         institution: formData.affiliation.trim(),
         unit: formData.unit.trim(),
         blood_group: formData.bloodGroup,
-        is_staff: formData.isStaff,
-        admin_staff_override: formData.isStaff,
-        registration_type: formData.isStaff ? 'staff' : 'participant',
+        badge_role: formData.badgeRole,
+        is_dev: formData.badgeRole === 'DEV',
+        is_staff: formData.badgeRole === 'DEV' || formData.badgeRole === 'STAFF',
+        admin_staff_override: formData.badgeRole === 'DEV' || formData.badgeRole === 'STAFF',
+        registration_type: formData.badgeRole === 'DEV' ? 'dev' : formData.badgeRole === 'STAFF' ? 'staff' : 'participant',
+        staff_role: formData.badgeRole === 'DEV' ? 'BestCyniX Dev / System Admin' : (formData.badgeRole === 'STAFF' ? (reg.staff_role || 'Staff คณะทำงาน') : ''),
         id_card_photo: formData.idCardPhoto
       };
 
@@ -174,11 +186,13 @@ export default function BadgeInspectEditModal({
                     ตรวจสอบ & แก้ไขข้อมูลบัตรประจำตัว (CR100)
                   </h3>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                    formData.isStaff 
+                    formData.badgeRole === 'DEV'
+                      ? 'border-purple-400/80 bg-purple-500/20 text-purple-300'
+                      : formData.badgeRole === 'STAFF'
                       ? 'border-yellow-400/80 bg-yellow-500/20 text-yellow-300' 
                       : 'border-sky-400/80 bg-sky-500/20 text-sky-300'
                   }`}>
-                    {formData.isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
+                    {formData.badgeRole === 'DEV' ? '💻 BESTCYNIX DEV' : formData.badgeRole === 'STAFF' ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
@@ -276,12 +290,26 @@ export default function BadgeInspectEditModal({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* DEV Button */}
                   <button
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, isStaff: true }))}
-                    className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-black transition-all cursor-pointer border ${
-                      formData.isStaff
+                    onClick={() => setFormData((prev) => ({ ...prev, badgeRole: 'DEV', isDev: true, isStaff: true }))}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl p-2.5 text-xs font-black transition-all cursor-pointer border ${
+                      formData.badgeRole === 'DEV'
+                        ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 text-white border-cyan-300 shadow-md ring-2 ring-purple-400/40'
+                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                    }`}
+                  >
+                    <span>💻 BESTCYNIX DEV</span>
+                  </button>
+
+                  {/* STAFF Button */}
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, badgeRole: 'STAFF', isDev: false, isStaff: true }))}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl p-2.5 text-xs font-black transition-all cursor-pointer border ${
+                      formData.badgeRole === 'STAFF'
                         ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 border-yellow-300 shadow-md ring-2 ring-yellow-400/40'
                         : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
                     }`}
@@ -290,17 +318,18 @@ export default function BadgeInspectEditModal({
                     <span>⭐ ORGANIZING STAFF</span>
                   </button>
 
+                  {/* PARTICIPANT Button */}
                   <button
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, isStaff: false }))}
-                    className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-black transition-all cursor-pointer border ${
-                      !formData.isStaff
+                    onClick={() => setFormData((prev) => ({ ...prev, badgeRole: 'PARTICIPANT', isDev: false, isStaff: false }))}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl p-2.5 text-xs font-black transition-all cursor-pointer border ${
+                      formData.badgeRole === 'PARTICIPANT'
                         ? 'bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white border-sky-300 shadow-md ring-2 ring-sky-400/40'
                         : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
                     }`}
                   >
                     <Users className="h-4 w-4 shrink-0" />
-                    <span>🎓 PARTICIPANT (ผู้สมัคร)</span>
+                    <span>🎓 PARTICIPANT</span>
                   </button>
                 </div>
               </div>

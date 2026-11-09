@@ -157,6 +157,66 @@ export function parseIdCardPayload(rawValue) {
   return { recordId: raw, cardCode: raw.toUpperCase(), raw };
 }
 
+export function resolveBadgeRole(r) {
+  if (!r) return 'PARTICIPANT';
+  const email = String(r.user_email || r.email || '').trim().toLowerCase();
+  const staffRole = String(r.staff_role || r.role || r.admin_note || '').toLowerCase();
+  const regType = String(r.registration_type || '').toLowerCase();
+  const fullName = `${r.first_name || ''} ${r.last_name || ''} ${r.full_name_affiliation || ''}`.toLowerCase();
+
+  // 1. DEV (BestCyniX Dev / System Admin / Full-Stack)
+  if (
+    email === 'developer.rcpmsu@gmail.com' ||
+    email === 'bestcynix@gmail.com' ||
+    r.is_dev === true ||
+    regType === 'dev' ||
+    staffRole.includes('dev') ||
+    staffRole.includes('developer') ||
+    staffRole.includes('ผู้พัฒนาระบบ') ||
+    staffRole.includes('โปรแกรมเมอร์') ||
+    fullName.includes('พงศ์ภรณ์') ||
+    fullName.includes('pongporn')
+  ) {
+    return 'DEV';
+  }
+
+  // 2. STAFF (Organizing Staff / Committee / Trainer / Coordinator)
+  if (
+    isStaffRegistration(r) ||
+    r.is_staff === true ||
+    regType === 'staff' ||
+    r.admin_staff_override === true
+  ) {
+    return 'STAFF';
+  }
+
+  // 3. PARTICIPANT (General Participant / Student)
+  return 'PARTICIPANT';
+}
+
+export function formatCardCallsign(callsign, unit, affiliation) {
+  if (!callsign || callsign === '-' || String(callsign).trim() === '') return '-';
+  const c = String(callsign).trim();
+
+  // If already starts with a unit abbreviation/prefix (RCP, TSI, อาสา, etc.), preserve it!
+  if (/^(rcp|tsi|kku|msu|sut|cm|อาสา|ว\.|กู้ภัย|หน่วย)/i.test(c)) {
+    return c;
+  }
+
+  const u = `${unit || ''} ${affiliation || ''}`.toLowerCase();
+  if (u.includes('ราชพฤกษ์') || u.includes('rcp')) {
+    return `RCP ${c}`;
+  }
+  if (u.includes('ตักศิลา') || u.includes('tsi')) {
+    return `TSI ${c}`;
+  }
+  if (u.includes('อาสา') && !c.includes('อาสา')) {
+    return `อาสา ${c}`;
+  }
+
+  return c;
+}
+
 export function getRegistrationCardData(registration) {
   const r = registration || {};
   const legacyName = parseLegacyFullName(r.full_name_affiliation);
@@ -173,11 +233,18 @@ export function getRegistrationCardData(registration) {
   const affiliationAbbrEn = clean(r.institution_abbr_en || legacyName.institutionAbbrEn || ENGLISH_ABBR_BY_THAI[affiliationAbbrTh]);
   const thaiName = formatThaiFullName(titleTh, firstNameTh, lastNameTh, affiliationAbbrTh);
   const englishName = formatEnglishFullName(titleEn, firstNameEn, lastNameEn, affiliationAbbrEn);
-  const isStaff = isStaffRegistration(r);
-  const rawRoleText = `${r.staff_role || ''} ${r.admin_note || ''} ${r.callsign || ''}`.toLowerCase();
-  const roleBadge = isStaff
-    ? (rawRoleText.includes('dev') || rawRoleText.includes('ผู้พัฒนาระบบ') ? 'STAFF • DEV' : 'ORGANIZING STAFF')
+  
+  const badgeRole = resolveBadgeRole(r);
+  const isDev = badgeRole === 'DEV';
+  const isStaff = isDev || badgeRole === 'STAFF';
+  const roleBadge = isDev 
+    ? 'BESTCYNIX DEV' 
+    : isStaff 
+    ? 'ORGANIZING STAFF' 
     : 'PARTICIPANT';
+
+  const rawCallsign = r.callsign || r.call_sign;
+  const fullCallsign = formatCardCallsign(rawCallsign, organization.unit, organization.affiliation);
 
   return {
     prefix: [titleTh, titleEn].filter(Boolean).join(' / ') || '-',
@@ -185,12 +252,14 @@ export function getRegistrationCardData(registration) {
     lastName: [lastNameTh, lastNameEn].filter(Boolean).join(' / ') || '-',
     thaiName: thaiName || [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || 'ผู้เข้าร่วม JRE 2027',
     englishName: englishName || '-',
-    callsign: r.callsign || r.call_sign || '-',
+    callsign: fullCallsign,
     nickname: r.nickname || (r.nickname_th && r.nickname_en ? `${r.nickname_th} / ${r.nickname_en}` : (r.nickname_th || r.nickname_en || '-')),
     unit: memberTypeInfo.isVolunteer ? memberTypeInfo.unitDisplay : (organization.unit || memberTypeInfo.unitDisplay || r.group_assigned || '-'),
     memberType: memberTypeInfo.type,
     memberTypeLabel: memberTypeInfo.shortLabel,
     isStaff,
+    isDev,
+    badgeRole,
     roleBadge,
     affiliation: organization.affiliation || affiliationAbbrTh || '-',
     affiliationAbbrTh: affiliationAbbrTh || '-',

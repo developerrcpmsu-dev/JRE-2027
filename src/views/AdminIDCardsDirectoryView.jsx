@@ -92,8 +92,9 @@ export default function AdminIDCardsDirectoryView({
     }
   };
 
-  // Group raw registrations into Staff, University, and General
+  // Group raw registrations into DEV, Staff, University, and General
   const categorizedData = useMemo(() => {
+    const devList = [];
     const staffList = [];
     const universityMap = {};
     const generalList = [];
@@ -107,13 +108,21 @@ export default function AdminIDCardsDirectoryView({
 
     (registrations || []).forEach((reg) => {
       const cardData = getRegistrationCardData(reg);
-      const isStaff = isStaffRegistration(reg) || reg.is_staff || cardData.isStaff;
+      const badgeRole = cardData.badgeRole || resolveBadgeRole(reg);
 
-      if (isStaff) {
+      // 1. DEV (BestCyniX Dev / System Admin)
+      if (badgeRole === 'DEV') {
+        devList.push({ reg, cardData });
+        return;
+      }
+
+      // 2. STAFF (Organizing Staff / Committee)
+      if (badgeRole === 'STAFF') {
         staffList.push({ reg, cardData });
         return;
       }
 
+      // 3. Participants (Group by University or General)
       const uniInfo = resolveUniversityInfo(reg);
       const shortTag = uniInfo.shortTag;
 
@@ -139,6 +148,7 @@ export default function AdminIDCardsDirectoryView({
       .sort((a, b) => a.meta.fullName.localeCompare(b.meta.fullName, 'th'));
 
     return {
+      devList,
       staffList,
       universityGroups,
       generalList,
@@ -173,8 +183,13 @@ export default function AdminIDCardsDirectoryView({
       return searchable.some((val) => val.includes(q));
     };
 
+    let matchedDev = categorizedData.devList.filter(matchesQuery);
+    if (activeCategory === 'staff' || activeCategory === 'university' || activeCategory === 'general') {
+      matchedDev = [];
+    }
+
     let matchedStaff = categorizedData.staffList.filter(matchesQuery);
-    if (activeCategory === 'university' || activeCategory === 'general') {
+    if (activeCategory === 'dev' || activeCategory === 'university' || activeCategory === 'general') {
       matchedStaff = [];
     }
 
@@ -192,21 +207,23 @@ export default function AdminIDCardsDirectoryView({
       })
       .filter(Boolean);
 
-    if (activeCategory === 'staff' || activeCategory === 'general') {
+    if (activeCategory === 'dev' || activeCategory === 'staff' || activeCategory === 'general') {
       matchedUniversities = [];
     }
 
     let matchedGeneral = categorizedData.generalList.filter(matchesQuery);
-    if (activeCategory === 'staff' || activeCategory === 'university') {
+    if (activeCategory === 'dev' || activeCategory === 'staff' || activeCategory === 'university') {
       matchedGeneral = [];
     }
 
     const totalVisible =
+      matchedDev.length +
       matchedStaff.length +
       matchedUniversities.reduce((acc, g) => acc + g.items.length, 0) +
       matchedGeneral.length;
 
     return {
+      dev: matchedDev,
       staff: matchedStaff,
       universities: matchedUniversities,
       general: matchedGeneral,
@@ -217,6 +234,7 @@ export default function AdminIDCardsDirectoryView({
   // Flatten currently visible items for A4 pagination (2 people per sheet)
   const visibleCardList = useMemo(() => {
     const list = [];
+    filteredDataset.dev.forEach((item) => list.push({ ...item, groupType: 'dev', groupLabel: '💻 BestCyniX Dev / System Admin' }));
     filteredDataset.staff.forEach((item) => list.push({ ...item, groupType: 'staff', groupLabel: '⭐ Staff คณะทำงาน' }));
     filteredDataset.universities.forEach((g) => {
       g.items.forEach((item) => list.push({ ...item, groupType: 'university', groupLabel: `🏫 ${g.meta.fullName}`, uniTag: g.tag }));
@@ -622,6 +640,21 @@ export default function AdminIDCardsDirectoryView({
           <button
             type="button"
             onClick={() => {
+              setActiveCategory('dev');
+              setSelectedUniversity('all');
+            }}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeCategory === 'dev'
+                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white font-black shadow-md shadow-purple-500/30'
+                : 'border border-purple-500/40 bg-purple-950/40 text-purple-200 hover:border-purple-400/60'
+            }`}
+          >
+            <span>💻 ฝ่ายพัฒนาระบบ DEV ({categorizedData.devList.length} คน)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               setActiveCategory('staff');
               setSelectedUniversity('all');
             }}
@@ -780,6 +813,69 @@ export default function AdminIDCardsDirectoryView({
             ======================================================== */}
         {viewLayout === 'grid' && (
           <div className="space-y-10">
+            {/* GROUP 0: 💻 DEV (BESTCYNIX DEV / SYSTEM ADMIN) */}
+            {filteredDataset.dev.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-purple-500/40 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300 border border-purple-400/50 shadow-sm shadow-purple-500/20">
+                      💻
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-black text-white sm:text-xl flex items-center gap-2">
+                        <span>คณะทำงานฝ่ายพัฒนาระบบ (BestCyniX Dev / System Admin)</span>
+                        <span className="rounded-full bg-purple-500/20 border border-purple-400/40 px-2 py-0.5 text-[10px] font-mono text-purple-300">
+                          CYBER OPS
+                        </span>
+                      </h2>
+                      <p className="text-xs text-purple-300/80">
+                        รวม {filteredDataset.dev.length} ท่าน • {Math.ceil(filteredDataset.dev.length / 2)} แผ่น A4 • BestCyniX Full-Stack Engineering
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredDataset.dev.map(({ reg, cardData }) => (
+                    <div key={cardData.cardCode} className="flex flex-col items-center gap-2 w-full max-w-sm mx-auto">
+                      <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-purple-950/40 border border-purple-500/40 shadow-sm">
+                        <span className="text-[11px] font-mono font-bold text-cyan-300">
+                          {cardData.cardCode}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setInspectingPerson(reg)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-purple-500/40 bg-purple-900/60 px-2 py-1 text-[10.5px] font-bold text-purple-200 hover:text-white hover:border-purple-300 cursor-pointer"
+                            title="ตรวจสอบข้อมูลและแก้ไขบัตร DEV"
+                          >
+                            <Edit3 className="h-3 w-3 text-cyan-400" />
+                            <span>ตรวจ / แก้</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCroppingPerson(reg)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[10.5px] font-bold text-cyan-200 hover:bg-cyan-500/20 cursor-pointer"
+                            title="ครอปรูปถ่ายประจำตัว"
+                          >
+                            <Scissors className="h-3 w-3" />
+                            <span>ครอปรูป</span>
+                          </button>
+                        </div>
+                      </div>
+                      <IDCardPreview
+                        registration={reg}
+                        user={user}
+                        defaultOrientation={cardOrientation}
+                        allowOrientationToggle={false}
+                        showActions={true}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* GROUP 1: ⭐ STAFF */}
             {filteredDataset.staff.length > 0 && (
               <section className="space-y-4">
