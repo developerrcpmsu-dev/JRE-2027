@@ -119,23 +119,72 @@ export function getIdCardCode(registration) {
 }
 
 /**
- * The QR contains only a record reference. Personal data stays in the
- * registration record and is resolved by the authenticated Admin scanner.
+ * Generates a publicly scannable verification URL for the ID Card QR Code.
+ * - Scanning with any smartphone camera (iOS/Android/LINE) opens the web verification page directly.
+ * - Scanning with the in-app Universal QR Scanner (Home or Admin) resolves the participant record immediately.
  */
 export function getIdCardQrPayload(registration) {
-  return JSON.stringify({
-    type: ID_CARD_PAYLOAD_TYPE,
-    version: 1,
-    event: 'JRE2027',
-    record_id: getRegistrationIdentity(registration),
-    card_code: getIdCardCode(registration)
-  });
+  const recordId = getRegistrationIdentity(registration);
+  const cardCode = getIdCardCode(registration);
+  const origin =
+    typeof window !== 'undefined' &&
+    window.location?.origin &&
+    window.location.origin.startsWith('http') &&
+    !window.location.origin.includes('localhost')
+      ? window.location.origin
+      : 'https://jre-2027.vercel.app';
+
+  const params = new URLSearchParams();
+  if (cardCode) params.set('badge', cardCode);
+  if (recordId) params.set('id', recordId);
+  return `${origin}/verify?${params.toString()}`;
 }
 
 export function parseIdCardPayload(rawValue) {
   const raw = clean(rawValue);
   if (!raw) return null;
 
+  // 1. Support Verification URL payloads (https://.../verify?badge=JRE27-...&id=...)
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/verify') || raw.includes('badge=') || raw.includes('/verify?')) {
+    try {
+      const urlObj = new URL(raw, 'https://jre-2027.vercel.app');
+      const badgeParam = clean(
+        urlObj.searchParams.get('badge') ||
+        urlObj.searchParams.get('card_code') ||
+        urlObj.searchParams.get('card') ||
+        urlObj.searchParams.get('code')
+      );
+      const idParam = clean(
+        urlObj.searchParams.get('id') ||
+        urlObj.searchParams.get('record_id') ||
+        urlObj.searchParams.get('uid') ||
+        urlObj.searchParams.get('user_id')
+      );
+      if (badgeParam || idParam) {
+        return {
+          recordId: idParam || badgeParam,
+          cardCode: (badgeParam || idParam).toUpperCase(),
+          isUrl: true,
+          raw
+        };
+      }
+      // Also support /users/:uid URLs
+      const segments = urlObj.pathname.split('/').filter(Boolean);
+      if ((segments[0] === 'users' || segments[0] === 'user' || segments[0] === 'verify') && segments[1]) {
+        const segId = decodeURIComponent(segments[1]);
+        return {
+          recordId: segId,
+          cardCode: segId.toUpperCase(),
+          isUrl: true,
+          raw
+        };
+      }
+    } catch (urlErr) {
+      // Fall through to JSON / plain string parsing
+    }
+  }
+
+  // 2. Support JSON payloads ({"type":"JRE27_ID_CARD","record_id":"...","card_code":"..."})
   try {
     const parsed = JSON.parse(raw);
     if (parsed && (parsed.type === ID_CARD_PAYLOAD_TYPE || parsed.card_code || parsed.record_id)) {

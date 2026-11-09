@@ -6,6 +6,7 @@ import FormsBanner from './components/FormsBanner';
 import GoogleLoginModal from './components/GoogleLoginModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import UserNotificationsModal from './components/UserNotificationsModal';
+import UniversalScannerModal from './components/UniversalScannerModal';
 import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
 import RegisterView from './views/RegisterView';
@@ -125,6 +126,23 @@ export default function App() {
   useEffect(() => {
     forceUnlockAll();
   }, [route.mainTab, route.subRoute]);
+
+  const [publicScannerOpen, setPublicScannerOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const p = window.location.pathname.toLowerCase();
+    const s = new URLSearchParams(window.location.search);
+    return p.startsWith('/verify') || p.startsWith('/qr-verify') || p.startsWith('/check-badge') || Boolean(s.get('badge'));
+  });
+
+  const [publicScannerInitialQuery, setPublicScannerInitialQuery] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const p = window.location.pathname.toLowerCase();
+    const s = new URLSearchParams(window.location.search);
+    if (p.startsWith('/verify') || p.startsWith('/qr-verify') || p.startsWith('/check-badge') || s.get('badge')) {
+      return window.location.href;
+    }
+    return '';
+  });
 
   const [user, setUser] = useState(() => {
     try {
@@ -1232,6 +1250,10 @@ export default function App() {
             onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
             onNavigateSchedule={() => setCurrentTab('schedule')}
             onNavigateMerchandise={() => setCurrentTab('merchandise')}
+            onOpenScanner={() => {
+              setPublicScannerInitialQuery('');
+              setPublicScannerOpen(true);
+            }}
             myRegistration={myRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             paymentConfig={paymentConfig}
@@ -1431,6 +1453,43 @@ export default function App() {
         myRegistration={myRegistration}
         onUpdateRegistration={handleUpdateRegistration}
       />
+
+      {/* Public & Universal QR Verification / Check-In Scanner Modal (Home Page Button & Direct /verify QR Scan) */}
+      {publicScannerOpen && (
+        <UniversalScannerModal
+          isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
+          initialQuery={publicScannerInitialQuery}
+          orders={merchandiseOrders}
+          registrations={registrations}
+          onClose={() => {
+            setPublicScannerOpen(false);
+            setPublicScannerInitialQuery('');
+            if (typeof window !== 'undefined') {
+              const p = window.location.pathname.toLowerCase();
+              const s = new URLSearchParams(window.location.search);
+              if (p.startsWith('/verify') || p.startsWith('/qr-verify') || p.startsWith('/check-badge') || s.get('badge')) {
+                window.history.replaceState({ mainTab: 'home', subRoute: null }, '', '/');
+                setRoute(parseCurrentRoute());
+              }
+            }
+          }}
+          onMarkOrderReceived={handleMarkOrderReceived}
+          onMarkRegistrationShirtReceived={async (userId, received) => {
+            await handleUpdateAllocation(userId, {
+              shirt_pickup_status: received ? 'received' : 'pending',
+              shirt_received: received,
+              shirt_received_date: received ? new Date().toISOString() : null
+            });
+          }}
+          onVerifyPayment={handleVerifyOrderPayment}
+          onRefreshRegistrations={refreshRegistrations}
+          onUpdateAllocation={handleUpdateAllocation}
+          onOpenAdminLogin={() => {
+            setPublicScannerOpen(false);
+            handleAdminEntry();
+          }}
+        />
+      )}
 
       {/* Vercel Web Analytics & Speed Insights */}
       <Analytics />

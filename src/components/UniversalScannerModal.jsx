@@ -33,8 +33,8 @@ import ModalPortal from './ModalPortal';
 import IDCardPreview from './IDCardPreview';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import { DataService } from '../supabase';
-import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode } from '../utils/idCard';
-import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, resolvePersonFullNameWithTitle } from '../data/defaultData';
+import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode, parseIdCardPayload } from '../utils/idCard';
+import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, resolvePersonFullNameWithTitle, resolveUniversityInfo } from '../data/defaultData';
 
 /**
  * Web Audio API synthesizer for crisp scan confirmation chime
@@ -93,7 +93,10 @@ const cleanStr = (val) => String(val || '').trim();
 export default function UniversalScannerModal({
   orders = [],
   registrations = [],
+  isAdmin = true,
+  initialQuery = '',
   onClose,
+  onOpenAdminLogin,
   onMarkOrderReceived,
   onMarkRegistrationShirtReceived,
   onVerifyPayment,
@@ -103,18 +106,19 @@ export default function UniversalScannerModal({
   const [activeTab, setActiveTab] = useState('camera'); // 'camera' | 'manual'
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState('');
-  const [manualQuery, setManualQuery] = useState('');
+  const [manualQuery, setManualQuery] = useState(initialQuery || '');
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
   const [previewSlip, setPreviewSlip] = useState(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [publicRegistrations, setPublicRegistrations] = useState([]);
 
   // Match result: { participant: regObj, order: orderObj, linkedOrders: [], linkedReg: null }
   const [matchResult, setMatchResult] = useState(null);
   const [multipleMatches, setMultipleMatches] = useState([]);
   const [selectedResultType, setSelectedResultType] = useState('participant'); // 'participant' | 'order'
 
-  // ID Card preview modal state
-  const [previewingIdCard, setPreviewingIdCard] = useState(false);
+  // ID Card preview modal state (default true so scanned badges immediately show the full card)
+  const [previewingIdCard, setPreviewingIdCard] = useState(true);
 
   // Notification & Admin Note state for trainee
   const [internalNote, setInternalNote] = useState('');
@@ -134,6 +138,39 @@ export default function UniversalScannerModal({
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
   const qrRegionId = 'universal-qr-reader-region';
+
+  // Ensure complete verifiable directory is available even when opened by general public on Home page
+  useEffect(() => {
+    let active = true;
+    if (!registrations || registrations.length <= 1) {
+      DataService.getPublicVerifiableRegistrations()
+        .then((list) => {
+          if (active && Array.isArray(list) && list.length > 0) {
+            setPublicRegistrations(list);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [registrations?.length]);
+
+  const effectiveRegistrations = useMemo(() => {
+    const base = Array.isArray(registrations) ? registrations : [];
+    const pub = Array.isArray(publicRegistrations) ? publicRegistrations : [];
+    if (base.length >= pub.length && base.length > 1) return base;
+    const map = new Map();
+    pub.forEach((r) => {
+      const k = r?.id || r?.user_id || r?.user_email;
+      if (k) map.set(k, r);
+    });
+    base.forEach((r) => {
+      const k = r?.id || r?.user_id || r?.user_email;
+      if (k) map.set(k, { ...(map.get(k) || {}), ...r });
+    });
+    return Array.from(map.values());
+  }, [registrations, publicRegistrations]);
 
   // Synchronize internal note when matched participant changes
   useEffect(() => {
@@ -161,7 +198,7 @@ export default function UniversalScannerModal({
    * Universal Match Resolver
    * Intelligently classifies payloads into participant and/or merchandise order
    */
-  const resolveMatch = (rawInput) => {
+  const resolveMatch = (rawInput, overrideRegList = null) => {
     if (!rawInput || typeof rawInput !== 'string') return null;
     const raw = cleanStr(rawInput);
     if (!raw) return null;
@@ -173,14 +210,30 @@ export default function UniversalScannerModal({
       // not JSON
     }
 
-    const regList = Array.isArray(registrations) ? registrations : [];
+    const regList = Array.isArray(overrideRegList) ? overrideRegList : effectiveRegistrations;
     const orderList = Array.isArray(orders) ? orders : [];
 
     let matchedParticipant = null;
     let matchedOrder = null;
 
+    // 0. Check if rawInput is a Verification URL (e.g. https://.../verify?badge=JRE27-...&id=...)
+    const parsedBadgePayload = parseIdCardPayload(raw);
+    if (parsedBadgePayload?.isUrl) {
+      matchedParticipant = findRegistrationByIdCard(regList, raw);
+      if (!matchedParticipant) {
+        const recId = cleanStr(parsedBadgePayload.recordId).toLowerCase();
+        const cCode = cleanStr(parsedBadgePayload.cardCode).toLowerCase();
+        matchedParticipant = regList.find(r => {
+          const rId = cleanStr(r.id || r.user_id || r.user_email).toLowerCase();
+          const rUserId = cleanStr(r.user_id).toLowerCase();
+          const rCode = getIdCardCode(r).toLowerCase();
+          return (recId && (rId === recId || rUserId === recId)) || (cCode && rCode === cCode);
+        });
+      }
+    }
+
     // 1. JSON Payload Evaluation
-    if (parsed && typeof parsed === 'object') {
+    if (!matchedParticipant && parsed && typeof parsed === 'object') {
       // A) Participant ID Card JSON
       if (parsed.type === 'JRE27_ID_CARD' || parsed.card_code || parsed.record_id) {
         matchedParticipant = findRegistrationByIdCard(regList, raw);
@@ -200,10 +253,6 @@ export default function UniversalScannerModal({
         const orderNum = cleanStr(parsed.order_number).toLowerCase();
         matchedOrder = orderList.find(o => cleanStr(o.order_number).toLowerCase() === orderNum);
 
-        // Applicant shirt passes are generated from the registration record and
-        // are intentionally not stored in the merchandise_orders collection.
-        // Resolve their stable JRE27-SHIRT-{first six chars of registration id}
-        // code directly against registrations so the universal scanner can find them.
         if (!matchedOrder && /^jre27-shirt-[a-z0-9]{1,12}$/i.test(orderNum)) {
           const registrationCode = orderNum.slice('jre27-shirt-'.length).toUpperCase();
           const shirtRegistration = regList.find(r =>
@@ -249,7 +298,7 @@ export default function UniversalScannerModal({
       matchedParticipant = findRegistrationByIdCard(regList, raw);
 
       // Deep string search across participant fields
-      if (!matchedParticipant) {
+      if (!matchedParticipant && !parsedBadgePayload?.isUrl) {
         matchedParticipant = regList.find(r => {
           const rId = cleanStr(r.id).toLowerCase();
           const rUserId = cleanStr(r.user_id).toLowerCase();
@@ -287,7 +336,7 @@ export default function UniversalScannerModal({
     }
 
     // Try finding in merchandise orders
-    if (!matchedOrder) {
+    if (!matchedOrder && !parsedBadgePayload?.isUrl) {
       matchedOrder = orderList.find(o => {
         const oNum = cleanStr(o.order_number).toLowerCase();
         const oId = cleanStr(o.id).toLowerCase();
@@ -304,9 +353,9 @@ export default function UniversalScannerModal({
       });
     }
 
-    // 3. Multi-matches check for search query (if query has >= 2 characters)
+    // 3. Multi-matches check for search query (if query has >= 2 characters and is not a direct URL/JSON)
     let candidateMatches = [];
-    if (raw.length >= 2) {
+    if (raw.length >= 2 && !parsedBadgePayload?.isUrl && !parsed) {
       const pMatches = regList.filter(r => {
         const text = [
           r.first_name, r.last_name, r.first_name_th, r.last_name_th,
@@ -363,7 +412,18 @@ export default function UniversalScannerModal({
     const raw = cleanStr(decodedText);
     if (!raw) return;
 
-    const result = resolveMatch(raw);
+    let result = resolveMatch(raw);
+
+    // If not matched yet in local list, fetch fresh public verifiable directory from Supabase
+    if (!result || (!result.participant && !result.order && result.candidateMatches.length === 0)) {
+      try {
+        const freshList = await DataService.getPublicVerifiableRegistrations();
+        if (Array.isArray(freshList) && freshList.length > 0) {
+          setPublicRegistrations(freshList);
+          result = resolveMatch(raw, freshList);
+        }
+      } catch (e) {}
+    }
 
     if (result && (result.participant || result.order || result.candidateMatches.length > 0)) {
       playAudioChime(true);
@@ -372,12 +432,13 @@ export default function UniversalScannerModal({
       setMatchResult(result);
       setMultipleMatches(result.candidateMatches);
       setScanError('');
+      setPreviewingIdCard(true);
 
       // Auto-select tab
-      if (result.order) {
-        setSelectedResultType('order');
-      } else if (result.participant) {
+      if (result.participant) {
         setSelectedResultType('participant');
+      } else if (result.order) {
+        setSelectedResultType('order');
       }
 
       // Add to recent scans strip
@@ -400,7 +461,7 @@ export default function UniversalScannerModal({
     } else {
       playAudioChime(false);
       triggerHaptic(false);
-      setScanError(`ไม่พบข้อมูลในระบบ: “${raw}” (กรุณาตรวจสอบว่าผู้ใช้ได้ลงทะเบียนหรือมีรหัสคำสั่งซื้อจริง)`);
+      setScanError(`ไม่พบข้อมูลในระบบ: “${raw}” (กรุณาตรวจสอบว่าผู้ใช้ได้ลงทะเบียนหรือมีรหัสบัตร/คำสั่งซื้อจริง)`);
     }
   };
 
@@ -540,9 +601,13 @@ export default function UniversalScannerModal({
     }
   };
 
-  // Start scanner on mount
+  // Start scanner on mount (or resolve initialQuery if provided)
   useEffect(() => {
-    startScanner();
+    if (initialQuery && initialQuery.trim()) {
+      handleDecodedPayload(initialQuery.trim());
+    } else {
+      startScanner();
+    }
     return () => {
       stopScanner();
     };
@@ -559,31 +624,114 @@ export default function UniversalScannerModal({
   // ACTION HANDLERS
   // ----------------------------------------------------
 
-  // 1. Mark Trainee Training Shirt Received
-  const handleToggleTraineeShirt = async (participant) => {
-    if (!participant || isActionLoading) return;
+  // Helper to persist participant updates both via parent callback and DataService
+  const persistParticipantUpdates = async (participant, updates) => {
     const userId = participant.user_id || participant.id;
-    const currentlyReceived = participant.shirt_pickup_status === 'received' || participant.shirt_received === true;
-    const nextReceived = !currentlyReceived;
+    if (onUpdateAllocation) {
+      await onUpdateAllocation(userId, updates);
+    } else {
+      await DataService.updateRegistrationDetails(userId, updates);
+    }
+    if (onRefreshRegistrations) {
+      onRefreshRegistrations();
+    }
+  };
+
+  // 1A. Toggle Event Attendance Check-In (เช็คชื่อมาเข้าร่วมการฝึก)
+  const handleToggleAttendanceCheckIn = async (participant) => {
+    if (!participant || isActionLoading || !isAdmin) return;
+    const currentlyCheckedIn = Boolean(participant.attendance_checked_in);
+    const nextCheckedIn = !currentlyCheckedIn;
+    const nowIso = nextCheckedIn ? new Date().toISOString() : '';
 
     setIsActionLoading(true);
     try {
+      const updates = {
+        attendance_checked_in: nextCheckedIn,
+        attendance_checked_in_at: nowIso
+      };
+      await persistParticipantUpdates(participant, updates);
+
+      const updatedParticipant = {
+        ...participant,
+        ...updates
+      };
+      setMatchResult(prev => prev ? { ...prev, participant: updatedParticipant } : prev);
+      playAudioChime(true);
+      triggerHaptic(true);
+      setActionSuccessMsg(
+        nextCheckedIn
+          ? `✓ เช็คชื่อมาเข้าร่วมการฝึกสำเร็จ! (${resolvePersonFullNameWithTitle(participant).fullName})`
+          : 'ยกเลิกสถานะการเช็คชื่อเข้าร่วมการฝึกเรียบร้อยแล้ว'
+      );
+    } catch (err) {
+      console.error('Toggle attendance check-in error:', err);
+      setScanError('บันทึกการเช็คชื่อไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // 1B. Toggle ID Card Received / Handover (สแกนยืนยันรับบัตรประจำตัว ID Card แล้ว)
+  const handleToggleIdCardReceived = async (participant) => {
+    if (!participant || isActionLoading || !isAdmin) return;
+    const currentlyReceived = Boolean(participant.id_card_received);
+    const nextReceived = !currentlyReceived;
+    const nowIso = nextReceived ? new Date().toISOString() : '';
+
+    setIsActionLoading(true);
+    try {
+      const updates = {
+        id_card_received: nextReceived,
+        id_card_received_at: nowIso
+      };
+      await persistParticipantUpdates(participant, updates);
+
+      const updatedParticipant = {
+        ...participant,
+        ...updates
+      };
+      setMatchResult(prev => prev ? { ...prev, participant: updatedParticipant } : prev);
+      playAudioChime(true);
+      triggerHaptic(true);
+      setActionSuccessMsg(
+        nextReceived
+          ? `✓ บันทึกการรับบัตรประจำตัว ID Card เรียบร้อยแล้ว!`
+          : 'ยกเลิกสถานะการรับบัตร ID Card เรียบร้อยแล้ว'
+      );
+    } catch (err) {
+      console.error('Toggle ID card received error:', err);
+      setScanError('บันทึกสถานะรับบัตร ID Card ไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // 1C. Mark Trainee Training Shirt Received (สแกนยืนยันรับเสื้อฝึกโครงการ)
+  const handleToggleTraineeShirt = async (participant) => {
+    if (!participant || isActionLoading || !isAdmin) return;
+    const userId = participant.user_id || participant.id;
+    const currentlyReceived = participant.shirt_pickup_status === 'received' || participant.shirt_received === true;
+    const nextReceived = !currentlyReceived;
+    const nowIso = nextReceived ? new Date().toISOString() : null;
+
+    setIsActionLoading(true);
+    try {
+      const updates = {
+        shirt_pickup_status: nextReceived ? 'received' : 'pending',
+        shirt_received: nextReceived,
+        shirt_received_date: nowIso
+      };
       if (onMarkRegistrationShirtReceived) {
         await onMarkRegistrationShirtReceived(userId, nextReceived);
-      } else if (onUpdateAllocation) {
-        await onUpdateAllocation(userId, {
-          shirt_pickup_status: nextReceived ? 'received' : 'pending',
-          shirt_received: nextReceived,
-          shirt_received_date: nextReceived ? new Date().toISOString() : null
-        });
+      } else {
+        await persistParticipantUpdates(participant, updates);
       }
 
       // Optimistically update local participant object
       const updatedParticipant = {
         ...participant,
-        shirt_pickup_status: nextReceived ? 'received' : 'pending',
-        shirt_received: nextReceived,
-        shirt_received_date: nextReceived ? new Date().toISOString() : null
+        ...updates
       };
 
       setMatchResult(prev => prev ? { ...prev, participant: updatedParticipant } : prev);
@@ -591,12 +739,46 @@ export default function UniversalScannerModal({
       triggerHaptic(true);
       setActionSuccessMsg(
         nextReceived
-          ? `✓ บันทึกเช็คชื่อรับเสื้อฝึกโครงการ ({size: ${participant.shirt_size || 'L'}}) สำเร็จแล้ว!`
+          ? `✓ บันทึกเช็คชื่อรับเสื้อฝึกโครงการ (ไซส์ ${participant.shirt_size || 'L'}) สำเร็จแล้ว!`
           : 'ยกเลิกสถานะรับเสื้อฝึกเรียบร้อยแล้ว'
       );
     } catch (err) {
       console.error('Toggle shirt received error:', err);
       setScanError('บันทึกสถานะเสื้อฝึกไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // 1D. 1-Click Fast All-in-One Check-In (มาเข้าร่วมการฝึก + รับบัตร ID Card + รับเสื้อฝึก)
+  const handleCheckInAllThree = async (participant) => {
+    if (!participant || isActionLoading || !isAdmin) return;
+    const nowIso = new Date().toISOString();
+    setIsActionLoading(true);
+    try {
+      const updates = {
+        attendance_checked_in: true,
+        attendance_checked_in_at: participant.attendance_checked_in_at || nowIso,
+        id_card_received: true,
+        id_card_received_at: participant.id_card_received_at || nowIso,
+        shirt_pickup_status: 'received',
+        shirt_received: true,
+        shirt_received_date: participant.shirt_received_date || nowIso
+      };
+      await persistParticipantUpdates(participant, updates);
+      const updatedParticipant = {
+        ...participant,
+        ...updates
+      };
+      setMatchResult(prev => prev ? { ...prev, participant: updatedParticipant } : prev);
+      playAudioChime(true);
+      triggerHaptic(true);
+      setActionSuccessMsg(
+        `⚡ เช็คอินด่วนครบ 3 รายการสำเร็จ! (มาเข้าร่วมฝึก + รับบัตร ID Card + รับเสื้อฝึก ไซส์ ${participant.shirt_size || 'L'})`
+      );
+    } catch (err) {
+      console.error('All-in-one check-in error:', err);
+      setScanError('บันทึกเช็คอินด่วนไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'));
     } finally {
       setIsActionLoading(false);
     }
@@ -743,21 +925,42 @@ export default function UniversalScannerModal({
                 <QrCode className="h-5 w-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-sm font-black text-white sm:text-base">
-                    ระบบสแกน QR อัจฉริยะ (Universal Scanner)
+                    {isAdmin
+                      ? 'ระบบสแกน QR อเนกประสงค์ (Admin Universal Scanner)'
+                      : 'ระบบสแกน QR ตรวจสอบข้อมูลผู้เข้าร่วมโครงการ (Public Verify)'}
                   </h2>
-                  <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-300">
-                    จุดเดียวสแกนได้ทุกอย่าง
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                    isAdmin
+                      ? 'border-orange-400/30 bg-orange-500/10 text-orange-300'
+                      : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                  }`}>
+                    {isAdmin ? 'Admin Mode • เช็คชื่อ & รับบัตรครบวงจร' : 'Verified Check • สำหรับบุคคลทั่วไป & สมาชิก'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  ตรวจบัตรประจำตัว ID • เช็คชื่อรับเสื้อฝึก • ส่งมอบสินค้า & ออเดอร์
+                  {isAdmin
+                    ? 'ตรวจบัตรประจำตัว ID • เช็คชื่อมาเข้าร่วมฝึก • ยืนยันรับบัตร ID Card • ส่งมอบเสื้อฝึก & สินค้า'
+                    : 'สแกน QR บนบัตรเพื่อตรวจสอบสถานะการรับรอง สังกัด มหาวิทยาลัย สิทธิ์การร่วมฝึก และสถานะการเช็คอิน'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              {!isAdmin && onOpenAdminLogin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose?.();
+                    onOpenAdminLogin();
+                  }}
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-purple-500/40 bg-purple-500/15 px-3 py-1.5 text-[11px] font-bold text-purple-200 hover:bg-purple-500/25 transition-colors"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-purple-400" />
+                  <span>โหมดเจ้าหน้าที่ Admin</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -1058,330 +1261,610 @@ export default function UniversalScannerModal({
                 </div>
 
                 {/* 3A. PARTICIPANT VIEW */}
-                {selectedResultType === 'participant' && matchResult.participant && (
-                  <div className="space-y-4">
-                    {/* Participant Profile Banner */}
-                    <div className="rounded-2xl border border-orange-500/30 bg-gradient-to-br from-slate-900 via-slate-900/90 to-orange-950/20 p-4 shadow-xl">
-                      <div className="flex flex-col sm:flex-row gap-4 items-start">
-                        {/* Photo */}
-                        <div className="relative aspect-[4/5] w-24 shrink-0 overflow-hidden rounded-xl border-2 border-orange-400/60 bg-slate-950 shadow-md">
-                          <img
-                            src={participantCardData?.photo || '/images/logo/jre_logo_square.png'}
-                            alt={participantCardData?.thaiName || 'รูปผู้สมัคร'}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = '/images/logo/jre_logo_square.png';
-                            }}
-                          />
-                          <div className="absolute inset-x-0 bottom-0 bg-slate-950/80 py-0.5 text-center text-[7px] font-black text-orange-300">
-                            PARTICIPANT
+                {selectedResultType === 'participant' && matchResult.participant && (() => {
+                  const p = matchResult.participant;
+                  const uniInfo = resolveUniversityInfo(p);
+                  const roleCode = participantCardData?.badgeRole || 'PARTICIPANT';
+                  const isDevRole = roleCode === 'DEV';
+                  const isStaffRole = roleCode === 'STAFF';
+                  const isCheckedIn = Boolean(p.attendance_checked_in);
+                  const isIdCardReceived = Boolean(p.id_card_received);
+                  const isShirtReceived = p.shirt_pickup_status === 'received' || p.shirt_received === true;
+                  const isPaymentVerified =
+                    p.payment_status === 'paid' ||
+                    p.payment_status === 'full' ||
+                    p.installment_1_status === 'paid' ||
+                    isStaffRole ||
+                    isDevRole;
+
+                  const roleTheme = isDevRole
+                    ? {
+                        badge: 'DEVRCPMSU • ผู้พัฒนาระบบและคณะทำงาน',
+                        shortTag: 'DEVRCPMSU',
+                        border: 'border-purple-500/50',
+                        bg: 'from-purple-950/80 via-slate-900 to-indigo-950/60',
+                        pill: 'bg-purple-500/20 text-purple-200 border-purple-400/50',
+                        photoRibbon: 'bg-purple-600 text-white'
+                      }
+                    : isStaffRole
+                    ? {
+                        badge: 'ORGANIZING STAFF • คณะกรรมการดำเนินงาน',
+                        shortTag: 'ORGANIZING STAFF',
+                        border: 'border-amber-500/50',
+                        bg: 'from-amber-950/70 via-slate-900 to-orange-950/40',
+                        pill: 'bg-amber-500/20 text-amber-200 border-amber-400/50',
+                        photoRibbon: 'bg-amber-500 text-slate-950'
+                      }
+                    : {
+                        badge: 'PARTICIPANT • ผู้เข้ารับการฝึกอบรม',
+                        shortTag: 'PARTICIPANT',
+                        border: 'border-sky-500/50',
+                        bg: 'from-sky-950/70 via-slate-900 to-blue-950/40',
+                        pill: 'bg-sky-500/20 text-sky-200 border-sky-400/50',
+                        photoRibbon: 'bg-sky-500 text-slate-950'
+                      };
+
+                  return (
+                    <div className="space-y-4">
+                      {/* OFFICIAL VERIFICATION & ELIGIBILITY BANNER */}
+                      <div className="rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/70 p-3.5 sm:p-4 shadow-lg">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 shadow-inner">
+                              <ShieldCheck className="h-6 w-6 text-emerald-400" />
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs sm:text-sm font-black text-emerald-300">
+                                  ✓ ได้รับการรับรองอย่างเป็นทางการ (Official JRE 2027 Verified)
+                                </span>
+                                <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${roleTheme.pill}`}>
+                                  {roleTheme.badge}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 mt-0.5">
+                                โครงการฝึกซ้อมร่วมเครือข่ายกู้ภัยนักศึกษา JRE 2027 ณ มหาวิทยาลัยมหาสารคาม (14–15 พ.ย. 2569)
+                              </p>
+                            </div>
+                          </div>
+
+                          <a
+                            href={`/verify?badge=${encodeURIComponent(participantCardData?.cardCode || '')}&id=${encodeURIComponent(p.id || p.user_id || '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/25 transition-colors inline-flex items-center gap-1"
+                          >
+                            <span>เปิดลิงก์หน้าตรวจสอบ</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </a>
+                        </div>
+
+                        {/* 4 KEY REAL-TIME VERIFICATION & ATTENDANCE STATUS CARDS */}
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {/* 1. สถานะการรับรอง */}
+                          <div className="rounded-xl border border-emerald-500/30 bg-slate-950/70 p-2.5">
+                            <span className="text-[10px] font-bold text-slate-400 block">1. สถานะข้อมูลในระบบ</span>
+                            <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-black text-emerald-300">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              ข้อมูลถูกต้อง • รับรองแล้ว
+                            </span>
+                          </div>
+
+                          {/* 2. สิทธิ์การร่วมฝึก */}
+                          <div className="rounded-xl border border-sky-500/30 bg-slate-950/70 p-2.5">
+                            <span className="text-[10px] font-bold text-slate-400 block">2. สิทธิ์การเข้าร่วมฝึก</span>
+                            <span className={`mt-0.5 inline-flex items-center gap-1 text-xs font-black ${isPaymentVerified ? 'text-sky-300' : 'text-amber-300'}`}>
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                              {isPaymentVerified ? 'มีสิทธิ์เข้าร่วมการฝึก' : 'รอยืนยันสิทธิ์การชำระเงิน'}
+                            </span>
+                          </div>
+
+                          {/* 3. สถานะมาเข้าร่วมฝึก (เช็คชื่อหน้างาน) */}
+                          <div className={`rounded-xl border p-2.5 ${
+                            isCheckedIn
+                              ? 'border-emerald-500/50 bg-emerald-950/40'
+                              : 'border-amber-500/30 bg-slate-950/70'
+                          }`}>
+                            <span className="text-[10px] font-bold text-slate-400 block">3. การมาเข้าร่วมฝึก (เช็คชื่อ)</span>
+                            <span className={`mt-0.5 inline-flex items-center gap-1 text-xs font-black ${
+                              isCheckedIn ? 'text-emerald-300' : 'text-amber-300'
+                            }`}>
+                              {isCheckedIn ? (
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                  <span>มาเข้าร่วมการฝึกแล้ว</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                  <span>รอเช็คชื่อหน้างาน</span>
+                                </>
+                              )}
+                            </span>
+                            {isCheckedIn && p.attendance_checked_in_at && (
+                              <span className="block text-[9px] text-emerald-200/80 mt-0.5">
+                                เวลา: {new Date(p.attendance_checked_in_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 4. สถานะรับบัตร ID Card & เสื้อฝึก */}
+                          <div className={`rounded-xl border p-2.5 ${
+                            isIdCardReceived
+                              ? 'border-emerald-500/50 bg-emerald-950/40'
+                              : 'border-slate-700 bg-slate-950/70'
+                          }`}>
+                            <span className="text-[10px] font-bold text-slate-400 block">4. รับบัตร ID Card & เสื้อฝึก</span>
+                            <div className="mt-0.5 flex flex-col gap-0.5">
+                              <span className={`inline-flex items-center gap-1 text-[11px] font-black ${
+                                isIdCardReceived ? 'text-emerald-300' : 'text-amber-300'
+                              }`}>
+                                🪪 {isIdCardReceived ? 'รับบัตร ID Card แล้ว' : 'รอรับบัตร ID Card'}
+                              </span>
+                              <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${
+                                isShirtReceived ? 'text-emerald-300' : 'text-slate-300'
+                              }`}>
+                                👕 {isShirtReceived ? `รับเสื้อแล้ว (${p.shirt_size || 'L'})` : `รอรับเสื้อ (${p.shirt_size || 'L'})`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PARTICIPANT PROFILE & AFFILIATION BANNER */}
+                      <div className={`rounded-2xl border ${roleTheme.border} bg-gradient-to-br ${roleTheme.bg} p-4 shadow-xl`}>
+                        <div className="flex flex-col sm:flex-row gap-4 items-start">
+                          {/* Photo */}
+                          <div className="relative aspect-[4/5] w-28 shrink-0 overflow-hidden rounded-xl border-2 border-white/30 bg-slate-950 shadow-lg mx-auto sm:mx-0">
+                            <img
+                              src={participantCardData?.photo || '/images/logo/jre_logo_square.png'}
+                              alt={participantCardData?.thaiName || 'รูปผู้สมัคร'}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = '/images/logo/jre_logo_square.png';
+                              }}
+                            />
+                            <div className={`absolute inset-x-0 bottom-0 py-0.5 text-center text-[8px] font-black tracking-wider ${roleTheme.photoRibbon}`}>
+                              {roleTheme.shortTag}
+                            </div>
+                          </div>
+
+                          {/* Name, Callsign, Unit & University */}
+                          <div className="flex-1 min-w-0 w-full">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-md border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[11px] font-mono font-black text-orange-300">
+                                🪪 {participantCardData?.cardCode || 'JRE27-ID'}
+                              </span>
+                              <span className="rounded-md border border-lime-400/40 bg-lime-400/15 px-2.5 py-0.5 text-[11px] font-mono font-black text-lime-200">
+                                📡 นามเรียกขาน: {participantCardData?.callsign || '-'}
+                              </span>
+                              <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200">
+                                ⭐ ชื่อเล่น: {participantCardData?.nickname || '-'}
+                              </span>
+                              <span className="rounded-md border border-rose-400/40 bg-rose-500/15 px-2 py-0.5 text-[11px] font-black text-rose-200">
+                                🩸 หมู่เลือด: {participantCardData?.bloodGroup || '-'}
+                              </span>
+                            </div>
+
+                            <h3 className="mt-2 text-lg sm:text-xl font-black text-white leading-snug">
+                              {participantCardData?.thaiName}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-amber-300 font-bold tracking-wide">
+                              {participantCardData?.englishName}
+                            </p>
+
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                              <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                  🏛️ สังกัดสถาบัน / มหาวิทยาลัย (AFFILIATION)
+                                </span>
+                                <span className="font-black text-white text-xs sm:text-sm mt-0.5 block">
+                                  {participantCardData?.affiliation || uniInfo?.university || p.institution || '-'}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                  🚑 หน่วยงาน / ชมรมกู้ภัย (UNIT)
+                                </span>
+                                <span className="font-black text-orange-300 text-xs sm:text-sm mt-0.5 block">
+                                  {participantCardData?.unit || uniInfo?.club || p.unit || '-'}
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                  🏕️ กลุ่มฝึกปฏิบัติ & ห้องพัก
+                                </span>
+                                <span className="font-bold text-slate-200 mt-0.5 block">
+                                  กลุ่มฝึก: <strong className="text-emerald-300">{p.group_assigned || 'รอกำหนด'}</strong> • ห้องพัก: <strong className="text-sky-300">{p.room_assigned || 'รอกำหนด'}</strong>
+                                </span>
+                              </div>
+
+                              <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                  👕 เสื้อฝึกปฏิบัติการ & การติดต่อ
+                                </span>
+                                <span className="font-bold text-slate-200 mt-0.5 block">
+                                  เสื้อไซส์ <strong className="text-orange-300">{p.shirt_size || 'L'}</strong>
+                                  {isAdmin && p.phone ? (
+                                    <>
+                                      {' • โทร: '}
+                                      <a href={`tel:${p.phone}`} className="text-orange-400 hover:underline font-mono">
+                                        {p.phone}
+                                      </a>
+                                    </>
+                                  ) : null}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Name & Call Sign */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-md border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[10px] font-mono font-black text-orange-300">
-                              {participantCardData?.cardCode || 'JRE27-ID'}
-                            </span>
-                            <span className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[10px] font-mono font-bold text-sky-200">
-                              📡 {participantCardData?.callsign || '-'}
-                            </span>
-                            <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">
-                              ชื่อเล่น: {participantCardData?.nickname || '-'}
-                            </span>
-                            <span className="rounded-md border border-rose-400/30 bg-rose-400/10 px-2 py-0.5 text-[10px] font-black text-rose-300">
-                              กรุ๊ปเลือด: {participantCardData?.bloodGroup || '-'}
-                            </span>
-                          </div>
+                        {/* Medical & Food Allergy Alert Banner (Admin Only for privacy protection) */}
+                        {isAdmin && (() => {
+                          const med = getApplicantMedical(p);
+                          const allergy = getApplicantAllergy(p);
+                          const hasMed = hasMedicalCondition(p);
+                          const hasAllergy = hasFoodOrDrugAllergy(p);
+                          const hasSpecial = Boolean(p.is_special_care || p.special_care_note || p.special_notes);
+                          
+                          if (!hasMed && !hasAllergy && !hasSpecial) return null;
 
-                          <h3 className="mt-1.5 text-lg font-black text-white leading-snug">
-                            {participantCardData?.thaiName}
-                          </h3>
-                          <p className="text-xs text-orange-300/90 font-medium">
-                            {participantCardData?.englishName}
-                          </p>
+                          return (
+                            <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-2.5 text-xs text-rose-200 space-y-1.5 shadow-sm">
+                              <div className="flex items-center gap-1.5 font-bold text-rose-400">
+                                <HeartPulse className="h-4 w-4 text-rose-400" />
+                                <span>ข้อมูลสุขภาพและการดูแลพิเศษ (เฉพาะเจ้าหน้าที่ Admin)</span>
+                              </div>
+                              {hasMed && (
+                                <p className="text-[11px] font-medium text-rose-200 bg-rose-900/30 px-2 py-1 rounded-md border border-rose-800/40">
+                                  🩺 โรคประจำตัว / ข้อจำกัดทางกาย: <span className="font-bold text-white">{med}</span>
+                                </p>
+                              )}
+                              {hasAllergy && (
+                                <p className="text-[11px] font-medium text-amber-200 bg-amber-900/30 px-2 py-1 rounded-md border border-amber-800/40">
+                                  🍽️ แพ้อาหาร / แพ้ยา / ข้อจำกัดอาหาร: <span className="font-bold text-amber-300">{allergy}</span>
+                                </p>
+                              )}
+                              {hasSpecial && (
+                                <p className="text-[11px] font-medium text-purple-200 bg-purple-900/30 px-2 py-1 rounded-md border border-purple-800/40">
+                                  ⚠️ ดูแลเป็นพิเศษ: <span className="font-bold text-white">{p.special_care_note || p.special_notes || 'ต้องได้รับการดูแลพิเศษ'}</span>
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
 
-                          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                            <div className="rounded-lg bg-slate-950/60 p-2 border border-slate-800">
-                              <span className="text-[10px] text-slate-400 block">หน่วย / สังกัด</span>
-                              <span className="font-bold text-slate-200 truncate block">
-                                {participantCardData?.unit || '-'} ({participantCardData?.affiliation || '-'})
-                              </span>
+                      {/* ADMIN MULTI-PURPOSE CHECK-IN & HANDOVER PANEL (Only shown when isAdmin === true) */}
+                      {isAdmin && (
+                        <div className="rounded-2xl border-2 border-orange-500/40 bg-slate-950/90 p-4 space-y-3 shadow-xl">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                            <div>
+                              <h4 className="text-xs sm:text-sm font-black text-orange-300 flex items-center gap-1.5">
+                                <QrCode className="h-4 w-4 text-orange-400" />
+                                <span>ระบบบันทึกการลงทะเบียนหน้างานสำหรับ Admin (Check-In & Handover)</span>
+                              </h4>
+                              <p className="text-[11px] text-slate-400">
+                                กดปุ่มด้านล่างเพื่อบันทึกเช็คชื่อมาเข้าร่วมการฝึก, ยืนยันรับบัตร ID Card และส่งมอบเสื้อฝึก
+                              </p>
                             </div>
-                            <div className="rounded-lg bg-slate-950/60 p-2 border border-slate-800">
-                              <span className="text-[10px] text-slate-400 block">ห้องพัก & กลุ่มฝึก</span>
-                              <span className="font-bold text-slate-200 block">
-                                {matchResult.participant.room_assigned || 'ยังไม่จัดห้อง'} • กลุ่ม: {matchResult.participant.group_assigned || 'ยังไม่จัด'}
-                              </span>
-                            </div>
-                            <div className="rounded-lg bg-slate-950/60 p-2 border border-slate-800 col-span-2 sm:col-span-1">
-                              <span className="text-[10px] text-slate-400 block">เบอร์ติดต่อ</span>
-                              <a
-                                href={`tel:${matchResult.participant.phone}`}
-                                className="font-bold text-orange-400 hover:underline block"
+
+                            {(!isCheckedIn || !isIdCardReceived || !isShirtReceived) && (
+                              <button
+                                type="button"
+                                onClick={() => handleCheckInAllThree(p)}
+                                disabled={isActionLoading}
+                                className="rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 px-3.5 py-2 text-xs font-black text-slate-950 shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
                               >
-                                {matchResult.participant.phone || '-'}
-                              </a>
+                                <Sparkles className="h-4 w-4" />
+                                <span>⚡ เช็คอินด่วนครบ 3 รายการ (มาฝึก + รับบัตร ID + รับเสื้อ)</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            {/* BUTTON 1: ATTENDANCE CHECK-IN (เช็คชื่อมาเข้าร่วมฝึก) */}
+                            <div className={`rounded-xl border p-3 flex flex-col justify-between gap-2 ${
+                              isCheckedIn
+                                ? 'border-emerald-500/50 bg-emerald-950/30'
+                                : 'border-slate-800 bg-slate-900/90'
+                            }`}>
+                              <div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-xs font-black text-white">1. เช็คชื่อเข้าร่วมฝึก</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                    isCheckedIn ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                                  }`}>
+                                    {isCheckedIn ? 'มาแล้ว' : 'รอเช็คชื่อ'}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                  {isCheckedIn && p.attendance_checked_in_at
+                                    ? `เช็คอินเมื่อ ${new Date(p.attendance_checked_in_at).toLocaleTimeString('th-TH')}`
+                                    : 'ยืนยันว่าเดินทางมาเข้าร่วมการฝึก'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAttendanceCheckIn(p)}
+                                disabled={isActionLoading}
+                                className={`w-full py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                  isCheckedIn
+                                    ? 'bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-slate-700'
+                                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-md'
+                                }`}
+                              >
+                                {isCheckedIn ? (
+                                  <>
+                                    <X className="h-3.5 w-3.5" />
+                                    <span>ยกเลิกเช็คชื่อ</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    <span>✓ เช็คชื่อมาเข้าร่วมฝึก</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* BUTTON 2: ID CARD RECEIVED (ยืนยันรับบัตร ID Card แล้ว) */}
+                            <div className={`rounded-xl border p-3 flex flex-col justify-between gap-2 ${
+                              isIdCardReceived
+                                ? 'border-emerald-500/50 bg-emerald-950/30'
+                                : 'border-slate-800 bg-slate-900/90'
+                            }`}>
+                              <div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-xs font-black text-white">2. รับบัตร ID Card</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                    isIdCardReceived ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                                  }`}>
+                                    {isIdCardReceived ? 'รับบัตรแล้ว' : 'รอรับบัตร'}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                  {isIdCardReceived && p.id_card_received_at
+                                    ? `รับเมื่อ ${new Date(p.id_card_received_at).toLocaleTimeString('th-TH')}`
+                                    : `รหัส ${participantCardData?.cardCode || 'JRE27'}`}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleIdCardReceived(p)}
+                                disabled={isActionLoading}
+                                className={`w-full py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                  isIdCardReceived
+                                    ? 'bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-slate-700'
+                                    : 'bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-400 hover:to-blue-400 text-slate-950 shadow-md'
+                                }`}
+                              >
+                                {isIdCardReceived ? (
+                                  <>
+                                    <X className="h-3.5 w-3.5" />
+                                    <span>ยกเลิกรับบัตร</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    <span>🪪 ยืนยันรับบัตร ID Card แล้ว</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* BUTTON 3: TRAINING SHIRT PICKUP (ยืนยันรับเสื้อฝึกแล้ว) */}
+                            <div className={`rounded-xl border p-3 flex flex-col justify-between gap-2 ${
+                              isShirtReceived
+                                ? 'border-emerald-500/50 bg-emerald-950/30'
+                                : 'border-slate-800 bg-slate-900/90'
+                            }`}>
+                              <div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-xs font-black text-white">
+                                    3. เสื้อฝึก (ไซส์ {p.shirt_size || 'L'})
+                                  </span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                    isShirtReceived ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                                  }`}>
+                                    {isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ'}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                  คอเต่าซิป แขนสั้น โทนสีเทา–ดำ
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTraineeShirt(p)}
+                                disabled={isActionLoading}
+                                className={`w-full py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                  isShirtReceived
+                                    ? 'bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-slate-700'
+                                    : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 shadow-md'
+                                }`}
+                              >
+                                {isShirtReceived ? (
+                                  <>
+                                    <X className="h-3.5 w-3.5" />
+                                    <span>ยกเลิกรับเสื้อ</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <PackageCheck className="h-4 w-4" />
+                                    <span>👕 ส่งมอบเสื้อ ({p.shirt_size || 'L'})</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* Medical & Food Allergy Alert Banner */}
-                      {(() => {
-                        const p = matchResult.participant;
-                        const med = getApplicantMedical(p);
-                        const allergy = getApplicantAllergy(p);
-                        const hasMed = hasMedicalCondition(p);
-                        const hasAllergy = hasFoodOrDrugAllergy(p);
-                        const hasSpecial = Boolean(p.is_special_care || p.special_care_note || p.special_notes);
-                        
-                        if (!hasMed && !hasAllergy && !hasSpecial) return null;
-
-                        return (
-                          <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-2.5 text-xs text-rose-200 space-y-1.5 shadow-sm">
-                            <div className="flex items-center gap-1.5 font-bold text-rose-400">
-                              <HeartPulse className="h-4 w-4 text-rose-400" />
-                              <span>ข้อมูลสุขภาพและการดูแลพิเศษ (Medical & Food Allergy Alert)</span>
+                      {/* ACTION 2: LINKED MERCHANDISE ORDERS (Admin Only) */}
+                      {isAdmin && matchResult.linkedOrders && matchResult.linkedOrders.length > 0 && (
+                        <div className="rounded-2xl border border-purple-500/40 bg-purple-950/20 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Tag className="h-4 w-4 text-purple-400" />
+                              <h4 className="text-xs font-bold text-purple-200">
+                                คำสั่งซื้อสินค้าเพิ่มเติมในระบบ ({matchResult.linkedOrders.length} รายการ)
+                              </h4>
                             </div>
-                            {hasMed && (
-                              <p className="text-[11px] font-medium text-rose-200 bg-rose-900/30 px-2 py-1 rounded-md border border-rose-800/40">
-                                🩺 โรคประจำตัว / ข้อจำกัดทางกาย: <span className="font-bold text-white">{med}</span>
-                              </p>
-                            )}
-                            {hasAllergy && (
-                              <p className="text-[11px] font-medium text-amber-200 bg-amber-900/30 px-2 py-1 rounded-md border border-amber-800/40">
-                                🍽️ แพ้อาหาร / แพ้ยา / ข้อจำกัดอาหาร: <span className="font-bold text-amber-300">{allergy}</span>
-                              </p>
-                            )}
-                            {hasSpecial && (
-                              <p className="text-[11px] font-medium text-purple-200 bg-purple-900/30 px-2 py-1 rounded-md border border-purple-800/40">
-                                ⚠️ ดูแลเป็นพิเศษ: <span className="font-bold text-white">{p.special_care_note || p.special_notes || 'ต้องได้รับการดูแลพิเศษ'}</span>
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    {/* 1-CLICK ACTION 1: TRAINING SHIRT PICKUP (เช็คชื่อรับเสื้อฝึกโครงการ) */}
-                    <div className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-black text-white">
-                              เสื้อฝึก Joint Response Exercise (JRE 2027)
-                            </h4>
-                            <span className="rounded-md border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-xs font-black text-orange-300">
-                              ไซส์ {matchResult.participant.shirt_size || 'L'}
+                            <span className="text-[10px] text-purple-300">
+                              ส่งมอบพร้อมกันที่โต๊ะนี้ได้ทันที
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            คอเต่าซิป แขนสั้น โทนสีเทา–ดำ • สำหรับสวมใส่ในการฝึกภาคปฏิบัติ
-                          </p>
+
+                          <div className="space-y-2">
+                            {matchResult.linkedOrders.map((ord) => {
+                              const ordReceived = ord.pickup_status === 'received';
+                              return (
+                                <div
+                                  key={ord.id}
+                                  className="rounded-xl border border-slate-800 bg-slate-900/90 p-3 flex flex-wrap items-center justify-between gap-2"
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono text-xs font-bold text-white">
+                                        {ord.order_number}
+                                      </span>
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${ordReceived ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                                        {ordReceived ? 'รับแล้ว' : 'ยังไม่ได้รับ'}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      ยอด {ord.total_amount || 0} บ. • {ord.items?.length || 1} รายการสินค้า
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleOrderReceived(ord)}
+                                      disabled={isActionLoading}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                        ordReceived
+                                          ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                          : 'bg-purple-600 hover:bg-purple-500 text-white'
+                                      }`}
+                                    >
+                                      {ordReceived ? 'ยกเลิก' : '✓ มอบสินค้าชิ้นนี้'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
+                      )}
 
-                        {/* Status chip */}
-                        {matchResult.participant.shirt_pickup_status === 'received' || matchResult.participant.shirt_received === true ? (
-                          <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/50 bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-300">
-                            <CheckCircle2 className="h-4 w-4" />
-                            รับเสื้อฝึกแล้ว
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-amber-500/20 px-3 py-1 text-xs font-black text-amber-300">
-                            <Clock className="h-4 w-4" />
-                            ยังไม่ได้รับเสื้อฝึก
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Primary Shirt Toggle Action Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleTraineeShirt(matchResult.participant)}
-                        disabled={isActionLoading}
-                        className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 ${
-                          matchResult.participant.shirt_pickup_status === 'received' || matchResult.participant.shirt_received === true
-                            ? 'bg-slate-800 hover:bg-rose-950/50 text-slate-300 hover:text-rose-300 border border-slate-700'
-                            : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/40'
-                        }`}
-                      >
-                        {isActionLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : matchResult.participant.shirt_pickup_status === 'received' || matchResult.participant.shirt_received === true ? (
-                          <>
-                            <X className="h-4 w-4" />
-                            <span>ยกเลิกสถานะรับเสื้อ (กรณีแตะผิด)</span>
-                          </>
-                        ) : (
-                          <>
-                            <PackageCheck className="h-4 w-4" />
-                            <span>✓ เช็คชื่อส่งมอบเสื้อฝึก (ไซส์ {matchResult.participant.shirt_size || 'L'}) เรียบร้อย</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* ACTION 2: LINKED MERCHANDISE ORDERS (If participant bought store items) */}
-                    {matchResult.linkedOrders && matchResult.linkedOrders.length > 0 && (
-                      <div className="rounded-2xl border border-purple-500/40 bg-purple-950/20 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-purple-400" />
-                            <h4 className="text-xs font-bold text-purple-200">
-                              คำสั่งซื้อสินค้าเพิ่มเติมในระบบ ({matchResult.linkedOrders.length} รายการ)
-                            </h4>
-                          </div>
-                          <span className="text-[10px] text-purple-300">
-                            ส่งมอบพร้อมกันที่โต๊ะนี้ได้ทันที
+                      {/* ACTION 3: DIGITAL ID CARD VIEW & PRINT (Shown to both Public & Admin!) */}
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3.5 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-orange-400" />
+                          <span className="text-xs font-bold text-white">
+                            บัตรประจำตัวผู้เข้าร่วมโครงการ (Official Digital ID Card — ด้านหน้า & ด้านหลัง)
                           </span>
                         </div>
-
-                        <div className="space-y-2">
-                          {matchResult.linkedOrders.map((ord) => {
-                            const ordReceived = ord.pickup_status === 'received';
-                            return (
-                              <div
-                                key={ord.id}
-                                className="rounded-xl border border-slate-800 bg-slate-900/90 p-3 flex flex-wrap items-center justify-between gap-2"
-                              >
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-xs font-bold text-white">
-                                      {ord.order_number}
-                                    </span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${ordReceived ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-                                      {ordReceived ? 'รับแล้ว' : 'ยังไม่ได้รับ'}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-400 mt-0.5">
-                                    ยอด {ord.total_amount || 0} บ. • {ord.items?.length || 1} รายการสินค้า
-                                  </p>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleOrderReceived(ord)}
-                                    disabled={isActionLoading}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                      ordReceived
-                                        ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                        : 'bg-purple-600 hover:bg-purple-500 text-white'
-                                    }`}
-                                  >
-                                    {ordReceived ? 'ยกเลิก' : '✓ มอบสินค้าชิ้นนี้'}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ACTION 3: DIGITAL ID CARD VIEW & PRINT */}
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3.5 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-orange-400" />
-                        <span className="text-xs font-bold text-white">
-                          ดูตัวอย่างบัตรประจำตัว Digital ID Card / สั่งพิมพ์ PDF
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewingIdCard(!previewingIdCard)}
-                        className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-300 transition-colors hover:bg-orange-500/20"
-                      >
-                        {previewingIdCard ? 'ซ่อนบัตร' : '🪪 แสดงบัตร ID Card'}
-                      </button>
-                    </div>
-
-                    {previewingIdCard && (
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 animate-in fade-in">
-                        <IDCardPreview
-                          registration={matchResult.participant}
-                          showActions={true}
-                        />
-                      </div>
-                    )}
-
-                    {/* ACTION 4: ADMIN NOTES & IN-APP ALERT MESSAGE */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Internal Note */}
-                      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
-                        <span className="block text-xs font-bold text-slate-300">
-                          📝 บันทึกเฉพาะผู้ดูแลระบบ (Admin Private Note)
-                        </span>
-                        <textarea
-                          rows={2}
-                          value={internalNote}
-                          onChange={(e) => setInternalNote(e.target.value)}
-                          placeholder="บันทึกข้อสังเกต หรือหมายเหตุเฉพาะเจ้าหน้าที่..."
-                          className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none"
-                        />
                         <button
                           type="button"
-                          onClick={handleSaveInternalNote}
-                          disabled={isSavingNote}
-                          className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors"
+                          onClick={() => setPreviewingIdCard(!previewingIdCard)}
+                          className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-300 transition-colors hover:bg-orange-500/20"
                         >
-                          {isSavingNote ? 'กำลังบันทึก…' : 'บันทึกโน้ต'}
+                          {previewingIdCard ? 'ซ่อนตัวอย่างบัตร' : '🪪 แสดงบัตร ID Card เต็มใบ'}
                         </button>
                       </div>
 
-                      {/* In-App Notification Sender */}
-                      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-300">
-                            💬 ส่งข้อความแจ้งเตือนถึงผู้สมัคร
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowMessageForm(!showMessageForm)}
-                            className="text-[11px] text-orange-400 hover:underline"
-                          >
-                            {showMessageForm ? 'ยกเลิก' : '+ เขียนข้อความ'}
-                          </button>
+                      {previewingIdCard && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 animate-in fade-in">
+                          <IDCardPreview
+                            registration={matchResult.participant}
+                            showActions={isAdmin}
+                          />
                         </div>
+                      )}
 
-                        {showMessageForm ? (
-                          <form onSubmit={handleSendNotification} className="space-y-2">
-                            <input
-                              type="text"
-                              value={messageText}
-                              onChange={(e) => setMessageText(e.target.value)}
-                              placeholder="พิมพ์ข้อความแจ้งเตือนด่วน..."
+                      {/* ACTION 4: ADMIN NOTES & IN-APP ALERT MESSAGE (Admin Only) */}
+                      {isAdmin && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Internal Note */}
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
+                            <span className="block text-xs font-bold text-slate-300">
+                              📝 บันทึกเฉพาะผู้ดูแลระบบ (Admin Private Note)
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={internalNote}
+                              onChange={(e) => setInternalNote(e.target.value)}
+                              placeholder="บันทึกข้อสังเกต หรือหมายเหตุเฉพาะเจ้าหน้าที่..."
                               className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none"
                             />
-                            <div className="flex items-center justify-between gap-2">
-                              <select
-                                value={messageKind}
-                                onChange={(e) => setMessageKind(e.target.value)}
-                                className="rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-[11px] text-slate-300"
-                              >
-                                <option value="alert">🚨 แจ้งเตือนด่วน</option>
-                                <option value="info">ℹ️ ข้อมูลทั่วไป</option>
-                              </select>
+                            <button
+                              type="button"
+                              onClick={handleSaveInternalNote}
+                              disabled={isSavingNote}
+                              className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors"
+                            >
+                              {isSavingNote ? 'กำลังบันทึก…' : 'บันทึกโน้ต'}
+                            </button>
+                          </div>
+
+                          {/* In-App Notification Sender */}
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-300">
+                                💬 ส่งข้อความแจ้งเตือนถึงผู้สมัคร
+                              </span>
                               <button
-                                type="submit"
-                                disabled={isSendingMessage || !messageText.trim()}
-                                className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-orange-400"
+                                type="button"
+                                onClick={() => setShowMessageForm(!showMessageForm)}
+                                className="text-[11px] text-orange-400 hover:underline"
                               >
-                                {isSendingMessage ? 'กำลังส่ง…' : 'ส่งทันที'}
+                                {showMessageForm ? 'ยกเลิก' : '+ เขียนข้อความ'}
                               </button>
                             </div>
-                          </form>
-                        ) : (
-                          <p className="text-[11px] text-slate-400">
-                            ส่งแจ้งเตือนในระบบไปยังหน้าผู้ใช้งานของผู้สมัครท่านนี้ได้โดยตรง
-                          </p>
-                        )}
-                      </div>
+
+                            {showMessageForm ? (
+                              <form onSubmit={handleSendNotification} className="space-y-2">
+                                <input
+                                  type="text"
+                                  value={messageText}
+                                  onChange={(e) => setMessageText(e.target.value)}
+                                  placeholder="พิมพ์ข้อความแจ้งเตือนด่วน..."
+                                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none"
+                                />
+                                <div className="flex items-center justify-between gap-2">
+                                  <select
+                                    value={messageKind}
+                                    onChange={(e) => setMessageKind(e.target.value)}
+                                    className="rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-[11px] text-slate-300"
+                                  >
+                                    <option value="alert">🚨 แจ้งเตือนด่วน</option>
+                                    <option value="info">ℹ️ ข้อมูลทั่วไป</option>
+                                  </select>
+                                  <button
+                                    type="submit"
+                                    disabled={isSendingMessage || !messageText.trim()}
+                                    className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-orange-400"
+                                  >
+                                    {isSendingMessage ? 'กำลังส่ง…' : 'ส่งทันที'}
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              <p className="text-[11px] text-slate-400">
+                                ส่งแจ้งเตือนในระบบไปยังหน้าผู้ใช้งานของผู้สมัครท่านนี้ได้โดยตรง
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 3B. MERCHANDISE ORDER VIEW */}
                 {selectedResultType === 'order' && matchResult.order && (

@@ -23,7 +23,8 @@ import {
   Maximize2,
   Tag,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  QrCode
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
@@ -38,6 +39,7 @@ export default function HomeView({
   onNavigateRegister, 
   onNavigateSchedule,
   onNavigateMerchandise,
+  onOpenScanner,
   myRegistration,
   onOpenGoogleLogin,
   paymentConfig
@@ -205,6 +207,18 @@ export default function HomeView({
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               )}
+
+            {onOpenScanner && (
+              <button
+                type="button"
+                onClick={onOpenScanner}
+                className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:via-teal-400 hover:to-emerald-400 text-slate-950 font-black rounded-2xl border border-cyan-300/60 flex items-center justify-center gap-2.5 text-sm transition-all duration-200 shadow-xl shadow-cyan-500/25 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+                title="สแกน QR Code ที่บัตรประจำตัวเพื่อตรวจสอบข้อมูลผู้เข้าอบรม สถานะการรับรอง การมาเข้าร่วมฝึก และการรับบัตร"
+              >
+                <QrCode className="w-5 h-5 text-slate-950 shrink-0" />
+                <span>📷 สแกน QR ตรวจสอบบัตรผู้เข้าร่วมโครงการ</span>
+              </button>
+            )}
 
             <button
               onClick={onNavigateSchedule}

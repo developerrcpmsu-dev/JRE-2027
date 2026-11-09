@@ -336,6 +336,12 @@ const packRegistrationForSupabase = (fullData) => {
     shirt_pickup_status: fullData.shirt_pickup_status || '',
     shirt_received: fullData.shirt_received || false,
     shirt_received_date: fullData.shirt_received_date || '',
+    attendance_checked_in: Boolean(fullData.attendance_checked_in),
+    attendance_checked_in_at: fullData.attendance_checked_in_at || '',
+    attendance_checked_in_by: fullData.attendance_checked_in_by || '',
+    id_card_received: Boolean(fullData.id_card_received),
+    id_card_received_at: fullData.id_card_received_at || '',
+    id_card_received_by: fullData.id_card_received_by || '',
     id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
     is_staff: Boolean(isStaff),
     staff_role_type: fullData.staff_role_type || (isStaff ? 'committee' : 'participant'),
@@ -669,6 +675,46 @@ export const DataService = {
     safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(regs));
     broadcastRealtimeChange('registrations', { action: 'save', userId: updated.user_id || updated.id });
     return updated;
+  },
+
+  async getPublicVerifiableRegistrations() {
+    const sanitizeForPublicVerify = (reg) => {
+      if (!reg) return reg;
+      const {
+        refund_citizen_id: _rcid,
+        refund_bank_account: _rbank,
+        refund_doc_url: _rdoc,
+        refund_slip_url: _rslip,
+        payment_slip_url: _pslip,
+        installment_1_slip_url: _i1slip,
+        installment_2_slip_url: _i2slip,
+        admin_private_notes: _apnotes,
+        admin_messages: _amsgs,
+        requested_docs: _rdocs,
+        ...publicSafe
+      } = reg;
+      return publicSafe;
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('registrations')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && Array.isArray(data)) {
+          return data.map(unpackRegistration).map(sanitizeForPublicVerify);
+        }
+      } catch (e) {
+        console.warn('getPublicVerifiableRegistrations fallback:', e);
+      }
+    }
+    const cached = readCachedRegistrations();
+    return cached.map(sanitizeForPublicVerify);
+  },
+
+  async updateRegistration(userId, fields) {
+    return this.updateRegistrationDetails(userId, fields);
   },
 
   async updateRegistrationAllocations(userId, fields) {

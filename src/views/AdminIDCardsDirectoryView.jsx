@@ -542,11 +542,11 @@ export default function AdminIDCardsDirectoryView({
               <button
                 type="button"
                 onClick={onOpenScanner}
-                className="inline-flex items-center gap-1.5 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-xs font-bold text-sky-200 transition-colors hover:bg-sky-500/20 cursor-pointer"
-                title="เปิดระบบสแกน Universal Scanner เพื่อตรวจบัตร"
+                className="inline-flex items-center gap-2 rounded-2xl border border-orange-300/60 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-orange-500/25 transition-all hover:brightness-110 cursor-pointer"
+                title="เปิดระบบสแกน QR อเนกประสงค์ (เช็คชื่อมาเข้าร่วมฝึก • ยืนยันรับบัตร ID Card • รับเสื้อฝึก)"
               >
                 <QrCode className="h-4 w-4" />
-                Universal Scanner
+                📷 สแกน QR อเนกประสงค์ (เช็คชื่อ • รับบัตร ID Card)
               </button>
             )}
           </div>

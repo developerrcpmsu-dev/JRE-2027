@@ -76,6 +76,18 @@ export function parseCurrentRoute() {
     return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
   }
 
+  if (first === 'verify' || first === 'qr-verify' || first === 'check-badge') {
+    const badge = url.searchParams.get('badge') || url.searchParams.get('code') || segments[1] || '';
+    const recId = url.searchParams.get('id') || url.searchParams.get('uid') || '';
+    return {
+      mainTab: 'home',
+      subRoute: 'verify',
+      verifyBadge: badge,
+      verifyId: recId,
+      canonicalPath: '/'
+    };
+  }
+
   if (first === 'id-cards' || first === 'idcards' || first === 'badges' || first === 'all-badges' || (first === 'id-card' && (second === 'all' || second === 'directory' || second === 'admin'))) {
     return { mainTab: 'admin', subRoute: 'id-cards', canonicalPath: '/admin/id-cards' };
   }

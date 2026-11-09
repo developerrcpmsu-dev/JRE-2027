@@ -5128,10 +5128,10 @@ export default function AdminDashboardView({
               type="button"
               onClick={() => setShowUniversalScanner(true)}
               className="px-4 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-orange-950/40 border border-orange-300/50 transition-all active:scale-95 cursor-pointer"
-              title="สแกน QR Code อัจฉริยะ (ตรวจบัตร ID, เช็คชื่อรับเสื้อฝึก, ส่งมอบสินค้า/ออเดอร์ ที่เดียวครบ)"
+              title="สแกน QR Code อเนกประสงค์ (เช็คชื่อมาเข้าร่วมฝึก, ยืนยันรับบัตร ID Card, ส่งมอบเสื้อฝึก, และตรวจข้อมูลผู้เข้าอบรม)"
             >
               <QrCode className="w-4 h-4" />
-              <span>📷 สแกน QR อัจฉริยะ (Universal Scanner)</span>
+              <span>📷 สแกน QR อเนกประสงค์ (เช็คชื่อ • รับบัตร ID • รับเสื้อ)</span>
             </button>
 
             <button
@@ -5912,6 +5912,16 @@ export default function AdminDashboardView({
                         <span>ตาราง</span>
                       </button>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowUniversalScanner(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-400 text-slate-950 border border-orange-300/60 text-xs font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                      title="เปิดสแกน QR อเนกประสงค์ (เช็คชื่อมาเข้าร่วมฝึก • ยืนยันรับบัตร ID Card • รับเสื้อฝึก)"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>📷 สแกน QR อเนกประสงค์</span>
+                    </button>
 
                     <button
                       type="button"
@@ -18513,6 +18523,7 @@ export default function AdminDashboardView({
       {/* UNIVERSAL QR & BARCODE SCANNER MODAL (STANDARDIZED ALL-IN-ONE SCANNER) */}
       {(showUniversalScanner || showQRScanner || showIDCardScanner) && (
         <UniversalScannerModal
+          isAdmin={true}
           orders={merchandiseOrders}
           registrations={registrations}
           onClose={() => {
