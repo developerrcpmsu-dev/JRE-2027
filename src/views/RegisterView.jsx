@@ -379,7 +379,7 @@ export default function RegisterView({
     if (subRoute === 'dashboard') {
       setIsEditing(false);
     } else if (subRoute === 'staff' && myRegistration) {
-      setIsEditing(true);
+      setIsEditing(false);
     } else if (subRoute === 'form' && myRegistration) {
       if (isSuperEditor || isStaffPortal || isStaffRegistration(myRegistration)) {
         setIsEditing(true);
@@ -2391,14 +2391,15 @@ export default function RegisterView({
 
           <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">
             {isStaffPortal
-              ? 'เข้าสู่ระบบสำหรับ Staff เพื่อกรอกข้อมูล & ทำบัตรประจำตัว ID Card'
+              ? 'สำหรับ Staff ที่ยังไม่ได้เข้าสู่ระบบและยังไม่มีบัตร ID Card ในระบบ'
               : 'เข้าสู่ระบบด้วย Google ก่อนสมัครเข้าร่วมโครงการ'}
           </h2>
           
           <p className="text-slate-300 text-sm max-w-xl mx-auto mb-6 leading-relaxed">
             {isStaffPortal ? (
               <>
-                หน้านี้เป็น <span className="text-amber-300 font-bold">ลิงก์เฉพาะสำหรับคณะทำงาน (ORGANIZING STAFF)</span> เพื่อเข้าสู่ระบบ/สร้างบัญชี แล้วกรอกข้อมูล ชื่อ-นามสกุล นามเรียกขาน สังกัด และ <span className="text-white font-bold">อัปโหลดรูปถ่ายสำหรับจัดทำบัตรประจำตัว Staff ID Card</span> เข้าสู่ระบบกลางโดยตรง
+                หน้านี้ใช้สำหรับสำรวจ <span className="text-amber-300 font-bold">คณะทำงาน (ORGANIZING STAFF) ที่ยังไม่เคยเข้าสู่ระบบด้วย Google และยังไม่ได้ป้อนข้อมูลเข้าระบบเท่านั้น</span> เพื่อกรอกข้อมูลและอัปโหลดรูปถ่ายออกบัตรประจำตัว ID Card <br />
+                <span className="text-emerald-300 font-bold">(หากท่านเคยสมัครและมีบัตร ID Card ในระบบอยู่แล้ว ไม่ต้องกรอกข้อมูลใหม่ครับ)</span>
               </>
             ) : (
               <>
@@ -2458,6 +2459,80 @@ export default function RegisterView({
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
   if (myRegistration && (!isEditing || (!isSuperEditor && !isStaffPortal && !isStaffRegistration(myRegistration)))) {
+    if (isStaffPortal) {
+      return (
+        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
+          <div className="flex justify-center">
+            <div className="w-full max-w-xl bg-white p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/60 flex items-center justify-center">
+              <img
+                src="/images/logo/jre_header_banner.png"
+                alt="Joint Response Exercise (JRE 2027)"
+                className="w-full h-auto object-contain max-h-24 sm:max-h-28"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border-2 border-emerald-500/60 bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/70 p-6 sm:p-8 shadow-2xl space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-400 flex items-center justify-center shrink-0 shadow-lg">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500 text-slate-950 text-[11px] font-black uppercase tracking-wider">
+                    ✓ มีบัตรประจำตัว ID Card ในระบบแล้ว
+                  </span>
+                  <h1 className="text-xl sm:text-2xl font-black text-white">
+                    คุณมีข้อมูลและบัตรประจำตัว ID Card ในระบบอยู่แล้ว (ไม่ต้องกรอกใหม่)
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    หน้า <code className="text-amber-300 font-bold">/staff-register</code> นี้ไว้สำหรับ Staff ที่ยังไม่ได้เข้าสู่ระบบด้วย Google และยังไม่ได้ป้อนข้อมูลเข้าระบบเท่านั้น • บัญชีของท่าน (<strong className="text-white">{myRegistration.first_name} {myRegistration.last_name}</strong>) มีบัตรประจำตัว ID Card ในระบบเรียบร้อยแล้วครับ
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-800/80">
+              <a
+                href="/id-card"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black text-xs shadow-lg inline-flex items-center gap-1.5"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>เปิดหน้าบัตร ID Card ของฉัน</span>
+              </a>
+              <a
+                href="/dashboard"
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs inline-flex items-center gap-1.5"
+              >
+                <User className="w-4 h-4 text-emerald-400" />
+                <span>ไปที่หน้าแดชบอร์ดของฉัน</span>
+              </a>
+            </div>
+          </div>
+
+          <section className="rounded-3xl border border-orange-500/25 bg-gradient-to-br from-slate-900 via-[#0b1f3a] to-slate-950 p-4 shadow-2xl sm:p-6">
+            <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">JRE 2027 Official Badge</p>
+                <h2 className="mt-0.5 text-lg font-black text-white">บัตรประจำตัวดิจิทัลของคุณในระบบ</h2>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold text-emerald-300">
+                <CheckCircle2 className="h-3.5 w-3.5" /> มีข้อมูลในระบบแล้ว
+              </span>
+            </div>
+            <IDCardPreview
+              registration={myRegistration}
+              user={user}
+              defaultOrientation="portrait"
+              allowOrientationToggle={true}
+            />
+          </section>
+
+          <Toast toast={toast} onClose={() => setToast(null)} />
+        </div>
+      );
+    }
+
     const paymentStatus = myRegistration.payment_status || 'unpaid';
     const adminMessages = Array.isArray(myRegistration.admin_messages) ? myRegistration.admin_messages : [];
     const unreadMessagesCount = adminMessages.filter(m => !m.read).length;
