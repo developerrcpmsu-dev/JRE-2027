@@ -165,7 +165,9 @@ export default function AdminDashboardView({
   userAccounts: propUserAccounts = [],
   onRefreshUserAccounts,
   onRefreshRegistrations,
-  onAdminLogout
+  onAdminLogout,
+  user = null,
+  isAdmin = true
 }) {
   const resolveDedicatedSubpage = (tab) => {
     if (tab === 'id-cards' || tab === 'id-card' || tab === 'idcards' || tab === 'badges' || tab === 'badge' || tab === 'all-badges') return 'id-cards';

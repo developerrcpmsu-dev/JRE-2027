@@ -60,6 +60,19 @@ const STORAGE_KEYS = {
   SPEAKERS: 'jre2027_speakers'
 };
 
+/**
+ * Safely writes to localStorage without throwing QuotaExceededError
+ */
+export function safeSetLocalStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    console.warn(`[safeSetLocalStorage] Failed to cache key "${key}" (quota limit exceeded or storage unavailable):`, err?.message || err);
+    return false;
+  }
+}
+
 // Initialize LocalStorage defaults if empty
 function initializeLocalStorage() {
   if (!localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS)) {
@@ -574,7 +587,7 @@ export const DataService = {
         if (!error && data) {
           const unpacked = data.map(unpackRegistration);
           if (admin) {
-            localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(unpacked));
+            safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(unpacked));
           }
           return unpacked;
         }
@@ -653,7 +666,7 @@ export const DataService = {
       regs.unshift(newEntry);
       updated = newEntry;
     }
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(regs));
+    safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(regs));
     broadcastRealtimeChange('registrations', { action: 'save', userId: updated.user_id || updated.id });
     return updated;
   },
@@ -762,7 +775,7 @@ export const DataService = {
 
     // 3. Keep the local cache consistent only after the server accepted the write.
     // When Supabase is not configured, localStorage remains the intentional fallback.
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
+    safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     broadcastRealtimeChange('registrations', { action: 'update', userId: targetUserId || userId });
     return true;
   },
@@ -1018,7 +1031,7 @@ export const DataService = {
     }
     const regs = readCachedRegistrations();
     const filtered = regs.filter(r => r.user_id !== userId && r.id !== userId);
-    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(filtered));
+    safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(filtered));
     broadcastRealtimeChange('registrations', { action: 'delete', userId });
     return true;
   },
@@ -1608,7 +1621,7 @@ export const DataService = {
 
     // Save only to LocalStorage cache - DO NOT mutate remote database inside a GET query to prevent infinite realtime loops
     try {
-      localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
+      safeSetLocalStorage('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
     } catch (e) {}
 
     const scoped = (userId || cleanEmail)
@@ -1689,7 +1702,7 @@ export const DataService = {
       }
     }
 
-    localStorage.setItem('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
+    safeSetLocalStorage('jre2027_user_accounts', JSON.stringify(deduped.map(projectAccountForClient)));
     broadcastRealtimeChange('user_accounts', { action: 'sync_user', email: cleanEmail });
     return userObj;
   },
@@ -2077,7 +2090,7 @@ export const DataService = {
         console.warn('Supabase delete user account notice', e);
       }
     }
-    localStorage.setItem('jre2027_user_accounts', JSON.stringify(filtered.map(projectAccountForClient)));
+    safeSetLocalStorage('jre2027_user_accounts', JSON.stringify(filtered.map(projectAccountForClient)));
     broadcastRealtimeChange('user_accounts', { action: 'delete_user', userId });
 
     // Also remove registration if exists

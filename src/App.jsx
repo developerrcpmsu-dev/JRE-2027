@@ -1305,6 +1305,8 @@ export default function App() {
 
         {currentTab === 'admin' && (isAdmin || isGoogleDevIdentity(user)) && (
           <AdminDashboardView
+            user={user}
+            isAdmin={isAdmin || isGoogleDevIdentity(user)}
             initialTab={currentSubRoute || 'applicants'}
             onTabChange={(tab) => {
               setCurrentTab('admin', tab);
