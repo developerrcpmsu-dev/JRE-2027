@@ -18,7 +18,8 @@ import {
   Scissors,
   RotateCw,
   FileText,
-  Edit3
+  Edit3,
+  Sliders
 } from 'lucide-react';
 import IDCardPreview, {
   renderNativeIdCardCanvas,
@@ -31,6 +32,7 @@ import IDCardPreview, {
 } from '../components/IDCardPreview';
 import BadgePhotoCropperModal from '../components/BadgePhotoCropperModal';
 import BadgeInspectEditModal from '../components/BadgeInspectEditModal';
+import MasterCardLayoutStudioModal from '../components/MasterCardLayoutStudioModal';
 import {
   isStaffRegistration,
   resolveUniversityInfo,
@@ -56,9 +58,16 @@ export default function AdminIDCardsDirectoryView({
   const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
 
-  // Admin Inspection & Cropping Modals
+  // Admin Inspection, Cropping & Master Layout Studio Modals
   const [inspectingPerson, setInspectingPerson] = useState(null);
   const [croppingPerson, setCroppingPerson] = useState(null);
+  const [isLayoutStudioOpen, setIsLayoutStudioOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('studio') === '1' || params.get('layout') === '1';
+    }
+    return false;
+  });
 
   const handleSaveCroppedPhoto = async (croppedDataUrl) => {
     if (!croppingPerson) return;
@@ -508,6 +517,16 @@ export default function AdminIDCardsDirectoryView({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsLayoutStudioOpen(true)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/50 bg-gradient-to-r from-purple-600/90 to-cyan-600/90 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-purple-500/25 transition-all hover:brightness-110 cursor-pointer"
+              title="เปิดสตูดิโอปรับแต่งรูปแบบบัตรกลาง (ขยับตำแหน่ง ย่อ-ขยายขนาด ทุกจุดแบบ Real-Time)"
+            >
+              <Sliders className="h-4 w-4" />
+              🎨 ปรับแต่งรูปแบบบัตรกลาง (Dev Studio)
+            </button>
+
             {onNavigateBack && (
               <button
                 type="button"
@@ -1057,6 +1076,15 @@ export default function AdminIDCardsDirectoryView({
           person={croppingPerson}
           onClose={() => setCroppingPerson(null)}
           onSave={handleSaveCroppedPhoto}
+        />
+      )}
+
+      {/* Dev Master ID Card Layout Studio Modal */}
+      {isLayoutStudioOpen && (
+        <MasterCardLayoutStudioModal
+          isOpen={isLayoutStudioOpen}
+          onClose={() => setIsLayoutStudioOpen(false)}
+          registrations={registrations}
         />
       )}
     </div>

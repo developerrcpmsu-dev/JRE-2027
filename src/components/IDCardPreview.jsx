@@ -19,6 +19,28 @@ import {
   Edit3
 } from 'lucide-react';
 import { getIdCardQrPayload, getRegistrationCardData } from '../utils/idCard';
+import {
+  getMasterCardLayout,
+  mergeMasterCardLayout,
+  MASTER_LAYOUT_EVENT
+} from '../utils/idCardLayoutConfig';
+
+export function useMasterCardLayout(overrideConfig = null) {
+  const [savedLayout, setSavedLayout] = useState(() => getMasterCardLayout());
+
+  useEffect(() => {
+    const handleUpdate = (event) => {
+      setSavedLayout(mergeMasterCardLayout(event?.detail || getMasterCardLayout()));
+    };
+    window.addEventListener(MASTER_LAYOUT_EVENT, handleUpdate);
+    return () => window.removeEventListener(MASTER_LAYOUT_EVENT, handleUpdate);
+  }, []);
+
+  return useMemo(
+    () => (overrideConfig ? mergeMasterCardLayout(overrideConfig) : savedLayout),
+    [overrideConfig, savedLayout]
+  );
+}
 
 export const FALLBACK_PHOTO = '/images/logo/jre_logo_square.png';
 export const BADGE_BACK_IMAGE = '/images/logo/jre_badge_back.png';
@@ -126,11 +148,18 @@ export function formatSingleBadgeCallsign(rawCallsign, isDev, isStaff) {
  * - 'portrait'  -> Exactly 1200 x 1500 PX (CR100 Portrait Standard)
  * - 'landscape' -> 2040 x 1284 PX (CR80 Landscape Standard)
  */
-export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, orientation = 'portrait' }) {
+export async function renderNativeIdCardCanvas({
+  photo,
+  cardData,
+  qrDataUrl,
+  orientation = 'portrait',
+  layoutConfig = null
+}) {
   const isPortrait = orientation === 'portrait';
   const W = isPortrait ? PORTRAIT_BASE_WIDTH : LANDSCAPE_BASE_WIDTH;
   const H = isPortrait ? PORTRAIT_BASE_HEIGHT : LANDSCAPE_BASE_HEIGHT;
   const scale = isPortrait ? 2.5 : 3; // 480*2.5 = 1200, 600*2.5 = 1500
+  const L = mergeMasterCardLayout(layoutConfig || getMasterCardLayout());
 
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(W * scale);
@@ -153,9 +182,7 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
   if (isPortrait) {
     // ==========================================
     // PORTRAIT: 1200 x 1500 PX (BASE 480 x 600)
-    // Matches the official event Canva badge aesthetic:
-    // 3D curved elements, centered 4:5 photo, neon lime callsign,
-    // royal blue hero name block, and complete credentials.
+    // Driven by Master Card Layout Config (L)
     // ==========================================
     const isDev = Boolean(cardData?.isDev || cardData?.badgeRole === 'DEV');
     const isStaff = !isDev && Boolean(cardData?.isStaff || cardData?.badgeRole === 'STAFF');
@@ -199,53 +226,73 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.stroke();
     ctx.restore();
 
-    // 2. Top Header Banner (Official Canva Banner: USIVN Seal Left + 4 Uni Logos Right)
+    // 2. Top Header Banner (Official Canva Banner: Full width edge-to-edge, no white bars)
+    const hb = L.headerBanner;
+    ctx.save();
+    ctx.fillStyle = '#0c1830';
+    ctx.fillRect(hb.x, hb.y, hb.width, hb.height);
     if (bannerImg) {
-      ctx.drawImage(bannerImg, 0, 0, W, 68);
+      if (hb.fit === 'cover') {
+        drawImageCover(ctx, bannerImg, hb.x, hb.y, hb.width, hb.height);
+      } else if (hb.fit === 'contain') {
+        drawImageContain(ctx, bannerImg, hb.x, hb.y, hb.width, hb.height);
+      } else {
+        ctx.drawImage(bannerImg, hb.x, hb.y, hb.width, hb.height);
+      }
     } else {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, W, 68);
       if (logoImg) {
-        drawImageContain(ctx, logoImg, 14, 16, 36, 36);
+        drawImageContain(ctx, logoImg, hb.x + 14, hb.y + 16, 36, 36);
       }
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffffff';
       ctx.font = `900 11px ${fontStack}`;
-      ctx.fillText('JOINT RESPONSE EXERCISE', 56, 26);
+      ctx.fillText('JOINT RESPONSE EXERCISE', hb.x + 56, hb.y + 26);
 
       ctx.fillStyle = isDev ? '#a855f7' : isStaff ? '#f59e0b' : '#38bdf8';
       ctx.font = `800 8.5px ${fontStack}`;
-      ctx.fillText('JRE 2027 • 14-15 NOV 2026', 56, 42);
+      ctx.fillText('JRE 2027 • 14-15 NOV 2026', hb.x + 56, hb.y + 42);
     }
-
-    // Role Pill Badge (Top Right of Banner)
-    const rolePillW = isDev ? 116 : isStaff ? 136 : 106;
-    const rolePillH = 22;
-    const rolePillX = W - 14 - rolePillW;
-    const rolePillY = 12;
-    ctx.save();
-    drawRoundedRectPath(ctx, rolePillX, rolePillY, rolePillW, rolePillH, 11);
-    ctx.fillStyle = isDev ? '#7c3aed' : isStaff ? '#f59e0b' : '#0284c7';
-    ctx.fill();
-    ctx.strokeStyle = isDev ? '#22d3ee' : isStaff ? '#fbbf24' : '#38bdf8';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(hb.x, hb.y + hb.height);
+    ctx.lineTo(hb.x + hb.width, hb.y + hb.height);
     ctx.stroke();
-    ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
-    ctx.font = `900 8.5px ${fontStack}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT', rolePillX + rolePillW / 2, rolePillY + rolePillH / 2);
     ctx.restore();
 
-    // 3. Centered 4:5 Photo Frame (pw=138, ph=168) - Clean with NO bottom strip
-    const pw = 138;
-    const ph = 168;
-    const px = Math.round((W - pw) / 2);
-    const py = 80;
+    // Optional Role Pill Badge (Only rendered if enabled in Master Layout Config)
+    const rp = L.rolePill;
+    if (rp && rp.visible) {
+      ctx.save();
+      drawRoundedRectPath(ctx, rp.x, rp.y, rp.width, rp.height, rp.height / 2);
+      ctx.fillStyle = isDev ? '#7c3aed' : isStaff ? '#f59e0b' : '#0284c7';
+      ctx.fill();
+      ctx.strokeStyle = isDev ? '#22d3ee' : isStaff ? '#fbbf24' : '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
+      ctx.font = `900 ${rp.fontSize || 8.5}px ${fontStack}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(
+        isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT',
+        rp.x + rp.width / 2,
+        rp.y + rp.height / 2
+      );
+      ctx.restore();
+    }
+
+    // 3. Centered 4:5 Photo Frame
+    const pf = L.photoFrame;
+    const pw = pf.width;
+    const ph = pf.height;
+    const px = pf.centerHorizontally ? Math.round((W - pw) / 2) : pf.x;
+    const py = pf.y;
+    const pRadius = pf.borderRadius ?? 16;
 
     ctx.save();
-    drawRoundedRectPath(ctx, px, py, pw, ph, 16);
+    drawRoundedRectPath(ctx, px, py, pw, ph, pRadius);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.clip();
@@ -255,28 +302,30 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.restore();
 
     ctx.save();
-    drawRoundedRectPath(ctx, px, py, pw, ph, 16);
+    drawRoundedRectPath(ctx, px, py, pw, ph, pRadius);
     ctx.strokeStyle = isDev
       ? 'rgba(6, 182, 212, 0.95)'
       : isStaff 
       ? 'rgba(250, 204, 21, 0.95)' 
       : 'rgba(56, 189, 248, 0.95)';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = pf.borderWidth ?? 3;
     ctx.stroke();
     ctx.restore();
 
-    // 4. Role-Specific Callsign Banner - Clean Positive Margin, Zero Overlap!
+    // 4. Role-Specific Callsign Banner - Centered Horizontally
+    const cp = L.callsignPill;
     const rawCallsign = formatSingleBadgeCallsign(cardData.callsign, isDev, isStaff);
-
-    ctx.font = `900 13px ${monoStack}`;
-    const callTextW = ctx.measureText(rawCallsign).width;
-    const callW = Math.min(W - 48, Math.max(148, callTextW + 36));
-    const callX = Math.round((W - callW) / 2);
-    const callY = py + ph + 8;
-    const callH = 28;
+    const callFontSize = cp.fontSize || 13;
 
     ctx.save();
-    drawRoundedRectPath(ctx, callX, callY, callW, callH, 8);
+    ctx.font = `900 ${callFontSize}px ${monoStack}`;
+    const callTextW = ctx.measureText(rawCallsign).width;
+    const callW = Math.min(W - 48, Math.max(cp.minWidth || 152, callTextW + 36));
+    const callX = Math.round((W - callW) / 2) + (cp.offsetX || 0);
+    const callY = cp.y;
+    const callH = cp.height || 28;
+
+    drawRoundedRectPath(ctx, callX, callY, callW, callH, cp.borderRadius ?? 8);
     ctx.fillStyle = isDev ? '#06b6d4' : isStaff ? '#f59e0b' : '#d9f929';
     ctx.fill();
     ctx.strokeStyle = isDev ? '#22d3ee' : isStaff ? '#fbbf24' : '#c2e420';
@@ -286,19 +335,21 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#07172f';
-    ctx.font = `900 13px ${monoStack}`;
+    ctx.font = `900 ${callFontSize}px ${monoStack}`;
     ctx.fillText(fitTextWithEllipsis(ctx, rawCallsign, callW - 12), callX + callW / 2, callY + callH / 2 + 0.5);
     ctx.restore();
 
-    // 5. Hero Name Block - distinct theme per role
-    const heroX = 24;
-    const heroY = callY + callH + 8;
-    const heroW = W - 48;
+    // 5. Hero Name Block - distinct theme per role, dead-center text
+    const hbName = L.heroBox;
+    const heroX = hbName.x;
+    const heroY = hbName.y;
+    const heroW = hbName.width;
     const hasNickname = Boolean(cardData.nickname && cardData.nickname !== '-');
-    const heroH = hasNickname ? 74 : 58;
+    const heroH = hasNickname ? hbName.heightWithNick : hbName.heightNoNick;
+    const heroCenterX = heroX + heroW / 2;
 
     ctx.save();
-    drawRoundedRectPath(ctx, heroX, heroY, heroW, heroH, 12);
+    drawRoundedRectPath(ctx, heroX, heroY, heroW, heroH, hbName.borderRadius ?? 12);
     if (isDev) {
       const devGrad = ctx.createLinearGradient(heroX, heroY, heroX + heroW, heroY + heroH);
       devGrad.addColorStop(0, '#3b0764');
@@ -309,26 +360,25 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       ctx.lineWidth = 1.5;
     } else if (isStaff) {
       const staffGrad = ctx.createLinearGradient(heroX, heroY, heroX + heroW, heroY + heroH);
-      staffGrad.addColorStop(0, '#c2410c'); // Flame orange
-      staffGrad.addColorStop(0.5, '#b45309'); // Amber gold
-      staffGrad.addColorStop(1, '#78350f'); // Deep warm amber
+      staffGrad.addColorStop(0, '#c2410c');
+      staffGrad.addColorStop(0.5, '#b45309');
+      staffGrad.addColorStop(1, '#78350f');
       ctx.fillStyle = staffGrad;
       ctx.fill();
-      ctx.strokeStyle = '#fde047'; // Bright gold border
+      ctx.strokeStyle = '#fde047';
       ctx.lineWidth = 2;
     } else {
-      ctx.fillStyle = '#1d4ed8'; // Royal Blue for Participant
+      ctx.fillStyle = '#1d4ed8';
       ctx.fill();
       ctx.strokeStyle = 'rgba(96, 165, 250, 0.6)';
       ctx.lineWidth = 1.5;
     }
     ctx.stroke();
 
-    // Upper Line: Large Typography (Cyan for Dev, Bright Warm Gold for Staff, Neon Lime for Participant)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = isStaff ? '#fef08a' : isDev ? '#67e8f9' : '#d9f929';
-    let enNameFontSize = 16;
+    let enNameFontSize = hbName.enFontSize || 16;
     ctx.font = `900 ${enNameFontSize}px ${fontStack}`;
     const displayEnName = (cardData.englishName && cardData.englishName !== '-')
       ? cardData.englishName
@@ -337,34 +387,41 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       enNameFontSize -= 0.5;
       ctx.font = `900 ${enNameFontSize}px ${fontStack}`;
     }
-    ctx.fillText(fitTextWithEllipsis(ctx, displayEnName.toUpperCase(), heroW - 20), W / 2, heroY + 19);
+    ctx.fillText(
+      fitTextWithEllipsis(ctx, displayEnName.toUpperCase(), heroW - 20),
+      heroCenterX,
+      heroY + Math.round(heroH * (hasNickname ? 0.26 : 0.34))
+    );
 
-    // Lower Line: Thai Full Name
     ctx.fillStyle = isStaff ? '#fef3c7' : '#ffffff';
-    let thaiNameFontSize = 12.5;
+    let thaiNameFontSize = hbName.thFontSize || 12.5;
     ctx.font = `700 ${thaiNameFontSize}px ${fontStack}`;
     while (thaiNameFontSize > 10 && ctx.measureText(cardData.thaiName || '').width > (heroW - 24)) {
       thaiNameFontSize -= 0.5;
       ctx.font = `700 ${thaiNameFontSize}px ${fontStack}`;
     }
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.thaiName, heroW - 20), W / 2, heroY + (hasNickname ? 39 : 41));
+    ctx.fillText(
+      fitTextWithEllipsis(ctx, cardData.thaiName, heroW - 20),
+      heroCenterX,
+      heroY + Math.round(heroH * (hasNickname ? 0.53 : 0.70))
+    );
 
-    // Prominent Nickname badge inside Hero box
     if (hasNickname) {
       ctx.fillStyle = isStaff ? '#fde047' : isDev ? '#a5f3fc' : '#fef08a';
-      ctx.font = `900 12px ${fontStack}`;
-      ctx.fillText(`⭐ ชื่อเล่น: ${cardData.nickname}`, W / 2, heroY + 58);
+      ctx.font = `900 ${hbName.nickFontSize || 12}px ${fontStack}`;
+      ctx.fillText(`⭐ ชื่อเล่น: ${cardData.nickname}`, heroCenterX, heroY + Math.round(heroH * 0.79));
     }
     ctx.restore();
 
-    // 6. Organizational Credentials
-    const affX = 24;
-    const affY = heroY + heroH + 8;
-    const affW = W - 48;
-    const affH = hasNickname ? 40 : 44;
+    // 6. Organizational Credentials (Affiliation + Unit & Badge ID)
+    const aff = L.affiliationBox;
+    const affX = aff.x;
+    const affY = aff.y;
+    const affW = aff.width;
+    const affH = aff.height;
 
     ctx.save();
-    drawRoundedRectPath(ctx, affX, affY, affW, affH, 10);
+    drawRoundedRectPath(ctx, affX, affY, affW, affH, aff.borderRadius ?? 10);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
@@ -374,22 +431,25 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#94a3b8';
-    ctx.font = `700 8px ${fontStack}`;
-    ctx.fillText('สังกัดสถาบัน / AFFILIATION', affX + 12, affY + 12);
+    ctx.font = `700 ${aff.labelFontSize || 8}px ${fontStack}`;
+    ctx.fillText('สังกัดสถาบัน / AFFILIATION', affX + 12, affY + Math.round(affH * 0.30));
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `800 13px ${fontStack}`;
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.affiliation, affW - 24), affX + 12, affY + (affH - 12));
+    ctx.font = `800 ${aff.valueFontSize || 13}px ${fontStack}`;
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.affiliation, affW - 24), affX + 12, affY + Math.round(affH * 0.70));
     ctx.restore();
 
-    const row2Y = affY + affH + 6;
-    const colGap = 8;
-    const colW = (affW - colGap) / 2;
-    const row2H = hasNickname ? 40 : 44;
+    const uRow = L.unitBadgeRow;
+    const row2X = uRow.x;
+    const row2Y = uRow.y;
+    const row2W = uRow.width;
+    const row2H = uRow.height;
+    const colGap = uRow.gap ?? 8;
+    const colW = (row2W - colGap) / 2;
 
     // Unit Box
     ctx.save();
-    drawRoundedRectPath(ctx, affX, row2Y, colW, row2H, 10);
+    drawRoundedRectPath(ctx, row2X, row2Y, colW, row2H, uRow.borderRadius ?? 10);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
@@ -399,18 +459,18 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#94a3b8';
-    ctx.font = `700 8px ${fontStack}`;
-    ctx.fillText('หน่วย / UNIT', affX + 12, row2Y + 12);
+    ctx.font = `700 ${uRow.labelFontSize || 8}px ${fontStack}`;
+    ctx.fillText('หน่วย / UNIT', row2X + 12, row2Y + Math.round(row2H * 0.30));
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `800 12px ${fontStack}`;
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.unit, colW - 24), affX + 12, row2Y + (row2H - 12));
+    ctx.font = `800 ${uRow.valueFontSize || 12}px ${fontStack}`;
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.unit, colW - 24), row2X + 12, row2Y + Math.round(row2H * 0.70));
     ctx.restore();
 
     // Badge ID Box
-    const idX = affX + colW + colGap;
+    const idX = row2X + colW + colGap;
     ctx.save();
-    drawRoundedRectPath(ctx, idX, row2Y, colW, row2H, 10);
+    drawRoundedRectPath(ctx, idX, row2Y, colW, row2H, uRow.borderRadius ?? 10);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
@@ -420,40 +480,52 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#94a3b8';
-    ctx.font = `700 8px ${fontStack}`;
-    ctx.fillText('รหัสบัตร / BADGE ID', idX + 12, row2Y + 12);
+    ctx.font = `700 ${uRow.labelFontSize || 8}px ${fontStack}`;
+    ctx.fillText('รหัสบัตร / BADGE ID', idX + 12, row2Y + Math.round(row2H * 0.30));
 
     ctx.fillStyle = '#fde047';
-    ctx.font = `900 12px ${monoStack}`;
-    ctx.fillText(fitTextWithEllipsis(ctx, cardData.cardCode, colW - 24), idX + 12, row2Y + (row2H - 12));
+    ctx.font = `900 ${uRow.valueFontSize || 12}px ${monoStack}`;
+    ctx.fillText(fitTextWithEllipsis(ctx, cardData.cardCode, colW - 24), idX + 12, row2Y + Math.round(row2H * 0.70));
     ctx.restore();
 
-    // 7. Bottom Section: QR Code, Blood Group & Verified Bar (botH=106, bottoms out at 576, leaving balanced 24px bottom space)
-    const botY = 470;
-    const botH = 106;
+    // 7. Bottom Section: QR Code, Blood Group & Verified Bar
+    const bot = L.bottomRow;
+    const botX = bot.x;
+    const botY = bot.y;
+    const botW = bot.width;
+    const botH = bot.height;
+    const botGap = bot.gap ?? 8;
+    const botRadius = bot.borderRadius ?? 12;
 
-    // QR Code Box (Left)
-    const qx = 24;
-    const qw = 104;
+    // QR Code Box (Left) - Sized so QR never overlaps the scan label below it!
+    const qx = botX;
+    const qw = bot.qrBoxWidth || 104;
     ctx.save();
-    drawRoundedRectPath(ctx, qx, botY, qw, botH, 12);
+    drawRoundedRectPath(ctx, qx, botY, qw, botH, botRadius);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
+    const qrDrawSize = Math.min(bot.qrSize || 74, qw - 14, botH - 26);
+    const qrDrawX = qx + Math.round((qw - qrDrawSize) / 2);
+    const qrDrawY = botY + (bot.qrTopOffset ?? 6);
     if (qrImg) {
-      drawImageContain(ctx, qrImg, qx + 8, botY + 8, qw - 16, qw - 16);
+      drawImageContain(ctx, qrImg, qrDrawX, qrDrawY, qrDrawSize, qrDrawSize);
     }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = isDev ? '#7e22ce' : isStaff ? '#d97706' : '#0284c7';
-    ctx.font = `900 7.5px ${fontStack}`;
-    ctx.fillText(isDev ? 'DEVRCPMSU SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN', qx + qw / 2, botY + botH - 10);
+    ctx.font = `900 ${bot.qrLabelFontSize || 7.5}px ${fontStack}`;
+    ctx.fillText(
+      isDev ? 'DEVRCPMSU SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN',
+      qx + qw / 2,
+      botY + (bot.qrLabelOffset ?? (botH - 11))
+    );
     ctx.restore();
 
-    // Blood Group Box with Blood Droplet (Middle)
-    const bx = qx + qw + colGap;
-    const bw = 104;
+    // Blood Group Box with Blood Droplet (Middle) - Dead-center alignment
+    const bx = qx + qw + botGap;
+    const bw = bot.bloodBoxWidth || 104;
     ctx.save();
-    drawRoundedRectPath(ctx, bx, botY, bw, botH, 12);
+    drawRoundedRectPath(ctx, bx, botY, bw, botH, botRadius);
     ctx.fillStyle = 'rgba(244, 63, 94, 0.14)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(244, 63, 94, 0.5)';
@@ -464,22 +536,25 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fecdd3';
     ctx.font = `900 8.5px ${fontStack}`;
-    ctx.fillText('🩸 หมู่เลือด', bx + bw / 2, botY + 20);
+    ctx.fillText('🩸 หมู่เลือด', bx + bw / 2, botY + Math.round(botH * 0.18));
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `900 36px ${monoStack}`;
-    ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, botY + 58);
+    ctx.font = `900 ${bot.bloodValueFontSize || 34}px ${monoStack}`;
+    ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, botY + Math.round(botH * 0.54));
 
     ctx.fillStyle = '#fda4af';
     ctx.font = `800 7.5px ${fontStack}`;
-    ctx.fillText('BLOOD TYPE', bx + bw / 2, botY + 92);
+    ctx.fillText('BLOOD TYPE', bx + bw / 2, botY + Math.round(botH * 0.86));
     ctx.restore();
 
-    // Verified Official Badge Box (Right) - Role specific colors
-    const vx = bx + bw + colGap;
-    const vw = affW - qw - bw - colGap * 2;
+    // Verified Official Badge Box (Right) - Explicitly centered textAlign!
+    const vx = bx + bw + botGap;
+    const vw = botW - qw - bw - botGap * 2;
+    const vCenterX = vx + vw / 2;
     ctx.save();
-    drawRoundedRectPath(ctx, vx, botY, vw, botH, 12);
+    drawRoundedRectPath(ctx, vx, botY, vw, botH, botRadius);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     if (isDev) {
       ctx.fillStyle = 'rgba(139, 92, 246, 0.16)';
       ctx.fill();
@@ -487,14 +562,14 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.fillStyle = '#a855f7';
-      ctx.font = `900 24px ${fontStack}`;
-      ctx.fillText('🛡️', vx + vw / 2, botY + 30);
+      ctx.font = `900 ${bot.verifiedIconSize || 22}px ${fontStack}`;
+      ctx.fillText('🛡️', vCenterX, botY + Math.round(botH * 0.27));
       ctx.fillStyle = '#c084fc';
-      ctx.font = `900 13px ${fontStack}`;
-      ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
+      ctx.font = `900 ${bot.verifiedTitleFontSize || 13}px ${fontStack}`;
+      ctx.fillText('✓ VERIFIED', vCenterX, botY + Math.round(botH * 0.55));
       ctx.fillStyle = '#38bdf8';
-      ctx.font = `800 8.5px ${fontStack}`;
-      ctx.fillText('DEVRCPMSU', vx + vw / 2, botY + 84);
+      ctx.font = `800 ${bot.verifiedSubFontSize || 8.5}px ${fontStack}`;
+      ctx.fillText('DEVRCPMSU', vCenterX, botY + Math.round(botH * 0.80));
     } else if (isStaff) {
       ctx.fillStyle = 'rgba(245, 158, 11, 0.16)';
       ctx.fill();
@@ -502,14 +577,14 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.fillStyle = '#f59e0b';
-      ctx.font = `900 24px ${fontStack}`;
-      ctx.fillText('⭐', vx + vw / 2, botY + 30);
+      ctx.font = `900 ${bot.verifiedIconSize || 22}px ${fontStack}`;
+      ctx.fillText('⭐', vCenterX, botY + Math.round(botH * 0.27));
       ctx.fillStyle = '#fbbf24';
-      ctx.font = `900 13px ${fontStack}`;
-      ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
+      ctx.font = `900 ${bot.verifiedTitleFontSize || 13}px ${fontStack}`;
+      ctx.fillText('✓ VERIFIED', vCenterX, botY + Math.round(botH * 0.55));
       ctx.fillStyle = '#fde047';
-      ctx.font = `800 8.5px ${fontStack}`;
-      ctx.fillText('ORGANIZING STAFF', vx + vw / 2, botY + 84);
+      ctx.font = `800 ${bot.verifiedSubFontSize || 8.5}px ${fontStack}`;
+      ctx.fillText('ORGANIZING STAFF', vCenterX, botY + Math.round(botH * 0.80));
     } else {
       ctx.fillStyle = 'rgba(16, 185, 129, 0.14)';
       ctx.fill();
@@ -517,14 +592,14 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.fillStyle = '#34d399';
-      ctx.font = `900 24px ${fontStack}`;
-      ctx.fillText('🛡️', vx + vw / 2, botY + 30);
+      ctx.font = `900 ${bot.verifiedIconSize || 22}px ${fontStack}`;
+      ctx.fillText('🛡️', vCenterX, botY + Math.round(botH * 0.27));
       ctx.fillStyle = '#6ee7b7';
-      ctx.font = `900 13px ${fontStack}`;
-      ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 58);
+      ctx.font = `900 ${bot.verifiedTitleFontSize || 13}px ${fontStack}`;
+      ctx.fillText('✓ VERIFIED', vCenterX, botY + Math.round(botH * 0.55));
       ctx.fillStyle = '#a7f3d0';
-      ctx.font = `800 8.5px ${fontStack}`;
-      ctx.fillText('PARTICIPANT', vx + vw / 2, botY + 84);
+      ctx.font = `800 ${bot.verifiedSubFontSize || 8.5}px ${fontStack}`;
+      ctx.fillText('PARTICIPANT', vCenterX, botY + Math.round(botH * 0.80));
     }
     ctx.restore();
 
@@ -1476,6 +1551,17 @@ export default function IDCardPreview({
               <Printer className="h-3.5 w-3.5" />
               พิมพ์ / PDF
             </button>
+
+            {(cardData.isDev || user?.role === 'admin' || user?.role === 'dev' || user?.is_admin) && (
+              <a
+                href="/admin/id-cards?studio=1"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/50 bg-gradient-to-r from-purple-600/80 to-cyan-600/80 px-3 py-2 text-[11px] font-black text-white shadow-md shadow-purple-500/20 hover:brightness-110 cursor-pointer"
+                title="เปิดสตูดิโอปรับแต่งรูปแบบบัตรกลางสำหรับ Dev (ขยับตำแหน่ง ย่อ-ขยายขนาด ทุกจุด)"
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+                ตั้งค่ารูปแบบบัตรกลาง (Dev)
+              </a>
+            )}
           </div>
         </div>
       )}
@@ -1585,29 +1671,64 @@ export default function IDCardPreview({
 /**
  * PORTRAIT CARD LAYOUT (1200 x 1500 PX / Base 480 x 600 PX)
  * Standard Convention Badge / CR100 Vertical Format
+ * Driven by Master Card Layout Config (L) for 100% parity between Web, Print, and PNG
  */
 export function CardInnerContentPortrait({
   photo,
   cardData,
   qrDataUrl,
-  thaiNameClass,
-  enNameClass,
-  hasCallsign,
-  hasNickname
+  layoutConfig = null,
+  studioInteractive = null
 }) {
+  const L = useMasterCardLayout(layoutConfig);
   const isDev = Boolean(cardData?.isDev || cardData?.badgeRole === 'DEV');
   const isStaff = !isDev && Boolean(cardData?.isStaff || cardData?.badgeRole === 'STAFF');
 
+  const hb = L.headerBanner;
+  const rp = L.rolePill;
+  const pf = L.photoFrame;
+  const cp = L.callsignPill;
+  const hbName = L.heroBox;
+  const aff = L.affiliationBox;
+  const uRow = L.unitBadgeRow;
+  const bot = L.bottomRow;
+
+  const photoX = pf.centerHorizontally ? Math.round((480 - pf.width) / 2) : pf.x;
+  const hasNick = Boolean(cardData?.nickname && cardData.nickname !== '-');
+  const heroH = hasNick ? hbName.heightWithNick : hbName.heightNoNick;
+
+  const activeZone = studioInteractive?.selectedZone || null;
+  const onSelectZone = studioInteractive?.onSelectZone || null;
+  const onStartDrag = studioInteractive?.onStartDrag || null;
+  const showGuides = Boolean(studioInteractive?.showGuides);
+
+  const getZoneInteractiveProps = (zoneKey) => {
+    if (!studioInteractive) return {};
+    const isSelected = activeZone === zoneKey;
+    return {
+      onMouseDown: (e) => {
+        e.stopPropagation();
+        if (onSelectZone) onSelectZone(zoneKey);
+        if (onStartDrag) onStartDrag(zoneKey, e);
+      },
+      className: `cursor-move transition-shadow ${
+        isSelected
+          ? 'ring-2 ring-cyan-400 shadow-[0_0_0_3px_rgba(34,211,238,0.35)] z-30'
+          : 'hover:ring-1 hover:ring-orange-400/80'
+      }`
+    };
+  };
+
   return (
     <>
-      {/* Background Decorative Ambient Lighting - Purple/Cyan for DEV / Amber for Staff / Electric Blue for Participant */}
+      {/* Background Decorative Ambient Lighting */}
       <div className={`pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full blur-3xl ${
         isDev ? 'bg-purple-600/25' : isStaff ? 'bg-amber-500/20' : 'bg-sky-500/20'
       }`} />
       <div className={`pointer-events-none absolute -bottom-20 -left-16 h-64 w-64 rounded-full blur-3xl ${
         isDev ? 'bg-cyan-500/20' : isStaff ? 'bg-yellow-500/15' : 'bg-blue-600/20'
       }`} />
-      <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-[4px] ${
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-[4px] z-20 ${
         isDev
           ? 'bg-gradient-to-r from-purple-500 via-cyan-400 to-indigo-500'
           : isStaff 
@@ -1615,198 +1736,379 @@ export function CardInnerContentPortrait({
           : 'bg-gradient-to-r from-sky-500 via-blue-400 to-cyan-500'
       }`} />
 
-      {/* 3D Geometric Fluid Curved Graphic Elements (matching event Canva poster aesthetic) */}
+      {/* 3D Geometric Fluid Curved Graphic Elements */}
       <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-35" preserveAspectRatio="none" viewBox="0 0 480 600">
-        <path d="M-40,80 Q60,180 -20,320 T-50,500" fill="none" stroke={isDev ? '#a855f7' : '#f97316'} strokeWidth="48" strokeLinecap="round" opacity="0.6" />
-        <path d="M520,120 Q420,240 500,380 T510,540" fill="none" stroke={isDev ? '#06b6d4' : '#1d4ed8'} strokeWidth="42" strokeLinecap="round" opacity="0.6" />
+        <path d="M-40,80 Q60,180 -20,320 T-50,500" fill="none" stroke={isDev ? '#a855f7' : isStaff ? '#f59e0b' : '#f97316'} strokeWidth="48" strokeLinecap="round" opacity="0.6" />
+        <path d="M520,120 Q420,240 500,380 T510,540" fill="none" stroke={isDev ? '#06b6d4' : isStaff ? '#ea580c' : '#1d4ed8'} strokeWidth="42" strokeLinecap="round" opacity="0.6" />
         <circle cx="410" cy="90" r="28" fill={isDev ? '#a855f7' : '#f59e0b'} opacity="0.25" />
         <circle cx="70" cy="530" r="34" fill={isDev ? '#06b6d4' : '#f97316'} opacity="0.25" />
       </svg>
 
-      <div className="relative z-10 flex h-full flex-col justify-between">
-        {/* Top Header Banner using user's uploaded Canva banner asset */}
-        <div className="relative shrink-0 overflow-hidden bg-[#0c1830] border-b border-white/10 shadow-md">
+      {/* Center Alignment Guides when in Studio Mode */}
+      {showGuides && (
+        <div className="pointer-events-none absolute inset-0 z-40">
+          <div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 border-l border-dashed border-cyan-400/60" />
+          <div className="absolute top-1/2 left-0 right-0 h-px -translate-y-1/2 border-t border-dashed border-cyan-400/40" />
+          <div className="absolute left-[24px] top-0 bottom-0 w-px border-l border-dotted border-amber-400/35" />
+          <div className="absolute right-[24px] top-0 bottom-0 w-px border-l border-dotted border-amber-400/35" />
+        </div>
+      )}
+
+      <div className="relative z-10 h-full w-full">
+        {/* 1. Top Header Banner (Full width edge-to-edge, zero white margins) */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${hb.x}px`,
+            top: `${hb.y}px`,
+            width: `${hb.width}px`,
+            height: `${hb.height}px`
+          }}
+          onMouseDown={getZoneInteractiveProps('headerBanner').onMouseDown}
+          className={`overflow-hidden bg-[#0c1830] border-b border-white/10 shadow-md ${getZoneInteractiveProps('headerBanner').className || ''}`}
+        >
           <img
             src="/images/logo/jre_header_canva.png"
             alt="Joint Response Exercise (JRE 2027)"
-            className="w-full h-[64px] object-cover object-center block"
+            style={{
+              objectFit: hb.fit === 'cover' ? 'cover' : hb.fit === 'contain' ? 'contain' : 'fill'
+            }}
+            className="w-full h-full object-center block pointer-events-none"
           />
-          {/* Floating Role Pill Badge (Top Right of Banner) */}
-          <div className="absolute right-3 top-3 z-20">
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[9px] font-black shadow-md border ${
+        </div>
+
+        {/* 2. Optional Floating Role Pill Badge */}
+        {rp && rp.visible && (
+          <div
+            style={{
+              position: 'absolute',
+              left: `${rp.x}px`,
+              top: `${rp.y}px`,
+              width: `${rp.width}px`,
+              height: `${rp.height}px`
+            }}
+            onMouseDown={getZoneInteractiveProps('rolePill').onMouseDown}
+            className={`z-20 flex items-center justify-center rounded-full font-black shadow-md border ${
               isDev
                 ? 'bg-purple-600 text-white border-cyan-400'
                 : isStaff
                 ? 'bg-amber-400 text-slate-950 border-amber-300'
                 : 'bg-sky-600 text-white border-sky-300'
-            }`}>
+            } ${getZoneInteractiveProps('rolePill').className || ''}`}
+          >
+            <span style={{ fontSize: `${rp.fontSize || 8.5}px` }} className="leading-none whitespace-nowrap">
               {isDev ? '💻 DEVRCPMSU' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
+            </span>
+          </div>
+        )}
+
+        {/* 3. Centered 4:5 Portrait Photo Frame */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${photoX}px`,
+            top: `${pf.y}px`,
+            width: `${pf.width}px`,
+            height: `${pf.height}px`,
+            borderRadius: `${pf.borderRadius ?? 16}px`,
+            borderWidth: `${pf.borderWidth ?? 3}px`
+          }}
+          onMouseDown={getZoneInteractiveProps('photoFrame').onMouseDown}
+          className={`overflow-hidden bg-slate-900 shadow-2xl ${
+            isDev
+              ? 'border-cyan-400 ring-2 ring-purple-500/60 shadow-purple-500/30'
+              : isStaff 
+              ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-amber-500/30' 
+              : 'border-sky-400 ring-2 ring-sky-400/60 shadow-sky-500/30'
+          } ${getZoneInteractiveProps('photoFrame').className || ''}`}
+        >
+          <img
+            src={photo}
+            alt={`รูปประจำตัว ${cardData.thaiName}`}
+            crossOrigin="anonymous"
+            className="h-full w-full object-cover pointer-events-none"
+            onError={(event) => {
+              event.currentTarget.src = FALLBACK_PHOTO;
+            }}
+          />
+        </div>
+
+        {/* 4. Role-Specific Callsign Banner (Centered Horizontally) */}
+        <div
+          style={{
+            position: 'absolute',
+            left: '0px',
+            right: '0px',
+            top: `${cp.y}px`,
+            height: `${cp.height || 28}px`,
+            transform: cp.offsetX ? `translateX(${cp.offsetX}px)` : undefined
+          }}
+          onMouseDown={getZoneInteractiveProps('callsignPill').onMouseDown}
+          className={`z-10 flex items-center justify-center ${getZoneInteractiveProps('callsignPill').className || ''}`}
+        >
+          <div
+            style={{
+              minWidth: `${cp.minWidth || 152}px`,
+              maxWidth: '432px',
+              height: `${cp.height || 28}px`,
+              borderRadius: `${cp.borderRadius ?? 8}px`
+            }}
+            className={`px-4 flex items-center justify-center shadow-xl border text-center ${
+              isDev
+                ? 'bg-cyan-400 border-cyan-300 text-slate-950'
+                : isStaff
+                ? 'bg-amber-400 border-amber-300 text-slate-950'
+                : 'bg-[#d9f929] border-[#c2e420] text-[#07172f]'
+            }`}
+          >
+            <span
+              style={{ fontSize: `${cp.fontSize || 13}px` }}
+              className="font-black tracking-widest font-mono leading-none truncate"
+            >
+              {formatSingleBadgeCallsign(cardData.callsign, isDev, isStaff)}
             </span>
           </div>
         </div>
 
-        {/* Card Body */}
-        <div className="flex flex-1 flex-col justify-between px-5 pb-3.5 pt-2">
-          {/* Centered Photo Section with Callsign Banner (matching user reference) */}
-          <div className="flex flex-col items-center justify-center my-0.5">
-            <div className={`relative h-[164px] w-[134px] shrink-0 overflow-hidden rounded-2xl border-[3px] shadow-2xl ${
-              isDev
-                ? 'border-cyan-400 ring-2 ring-purple-500/60 shadow-purple-500/30'
-                : isStaff 
-                ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-amber-500/30' 
-                : 'border-sky-400 ring-2 ring-sky-400/60 shadow-sky-500/30'
-            }`}>
-              <img
-                src={photo}
-                alt={`รูปประจำตัว ${cardData.thaiName}`}
-                crossOrigin="anonymous"
-                className="h-full w-full object-cover"
-                onError={(event) => {
-                  event.currentTarget.src = FALLBACK_PHOTO;
-                }}
-              />
-            </div>
-
-            {/* Role-Specific Callsign Banner - Clean Positive Margin, Zero Overlap! */}
-            <div className="mt-2.5 z-10">
-              <div className={`rounded-md px-4 py-0.5 shadow-xl border text-center ${
-                isDev
-                  ? 'bg-cyan-400 border-cyan-300 text-slate-950'
-                  : isStaff
-                  ? 'bg-amber-400 border-amber-300 text-slate-950'
-                  : 'bg-[#d9f929] border-[#c2e420] text-[#07172f]'
-              }`}>
-                <span className="font-black text-[13px] tracking-widest font-mono">
-                  {formatSingleBadgeCallsign(cardData.callsign, isDev, isStaff)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Hero Name Block with Distinct Role Theme */}
-          <div className={`w-full rounded-xl px-3 py-2 text-center shadow-xl border-2 my-1 ${
+        {/* 5. Hero Name Block with Distinct Role Theme & Centered Content */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${hbName.x}px`,
+            top: `${hbName.y}px`,
+            width: `${hbName.width}px`,
+            height: `${heroH}px`,
+            borderRadius: `${hbName.borderRadius ?? 12}px`
+          }}
+          onMouseDown={getZoneInteractiveProps('heroBox').onMouseDown}
+          className={`px-3 flex flex-col items-center justify-center text-center shadow-xl border-2 overflow-hidden ${
             isDev
               ? 'bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 border-cyan-400/60 shadow-purple-950/50'
               : isStaff
               ? 'bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 border-yellow-300 shadow-amber-950/50'
               : 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 border-blue-400/60 shadow-blue-950/50'
-          }`}>
-            <span className={`block font-black tracking-tight text-[15px] sm:text-[16px] leading-tight uppercase truncate ${
+          } ${getZoneInteractiveProps('heroBox').className || ''}`}
+        >
+          <span
+            style={{ fontSize: `${hbName.enFontSize || 16}px` }}
+            className={`block w-full font-black tracking-tight leading-tight uppercase truncate ${
               isDev ? 'text-cyan-300' : isStaff ? 'text-yellow-100' : 'text-[#d9f929]'
-            }`} title={cardData.englishName}>
-              {cardData.englishName && cardData.englishName !== '-' ? cardData.englishName : cardData.thaiName}
-            </span>
-            <span className={`block text-[11.5px] font-bold leading-tight mt-0.5 truncate ${
+            }`}
+            title={cardData.englishName}
+          >
+            {cardData.englishName && cardData.englishName !== '-' ? cardData.englishName : cardData.thaiName}
+          </span>
+          <span
+            style={{ fontSize: `${hbName.thFontSize || 12.5}px` }}
+            className={`block w-full font-bold leading-tight mt-0.5 truncate ${
               isStaff ? 'text-amber-100' : 'text-white'
-            }`} title={cardData.thaiName}>
-              {cardData.thaiName}
-            </span>
-            {cardData.nickname && cardData.nickname !== '-' && (
-              <div className="mt-1 flex items-center justify-center">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[12px] font-black border shadow-sm ${
+            }`}
+            title={cardData.thaiName}
+          >
+            {cardData.thaiName}
+          </span>
+          {hasNick && (
+            <div className="mt-0.5 flex items-center justify-center">
+              <span
+                style={{ fontSize: `${hbName.nickFontSize || 12}px` }}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-black leading-none border shadow-sm ${
                   isDev
                     ? 'bg-purple-500/30 border-purple-400/50 text-cyan-200'
                     : isStaff
                     ? 'bg-yellow-400/30 border-yellow-200 text-yellow-100'
                     : 'bg-sky-400/25 border-sky-300/50 text-sky-100'
-                }`}>
-                  <span>⭐ ชื่อเล่น:</span>
-                  <span className="font-black">{cardData.nickname}</span>
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Organizational Credentials */}
-          <div className="space-y-1.5 pt-0.5">
-            <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 shadow-inner">
-              <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
-                สังกัดสถาบัน / Affiliation
-              </span>
-              <span className="mt-1 block text-[13px] font-black text-white truncate" title={cardData.affiliation}>
-                {cardData.affiliation || '-'}
+                }`}
+              >
+                <span>⭐ ชื่อเล่น:</span>
+                <span className="font-black">{cardData.nickname}</span>
               </span>
             </div>
+          )}
+        </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 shadow-inner">
-                <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
-                  หน่วย / Unit
-                </span>
-                <span className="mt-1 block text-[12px] font-bold text-white truncate" title={cardData.unit}>
-                  {cardData.unit || '-'}
-                </span>
-              </div>
+        {/* 6. Organizational Credentials: Affiliation Box */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${aff.x}px`,
+            top: `${aff.y}px`,
+            width: `${aff.width}px`,
+            height: `${aff.height}px`,
+            borderRadius: `${aff.borderRadius ?? 10}px`
+          }}
+          onMouseDown={getZoneInteractiveProps('affiliationBox').onMouseDown}
+          className={`border border-white/15 bg-white/[0.08] px-3 flex flex-col justify-center shadow-inner overflow-hidden ${getZoneInteractiveProps('affiliationBox').className || ''}`}
+        >
+          <span
+            style={{ fontSize: `${aff.labelFontSize || 8}px` }}
+            className="block font-bold uppercase tracking-wider text-slate-300 leading-none"
+          >
+            สังกัดสถาบัน / Affiliation
+          </span>
+          <span
+            style={{ fontSize: `${aff.valueFontSize || 13}px` }}
+            className="mt-1 block font-black text-white leading-tight truncate"
+            title={cardData.affiliation}
+          >
+            {cardData.affiliation || '-'}
+          </span>
+        </div>
 
-              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 shadow-inner">
-                <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
-                  รหัสบัตร / Badge ID
-                </span>
-                <span className="mt-1 block text-[12px] font-black font-mono text-amber-300 truncate tracking-wide" title={cardData.cardCode}>
-                  {cardData.cardCode || '-'}
-                </span>
-              </div>
-            </div>
+        {/* 7. Unit & Badge ID Row */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${uRow.x}px`,
+            top: `${uRow.y}px`,
+            width: `${uRow.width}px`,
+            height: `${uRow.height}px`,
+            gap: `${uRow.gap ?? 8}px`
+          }}
+          onMouseDown={getZoneInteractiveProps('unitBadgeRow').onMouseDown}
+          className={`grid grid-cols-2 ${getZoneInteractiveProps('unitBadgeRow').className || ''}`}
+        >
+          <div
+            style={{ borderRadius: `${uRow.borderRadius ?? 10}px` }}
+            className="border border-white/15 bg-white/[0.08] px-3 flex flex-col justify-center shadow-inner overflow-hidden"
+          >
+            <span
+              style={{ fontSize: `${uRow.labelFontSize || 8}px` }}
+              className="block font-bold uppercase tracking-wider text-slate-300 leading-none"
+            >
+              หน่วย / Unit
+            </span>
+            <span
+              style={{ fontSize: `${uRow.valueFontSize || 12}px` }}
+              className="mt-1 block font-bold text-white leading-tight truncate"
+              title={cardData.unit}
+            >
+              {cardData.unit || '-'}
+            </span>
           </div>
 
-          {/* Bottom Verification Section: QR + Blood Type with Droplet + Clean Verified Box */}
-          <div className="flex items-stretch gap-2 pt-1 border-t border-white/10">
-            {/* QR Code */}
-            <div className="flex w-[104px] shrink-0 flex-col items-center justify-between rounded-xl bg-white p-1.5 shadow-md">
+          <div
+            style={{ borderRadius: `${uRow.borderRadius ?? 10}px` }}
+            className="border border-white/15 bg-white/[0.08] px-3 flex flex-col justify-center shadow-inner overflow-hidden"
+          >
+            <span
+              style={{ fontSize: `${uRow.labelFontSize || 8}px` }}
+              className="block font-bold uppercase tracking-wider text-slate-300 leading-none"
+            >
+              รหัสบัตร / Badge ID
+            </span>
+            <span
+              style={{ fontSize: `${uRow.valueFontSize || 12}px` }}
+              className="mt-1 block font-black font-mono text-amber-300 leading-tight truncate tracking-wide"
+              title={cardData.cardCode}
+            >
+              {cardData.cardCode || '-'}
+            </span>
+          </div>
+        </div>
+
+        {/* 8. Bottom Verification Section: QR + Blood Type + Verified Box */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${bot.x}px`,
+            top: `${bot.y}px`,
+            width: `${bot.width}px`,
+            height: `${bot.height}px`,
+            gap: `${bot.gap ?? 8}px`
+          }}
+          onMouseDown={getZoneInteractiveProps('bottomRow').onMouseDown}
+          className={`flex items-stretch ${getZoneInteractiveProps('bottomRow').className || ''}`}
+        >
+          {/* QR Code Box (Left) - Explicit qrSize so QR NEVER overlaps bottom scan label */}
+          <div
+            style={{
+              width: `${bot.qrBoxWidth || 104}px`,
+              borderRadius: `${bot.borderRadius ?? 12}px`
+            }}
+            className="relative shrink-0 bg-white shadow-md overflow-hidden flex flex-col items-center justify-between pt-1.5 pb-1.5 px-1.5"
+          >
+            <div
+              style={{
+                width: `${Math.min(bot.qrSize || 74, (bot.qrBoxWidth || 104) - 14, bot.height - 26)}px`,
+                height: `${Math.min(bot.qrSize || 74, (bot.qrBoxWidth || 104) - 14, bot.height - 26)}px`
+              }}
+              className="flex items-center justify-center shrink-0"
+            >
               {qrDataUrl ? (
                 <img
                   src={qrDataUrl}
                   alt="QR Code สำหรับ Admin สแกน"
-                  className="aspect-square w-full object-contain"
+                  className="h-full w-full object-contain pointer-events-none"
                 />
               ) : (
-                <div className="aspect-square w-full animate-pulse rounded bg-slate-200" />
+                <div className="h-full w-full animate-pulse rounded bg-slate-200" />
               )}
-              <span className={`text-[7.5px] font-black tracking-wider uppercase leading-none mt-0.5 ${
-                isDev ? 'text-purple-600' : isStaff ? 'text-amber-600' : 'text-sky-600'
-              }`}>
-                {isDev ? 'DEVRCPMSU SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN'}
+            </div>
+            <span
+              style={{ fontSize: `${bot.qrLabelFontSize || 7.5}px` }}
+              className={`block w-full text-center font-black tracking-wider uppercase leading-none whitespace-nowrap ${
+                isDev ? 'text-purple-700' : isStaff ? 'text-amber-600' : 'text-sky-700'
+              }`}
+            >
+              {isDev ? 'DEVRCPMSU SCAN' : isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN'}
+            </span>
+          </div>
+
+          {/* Blood Type Box with Blood Drop Icon (Middle) - Dead-center alignment */}
+          <div
+            style={{
+              width: `${bot.bloodBoxWidth || 104}px`,
+              borderRadius: `${bot.borderRadius ?? 12}px`
+            }}
+            className="shrink-0 flex flex-col items-center justify-between border border-rose-500/50 bg-rose-500/15 py-2 px-1.5 text-center shadow-sm"
+          >
+            <div className="flex items-center justify-center gap-1">
+              <Droplet className="w-3.5 h-3.5 fill-rose-500 text-rose-400 shrink-0" />
+              <span className="block text-[8.5px] font-black uppercase tracking-wider text-rose-200 leading-none">
+                หมู่เลือด
               </span>
             </div>
+            <strong
+              style={{ fontSize: `${bot.bloodValueFontSize || 34}px` }}
+              className="block font-black leading-none text-white my-auto font-mono"
+            >
+              {cardData.bloodGroup || '-'}
+            </strong>
+            <span className="block text-[7.5px] font-bold text-rose-300 uppercase leading-none">
+              BLOOD TYPE
+            </span>
+          </div>
 
-            {/* Blood Type Box with Blood Drop Icon */}
-            <div className="flex w-[104px] shrink-0 flex-col justify-between rounded-xl border border-rose-500/50 bg-rose-500/15 p-2 text-center shadow-sm">
-              <div className="flex items-center justify-center gap-1">
-                <Droplet className="w-3.5 h-3.5 fill-rose-500 text-rose-400 shrink-0" />
-                <span className="block text-[8.5px] font-black uppercase tracking-wider text-rose-200 leading-none">
-                  หมู่เลือด
-                </span>
-              </div>
-              <strong className="block text-[32px] font-black leading-none text-white my-auto font-mono">
-                {cardData.bloodGroup || '-'}
-              </strong>
-              <span className="block text-[7.5px] font-bold text-rose-300 uppercase leading-none">
-                BLOOD TYPE
-              </span>
-            </div>
-
-            {/* Clean Official Verified Box with Role tag */}
-            <div className={`flex flex-1 flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm ${
+          {/* Clean Official Verified Box (Right) - Dead-center alignment */}
+          <div
+            style={{ borderRadius: `${bot.borderRadius ?? 12}px` }}
+            className={`flex flex-1 flex-col items-center justify-center border p-2 text-center shadow-sm ${
               isDev
                 ? 'border-purple-500/50 bg-purple-500/15'
                 : isStaff
                 ? 'border-amber-500/50 bg-amber-500/15'
                 : 'border-emerald-500/40 bg-emerald-500/15'
-            }`}>
-              <ShieldCheck className={`h-6 w-6 shrink-0 ${
-                isDev ? 'text-purple-400' : isStaff ? 'text-amber-400' : 'text-emerald-400'
-              }`} />
-              <strong className={`mt-1 block text-[13px] font-black tracking-wider leading-tight ${
+            }`}
+          >
+            <ShieldCheck className={`h-6 w-6 shrink-0 mx-auto ${
+              isDev ? 'text-purple-400' : isStaff ? 'text-amber-400' : 'text-emerald-400'
+            }`} />
+            <strong
+              style={{ fontSize: `${bot.verifiedTitleFontSize || 13}px` }}
+              className={`mt-1 block w-full text-center font-black tracking-wider leading-tight ${
                 isDev ? 'text-purple-300' : isStaff ? 'text-amber-300' : 'text-emerald-300'
-              }`}>
-                ✓ VERIFIED
-              </strong>
-              <span className={`mt-0.5 block text-[8px] font-bold uppercase tracking-wider leading-tight ${
+              }`}
+            >
+              ✓ VERIFIED
+            </strong>
+            <span
+              style={{ fontSize: `${bot.verifiedSubFontSize || 8.5}px` }}
+              className={`mt-0.5 block w-full text-center font-bold uppercase tracking-wider leading-tight ${
                 isDev ? 'text-cyan-300' : isStaff ? 'text-yellow-300' : 'text-emerald-200/90'
-              }`}>
-                {isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT'}
-              </span>
-            </div>
+              }`}
+            >
+              {isDev ? 'DEVRCPMSU' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT'}
+            </span>
           </div>
         </div>
       </div>
