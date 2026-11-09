@@ -12,7 +12,11 @@ import {
   CreditCard,
   Layers,
   RotateCw,
-  Scissors
+  Scissors,
+  Droplet,
+  Sparkles,
+  Radio,
+  Edit3
 } from 'lucide-react';
 import { getIdCardQrPayload, getRegistrationCardData } from '../utils/idCard';
 
@@ -187,23 +191,37 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.font = `600 7.5px ${fontStack}`;
     ctx.fillText('JOINT RESPONSE EXERCISE', 58, 86);
 
-    // Right: OFFICIAL Pill
-    const offW = 62;
+    // Right: Role Pill (Staff vs Participant)
+    const isStaff = Boolean(cardData.isStaff);
+    const offW = isStaff ? 120 : 96;
     const offH = 22;
     const offX = W - 22 - offW;
     const offY = 68;
     ctx.save();
     drawRoundedRectPath(ctx, offX, offY, offW, offH, 11);
-    ctx.fillStyle = 'rgba(251, 146, 60, 0.12)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(251, 146, 60, 0.45)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = '#fdba74';
-    ctx.font = `900 8.5px ${fontStack}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('OFFICIAL', offX + offW / 2, offY + offH / 2);
+    if (isStaff) {
+      ctx.fillStyle = '#facc15';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#020617';
+      ctx.font = `900 8.5px ${fontStack}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⭐ ORGANIZING STAFF', offX + offW / 2, offY + offH / 2);
+    } else {
+      ctx.fillStyle = 'rgba(14, 165, 233, 0.2)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(14, 165, 233, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = `900 8.5px ${fontStack}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🎓 PARTICIPANT', offX + offW / 2, offY + offH / 2);
+    }
     ctx.restore();
 
     // 3. Centered Participant Photo (pw=132, ph=162)
@@ -221,18 +239,18 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
       drawImageCover(ctx, portraitImg, px, py, pw, ph);
     }
     // Bottom role label bar inside photo
-    ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+    ctx.fillStyle = isStaff ? 'rgba(234, 179, 8, 0.95)' : 'rgba(2, 132, 199, 0.95)';
     ctx.fillRect(px, py + ph - 22, pw, 22);
-    ctx.fillStyle = cardData.isStaff ? '#fde047' : '#fdba74';
+    ctx.fillStyle = isStaff ? '#020617' : '#ffffff';
     ctx.font = `900 8.5px ${fontStack}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cardData.roleBadge || 'PARTICIPANT', px + pw / 2, py + ph - 11);
+    ctx.fillText(isStaff ? '⭐ ORGANIZING STAFF' : 'PARTICIPANT / ผู้เข้าร่วม', px + pw / 2, py + ph - 11);
     ctx.restore();
 
     ctx.save();
     drawRoundedRectPath(ctx, px, py, pw, ph, 14);
-    ctx.strokeStyle = cardData.isStaff ? 'rgba(250, 204, 21, 0.9)' : 'rgba(251, 146, 60, 0.9)';
+    ctx.strokeStyle = isStaff ? 'rgba(250, 204, 21, 0.95)' : 'rgba(56, 189, 248, 0.95)';
     ctx.lineWidth = 2.5;
     ctx.stroke();
     ctx.restore();
@@ -405,54 +423,50 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     const bw = 104;
     ctx.save();
     drawRoundedRectPath(ctx, bx, botY, bw, botH, 12);
-    ctx.fillStyle = 'rgba(251, 113, 133, 0.1)';
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.12)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(251, 113, 133, 0.4)';
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.45)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fecdd3';
-    ctx.font = `700 8px ${fontStack}`;
-    ctx.fillText('BLOOD', bx + bw / 2, botY + 18);
+    ctx.font = `900 8.5px ${fontStack}`;
+    ctx.fillText('🩸 หมู่เลือด', bx + bw / 2, botY + 20);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = `900 32px ${fontStack}`;
-    ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, botY + 54);
+    ctx.fillText(cardData.bloodGroup || '-', bx + bw / 2, botY + 55);
 
-    ctx.fillStyle = '#fb7185';
-    ctx.font = `700 7.5px ${fontStack}`;
-    ctx.fillText('TYPE', bx + bw / 2, botY + 92);
+    ctx.fillStyle = '#fda4af';
+    ctx.font = `800 8px ${fontStack}`;
+    ctx.fillText('BLOOD TYPE', bx + bw / 2, botY + 90);
     ctx.restore();
 
     const vx = 252;
     const vw = affW - qw - bw - colGap * 2;
     ctx.save();
     drawRoundedRectPath(ctx, vx, botY, vw, botH, 12);
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#34d399';
+    ctx.font = `900 22px ${fontStack}`;
+    ctx.fillText('🛡️', vx + vw / 2, botY + 34);
+
     ctx.fillStyle = '#6ee7b7';
     ctx.font = `900 13px ${fontStack}`;
-    ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 28);
+    ctx.fillText('✓ VERIFIED', vx + vw / 2, botY + 65);
 
     ctx.fillStyle = '#a7f3d0';
-    ctx.font = `700 8px ${fontStack}`;
-    ctx.fillText('UNIVERSAL SCANNER READY', vx + vw / 2, botY + 52);
-
-    ctx.fillStyle = '#fdba74';
-    ctx.font = `800 8px ${monoStack}`;
-    ctx.fillText('1200 × 1500 PX STANDARD', vx + vw / 2, botY + 76);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = `600 7.5px ${fontStack}`;
-    ctx.fillText('CR100 VERTICAL BADGE', vx + vw / 2, botY + 94);
+    ctx.font = `800 8px ${fontStack}`;
+    ctx.fillText('OFFICIAL BADGE', vx + vw / 2, botY + 88);
     ctx.restore();
 
     // 7. Bottom Gradient Line & Border
@@ -773,19 +787,147 @@ export async function renderNativeIdCardBackCanvas() {
   const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
 
-  const backImg = await loadCanvasImage(BADGE_BACK_IMAGE);
+  const [bannerImg, backImg] = await Promise.all([
+    loadCanvasImage('/images/logo/jre_header_banner.png'),
+    loadCanvasImage(BADGE_BACK_IMAGE)
+  ]);
+
+  const fontStack = '"Prompt", "Kanit", "Sarabun", "Noto Sans Thai", system-ui, -apple-system, sans-serif';
+  const monoStack = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
   ctx.save();
   drawRoundedRectPath(ctx, 0, 0, W, H, 22);
   ctx.clip();
-  ctx.fillStyle = '#ffffff';
+
+  // Dark Navy background
+  ctx.fillStyle = '#07172f';
   ctx.fillRect(0, 0, W, H);
 
-  if (backImg) {
-    drawImageContain(ctx, backImg, 12, 12, W - 24, H - 24);
+  // Top header banner
+  ctx.save();
+  drawRoundedRectPath(ctx, 16, 16, W - 32, 54, 12);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.clip();
+  if (bannerImg) {
+    drawImageContain(ctx, bannerImg, 24, 20, W - 48, 44);
   }
   ctx.restore();
 
+  // Banner bottom accent line
+  ctx.fillStyle = '#f97316';
+  ctx.fillRect(16, 68, W - 32, 2.5);
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fb923c';
+  ctx.font = `900 8.5px ${fontStack}`;
+  ctx.fillText('JRE 2027 • EVENT BADGE GUIDE', W / 2, 86);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 13px ${fontStack}`;
+  ctx.fillText('ข้อมูลและระเบียบประจำบัตรการฝึกซ้อมร่วม', W / 2, 102);
+
+  // Center QR Card
+  const qrCardW = 210;
+  const qrCardH = 200;
+  const qrCardX = (W - qrCardW) / 2;
+  const qrCardY = 120;
+  ctx.save();
+  drawRoundedRectPath(ctx, qrCardX, qrCardY, qrCardW, qrCardH, 14);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  if (backImg) {
+    drawImageContain(ctx, backImg, qrCardX + 12, qrCardY + 8, qrCardW - 24, qrCardH - 45);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1e293b';
+  ctx.font = `900 8px ${fontStack}`;
+  ctx.fillText('สแกนเข้าเว็บไซต์ JRE 2027', W / 2, qrCardY + qrCardH - 24);
+
+  ctx.fillStyle = '#475569';
+  ctx.font = `700 7.5px ${monoStack}`;
+  ctx.fillText('rcp-msu.web.app • rcp-msu.vercel.app', W / 2, qrCardY + qrCardH - 11);
+  ctx.restore();
+
+  // Regulations Box
+  const regX = 24;
+  const regY = 336;
+  const regW = W - 48;
+  const regH = 205;
+  ctx.save();
+  drawRoundedRectPath(ctx, regX, regY, regW, regH, 12);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  const rules = [
+    { num: '1.', title: 'การพกพาบัตร:', desc: 'ผู้เข้าร่วมและ Staff ต้องคล้องบัตรนี้ตลอดระยะเวลาโครงการ และห้ามโอนสิทธิ์ให้ผู้อื่น' },
+    { num: '2.', title: 'จุดตรวจ & สวัสดิการ:', desc: 'ใช้ QR Code ด้านหน้าสำหรับจุดตรวจนับยอด รายงานตัว รับเสื้อฝึก และรับประทานอาหาร' },
+    { num: '3.', title: 'เหตุฉุกเฉิน / กองอำนวยการ:', desc: 'กรณีมีเหตุฉุกเฉินหรือเจ็บป่วย โทร 098-329-6762 ได้ตลอด 24 ชั่วโมง' },
+    { num: '4.', title: 'เกณฑ์วุฒิบัตร:', desc: 'ผู้เข้าร่วมต้องมีเวลาฝึกซ้อมไม่น้อยกว่า 80% ตามเกณฑ์ที่คณะกรรมการกำหนด' },
+    { num: '5.', title: 'กรณีพบบัตรสูญหาย:', desc: 'โปรดนำส่งคืนที่กองอำนวยการกลาง JRE 2027 (ชมรมกู้ภัยราชพฤกษ์ มมส)' }
+  ];
+
+  let textY = regY + 12;
+  rules.forEach((r) => {
+    ctx.fillStyle = '#f97316';
+    ctx.font = `900 9px ${fontStack}`;
+    ctx.fillText(r.num, regX + 12, textY);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 8.5px ${fontStack}`;
+    ctx.fillText(r.title, regX + 26, textY);
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = `500 8px ${fontStack}`;
+    const descWrapped = fitTextWithEllipsis(ctx, r.desc, regW - 40);
+    ctx.fillText(descWrapped, regX + 26, textY + 14);
+
+    textY += 36;
+  });
+  ctx.restore();
+
+  // Footer bar
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.beginPath();
+  ctx.moveTo(24, 555);
+  ctx.lineTo(W - 24, 555);
+  ctx.stroke();
+
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#fdba74';
+  ctx.font = `700 8px ${fontStack}`;
+  ctx.fillText('ชมรมกู้ภัยราชพฤกษ์ มมส', 24, 572);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = `600 7.5px ${fontStack}`;
+  ctx.fillText('USIVN NETWORK EXERCISE', W / 2, 572);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#34d399';
+  ctx.font = `900 8px ${fontStack}`;
+  ctx.fillText('✓ OFFICIAL', W - 24, 572);
+  ctx.restore();
+
+  ctx.restore();
+
+  // Card Outer Border
   ctx.save();
   drawRoundedRectPath(ctx, 0.5, 0.5, W - 1, H - 1, 22);
   ctx.strokeStyle = 'rgba(100, 116, 139, 0.8)';
@@ -798,19 +940,96 @@ export async function renderNativeIdCardBackCanvas() {
 
 /**
  * BACK SIDE COMPONENT (1200 x 1500 PX / 480 x 600 PX Base)
- * Official JRE 2027 Website QR Card
+ * Official Convention Badge Back with JRE 2027 Website QR & Event Guidelines
  */
-export function CardInnerContentBack() {
+export function CardInnerContentBack({ cardData = null }) {
+  const isStaff = Boolean(cardData?.isStaff);
+
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center bg-white p-4 overflow-hidden rounded-[22px] select-none shadow-2xl">
-      <img
-        src={BADGE_BACK_IMAGE}
-        alt="เว็บไซต์ JRE2027 QR Code"
-        className="h-full w-full object-contain"
-        onError={(e) => {
-          e.currentTarget.src = FALLBACK_PHOTO;
-        }}
-      />
+    <div className="relative flex h-full w-full flex-col justify-between bg-[#07172f] text-white p-4 overflow-hidden rounded-[22px] select-none shadow-2xl border border-slate-700">
+      {/* Background Ambient Glow */}
+      <div className={`pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full blur-3xl ${
+        isStaff ? 'bg-amber-500/15' : 'bg-sky-500/15'
+      }`} />
+      <div className={`pointer-events-none absolute -bottom-20 -left-16 h-64 w-64 rounded-full blur-3xl ${
+        isStaff ? 'bg-yellow-500/10' : 'bg-blue-600/15'
+      }`} />
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-[4px] ${
+        isStaff 
+          ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600' 
+          : 'bg-gradient-to-r from-sky-500 via-blue-400 to-cyan-500'
+      }`} />
+
+      {/* Top Header Banner */}
+      <div className="relative h-[52px] shrink-0 overflow-hidden rounded-xl bg-white px-3 py-1.5 shadow-md">
+        <img
+          src="/images/logo/jre_header_banner.png"
+          alt="Joint Response Exercise JRE 2027"
+          className="h-full w-full object-contain"
+        />
+        <div className={`absolute inset-x-0 bottom-0 h-1 ${
+          isStaff 
+            ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500' 
+            : 'bg-gradient-to-r from-sky-500 via-blue-400 to-cyan-500'
+        }`} />
+      </div>
+
+      {/* Title */}
+      <div className="text-center pt-1.5">
+        <span className={`text-[8.5px] font-black uppercase tracking-[0.2em] ${
+          isStaff ? 'text-amber-400' : 'text-sky-400'
+        }`}>
+          JRE 2027 • EVENT BADGE GUIDE
+        </span>
+        <h3 className="text-[13px] font-black text-white leading-tight">
+          ข้อมูลและระเบียบประจำบัตรการฝึกซ้อมร่วม
+        </h3>
+      </div>
+
+      {/* Center QR Card */}
+      <div className="mx-auto flex flex-col items-center rounded-2xl border border-white/20 bg-white p-2 text-slate-900 shadow-xl max-w-[210px] w-full">
+        <img
+          src={BADGE_BACK_IMAGE}
+          alt="QR เว็บไซต์ JRE2027"
+          className="w-[145px] h-[145px] object-contain"
+          onError={(e) => {
+            e.currentTarget.src = FALLBACK_PHOTO;
+          }}
+        />
+        <span className="mt-1 text-[8px] font-black text-slate-800 tracking-wider uppercase">
+          สแกนเข้าเว็บไซต์ JRE 2027
+        </span>
+        <span className="text-[7.5px] font-mono text-slate-600 font-bold">
+          rcp-msu.web.app • rcp-msu.vercel.app
+        </span>
+      </div>
+
+      {/* Regulations / Safety Instructions Box */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.06] p-2.5 space-y-1 text-[8.5px] leading-relaxed text-slate-300 shadow-inner">
+        <div className="flex items-start gap-1.5">
+          <span className="text-orange-400 font-bold">1.</span>
+          <span><strong>การพกพา:</strong> ผู้เข้าร่วมและ Staff ต้องคล้องบัตรนี้ตลอดระยะเวลาโครงการ และห้ามโอนสิทธิ์</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <span className="text-orange-400 font-bold">2.</span>
+          <span><strong>จุดตรวจ & สวัสดิการ:</strong> ใช้ QR ด้านหน้าสำหรับเช็คชื่อ รับเสื้อฝึก และรับประทานอาหาร</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <span className="text-orange-400 font-bold">3.</span>
+          <span><strong>เหตุฉุกเฉิน / กองอำนวยการ:</strong> สายด่วน <strong className="text-amber-300">098-329-6762</strong> ได้ตลอด 24 ชั่วโมง</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <span className="text-orange-400 font-bold">4.</span>
+          <span><strong>เกณฑ์วุฒิบัตร:</strong> ต้องมีเวลาเข้าร่วมการฝึกไม่น้อยกว่า 80% ตามเกณฑ์ที่กำหนด</span>
+        </div>
+      </div>
+
+      {/* Footer Credentials */}
+      <div className="flex items-center justify-between border-t border-white/10 pt-1.5 text-[7.5px] text-slate-400">
+        <span className="font-bold text-orange-300">ชมรมกู้ภัยราชพฤกษ์ มมส</span>
+        <span>USIVN NETWORK EXERCISE</span>
+        <span className="text-emerald-400 font-bold">✓ OFFICIAL</span>
+      </div>
     </div>
   );
 }
@@ -1217,7 +1436,7 @@ export default function IDCardPreview({
               className="jre-id-card relative shrink-0 overflow-hidden rounded-[22px] border border-slate-600/80 bg-[#07172f] shadow-2xl shadow-black/40 select-none"
             >
               {cardSide === 'back' ? (
-                <CardInnerContentBack />
+                <CardInnerContentBack cardData={cardData} />
               ) : isPortrait ? (
                 <CardInnerContentPortrait
                   photo={photo}
@@ -1253,7 +1472,7 @@ export default function IDCardPreview({
                 className="jre-id-card relative shrink-0 overflow-hidden rounded-[22px] border border-slate-600/80 bg-[#07172f] shadow-2xl shadow-black/40 select-none"
               >
                 {cardSide === 'back' ? (
-                  <CardInnerContentBack />
+                  <CardInnerContentBack cardData={cardData} />
                 ) : isPortrait ? (
                   <CardInnerContentPortrait
                     photo={photo}
@@ -1307,36 +1526,52 @@ export function CardInnerContentPortrait({
   hasCallsign,
   hasNickname
 }) {
+  const isStaff = Boolean(cardData.isStaff);
+
   return (
     <>
-      {/* Background Decorative Ambient Lighting */}
-      <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-orange-500/12 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 -left-16 h-64 w-64 rounded-full bg-sky-500/12 blur-3xl" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[4px] bg-gradient-to-r from-orange-500 via-amber-400 to-orange-600" />
+      {/* Background Decorative Ambient Lighting - Golden Amber for Staff / Electric Blue for Participant */}
+      <div className={`pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full blur-3xl ${
+        isStaff ? 'bg-amber-500/20' : 'bg-sky-500/20'
+      }`} />
+      <div className={`pointer-events-none absolute -bottom-20 -left-16 h-64 w-64 rounded-full blur-3xl ${
+        isStaff ? 'bg-yellow-500/15' : 'bg-blue-600/20'
+      }`} />
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-[4px] ${
+        isStaff 
+          ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600' 
+          : 'bg-gradient-to-r from-sky-500 via-blue-400 to-cyan-500'
+      }`} />
 
       <div className="relative z-10 flex h-full flex-col justify-between">
         {/* Top Header Banner */}
-        <div className="relative h-[58px] shrink-0 overflow-hidden bg-white px-4 py-2">
+        <div className="relative h-[58px] shrink-0 overflow-hidden bg-white px-4 py-2 shadow-sm">
           <img
             src="/images/logo/jre_header_banner.png"
             alt="Joint Response Exercise JRE 2027"
             className="h-full w-full object-contain"
           />
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500" />
+          <div className={`absolute inset-x-0 bottom-0 h-1 ${
+            isStaff 
+              ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500' 
+              : 'bg-gradient-to-r from-sky-500 via-blue-400 to-cyan-500'
+          }`} />
         </div>
 
         {/* Card Body */}
-        <div className="flex flex-1 flex-col justify-between px-5 pb-3 pt-2.5">
+        <div className="flex flex-1 flex-col justify-between px-5 pb-3 pt-2">
           {/* Subheader: Event Branding & Roles */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <img
                 src="/images/logo/jre_logo_square.png"
                 alt="USIVN"
-                className="h-7 w-7 shrink-0 rounded-lg border border-orange-400/40 bg-white object-contain p-0.5"
+                className="h-7 w-7 shrink-0 rounded-lg border border-orange-400/40 bg-white object-contain p-0.5 shadow-sm"
               />
               <div className="min-w-0">
-                <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.16em] text-orange-300 leading-tight">
+                <p className={`whitespace-nowrap text-[9px] font-black uppercase tracking-[0.16em] leading-tight ${
+                  isStaff ? 'text-amber-300' : 'text-sky-300'
+                }`}>
                   USIVN • JRE 2027
                 </p>
                 <p className="whitespace-nowrap text-[7.5px] font-medium text-slate-400 leading-tight">
@@ -1345,24 +1580,33 @@ export function CardInnerContentPortrait({
               </div>
             </div>
 
+            {/* Clear Distinct Role Badge (Staff vs Participant) */}
             <div className="flex items-center gap-1.5">
-              <span className={`rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-wider border ${
-                cardData.isStaff 
-                  ? 'border-yellow-400/60 bg-yellow-500/15 text-yellow-300' 
-                  : 'border-orange-400/50 bg-orange-500/15 text-orange-300'
+              {isStaff ? (
+                <span className="flex items-center gap-1 rounded-full border border-yellow-400/80 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-slate-950 shadow-md">
+                  ⭐ ORGANIZING STAFF
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 rounded-full border border-sky-400/80 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-md">
+                  🎓 PARTICIPANT
+                </span>
+              )}
+              <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black tracking-widest ${
+                isStaff 
+                  ? 'border-amber-400/50 bg-amber-400/10 text-amber-300' 
+                  : 'border-sky-400/50 bg-sky-400/10 text-sky-300'
               }`}>
-                {cardData.roleBadge || 'PARTICIPANT'}
-              </span>
-              <span className="rounded-full border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[8px] font-black tracking-widest text-orange-300">
                 OFFICIAL
               </span>
             </div>
           </div>
 
-          {/* Centered Photo Section */}
+          {/* Centered Photo Section (4:5 Aspect Ratio 132 x 162 px) */}
           <div className="flex flex-col items-center justify-center my-0.5">
-            <div className={`relative h-[162px] w-[132px] shrink-0 overflow-hidden rounded-2xl border-2 shadow-xl shadow-black/40 ${
-              cardData.isStaff ? 'border-yellow-400/90' : 'border-orange-400/90'
+            <div className={`relative h-[162px] w-[132px] shrink-0 overflow-hidden rounded-2xl border-2 shadow-2xl ${
+              isStaff 
+                ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-amber-500/25' 
+                : 'border-sky-400 ring-2 ring-sky-400/50 shadow-sky-500/25'
             }`}>
               <img
                 src={photo}
@@ -1373,10 +1617,12 @@ export function CardInnerContentPortrait({
                   event.currentTarget.src = FALLBACK_PHOTO;
                 }}
               />
-              <div className={`absolute inset-x-0 bottom-0 bg-slate-950/90 px-1 py-1 text-center text-[8.5px] font-black tracking-[0.1em] ${
-                cardData.isStaff ? 'text-yellow-300' : 'text-orange-300'
+              <div className={`absolute inset-x-0 bottom-0 px-1 py-1 text-center text-[9px] font-black tracking-[0.1em] shadow-md ${
+                isStaff 
+                  ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black' 
+                  : 'bg-gradient-to-r from-sky-600 to-blue-700 text-white font-black'
               }`}>
-                {cardData.roleBadge || 'PARTICIPANT'}
+                {isStaff ? '⭐ ORGANIZING STAFF' : 'PARTICIPANT / ผู้เข้าร่วม'}
               </div>
             </div>
           </div>
@@ -1393,24 +1639,32 @@ export function CardInnerContentPortrait({
               {cardData.thaiName}
             </h2>
             <p
-              className={`mt-0.5 font-semibold leading-tight text-orange-300 whitespace-nowrap max-w-full truncate ${enNameClass}`}
+              className={`mt-0.5 font-bold leading-tight whitespace-nowrap max-w-full truncate ${
+                isStaff ? 'text-amber-300' : 'text-sky-300'
+              } ${enNameClass}`}
               title={cardData.englishName}
             >
               {cardData.englishName}
             </p>
 
-            {/* Callsign & Nickname Badges Row */}
+            {/* Callsign & Nickname Badges Row - Large & High Contrast */}
             {(hasCallsign || hasNickname) && (
-              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1.5">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1.5">
                 {hasCallsign && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-sky-400/35 bg-sky-400/15 px-2 py-0.5 text-[9px] font-black font-mono text-sky-200">
-                    📡 {cardData.callsign}
-                  </span>
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/70 bg-sky-950/90 px-2.5 py-1 shadow-sm">
+                    <span className="text-[9px] font-bold text-sky-400">📡 นามเรียกขาน:</span>
+                    <span className="text-[11.5px] font-black font-mono text-sky-100 tracking-wide">
+                      {cardData.callsign}
+                    </span>
+                  </div>
                 )}
                 {hasNickname && (
-                  <span className="inline-flex items-center rounded-md border border-amber-400/35 bg-amber-400/15 px-2 py-0.5 text-[9px] font-bold text-amber-200" title={cardData.nickname}>
-                    Nickname: {cardData.nickname}
-                  </span>
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/70 bg-amber-950/90 px-2.5 py-1 shadow-sm">
+                    <span className="text-[9px] font-bold text-amber-400">⭐ ชื่อเล่น:</span>
+                    <span className="text-[11.5px] font-black text-amber-100">
+                      {cardData.nickname}
+                    </span>
+                  </div>
                 )}
               </div>
             )}
@@ -1418,37 +1672,37 @@ export function CardInnerContentPortrait({
 
           {/* Organizational Credentials */}
           <div className="space-y-1.5 pt-1">
-            <div className="rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-1.5">
-              <span className="block text-[8px] font-semibold uppercase tracking-wider text-slate-400 leading-none">
-                สังกัด / Affiliation
+            <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-1.5 shadow-inner">
+              <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
+                สังกัดสถาบัน / Affiliation
               </span>
-              <span className="mt-1 block text-[12px] font-bold text-white truncate" title={cardData.affiliation}>
+              <span className="mt-1 block text-[13px] font-black text-white truncate" title={cardData.affiliation}>
                 {cardData.affiliation || '-'}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
-              <div className="rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-1.5">
-                <span className="block text-[8px] font-semibold uppercase tracking-wider text-slate-400 leading-none">
+              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-1.5 shadow-inner">
+                <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
                   หน่วย / Unit
                 </span>
-                <span className="mt-1 block text-[11px] font-bold text-white truncate" title={cardData.unit}>
+                <span className="mt-1 block text-[12px] font-bold text-white truncate" title={cardData.unit}>
                   {cardData.unit || '-'}
                 </span>
               </div>
 
-              <div className="rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-1.5">
-                <span className="block text-[8px] font-semibold uppercase tracking-wider text-slate-400 leading-none">
+              <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3 py-1.5 shadow-inner">
+                <span className="block text-[8px] font-bold uppercase tracking-wider text-slate-300 leading-none">
                   รหัสบัตร / Badge ID
                 </span>
-                <span className="mt-1 block text-[11px] font-black font-mono text-orange-300 truncate tracking-wide" title={cardData.cardCode}>
+                <span className="mt-1 block text-[12px] font-black font-mono text-amber-300 truncate tracking-wide" title={cardData.cardCode}>
                   {cardData.cardCode || '-'}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Bottom Verification Section: QR + Blood Type + Verified Box */}
+          {/* Bottom Verification Section: QR + Blood Type with Droplet + Clean Verified Box */}
           <div className="flex items-stretch gap-2 pt-1 border-t border-white/10">
             {/* QR Code */}
             <div className="flex w-[104px] shrink-0 flex-col items-center justify-between rounded-xl bg-white p-1.5 shadow-md">
@@ -1461,35 +1715,37 @@ export function CardInnerContentPortrait({
               ) : (
                 <div className="aspect-square w-full animate-pulse rounded bg-slate-200" />
               )}
-              <span className="text-[7.5px] font-black text-orange-600 tracking-wider uppercase leading-none mt-0.5">
-                ADMIN QR SCAN
+              <span className={`text-[7.5px] font-black tracking-wider uppercase leading-none mt-0.5 ${
+                isStaff ? 'text-amber-600' : 'text-sky-600'
+              }`}>
+                {isStaff ? 'STAFF ID ACCESS' : 'PARTICIPANT SCAN'}
               </span>
             </div>
 
-            {/* Blood Type Box */}
-            <div className="flex w-[100px] shrink-0 flex-col justify-between rounded-xl border border-rose-400/40 bg-rose-400/10 p-1.5 text-center">
-              <span className="block text-[7.5px] font-bold uppercase tracking-wider text-rose-200 leading-none">
-                Blood
-              </span>
-              <strong className="block text-[28px] font-black leading-none text-white my-auto">
+            {/* Blood Type Box with Blood Drop Icon */}
+            <div className="flex w-[104px] shrink-0 flex-col justify-between rounded-xl border border-rose-500/50 bg-rose-500/15 p-1.5 text-center shadow-sm">
+              <div className="flex items-center justify-center gap-1">
+                <Droplet className="w-3.5 h-3.5 fill-rose-500 text-rose-400 shrink-0" />
+                <span className="block text-[8.5px] font-black uppercase tracking-wider text-rose-200 leading-none">
+                  หมู่เลือด
+                </span>
+              </div>
+              <strong className="block text-[30px] font-black leading-none text-white my-auto font-mono">
                 {cardData.bloodGroup || '-'}
               </strong>
               <span className="block text-[7.5px] font-bold text-rose-300 uppercase leading-none">
-                Type
+                BLOOD TYPE
               </span>
             </div>
 
-            {/* Verified Box */}
-            <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-2 text-center">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              <strong className="mt-1 block text-[11px] font-black tracking-wider text-emerald-300 leading-none">
+            {/* Clean Official Verified Box (Removed Universal Scan Ready & 1200x1500 PX as requested) */}
+            <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-2 text-center shadow-sm">
+              <ShieldCheck className="h-6 w-6 text-emerald-400 shrink-0" />
+              <strong className="mt-1 block text-[13px] font-black tracking-wider text-emerald-300 leading-tight">
                 ✓ VERIFIED
               </strong>
-              <span className="mt-1 block text-[7.5px] font-bold text-emerald-200/90 leading-tight">
-                Universal Scan Ready
-              </span>
-              <span className="mt-0.5 block text-[7.5px] font-mono text-orange-300 leading-tight">
-                1200×1500 PX
+              <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-wider text-emerald-200/90 leading-tight">
+                OFFICIAL BADGE
               </span>
             </div>
           </div>
@@ -1662,7 +1918,9 @@ export function CardInnerContentLandscape({
 export function PersonFoldBadgePair({
   person,
   user = null,
-  onPrintSingle = null
+  onPrintSingle = null,
+  onInspect = null,
+  onCrop = null
 }) {
   const reg = person?.reg || person;
   const cardData = person?.cardData || getRegistrationCardData(reg);
@@ -1700,6 +1958,37 @@ export function PersonFoldBadgePair({
 
   return (
     <div className="person-fold-box relative w-full rounded-2xl border-2 border-dashed border-slate-500 bg-slate-950/70 p-2.5 sm:p-3 my-1">
+      {/* Admin Action Toolbar (Hidden in Print) */}
+      {(onInspect || onCrop) && (
+        <div className="no-print flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800">
+          <span className="text-[10px] font-bold text-slate-300">
+            {cardData.isStaff ? '⭐ Organizing Staff' : '🎓 Participant'} • {cardData.cardCode}
+          </span>
+          <div className="flex items-center gap-1.5">
+            {onInspect && (
+              <button
+                type="button"
+                onClick={() => onInspect(reg)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[10.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400/50 cursor-pointer"
+              >
+                <Edit3 className="h-3 w-3 text-orange-400" />
+                <span>ตรวจสอบ / แก้ไขบัตร</span>
+              </button>
+            )}
+            {onCrop && (
+              <button
+                type="button"
+                onClick={() => onCrop(reg)}
+                className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-2.5 py-1 text-[10.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
+              >
+                <Scissors className="h-3 w-3" />
+                <span>ครอปรูป</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Corner Crop Marks for Cutter */}
       <span className="absolute -top-1.5 -left-1.5 text-slate-400 font-mono text-xs select-none">⌜</span>
       <span className="absolute -top-1.5 -right-1.5 text-slate-400 font-mono text-xs select-none">⌝</span>
@@ -1759,16 +2048,11 @@ export function PersonFoldBadgePair({
           </span>
           <div
             style={{ width: '220px', height: '275px' }}
-            className="relative shrink-0 overflow-hidden rounded-[14px] border border-slate-600 bg-white shadow-md p-1.5 flex items-center justify-center select-none"
+            className="relative shrink-0 overflow-hidden rounded-[14px] border border-slate-600 bg-[#07172f] shadow-md text-white select-none"
           >
-            <img
-              src={BADGE_BACK_IMAGE}
-              alt="JRE 2027 Website QR"
-              className="h-full w-full object-contain"
-              onError={(e) => {
-                e.currentTarget.src = FALLBACK_PHOTO;
-              }}
-            />
+            <div style={{ transform: 'scale(0.4583)', transformOrigin: 'top left', width: '480px', height: '600px' }}>
+              <CardInnerContentBack cardData={cardData} />
+            </div>
           </div>
         </div>
       </div>

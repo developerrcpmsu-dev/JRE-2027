@@ -6040,6 +6040,7 @@ export default function AdminDashboardView({
                   isAdmin={true}
                   onNavigateBack={() => handleNavigateSubpage('applicants')}
                   onOpenScanner={() => setShowUniversalScanner(true)}
+                  onUpdateRegistration={onUpdateAllocation}
                 />
               )}
 

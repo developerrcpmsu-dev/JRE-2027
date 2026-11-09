@@ -17,7 +17,8 @@ import {
   Check,
   Scissors,
   RotateCw,
-  FileText
+  FileText,
+  Edit3
 } from 'lucide-react';
 import IDCardPreview, {
   renderNativeIdCardCanvas,
@@ -27,6 +28,8 @@ import IDCardPreview, {
   PORTRAIT_BASE_HEIGHT,
   BADGE_BACK_IMAGE
 } from '../components/IDCardPreview';
+import BadgePhotoCropperModal from '../components/BadgePhotoCropperModal';
+import BadgeInspectEditModal from '../components/BadgeInspectEditModal';
 import {
   isStaffRegistration,
   resolveUniversityInfo,
@@ -40,7 +43,8 @@ export default function AdminIDCardsDirectoryView({
   user = null,
   isAdmin = true,
   onNavigateBack = null,
-  onOpenScanner = null
+  onOpenScanner = null,
+  onUpdateRegistration = null
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all'); // 'all', 'staff', 'university', 'general'
@@ -50,6 +54,29 @@ export default function AdminIDCardsDirectoryView({
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
+
+  // Admin Inspection & Cropping Modals
+  const [inspectingPerson, setInspectingPerson] = useState(null);
+  const [croppingPerson, setCroppingPerson] = useState(null);
+
+  const handleSaveCroppedPhoto = async (croppedDataUrl) => {
+    if (!croppingPerson) return;
+    const targetId = croppingPerson.user_id || croppingPerson.id;
+    if (onUpdateRegistration) {
+      await onUpdateRegistration(targetId, { id_card_photo: croppedDataUrl });
+    }
+    setCroppingPerson(null);
+    if (inspectingPerson) {
+      setInspectingPerson(prev => prev ? { ...prev, id_card_photo: croppedDataUrl } : null);
+    }
+  };
+
+  const handleSaveBadgeEdits = async (userId, updates) => {
+    if (onUpdateRegistration) {
+      await onUpdateRegistration(userId, updates);
+    }
+    setInspectingPerson(null);
+  };
 
   const pageUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/admin/id-cards`
@@ -698,7 +725,13 @@ export default function AdminIDCardsDirectoryView({
                 {/* Person 1 Box (Front + Fold + Back) */}
                 <div className="w-full flex justify-center">
                   <div className="w-full max-w-2xl">
-                    <PersonFoldBadgePair person={person1} user={user} onPrintSingle={handlePrint} />
+                    <PersonFoldBadgePair 
+                      person={person1} 
+                      user={user} 
+                      onPrintSingle={handlePrint}
+                      onInspect={setInspectingPerson}
+                      onCrop={setCroppingPerson}
+                    />
                   </div>
                 </div>
 
@@ -717,7 +750,13 @@ export default function AdminIDCardsDirectoryView({
                 {person2 ? (
                   <div className="w-full flex justify-center">
                     <div className="w-full max-w-2xl">
-                      <PersonFoldBadgePair person={person2} user={user} onPrintSingle={handlePrint} />
+                      <PersonFoldBadgePair 
+                        person={person2} 
+                        user={user} 
+                        onPrintSingle={handlePrint}
+                        onInspect={setInspectingPerson}
+                        onCrop={setCroppingPerson}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -762,7 +801,32 @@ export default function AdminIDCardsDirectoryView({
 
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredDataset.staff.map(({ reg, cardData }) => (
-                    <div key={cardData.cardCode} className="flex justify-center">
+                    <div key={cardData.cardCode} className="flex flex-col items-center gap-2 w-full max-w-sm mx-auto">
+                      <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 shadow-sm">
+                        <span className="text-[11px] font-mono font-bold text-amber-300">
+                          {cardData.cardCode}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setInspectingPerson(reg)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[10.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400/50 cursor-pointer"
+                            title="ตรวจสอบข้อมูลและแก้ไขบัตร"
+                          >
+                            <Edit3 className="h-3 w-3 text-orange-400" />
+                            <span>ตรวจ / แก้</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCroppingPerson(reg)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-2 py-1 text-[10.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
+                            title="ครอปรูปถ่ายประจำตัว"
+                          >
+                            <Scissors className="h-3 w-3" />
+                            <span>ครอปรูป</span>
+                          </button>
+                        </div>
+                      </div>
                       <IDCardPreview
                         registration={reg}
                         user={user}
@@ -802,7 +866,32 @@ export default function AdminIDCardsDirectoryView({
 
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                       {group.items.map(({ reg, cardData }) => (
-                        <div key={cardData.cardCode} className="flex justify-center">
+                        <div key={cardData.cardCode} className="flex flex-col items-center gap-2 w-full max-w-sm mx-auto">
+                          <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 shadow-sm">
+                            <span className="text-[11px] font-mono font-bold text-sky-300">
+                              {cardData.cardCode}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setInspectingPerson(reg)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[10.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400/50 cursor-pointer"
+                                title="ตรวจสอบข้อมูลและแก้ไขบัตร"
+                              >
+                                <Edit3 className="h-3 w-3 text-orange-400" />
+                                <span>ตรวจ / แก้</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCroppingPerson(reg)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-2 py-1 text-[10.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
+                                title="ครอปรูปถ่ายประจำตัว"
+                              >
+                                <Scissors className="h-3 w-3" />
+                                <span>ครอปรูป</span>
+                              </button>
+                            </div>
+                          </div>
                           <IDCardPreview
                             registration={reg}
                             user={user}
@@ -839,7 +928,32 @@ export default function AdminIDCardsDirectoryView({
 
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredDataset.general.map(({ reg, cardData }) => (
-                    <div key={cardData.cardCode} className="flex justify-center">
+                    <div key={cardData.cardCode} className="flex flex-col items-center gap-2 w-full max-w-sm mx-auto">
+                      <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 shadow-sm">
+                        <span className="text-[11px] font-mono font-bold text-emerald-300">
+                          {cardData.cardCode}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setInspectingPerson(reg)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[10.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400/50 cursor-pointer"
+                            title="ตรวจสอบข้อมูลและแก้ไขบัตร"
+                          >
+                            <Edit3 className="h-3 w-3 text-orange-400" />
+                            <span>ตรวจ / แก้</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCroppingPerson(reg)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-2 py-1 text-[10.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
+                            title="ครอปรูปถ่ายประจำตัว"
+                          >
+                            <Scissors className="h-3 w-3" />
+                            <span>ครอปรูป</span>
+                          </button>
+                        </div>
+                      </div>
                       <IDCardPreview
                         registration={reg}
                         user={user}
@@ -879,6 +993,27 @@ export default function AdminIDCardsDirectoryView({
           </div>
         )}
       </div>
+
+      {/* Admin Live Badge Inspector & Editor Modal */}
+      {inspectingPerson && (
+        <BadgeInspectEditModal
+          isOpen={Boolean(inspectingPerson)}
+          person={inspectingPerson}
+          onClose={() => setInspectingPerson(null)}
+          onSave={handleSaveBadgeEdits}
+          onOpenCropper={(p) => setCroppingPerson(p)}
+        />
+      )}
+
+      {/* Admin ID Photo 4:5 Cropper Modal */}
+      {croppingPerson && (
+        <BadgePhotoCropperModal
+          isOpen={Boolean(croppingPerson)}
+          person={croppingPerson}
+          onClose={() => setCroppingPerson(null)}
+          onSave={handleSaveCroppedPhoto}
+        />
+      )}
     </div>
   );
 }
