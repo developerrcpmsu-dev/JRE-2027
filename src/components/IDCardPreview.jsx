@@ -286,7 +286,7 @@ export async function renderNativeIdCardCanvas({ photo, cardData, qrDataUrl, ori
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(
-      isDev ? 'SYSTEM DEVELOPER' : isStaff ? 'STAFF / คณะทำงาน' : 'PARTICIPANT / ผู้เข้าร่วม',
+      isDev ? 'BESTCYNIX DEV' : isStaff ? 'ORGANIZING STAFF' : 'PARTICIPANT',
       px + pw / 2,
       py + ph - 11
     );
@@ -1668,14 +1668,14 @@ export function CardInnerContentPortrait({
                   event.currentTarget.src = FALLBACK_PHOTO;
                 }}
               />
-              <div className={`absolute inset-x-0 bottom-0 px-1 py-0.5 text-center text-[8.5px] font-black tracking-wider uppercase shadow-md ${
+              <div className={`absolute inset-x-0 bottom-0 px-1 py-0.5 text-center text-[8px] font-black tracking-wider uppercase shadow-md whitespace-nowrap truncate overflow-hidden ${
                 isDev
                   ? 'bg-gradient-to-r from-purple-700 via-indigo-800 to-cyan-800 text-cyan-200'
                   : isStaff 
                   ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black' 
                   : 'bg-gradient-to-r from-sky-600 to-blue-700 text-white font-black'
               }`}>
-                {isDev ? 'SYSTEM DEVELOPER' : isStaff ? 'STAFF / คณะทำงาน' : 'PARTICIPANT / ผู้เข้าร่วม'}
+                {isDev ? '💻 BESTCYNIX DEV' : isStaff ? '⭐ ORGANIZING STAFF' : '🎓 PARTICIPANT'}
               </div>
             </div>
 
@@ -1831,7 +1831,7 @@ export function CardInnerContentLandscape({
                   event.currentTarget.src = FALLBACK_PHOTO;
                 }}
               />
-              <div className={`absolute inset-x-0 bottom-0 bg-slate-950/90 px-1 py-1 text-center text-[8px] font-black tracking-[0.1em] ${cardData.isStaff ? 'text-yellow-300' : 'text-orange-300'}`}>
+              <div className={`absolute inset-x-0 bottom-0 bg-slate-950/90 px-1 py-1 text-center text-[8px] font-black tracking-[0.1em] whitespace-nowrap truncate overflow-hidden ${cardData.isStaff ? 'text-yellow-300' : 'text-orange-300'}`}>
                 {cardData.roleBadge || 'PARTICIPANT'}
               </div>
             </div>
@@ -1947,41 +1947,17 @@ export function CardInnerContentLandscape({
 }
 
 /**
- * PERSON FOLD BADGE PAIR (FRONT + CENTER FOLD + BACK)
- * For 2-person A4 Print Sheet with Clear Outer Cut Line and Center Fold Line
- * Designed for Laminating (พับประกบหน้า-หลังแล้วเคลือบ)
+ * SINGLE A6 BADGE CARD ITEM (FRONT OR BACK)
+ * Sized for A6 (105 x 148.5 mm standard quadrant of A4)
  */
-export function PersonFoldBadgePair({
+export function A6BadgeCardItem({
   person,
   user = null,
-  onPrintSingle = null,
-  onInspect = null,
-  onCrop = null
+  side = 'front',
+  qrDataUrl = ''
 }) {
   const reg = person?.reg || person;
   const cardData = person?.cardData || getRegistrationCardData(reg);
-  const [qrDataUrl, setQrDataUrl] = useState('');
-
-  useEffect(() => {
-    if (!reg) return undefined;
-    let cancelled = false;
-
-    QRCode.toDataURL(getIdCardQrPayload(reg), {
-      width: 360,
-      margin: 1,
-      errorCorrectionLevel: 'M',
-      color: { dark: '#000000', light: '#ffffff' }
-    })
-      .then((url) => {
-        if (!cancelled) setQrDataUrl(url);
-      })
-      .catch((err) => console.error(err));
-
-    return () => {
-      cancelled = true;
-    };
-  }, [reg]);
-
   if (!reg) return null;
 
   const photo = cardData.photo || user?.avatar || FALLBACK_PHOTO;
@@ -1993,122 +1969,288 @@ export function PersonFoldBadgePair({
   const hasNickname = cardData.nickname && cardData.nickname !== '-';
 
   return (
-    <div className="person-fold-box relative w-full rounded-2xl border-2 border-dashed border-slate-500 bg-slate-950/70 p-2.5 sm:p-3 my-1">
-      {/* Admin Action Toolbar (Hidden in Print) */}
-      {(onInspect || onCrop) && (
-        <div className="no-print flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800">
-          <span className="text-[10px] font-bold text-slate-300">
-            {cardData.isStaff ? '⭐ Organizing Staff' : '🎓 Participant'} • {cardData.cardCode}
-          </span>
-          <div className="flex items-center gap-1.5">
-            {onInspect && (
-              <button
-                type="button"
-                onClick={() => onInspect(reg)}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[10.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400/50 cursor-pointer"
-              >
-                <Edit3 className="h-3 w-3 text-orange-400" />
-                <span>ตรวจสอบ / แก้ไขบัตร</span>
-              </button>
-            )}
-            {onCrop && (
-              <button
-                type="button"
-                onClick={() => onCrop(reg)}
-                className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-2.5 py-1 text-[10.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
-              >
-                <Scissors className="h-3 w-3" />
-                <span>ครอปรูป</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Corner Crop Marks for Cutter */}
-      <span className="absolute -top-1.5 -left-1.5 text-slate-400 font-mono text-xs select-none">⌜</span>
-      <span className="absolute -top-1.5 -right-1.5 text-slate-400 font-mono text-xs select-none">⌝</span>
-      <span className="absolute -bottom-1.5 -left-1.5 text-slate-400 font-mono text-xs select-none">⌞</span>
-      <span className="absolute -bottom-1.5 -right-1.5 text-slate-400 font-mono text-xs select-none">⌟</span>
-
-      {/* Top Outer Cut Line Indicator */}
-      <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 pb-1.5 border-b border-dashed border-slate-700 select-none">
-        <span className="flex items-center gap-1 text-orange-400">
-          <Scissors className="h-3 w-3" />
-          เส้นตัดขอบนอกสำหรับเคลือบ (Outer Cut Line)
-        </span>
-        <span className="font-mono text-white text-[9.5px]">
-          {cardData.cardCode} • {cardData.thaiName}
-        </span>
-        <span className="text-amber-400 font-mono">
-          1200 × 1500 PX
-        </span>
-      </div>
-
-      {/* Side-by-Side: Front + Center Fold + Back */}
-      <div className="flex items-center justify-center gap-3 py-2">
-        {/* FRONT CARD */}
-        <div className="flex flex-col items-center">
-          <span className="mb-1 text-[8.5px] font-black uppercase tracking-wider text-orange-400">
-            [ ด้านหน้า (FRONT) ]
-          </span>
-          <div
-            style={{ width: '220px', height: '275px' }}
-            className="relative shrink-0 overflow-hidden rounded-[14px] border border-slate-600 bg-[#07172f] shadow-md text-white select-none"
-          >
-            <div style={{ transform: 'scale(0.4583)', transformOrigin: 'top left', width: '480px', height: '600px' }}>
-              <CardInnerContentPortrait
-                photo={photo}
-                cardData={cardData}
-                qrDataUrl={qrDataUrl}
-                thaiNameClass={thaiNameClass}
-                enNameClass={enNameClass}
-                hasCallsign={hasCallsign}
-                hasNickname={hasNickname}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* CENTER FOLD LINE WITH FOLD ARROWS */}
-        <div className="flex flex-col items-center justify-center h-full px-1 border-l-2 border-dashed border-orange-500/90 select-none">
-          <div className="text-[8.5px] font-black text-orange-400 bg-orange-500/10 px-1 py-3 rounded-md border border-orange-400/40 text-center uppercase tracking-widest whitespace-nowrap">
-            ⤸ พับประกบกึ่งกลาง (FOLD HERE) ⤸
-          </div>
-        </div>
-
-        {/* BACK CARD */}
-        <div className="flex flex-col items-center">
-          <span className="mb-1 text-[8.5px] font-black uppercase tracking-wider text-sky-400">
-            [ ด้านหลัง (BACK) ]
-          </span>
-          <div
-            style={{ width: '220px', height: '275px' }}
-            className="relative shrink-0 overflow-hidden rounded-[14px] border border-slate-600 bg-[#07172f] shadow-md text-white select-none"
-          >
-            <div style={{ transform: 'scale(0.4583)', transformOrigin: 'top left', width: '480px', height: '600px' }}>
-              <CardInnerContentBack cardData={cardData} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Laminating Instruction */}
-      <div className="flex items-center justify-between text-[8.5px] text-slate-400 pt-1.5 border-t border-dashed border-slate-700">
-        <span className="text-emerald-300 font-semibold">
-          ✂ ตัดตามรอยประรอบนอก ⤸ พับประกบกึ่งกลาง แล้วเคลือบพลาสติก (Laminate) ขนาดพอดีกัน 100%
-        </span>
-        {onPrintSingle && (
-          <button
-            type="button"
-            onClick={onPrintSingle}
-            className="no-print inline-flex items-center gap-1 rounded-md border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold text-orange-300 hover:bg-orange-500/20 cursor-pointer"
-          >
-            <Printer className="h-3 w-3" />
-            พิมพ์คู่นี้
-          </button>
+    <div
+      style={{ width: '230px', height: '287.5px' }}
+      className="a6-card-wrapper relative shrink-0 overflow-hidden rounded-[14px] border border-slate-600 bg-[#07172f] shadow-md text-white select-none"
+    >
+      <div style={{ transform: 'scale(0.4791)', transformOrigin: 'top left', width: '480px', height: '600px' }}>
+        {side === 'front' ? (
+          <CardInnerContentPortrait
+            photo={photo}
+            cardData={cardData}
+            qrDataUrl={qrDataUrl}
+            thaiNameClass={thaiNameClass}
+            enNameClass={enNameClass}
+            hasCallsign={hasCallsign}
+            hasNickname={hasNickname}
+          />
+        ) : (
+          <CardInnerContentBack cardData={cardData} />
         )}
       </div>
     </div>
   );
 }
+
+/**
+ * A4 4-CELL GRID SHEET (2 PEOPLE PER A4 SHEET)
+ * Layout: 2 Columns x 2 Rows = 4 Quadrants of A6 size (105 x 148.5 mm)
+ * Row 1 (Person 1 Top): Left = FRONT (A6) | Right = BACK (A6)
+ * Row 2 (Person 2 Bottom): Left = FRONT (A6) | Right = BACK (A6)
+ * Center Vertical Fold Line: Folds front & back back-to-back with 100% exact alignment
+ * Center Horizontal Cut Line: Cuts between Person 1 and Person 2
+ */
+export function A4FourQuadrantGridSheet({
+  pageNumber = 1,
+  totalPages = 1,
+  person1,
+  person2 = null,
+  user = null,
+  onPrintSingle = null,
+  onInspect = null,
+  onCrop = null
+}) {
+  const [qr1, setQr1] = useState('');
+  const [qr2, setQr2] = useState('');
+
+  const reg1 = person1?.reg || person1;
+  const cardData1 = person1?.cardData || getRegistrationCardData(reg1);
+
+  const reg2 = person2?.reg || person2;
+  const cardData2 = person2 ? (person2?.cardData || getRegistrationCardData(reg2)) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (reg1) {
+      QRCode.toDataURL(getIdCardQrPayload(reg1), {
+        width: 360,
+        margin: 1,
+        errorCorrectionLevel: 'M'
+      })
+        .then((url) => {
+          if (!cancelled) setQr1(url);
+        })
+        .catch(console.error);
+    }
+    if (reg2) {
+      QRCode.toDataURL(getIdCardQrPayload(reg2), {
+        width: 360,
+        margin: 1,
+        errorCorrectionLevel: 'M'
+      })
+        .then((url) => {
+          if (!cancelled) setQr2(url);
+        })
+        .catch(console.error);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [reg1, reg2]);
+
+  if (!reg1) return null;
+
+  return (
+    <div className="a4-print-sheet relative w-full rounded-3xl border border-slate-700 bg-slate-900/90 shadow-2xl overflow-hidden p-3 sm:p-5 select-none my-6">
+      {/* Non-print Sheet Header */}
+      <div className="no-print flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-orange-500/20 text-orange-300 font-black text-xs border border-orange-400/40 shadow-sm">
+            A4
+          </span>
+          <div>
+            <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
+              <span>JRE 2027 • แผ่นที่ {pageNumber} / {totalPages}</span>
+              <span className="rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold font-mono">
+                ตาราง 4 ช่อง A6 (แนวตั้ง)
+              </span>
+            </h3>
+            <p className="text-[10.5px] text-slate-400">
+              1 แผ่น A4 มี 2 คน • ขนาดบัตร A6 (หน้า-หลัง) • หน้าซ้าย หลังขวา พับประกบกึ่งกลางพอดีเป๊ะ
+            </p>
+          </div>
+        </div>
+
+        {onPrintSingle && (
+          <button
+            type="button"
+            onClick={onPrintSingle}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-orange-400/40 bg-orange-500/20 px-3 py-1.5 text-xs font-bold text-orange-200 hover:bg-orange-500/30 transition-all cursor-pointer shadow-sm"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            <span>พิมพ์แผ่นนี้ (A4)</span>
+          </button>
+        )}
+      </div>
+
+      {/* Outer Cut Marks at the 4 Corners */}
+      <span className="absolute top-2 left-2 text-slate-500 font-mono text-xs select-none">⌜</span>
+      <span className="absolute top-2 right-2 text-slate-500 font-mono text-xs select-none">⌝</span>
+      <span className="absolute bottom-2 left-2 text-slate-500 font-mono text-xs select-none">⌞</span>
+      <span className="absolute bottom-2 right-2 text-slate-500 font-mono text-xs select-none">⌟</span>
+
+      {/* =========================================================
+          THE 4-CELL TABLE GRID (A4 PORTRAIT)
+          Columns: Left (Front A6) | Right (Back A6)
+          Rows: Row 1 (Person 1)   | Row 2 (Person 2)
+          ========================================================= */}
+      <div className="a4-grid-4cell relative w-full grid grid-cols-2 gap-0 border border-slate-700/80 rounded-2xl bg-slate-950/60 overflow-hidden">
+        
+        {/* Printable Center Vertical Fold Line (Left: 50%) */}
+        <div className="print-center-fold-line pointer-events-none absolute inset-y-0 left-1/2 -ml-[1px] w-0 border-l-2 border-dashed border-orange-500/80 z-20 flex flex-col justify-around select-none">
+          <div className="no-print -ml-16 bg-orange-500/90 text-slate-950 px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider shadow whitespace-nowrap">
+            ⤸ พับประกบกึ่งกลาง (Fold Line) ⤸
+          </div>
+          <div className="no-print -ml-16 bg-orange-500/90 text-slate-950 px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider shadow whitespace-nowrap">
+            ⤸ พับประกบกึ่งกลาง (Fold Line) ⤸
+          </div>
+        </div>
+
+        {/* Printable Center Horizontal Cut Line (Top: 50%) */}
+        <div className="print-center-cut-line pointer-events-none absolute inset-x-0 top-1/2 -mt-[1px] h-0 border-t-2 border-dashed border-slate-500 z-20 flex items-center justify-center select-none">
+          <div className="no-print bg-slate-900 border border-slate-600 text-slate-300 px-3 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider shadow flex items-center gap-1">
+            <Scissors className="h-3 w-3 text-orange-400" />
+            <span>เส้นตัดแบ่งครึ่งแผ่น A4 (Cut Line) สำหรับ 2 คน</span>
+          </div>
+        </div>
+
+        {/* -------------------------------------------------------
+            ROW 1: PERSON 1 (คนบน)
+            ------------------------------------------------------- */}
+        {/* Quadrant 1 (Top-Left): Person 1 FRONT - A6 */}
+        <div className="a6-quadrant flex flex-col items-center justify-center p-2 sm:p-4 border-r border-b border-dashed border-slate-800">
+          {/* Person 1 Action Bar (Non-print) */}
+          <div className="no-print w-full flex items-center justify-between pb-1.5 mb-1.5 text-[10px] text-slate-300 border-b border-slate-800/80">
+            <div className="flex items-center gap-1 truncate max-w-[170px]">
+              <span className="font-mono text-orange-400 font-bold">{cardData1.cardCode}</span>
+              <span className="truncate">{cardData1.thaiName}</span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {onInspect && (
+                <button
+                  type="button"
+                  onClick={() => onInspect(reg1)}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-0.5 text-[9.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400 cursor-pointer"
+                  title="ตรวจสอบ / แก้ไขบัตร"
+                >
+                  <Edit3 className="h-2.5 w-2.5 inline mr-0.5 text-orange-400" />
+                  ตรวจ/แก้
+                </button>
+              )}
+              {onCrop && (
+                <button
+                  type="button"
+                  onClick={() => onCrop(reg1)}
+                  className="rounded-lg border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[9.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
+                  title="ครอปรูปถ่าย"
+                >
+                  <Scissors className="h-2.5 w-2.5 inline mr-0.5" />
+                  ครอปรูป
+                </button>
+              )}
+            </div>
+          </div>
+          <span className="no-print mb-1 text-[8.5px] font-black uppercase tracking-wider text-orange-400">
+            [ คนบน • ด้านหน้า (FRONT) - A6 ]
+          </span>
+          <A6BadgeCardItem person={person1} user={user} side="front" qrDataUrl={qr1} />
+        </div>
+
+        {/* Quadrant 2 (Top-Right): Person 1 BACK - A6 */}
+        <div className="a6-quadrant flex flex-col items-center justify-center p-2 sm:p-4 border-b border-dashed border-slate-800">
+          <div className="no-print w-full flex items-center justify-between pb-1.5 mb-1.5 text-[10px] text-slate-400 border-b border-slate-800/80">
+            <span className="font-mono text-[9px] text-slate-500">BACK OF {cardData1.cardCode}</span>
+            <span className="text-[9px] text-sky-400 font-bold">QR เว็บไซต์ JRE2027</span>
+          </div>
+          <span className="no-print mb-1 text-[8.5px] font-black uppercase tracking-wider text-sky-400">
+            [ คนบน • ด้านหลัง (BACK) - A6 ]
+          </span>
+          <A6BadgeCardItem person={person1} user={user} side="back" />
+        </div>
+
+        {/* -------------------------------------------------------
+            ROW 2: PERSON 2 (คนล่าง)
+            ------------------------------------------------------- */}
+        {/* Quadrant 3 (Bottom-Left): Person 2 FRONT - A6 */}
+        <div className="a6-quadrant flex flex-col items-center justify-center p-2 sm:p-4 border-r border-dashed border-slate-800">
+          {person2 ? (
+            <>
+              {/* Person 2 Action Bar (Non-print) */}
+              <div className="no-print w-full flex items-center justify-between pb-1.5 mb-1.5 text-[10px] text-slate-300 border-b border-slate-800/80">
+                <div className="flex items-center gap-1 truncate max-w-[170px]">
+                  <span className="font-mono text-orange-400 font-bold">{cardData2.cardCode}</span>
+                  <span className="truncate">{cardData2.thaiName}</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {onInspect && (
+                    <button
+                      type="button"
+                      onClick={() => onInspect(reg2)}
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-0.5 text-[9.5px] font-bold text-slate-200 hover:text-white hover:border-orange-400 cursor-pointer"
+                      title="ตรวจสอบ / แก้ไขบัตร"
+                    >
+                      <Edit3 className="h-2.5 w-2.5 inline mr-0.5 text-orange-400" />
+                      ตรวจ/แก้
+                    </button>
+                  )}
+                  {onCrop && (
+                    <button
+                      type="button"
+                      onClick={() => onCrop(reg2)}
+                      className="rounded-lg border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[9.5px] font-bold text-orange-200 hover:bg-orange-500/20 cursor-pointer"
+                      title="ครอปรูปถ่าย"
+                    >
+                      <Scissors className="h-2.5 w-2.5 inline mr-0.5" />
+                      ครอปรูป
+                    </button>
+                  )}
+                </div>
+              </div>
+              <span className="no-print mb-1 text-[8.5px] font-black uppercase tracking-wider text-orange-400">
+                [ คนล่าง • ด้านหน้า (FRONT) - A6 ]
+              </span>
+              <A6BadgeCardItem person={person2} user={user} side="front" qrDataUrl={qr2} />
+            </>
+          ) : (
+            <div className="h-[287.5px] w-[230px] rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center p-4 text-center text-slate-600 text-xs">
+              <span>(ตำแหน่งว่างสำหรับคนที่ 2)</span>
+              <span className="text-[10px] text-slate-700 mt-1">แผ่นสุดท้ายมีจำนวนผู้เข้าร่วมเป็นเลขคี่</span>
+            </div>
+          )}
+        </div>
+
+        {/* Quadrant 4 (Bottom-Right): Person 2 BACK - A6 */}
+        <div className="a6-quadrant flex flex-col items-center justify-center p-2 sm:p-4">
+          {person2 ? (
+            <>
+              <div className="no-print w-full flex items-center justify-between pb-1.5 mb-1.5 text-[10px] text-slate-400 border-b border-slate-800/80">
+                <span className="font-mono text-[9px] text-slate-500">BACK OF {cardData2.cardCode}</span>
+                <span className="text-[9px] text-sky-400 font-bold">QR เว็บไซต์ JRE2027</span>
+              </div>
+              <span className="no-print mb-1 text-[8.5px] font-black uppercase tracking-wider text-sky-400">
+                [ คนล่าง • ด้านหลัง (BACK) - A6 ]
+              </span>
+              <A6BadgeCardItem person={person2} user={user} side="back" />
+            </>
+          ) : (
+            <div className="h-[287.5px] w-[230px] rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center p-4 text-center text-slate-600 text-xs">
+              <span>(ตำแหน่งว่างด้านหลังคนที่ 2)</span>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Non-print Footer Guide */}
+      <div className="no-print mt-3 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+        <span className="text-emerald-300 font-semibold flex items-center gap-1.5">
+          <span>💡 <strong>วิธีตัด & พับประกบ:</strong> 1. ตัดตามเส้นประแนวนอนกึ่งกลางแบ่งเป็น 2 คน ✂ 2. พับครึ่งตามเส้นประแนวตั้งประกบหน้า-หลังพอดีเป๊ะ A6 ⤸ 3. นำไปเคลือบพลาสติกใส</span>
+        </span>
+        <span className="font-mono text-amber-300">A4 Portrait (4 Quadrants) • A6 ID Cards</span>
+      </div>
+    </div>
+  );
+}
+
+// Backward compatibility alias
+export const PersonFoldBadgePair = A4FourQuadrantGridSheet;

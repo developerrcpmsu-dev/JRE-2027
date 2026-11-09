@@ -23,6 +23,7 @@ import {
 import IDCardPreview, {
   renderNativeIdCardCanvas,
   renderNativeIdCardBackCanvas,
+  A4FourQuadrantGridSheet,
   PersonFoldBadgePair,
   PORTRAIT_BASE_WIDTH,
   PORTRAIT_BASE_HEIGHT,
@@ -357,14 +358,22 @@ export default function AdminIDCardsDirectoryView({
           button:not(.print-include) {
             display: none !important;
           }
-          body {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
             background: #ffffff !important;
             color: #000000 !important;
           }
           #printable-id-cards-directory {
             display: block !important;
             visibility: visible !important;
-            width: 100% !important;
+            width: 210mm !important;
             margin: 0 !important;
             padding: 0 !important;
           }
@@ -376,24 +385,75 @@ export default function AdminIDCardsDirectoryView({
           .a4-print-sheet {
             page-break-after: always !important;
             break-after: page !important;
-            width: 100% !important;
-            min-height: 275mm !important;
-            max-height: 285mm !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            max-height: 297mm !important;
+            box-sizing: border-box !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            border: none !important;
+            display: block !important;
+          }
+          .a4-grid-4cell {
+            width: 210mm !important;
+            height: 297mm !important;
+            display: grid !important;
+            grid-template-columns: 105mm 105mm !important;
+            grid-template-rows: 148.5mm 148.5mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+            background: #ffffff !important;
+            border: none !important;
+          }
+          .a6-quadrant {
+            width: 105mm !important;
+            height: 148.5mm !important;
+            box-sizing: border-box !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-around !important;
-            padding: 3mm 0 !important;
-            box-sizing: border-box !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            position: relative !important;
+            border: none !important;
           }
-          .person-fold-box {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            border: 1.5px dashed #475569 !important;
-            background: #ffffff !important;
-            color: #000000 !important;
-            padding: 3mm !important;
-            margin: 2mm 0 !important;
+          .a6-card-wrapper {
+            width: 96mm !important;
+            height: 120mm !important;
+            box-sizing: border-box !important;
+            border-radius: 4.5mm !important;
+            overflow: hidden !important;
             box-shadow: none !important;
+            border: 1px solid #334155 !important;
+          }
+          .a6-card-wrapper > div {
+            transform: scale(0.7559) !important;
+            transform-origin: top left !important;
+          }
+          .print-center-fold-line {
+            display: block !important;
+            position: absolute !important;
+            left: 105mm !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            width: 0 !important;
+            border-left: 1px dashed #64748b !important;
+            z-index: 30 !important;
+          }
+          .print-center-cut-line {
+            display: block !important;
+            position: absolute !important;
+            top: 148.5mm !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 0 !important;
+            border-top: 1px dashed #64748b !important;
+            z-index: 30 !important;
           }
         }
       `}</style>
@@ -724,86 +784,26 @@ export default function AdminIDCardsDirectoryView({
       {/* Main Print / Display Container */}
       <div id="printable-id-cards-directory">
         {/* ========================================================
-            VIEW MODE 1: A4 FOLD SHEETS (2 PEOPLE PER SHEET)
-            Front & Back side-by-side with fold line and cutting border
+            VIEW MODE 1: A4 4-CELL GRID SHEETS (2 PEOPLE PER SHEET)
+            2 Columns x 2 Rows = 4 Quadrants A6 (105 x 148.5 mm)
+            Row 1 (Person 1): Front (Left) & Back (Right)
+            Row 2 (Person 2): Front (Left) & Back (Right)
+            Folds down the vertical center line with 100% exact alignment
             ======================================================== */}
         {viewLayout === 'a4_fold' && (
           <div className="space-y-8">
             {a4Pages.map(({ pageNumber, person1, person2 }) => (
-              <div
+              <A4FourQuadrantGridSheet
                 key={`a4-page-${pageNumber}`}
-                className="a4-print-sheet rounded-3xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6 shadow-2xl space-y-4"
-              >
-                {/* A4 Sheet Header */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800 select-none">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-500/20 text-orange-300 font-bold text-xs border border-orange-400/30">
-                      A4
-                    </span>
-                    <span className="text-xs font-black text-white">
-                      JRE 2027 • บัตรประจำตัวผู้เข้าร่วม (แผ่นที่ {pageNumber} / {a4Pages.length})
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      • 2 คน/แผ่น (หน้า-หลังพับประกบสำหรับเคลือบ)
-                    </span>
-                  </div>
-
-                  <div className="no-print flex items-center gap-2">
-                    <span className="text-[10px] text-amber-300 font-mono">
-                      {person1.groupLabel}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Person 1 Box (Front + Fold + Back) */}
-                <div className="w-full flex justify-center">
-                  <div className="w-full max-w-2xl">
-                    <PersonFoldBadgePair 
-                      person={person1} 
-                      user={user} 
-                      onPrintSingle={handlePrint}
-                      onInspect={setInspectingPerson}
-                      onCrop={setCroppingPerson}
-                    />
-                  </div>
-                </div>
-
-                {/* Middle Page Divider between 2 people */}
-                {person2 && (
-                  <div className="relative py-1 flex items-center justify-center select-none">
-                    <div className="w-full border-t border-dashed border-slate-700" />
-                    <span className="absolute bg-slate-900 px-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                      <Scissors className="h-3 w-3 text-orange-400" />
-                      เส้นตัดแบ่งครึ่งแผ่น A4 สำหรับ 2 คน (Split Line)
-                    </span>
-                  </div>
-                )}
-
-                {/* Person 2 Box (Front + Fold + Back) */}
-                {person2 ? (
-                  <div className="w-full flex justify-center">
-                    <div className="w-full max-w-2xl">
-                      <PersonFoldBadgePair 
-                        person={person2} 
-                        user={user} 
-                        onPrintSingle={handlePrint}
-                        onInspect={setInspectingPerson}
-                        onCrop={setCroppingPerson}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-xs text-slate-500 select-none">
-                    (ตำแหน่งว่างสำหรับคนที่ 2 ของแผ่นสุดท้ายนี้)
-                  </div>
-                )}
-
-                {/* A4 Sheet Footer Guidance */}
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[9px] text-slate-400 select-none">
-                  <span>💡 คำแนะนำ: 1. ตัดตามรอยประขอบนอก ✂ 2. พับครึ่งตามแนวเส้นประ ⤸ 3. ประกบหน้า-หลังแล้วนำไปเคลือบพลาสติกใส</span>
-                  <span className="font-mono text-orange-300">rcp-msu.web.app • CR100 Vertical 1200×1500 PX</span>
-                </div>
-              </div>
+                pageNumber={pageNumber}
+                totalPages={a4Pages.length}
+                person1={person1}
+                person2={person2}
+                user={user}
+                onPrintSingle={handlePrint}
+                onInspect={setInspectingPerson}
+                onCrop={setCroppingPerson}
+              />
             ))}
           </div>
         )}
