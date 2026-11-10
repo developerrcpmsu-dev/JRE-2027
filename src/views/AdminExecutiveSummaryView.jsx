@@ -204,6 +204,11 @@ export default function AdminExecutiveSummaryView({
   // Protection switch: Admin must unlock Edit Mode before changing data, to prevent accidental clicks
   const [isEditMode, setIsEditMode] = useState(false);
 
+  // Staged / Draft changes in Edit Mode before explicit Save
+  // rowDrafts[itemId] = { status, needAccommodation, uni, role, dutyNote }
+  const [rowDrafts, setRowDrafts] = useState({});
+  const [isSavingDrafts, setIsSavingDrafts] = useState(false);
+
   // Inline Duty / Note Drafts per row
   const [dutyNoteDrafts, setDutyNoteDrafts] = useState({});
 
@@ -1127,6 +1132,104 @@ export default function AdminExecutiveSummaryView({
     }
   };
 
+  // Stage a change into draft without saving immediately
+  const handleStageRowChange = (item, key, val) => {
+    setRowDrafts((prev) => ({
+      ...prev,
+      [item.id]: {
+        ...(prev[item.id] || {}),
+        [key]: val
+      }
+    }));
+  };
+
+  const handleDiscardRowDraft = (itemId) => {
+    setRowDrafts((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+  };
+
+  const handleSaveRowDraft = async (item) => {
+    const draft = rowDrafts[item.id];
+    if (!draft || !onUpdateAllocation) return;
+    setUpdatingId(item.id);
+    try {
+      const patch = {};
+      const now = new Date().toISOString();
+
+      if (draft.status !== undefined) {
+        patch.attendance_confirmed_status = draft.status;
+        patch.attendance_confirmed_at = draft.status === 'pending' ? '' : now;
+        patch.attendance_confirmed_by = 'admin';
+        if (draft.status === 'declined') {
+          patch.attendance_need_accommodation = false;
+          patch.attendance_meal_confirmed = false;
+        }
+      }
+
+      if (draft.needAccommodation !== undefined) {
+        patch.attendance_need_accommodation = draft.needAccommodation;
+      }
+
+      if (draft.uni !== undefined) {
+        const uniObj = OFFICIAL_NETWORK_INSTITUTIONS.find((u) => u.shortTag === draft.uni);
+        const nextInstitution = uniObj ? uniObj.label : draft.uni;
+        const nextAbbrTh = uniObj ? uniObj.shortTag : draft.uni;
+        const cleanName = `${item.reg.title_th || ''}${item.reg.first_name || ''}${item.reg.last_name ? ' ' + item.reg.last_name : ''}`.trim();
+        patch.institution = nextInstitution;
+        patch.affiliation = nextAbbrTh;
+        patch.institution_abbr_th = nextAbbrTh;
+        patch.full_name_affiliation = `${cleanName} (${nextAbbrTh})`.trim();
+      }
+
+      if (draft.role !== undefined) {
+        const isNextStaff = ['committee', 'staff', 'mc', 'photographer', 'dev'].includes(draft.role);
+        patch.is_staff = isNextStaff;
+        patch.admin_staff_override = isNextStaff;
+        patch.staff_role_type = draft.role;
+        patch.registration_type = isNextStaff ? 'staff' : (draft.role === 'volunteer' ? 'volunteer' : draft.role === 'club_org' ? 'club_org' : 'participant');
+        patch.callsign = formatStaffCallsign(item.reg.callsign || '', isNextStaff);
+      }
+
+      await onUpdateAllocation(item.id, patch);
+      handleDiscardRowDraft(item.id);
+      if (triggerToast) {
+        triggerToast(`✓ บันทึกการเปลี่ยนแปลงของคุณ ${item.fullName} เรียบร้อยแล้ว`, 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleSaveAllDrafts = async () => {
+    const ids = Object.keys(rowDrafts);
+    if (ids.length === 0) return;
+    setIsSavingDrafts(true);
+    try {
+      for (const id of ids) {
+        const item = filteredItems.find((it) => it.id === id) || allItems.find((it) => it.id === id);
+        if (item) {
+          await handleSaveRowDraft(item);
+        }
+      }
+      if (triggerToast) {
+        triggerToast(`✓ บันทึกข้อมูลที่แก้ไขทั้งหมด ${ids.length} รายการเรียบร้อยแล้ว`, 'success');
+      }
+    } finally {
+      setIsSavingDrafts(false);
+    }
+  };
+
+  const handleDiscardAllDrafts = () => {
+    setRowDrafts({});
+    if (triggerToast) triggerToast('ยกเลิกรายการแก้ไขทั้งหมดแล้ว', 'info');
+  };
+
   // Bulk confirm all currently filtered pending applicants
   const handleBulkConfirmFiltered = async () => {
     const targets = filteredItems.filter((it) => !it.confirmInfo.isConfirmed);
@@ -1138,12 +1241,17 @@ export default function AdminExecutiveSummaryView({
     const scopeLabel = uniFilter !== 'all' ? `สังกัด ${uniFilter}` : 'ตามตัวกรองปัจจุบัน';
     if (askConfirm) {
       const ok = await askConfirm({
-        title: `ยืนยันการเข้าร่วมทั้งหมด (${targets.length} คน)`,
-        message: `ต้องการบันทึกสถานะ "✅ ยืนยันเข้าร่วมแน่นอน" ให้กับผู้สมัคร ${scopeLabel} จำนวน ${targets.length} คน พร้อมคำนวณยอดอาหารและห้องพักทันทีใช่หรือไม่?`,
+        title: `⚠️ ยืนยันการทำรายการทั้งกลุ่ม (${targets.length} คน)`,
+        message: `ต้องการบันทึกสถานะ "✅ ยืนยันมาแน่นอน (100%)" ให้กับผู้สมัคร ${scopeLabel} จำนวน ${targets.length} คน พร้อมคำนวณยอดอาหารและห้องพักทันทีใช่หรือไม่? (การทำรายการนี้จะเปลี่ยนสถานะเป็น 'แอดมินบันทึก')`,
         confirmText: `✅ ยืนยันมาแน่ทั้ง ${targets.length} คน`,
         cancelText: 'ยกเลิก',
-        variant: 'info'
+        variant: 'warning'
       });
+      if (!ok) return;
+    } else {
+      const ok = window.confirm(
+        `⚠️ ยืนยันการทำรายการ:\n\nต้องการบันทึกสถานะ "✅ มาแน่นอน (100%)" ให้กับผู้สมัคร ${scopeLabel} จำนวน ${targets.length} คนใช่หรือไม่?\n(สถานะจะถูกบันทึกเป็น 'แอดมินบันทึก')`
+      );
       if (!ok) return;
     }
 
@@ -2113,6 +2221,46 @@ export default function AdminExecutiveSummaryView({
           )}
         </div>
 
+        {/* UNSAVED CHANGES STAGING BAR (ระบบแก้ไขแล้วกดบันทึก) */}
+        {Object.keys(rowDrafts).length > 0 && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/80 via-slate-900 to-emerald-950/80 border-2 border-amber-500/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-amber-400 animate-ping shrink-0"></span>
+              <div>
+                <h4 className="text-xs font-black text-white flex items-center gap-1.5">
+                  <span>💾 คุณมีการแก้ไขที่ยังไม่ได้บันทึก:</span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px]">
+                    {Object.keys(rowDrafts).length} คน
+                  </span>
+                </h4>
+                <p className="text-[11px] text-amber-200/90 mt-0.5">
+                  ข้อมูลที่ท่านคลิกเปลี่ยนถูกทดลองปรับไว้แล้ว กรุณากดปุ่มบันทึกด้านข้างเพื่อยืนยันลงฐานข้อมูลจริง
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <button
+                type="button"
+                disabled={isSavingDrafts}
+                onClick={handleSaveAllDrafts}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/40 cursor-pointer active:scale-95 transition-all"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingDrafts ? 'กำลังบันทึก...' : `💾 บันทึกทั้งหมด (${Object.keys(rowDrafts).length})`}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSavingDrafts}
+                onClick={handleDiscardAllDrafts}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer border border-slate-700"
+              >
+                <span>↩️ ยกเลิก</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto rounded-2xl border border-slate-800">
           <table className="w-full min-w-[1050px] text-left text-xs border-collapse">
             <thead>
@@ -2275,12 +2423,25 @@ export default function AdminExecutiveSummaryView({
             </button>
             <button
               type="button"
-              onClick={handleBulkConfirmFiltered}
+              onClick={() => {
+                if (!isEditMode) {
+                  if (triggerToast) {
+                    triggerToast('🔒 กรุณากด "เปิดโหมดแก้ไข (Edit Mode)" ด้านซ้ายก่อน จึงจะสามารถกดยืนยันทั้งกลุ่มได้ เพื่อความปลอดภัย', 'warning');
+                  }
+                  return;
+                }
+                handleBulkConfirmFiltered();
+              }}
               disabled={isBulkUpdating}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50"
+              className={`px-4 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer ${
+                !isEditMode
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
+              }`}
+              title={!isEditMode ? '🔒 ล็อคอยู่ — กรุณาเปิดโหมดแก้ไขก่อน' : 'ยืนยันมาแน่ทั้งกลุ่ม'}
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>✅ ยืนยันมาแน่ทั้งกลุ่มที่แสดง ({filteredItems.filter(i => !i.confirmInfo.isConfirmed).length} คน)</span>
+              {!isEditMode ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>✅ ยืนยันมาแน่ทั้งกลุ่มที่แสดง ({filteredItems.filter((i) => !i.confirmInfo.isConfirmed).length} คน)</span>
             </button>
           </div>
         </div>
@@ -2540,68 +2701,83 @@ export default function AdminExecutiveSummaryView({
                         </span>
                       </td>
 
-                      {/* Attendance Confirmation: Interactive in Edit Mode, Clean Badge in Safe Mode */}
+                      {/* Attendance Confirmation: Interactive in Edit Mode (Stages draft), Clean Badge in Safe Mode */}
                       <td className="py-3 px-3 text-center bg-emerald-950/10">
-                        {isEditMode ? (
-                          <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleQuickUpdateConfirmation(item, 'confirmed')}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
-                                confirmInfo.isConfirmed
-                                  ? 'bg-emerald-500 text-slate-950 shadow'
-                                  : 'text-slate-400 hover:text-emerald-300'
-                              }`}
-                              title="ยืนยันเข้าร่วมกิจกรรมแน่นอน"
-                            >
-                              ✅ มาแน่
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleQuickUpdateConfirmation(item, 'pending')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                confirmInfo.isPending
-                                  ? 'bg-amber-500 text-slate-950 shadow font-black'
-                                  : 'text-slate-400 hover:text-amber-300'
-                              }`}
-                              title="อยู่ในสถานะรอยืนยัน"
-                            >
-                              ⏳ รอ
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleQuickUpdateConfirmation(item, 'declined')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                confirmInfo.isDeclined
-                                  ? 'bg-rose-600 text-white shadow font-black'
-                                  : 'text-slate-400 hover:text-rose-300'
-                              }`}
-                              title="ไม่สะดวกเข้าร่วม / สละสิทธิ์"
-                            >
-                              ❌ ไม่มา
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="inline-flex flex-col items-center">
-                            <span className={`px-2.5 py-1 rounded-xl text-xs font-black border ${
-                              confirmInfo.isConfirmed
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow'
-                                : confirmInfo.isPending
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            }`}>
-                              {confirmInfo.isConfirmed ? '✅ มาแน่ (100%)' : confirmInfo.isPending ? '⏳ รอยืนยัน' : '❌ ไม่มา'}
-                            </span>
-                          </div>
-                        )}
-                        {confirmInfo.confirmedAt && (
-                          <div className="text-[10px] text-emerald-400/80 mt-0.5 font-mono">
-                            {confirmInfo.confirmedBy === 'self' ? 'เจ้าตัวยืนยันเอง' : confirmInfo.confirmedBy === 'qr' ? 'เช็คอิน QR' : 'แอดมินบันทึก'}
-                          </div>
-                        )}
+                        {(() => {
+                          const rowDraft = rowDrafts[item.id];
+                          const activeStatus = rowDraft?.status !== undefined ? rowDraft.status : (confirmInfo.isConfirmed ? 'confirmed' : confirmInfo.isPending ? 'pending' : 'declined');
+                          const isDraftChanged = rowDraft?.status !== undefined && rowDraft.status !== (confirmInfo.isConfirmed ? 'confirmed' : confirmInfo.isPending ? 'pending' : 'declined');
+
+                          return (
+                            <div>
+                              {isEditMode ? (
+                                <div className={`inline-flex items-center gap-1 bg-slate-950 p-1 rounded-xl border ${isDraftChanged ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-slate-800'}`}>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleStageRowChange(item, 'status', 'confirmed')}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                                      activeStatus === 'confirmed'
+                                        ? 'bg-emerald-500 text-slate-950 shadow'
+                                        : 'text-slate-400 hover:text-emerald-300'
+                                    }`}
+                                    title="เลือกสถานะ: มาแน่ (กดบันทึกเพื่อยืนยัน)"
+                                  >
+                                    ✅ มาแน่
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleStageRowChange(item, 'status', 'pending')}
+                                    className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                      activeStatus === 'pending'
+                                        ? 'bg-amber-500 text-slate-950 shadow font-black'
+                                        : 'text-slate-400 hover:text-amber-300'
+                                    }`}
+                                    title="เลือกสถานะ: รอยืนยัน (กดบันทึกเพื่อยืนยัน)"
+                                  >
+                                    ⏳ รอ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleStageRowChange(item, 'status', 'declined')}
+                                    className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                      activeStatus === 'declined'
+                                        ? 'bg-rose-600 text-white shadow font-black'
+                                        : 'text-slate-400 hover:text-rose-300'
+                                    }`}
+                                    title="เลือกสถานะ: ไม่มา (กดบันทึกเพื่อยืนยัน)"
+                                  >
+                                    ❌ ไม่มา
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="inline-flex flex-col items-center">
+                                  <span className={`px-2.5 py-1 rounded-xl text-xs font-black border ${
+                                    confirmInfo.isConfirmed
+                                      ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow'
+                                      : confirmInfo.isPending
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  }`}>
+                                    {confirmInfo.isConfirmed ? '✅ มาแน่ (100%)' : confirmInfo.isPending ? '⏳ รอยืนยัน' : '❌ ไม่มา'}
+                                  </span>
+                                </div>
+                              )}
+                              {confirmInfo.confirmedAt && activeStatus === 'confirmed' && !isDraftChanged && (
+                                <div className="text-[10px] text-emerald-400/80 mt-0.5 font-mono">
+                                  {confirmInfo.confirmedBy === 'self' ? 'เจ้าตัวยืนยันเอง' : confirmInfo.confirmedBy === 'qr' ? 'เช็คอิน QR' : 'แอดมินบันทึก'}
+                                </div>
+                              )}
+                              {isDraftChanged && (
+                                <div className="text-[10px] text-amber-300 font-bold mt-0.5 font-mono animate-pulse">
+                                  ⏳ รอกดบันทึก
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Accommodation: Toggle in Edit Mode, Badge in Safe Mode */}

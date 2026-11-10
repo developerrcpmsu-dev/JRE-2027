@@ -2482,12 +2482,10 @@ export function getAttendanceConfirmationInfo(reg) {
   let status = 'pending';
   if (reg.attendance_confirmed_status === 'declined') {
     status = 'declined';
-  } else if (
-    reg.attendance_confirmed_status === 'confirmed' || 
-    reg.attendance_checked_in ||
-    (reg.room_assigned && String(reg.room_assigned).trim() !== '' && String(reg.room_assigned).includes('10'))
-  ) {
+  } else if (reg.attendance_confirmed_status === 'confirmed' || reg.attendance_checked_in) {
     status = 'confirmed';
+  } else {
+    status = 'pending';
   }
 
   const isConfirmed = status === 'confirmed';
