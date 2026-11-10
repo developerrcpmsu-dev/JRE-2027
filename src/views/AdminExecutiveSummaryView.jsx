@@ -60,7 +60,8 @@ import {
   formatStaffCallsign,
   normalizeCallsignSpacing,
   compareRosterItems,
-  getRosterSortTier
+  getRosterSortTier,
+  isHealthSharedWithRoommate
 } from '../data/defaultData';
 
 const DELETED_COMMITTEE_STORAGE_KEY = 'jre2027_deleted_committee_keys';
@@ -2933,6 +2934,57 @@ export default function AdminExecutiveSummaryView({
                               🏥 โรคประจำตัว: {reg.medical_history}
                             </div>
                           )}
+                          {(() => {
+                            const isHealthShared = isHealthSharedWithRoommate(reg);
+                            return (
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const nextVal = !isHealthShared;
+                                  if (!onUpdateAllocation) return;
+                                  const targetUserId = reg.user_id || reg.id || item.id;
+                                  try {
+                                    await onUpdateAllocation(targetUserId, {
+                                      share_health_with_roommate: nextVal
+                                    });
+                                    if (triggerToast) {
+                                      triggerToast(
+                                        nextVal
+                                          ? `✓ ปรับ "${item.fullName}": ยินยอมเปิดเผยข้อมูลสุขภาพแล้ว`
+                                          : `✓ ปรับ "${item.fullName}": ปฏิเสธ/ปิดข้อมูลสุขภาพแล้ว`,
+                                        'success'
+                                      );
+                                    }
+                                  } catch (err) {
+                                    if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการปรับสถานะข้อมูลสุขภาพ', 'error');
+                                  }
+                                }}
+                                className={`mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer inline-flex items-center gap-1 ${
+                                  isHealthShared
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                }`}
+                                title={
+                                  isHealthShared
+                                    ? 'สถานะ: ยินยอมเปิดเผยข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นปฏิเสธ/ปิด)'
+                                    : 'สถานะ: ปฏิเสธ/ปิดข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นยินยอม/เปิดเผย)'
+                                }
+                              >
+                                {isHealthShared ? (
+                                  <>
+                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                                    <span>เปิดเผยสุขภาพ (ยินยอม)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                    <span>ปิดสุขภาพ (ปฏิเสธ)</span>
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
 

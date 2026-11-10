@@ -3320,6 +3320,35 @@ export default function AdminDashboardView({
     triggerToast(`🔔 ส่งข้อความแจ้งเตือนงวดที่ 2 ครบทั้ง ${list.length} คน เรียบร้อยแล้ว!`);
   };
 
+  // Admin & Staff Health Privacy Consent Toggle (Adjustable for EVERY applicant)
+  const handleToggleHealthShare = async (reg, customVal = null) => {
+    if (!reg || !onUpdateAllocation) return;
+    const currentVal = isHealthSharedWithRoommate(reg);
+    const nextVal = typeof customVal === 'boolean' ? customVal : !currentVal;
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    const pName = resolvePersonFullNameWithTitle(reg).fullName || 'ผู้สมัคร';
+
+    const updates = {
+      share_health_with_roommate: nextVal
+    };
+
+    try {
+      await onUpdateAllocation(targetKey, updates);
+      if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+        setProfileModalReg(prev => ({ ...prev, ...updates }));
+      }
+      triggerToast(
+        nextVal
+          ? `✓ บันทึกสำเร็จ: "${pName}" ยินยอมเปิดเผยข้อมูลสุขภาพ`
+          : `✓ บันทึกสำเร็จ: "${pName}" ปฏิเสธ/ปิดการเปิดเผยข้อมูลสุขภาพ`,
+        'success'
+      );
+    } catch (err) {
+      console.error(err);
+      triggerToast('เกิดข้อผิดพลาดในการปรับสถานะข้อมูลสุขภาพ', 'error');
+    }
+  };
+
   // Dev & Admin Refund Toggle: Choose whether to refund overpaid amount or keep as project donation (No Refund)
   const handleToggleRefundMode = async (reg) => {
     if (!reg) return;
@@ -8540,6 +8569,40 @@ export default function AdminDashboardView({
                                     🩺 {getApplicantMedical(reg)}
                                   </span>
                                 )}
+                                {(() => {
+                                  const isHealthShared = isHealthSharedWithRoommate(reg);
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleHealthShare(reg);
+                                      }}
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer inline-flex items-center gap-1 ${
+                                        isHealthShared
+                                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                      }`}
+                                      title={
+                                        isHealthShared
+                                          ? 'สถานะ: ยินยอมเปิดเผยข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นปฏิเสธ/ปิด)'
+                                          : 'สถานะ: ปฏิเสธ/ปิดข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นยินยอม/เปิดเผย)'
+                                      }
+                                    >
+                                      {isHealthShared ? (
+                                        <>
+                                          <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                                          <span>เปิดเผยสุขภาพ (ยินยอม)</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                          <span>ปิดสุขภาพ (ปฏิเสธ)</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  );
+                                })()}
                               </div>
                               <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                                 หน่วย: {cardData.unit} • สังกัด: {cardData.affiliation}
@@ -9593,6 +9656,52 @@ export default function AdminDashboardView({
                     })()}
                   </div>
                 )}
+
+                {/* Health Privacy Consent Management (Admin can toggle for everyone) */}
+                <div className="p-4 bg-slate-950/90 border border-indigo-500/40 rounded-2xl space-y-2.5 text-xs shadow-md">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                      <span className="font-bold text-white">สิทธิ์การเปิดเผยข้อมูลสุขภาพ (Health Privacy Consent)</span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                      isHealthSharedWithRoommate(profileModalReg)
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}>
+                      {isHealthSharedWithRoommate(profileModalReg) ? '👁️ ยินยอมเปิดเผยข้อมูลสุขภาพ' : '🔒 ปิดเป็นความลับ (ปฏิเสธ)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว) Admin สามารถช่วยผู้สมัครปรับการเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องและทีมงานทราบเพื่อความปลอดภัยในกรณีฉุกเฉินได้ทันที
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHealthShare(profileModalReg, true)}
+                      className={`px-3 py-1.5 rounded-xl font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isHealthSharedWithRoommate(profileModalReg)
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 text-white" />
+                      <span>ยินยอม / ตกลงเปิดเผย (Agree)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHealthShare(profileModalReg, false)}
+                      className={`px-3 py-1.5 rounded-xl font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        !isHealthSharedWithRoommate(profileModalReg)
+                          ? 'bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Lock className="w-3.5 h-3.5 text-white" />
+                      <span>ปฏิเสธ / ปิดข้อมูล (Decline)</span>
+                    </button>
+                  </div>
+                </div>
 
                 {/* Comprehensive Personal, Identity, Affiliation & Contact Editor (Editable for all fields when unlocked) */}
                 <div className="p-4 bg-slate-950/80 rounded-2xl border border-indigo-500/30 space-y-4 text-xs shadow-inner">

@@ -4187,9 +4187,10 @@ export default function RegisterView({
                   };
                 })();
 
-                if (!hasRoom) {
-                  return (
-                    <div className="bg-slate-900/90 border border-slate-700/60 p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
+                return (
+                  <div className="space-y-4">
+                    {!hasRoom ? (
+                      <div className="bg-slate-900/90 border border-slate-700/60 p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
                           <span>🏠</span> ข้อมูลที่พักค้างแรม (Accommodation Status)
@@ -4220,12 +4221,8 @@ export default function RegisterView({
                         </div>
                       )}
                     </div>
-                  );
-                }
-
-                // HAS ROOM:
-                return (
-                  <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/40 border border-sky-500/40 p-5 sm:p-6 rounded-3xl relative overflow-hidden shadow-2xl space-y-4">
+                    ) : (
+                      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/40 border border-sky-500/40 p-5 sm:p-6 rounded-3xl relative overflow-hidden shadow-2xl space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
                       <div>
                         <span className="text-[10px] uppercase font-black text-sky-400 tracking-wider flex items-center gap-1.5">
@@ -4369,8 +4366,11 @@ export default function RegisterView({
                       )}
                     </div>
 
-                    {/* HEALTH PRIVACY CONSENT SETTING CARD */}
-                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-indigo-500/40 space-y-3 shadow-lg">
+                      </div>
+                    )}
+
+                    {/* HEALTH PRIVACY CONSENT SETTING CARD (SHOWN TO EVERYONE) */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/90 border border-indigo-500/40 space-y-3.5 shadow-lg">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
@@ -4405,21 +4405,64 @@ export default function RegisterView({
                         </p>
                       </div>
 
-                      {/* Interactive Toggle Switch & Save Button */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                        <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={consentHealthShare}
-                            onChange={(e) => setConsentHealthShare(e.target.checked)}
-                            className="w-4 h-4 mt-0.5 sm:mt-0 text-emerald-500 rounded border-slate-700 bg-slate-900 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
-                          />
-                          <span className="text-xs text-white font-medium">
-                            {consentHealthShare
-                              ? 'ยินยอมเปิดเผยข้อมูลสุขภาพ (โรคประจำตัว / อาการแพ้) ให้เพื่อนร่วมห้องทราบเพื่อความปลอดภัย'
-                              : 'ไม่ยินยอมเปิดเผยข้อมูลสุขภาพ (ซ่อนจากเพื่อนร่วมห้อง • ให้เฉพาะทีมแพทย์สนามและ Staff ทราบ)'}
-                          </span>
-                        </label>
+                      {/* Interactive Choice Buttons (ยอมรับ / ตกลง vs ปฏิเสธ) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setConsentHealthShare(true)}
+                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
+                            consentHealthShare
+                              ? 'bg-emerald-500/15 border-emerald-500 text-white ring-2 ring-emerald-500/40 shadow-md'
+                              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
+                            consentHealthShare ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600 bg-slate-800'
+                          }`}>
+                            {consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-bold block text-emerald-300">
+                              ✅ ยินยอม / ตกลงเปิดเผยข้อมูลสุขภาพ
+                            </span>
+                            <span className="text-[11px] text-slate-300 block leading-tight">
+                              ยินยอมให้เพื่อนร่วมห้องและทีมงานทราบข้อมูลโรคประจำตัว/การแพ้ เพื่อความปลอดภัยและการปฐมพยาบาล
+                            </span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setConsentHealthShare(false)}
+                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
+                            !consentHealthShare
+                              ? 'bg-amber-500/15 border-amber-500 text-white ring-2 ring-amber-500/40 shadow-md'
+                              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
+                            !consentHealthShare ? 'bg-amber-500 border-amber-400 text-slate-950' : 'border-slate-600 bg-slate-800'
+                          }`}>
+                            {!consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-bold block text-amber-300">
+                              ❌ ปฏิเสธ / ไม่ยินยอมเปิดเผยข้อมูลสุขภาพ
+                            </span>
+                            <span className="text-[11px] text-slate-300 block leading-tight">
+                              ปิดเป็นความลับ ซ่อนจากเพื่อนร่วมห้อง • แสดงเฉพาะฝ่ายพยาบาลสนามเมื่อจำเป็นเท่านั้น
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Save Status & Button */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2">
+                        <span className="text-[11px] text-slate-400">
+                          {consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
+                            ? '⚡ มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก: กรุณากดปุ่มบันทึกด้านขวา'
+                            : '✓ บันทึกการตั้งค่าเป็นปัจจุบันแล้ว'}
+                        </span>
 
                         <button
                           type="button"
