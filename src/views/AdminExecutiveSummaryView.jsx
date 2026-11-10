@@ -1162,7 +1162,7 @@ export default function AdminExecutiveSummaryView({
       if (draft.status !== undefined) {
         patch.attendance_confirmed_status = draft.status;
         patch.attendance_confirmed_at = draft.status === 'pending' ? '' : now;
-        patch.attendance_confirmed_by = 'admin';
+        patch.attendance_confirmed_by = draft.status === 'pending' ? '' : 'admin';
         if (draft.status === 'declined') {
           patch.attendance_need_accommodation = false;
           patch.attendance_meal_confirmed = false;
@@ -2755,13 +2755,13 @@ export default function AdminExecutiveSummaryView({
                               ) : (
                                 <div className="inline-flex flex-col items-center">
                                   <span className={`px-2.5 py-1 rounded-xl text-xs font-black border ${
-                                    confirmInfo.isConfirmed
+                                    activeStatus === 'confirmed'
                                       ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow'
-                                      : confirmInfo.isPending
+                                      : activeStatus === 'pending'
                                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                                       : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                                   }`}>
-                                    {confirmInfo.isConfirmed ? '✅ มาแน่ (100%)' : confirmInfo.isPending ? '⏳ รอยืนยัน' : '❌ ไม่มา'}
+                                    {activeStatus === 'confirmed' ? '✅ มาแน่ (100%)' : activeStatus === 'pending' ? '⏳ รอยืนยัน' : '❌ ไม่มา'}
                                   </span>
                                 </div>
                               )}

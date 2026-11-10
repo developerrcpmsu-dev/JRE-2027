@@ -516,7 +516,7 @@ export default function AdminRoomsView({
       </div>
 
       {/* SEARCH BAR */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4 shadow-lg">
+      <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4 shadow-lg no-print">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -686,7 +686,7 @@ export default function AdminRoomsView({
                                       </div>
                                     </div>
                                   </div>
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200 no-print">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
@@ -776,7 +776,7 @@ export default function AdminRoomsView({
                                       </div>
                                     </div>
                                   </div>
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200 no-print">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
@@ -942,7 +942,7 @@ export default function AdminRoomsView({
                                       </div>
                                     </div>
                                   </div>
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200 no-print">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
@@ -1032,7 +1032,7 @@ export default function AdminRoomsView({
                                       </div>
                                     </div>
                                   </div>
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200 no-print">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>

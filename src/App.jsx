@@ -26,16 +26,18 @@ import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/rout
 import { decodeJwtResponse } from './utils/googleAuth';
 import { forceUnlockAll } from './utils/scrollLock';
 import { getRegistrationScheduleStatus } from './utils/registrationSchedule';
+import { isAuthorizedStaffOrAdminEmail, INITIAL_STAFF_ADMIN_ACCOUNTS } from './data/defaultData';
 
 const DEV_ADMIN_EMAIL = 'developer.rcpmsu@gmail.com';
-const isGoogleDevIdentity = (identity) => {
-  const email = String(identity?.email || '').trim().toLowerCase();
-  if (email !== DEV_ADMIN_EMAIL) return false;
-  const providers = identity?.app_metadata?.providers || (identity?.app_metadata?.provider ? [identity.app_metadata.provider] : null);
-  if (Array.isArray(providers) && providers.length > 0) {
-    return providers.includes('google') || providers.includes('email') || true;
-  }
-  return true;
+const isGoogleDevIdentity = (identity, whitelist = INITIAL_STAFF_ADMIN_ACCOUNTS) => {
+  if (!identity) return false;
+  const role = identity?.role || identity?.user_metadata?.role;
+  if (['dev', 'admin', 'staff'].includes(role)) return true;
+  const email = String(identity?.email || identity?.user_metadata?.email || '').trim().toLowerCase();
+  if (email === DEV_ADMIN_EMAIL) return true;
+  const authAccount = isAuthorizedStaffOrAdminEmail(email, whitelist);
+  if (authAccount && ['dev', 'admin', 'staff'].includes(authAccount.role)) return true;
+  return false;
 };
 
 export default function App() {
@@ -182,6 +184,7 @@ export default function App() {
     } catch (e) {}
     return false;
   });
+  const [staffAdminWhitelist, setStaffAdminWhitelist] = useState(INITIAL_STAFF_ADMIN_ACCOUNTS);
   const [devAdminLoading, setDevAdminLoading] = useState(false);
   const [devAdminError, setDevAdminError] = useState('');
 
@@ -432,7 +435,8 @@ export default function App() {
           DataService.getMerchandiseOrders(),
           DataService.getTeam(),
           DataService.getSpeakers(),
-          hasValidAdminSession ? DataService.getUserAccounts({ admin: true }) : Promise.resolve([])
+          hasValidAdminSession ? DataService.getUserAccounts({ admin: true }) : Promise.resolve([]),
+          DataService.getStaffAdminAccounts()
         ]);
 
         if (Array.isArray(regs)) setRegistrations(regs);
@@ -444,6 +448,7 @@ export default function App() {
         if (Array.isArray(team)) setTeamMembers(team);
         if (Array.isArray(spks)) setSpeakers(spks);
         if (Array.isArray(accs)) setUserAccounts(accs || []);
+        if (Array.isArray(staffAccounts) && staffAccounts.length > 0) setStaffAdminWhitelist(staffAccounts);
 
         // =====================================================================
         // STEP 3: Match & Link User Registration
@@ -468,9 +473,9 @@ export default function App() {
         }
 
         // 3. Strict Admin Session Verification:
-        // Admin access is strictly separated from Google login and REQUIRES active session tokens
-        // (Except for verified developer account developer.rcpmsu@gmail.com which has full access)
-        const isDevAuthenticated = isGoogleDevIdentity(authenticatedUser);
+        // Admin access is verified via Google OAuth whitelist and active session tokens
+        const effectiveWhitelist = (Array.isArray(staffAccounts) && staffAccounts.length > 0) ? staffAccounts : INITIAL_STAFF_ADMIN_ACCOUNTS;
+        const isDevAuthenticated = isGoogleDevIdentity(authenticatedUser, effectiveWhitelist);
         if (isDevAuthenticated) {
           setDevGoogleSignedIn(true);
           setIsAdmin(true);
@@ -980,8 +985,12 @@ export default function App() {
   };
 
   const handleAdminEntry = () => {
-    if (isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn) {
+    if (isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist) || devGoogleSignedIn) {
       handleDevAdminLogin();
+      return;
+    }
+    if (!user) {
+      setGoogleModalOpen(true);
       return;
     }
     setAdminModalOpen(true);
@@ -1014,12 +1023,16 @@ export default function App() {
     }
   };
 
-  // Auto-prompt Admin Login modal when user accesses /admin route while unauthenticated
+  // Auto-prompt Google login / Admin modal when user accesses /admin route while unauthenticated
   useEffect(() => {
-    if (currentTab === 'admin' && !isAdmin && !isGoogleDevIdentity(user) && !devGoogleSignedIn && !loading) {
-      setAdminModalOpen(true);
+    if (currentTab === 'admin' && !isAdmin && !isGoogleDevIdentity(user, staffAdminWhitelist) && !devGoogleSignedIn && !loading) {
+      if (!user) {
+        setGoogleModalOpen(true);
+      } else {
+        setAdminModalOpen(true);
+      }
     }
-  }, [currentTab, isAdmin, user?.email, devGoogleSignedIn, loading]);
+  }, [currentTab, isAdmin, user?.email, devGoogleSignedIn, loading, staffAdminWhitelist]);
 
   // Data Mutation Handlers with Strict Access Controls
   const handleSaveRegistration = async (payload) => {
@@ -1223,7 +1236,7 @@ export default function App() {
         currentSubRoute={currentSubRoute}
         setCurrentTab={setCurrentTab}
         user={user}
-        isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
+        isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist))}
         onOpenGoogleLogin={() => setGoogleModalOpen(true)}
         onOpenAdminLogin={handleAdminEntry}
         onLogout={handleLogout}
@@ -1276,7 +1289,7 @@ export default function App() {
         {currentTab === 'register' && (
           <RegisterView
             user={user}
-            isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
+            isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist))}
             myRegistration={myRegistration}
             allRegistrations={registrations}
             onSaveRegistration={handleSaveRegistration}
@@ -1327,10 +1340,10 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'admin' && (isAdmin || isGoogleDevIdentity(user)) && (
+        {currentTab === 'admin' && (isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist)) && (
           <AdminDashboardView
             user={user}
-            isAdmin={isAdmin || isGoogleDevIdentity(user)}
+            isAdmin={isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist)}
             initialTab={currentSubRoute || 'applicants'}
             onTabChange={(tab) => {
               setCurrentTab('admin', tab);
@@ -1446,6 +1459,9 @@ export default function App() {
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
         onLoginSuccess={handleAdminLoginSuccess}
+        user={user}
+        staffAdminWhitelist={staffAdminWhitelist}
+        onOpenGoogleLogin={() => setGoogleModalOpen(true)}
       />
 
       {/* Participant Notification Inbox Modal */}

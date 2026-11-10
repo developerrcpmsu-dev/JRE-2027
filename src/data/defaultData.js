@@ -3057,6 +3057,138 @@ export const resolveMessageSenderInfo = (msg = {}) => {
   };
 };
 
+/**
+ * ========================================================
+ * STAFF & ADMIN RBAC WHITELIST & ACCOUNT MANAGEMENT
+ * บัญชีผู้ดูแลระบบและคณะกรรมการที่ได้รับอนุญาตให้เข้าถึงหน้า Admin ด้วย Google OAuth
+ * Dev สามารถเพิ่ม ลบ แก้ไขสิทธิ์ได้ผ่านหน้า /admin/staff-accounts
+ * ========================================================
+ */
+export const INITIAL_STAFF_ADMIN_ACCOUNTS = [
+  {
+    email: 'developer.rcpmsu@gmail.com',
+    name: 'DEV ชมรมกู้ภัยราชพฤกษ์ มมส',
+    role: 'dev',
+    role_label: '💻 System Developer & Head Admin',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: 'bestasic22@gmail.com',
+    name: 'นายพงศ์ภรณ์ ทองศิริ (เบส)',
+    role: 'dev',
+    role_label: '💻 คณะกรรมการ • ผู้พัฒนาระบบ (RCP 16-37)',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: '68011211206@msu.ac.th',
+    name: 'พงศ์ภรณ์ ทองศิริ (เบส มมส)',
+    role: 'dev',
+    role_label: '💻 คณะกรรมการ • ผู้พัฒนาระบบ (RCP 16-37)',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: '67011312130@msu.ac.th',
+    name: 'นายเศรษฐบุตร อากานิส (โฟกัส)',
+    role: 'admin',
+    role_label: '🎖️ คณะกรรมการ • ฝ่ายอำนวยการและควบคุมการฝึก (RCP 15-05)',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: '67012310106@msu.ac.th',
+    name: 'นายพีรณัฐ พาลึก (เยลโล่)',
+    role: 'admin',
+    role_label: '🎖️ คณะกรรมการ • ฝ่ายปฏิบัติการและประสานงานฝึก (RCP 15-46)',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: 'nickworaphat2542@gmail.com',
+    name: 'นายวรภัทร เวสสุริยา (นิก)',
+    role: 'staff',
+    role_label: '📸 คณะกรรมการ • ช่างภาพและสื่อโสตทัศนูปกรณ์ (RCP 17-02)',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: '67011312136@msu.ac.th',
+    name: 'น.ส. อพัชนิภา ไวมาตร (อพัชนิภา)',
+    role: 'staff',
+    role_label: '🎖️ คณะกรรมการ • ฝ่ายพยาบาลและสวัสดิการ',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: '68010310504@msu.ac.th',
+    name: 'นายณัฐพล เชื้อคนแข็ง (ณัฐพล)',
+    role: 'staff',
+    role_label: '🎖️ คณะกรรมการ • ฝ่ายสนับสนุนและอุปกรณ์ภาคสนาม',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: 'titiphum.s@kkumail.com',
+    name: 'นายฐิติภูมิ สิงหาปัด (ไตเติ้ล)',
+    role: 'staff',
+    role_label: '🎖️ คณะกรรมการดำเนินงาน • ฝ่ายประสานงาน มข (TSI 1905)',
+    institution: 'มข',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: 'vachirawit2547@gmail.com',
+    name: 'นายวชิรวิทย์ มังสระคู (โดโด้)',
+    role: 'staff',
+    role_label: '🎖️ คณะกรรมการดำเนินงาน • ผู้ประสานงาน มข (TSI 1805)',
+    institution: 'มข',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: 'watcharapa.j@kkumail.com',
+    name: 'นางสาววัชราภา จำปาโพธิ์ (ปอปอ)',
+    role: 'staff',
+    role_label: '🎖️ คณะกรรมการดำเนินงาน • TSI มข (TSI 2002)',
+    institution: 'มข',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
+    email: 'varattaya.r@kkumail.com',
+    name: 'นางสาววารัทยา เรืองเวทย์วัฒนา (ซิน)',
+    role: 'staff',
+    role_label: '🎖️ คณะกรรมการดำเนินงาน • TSI มข (TSI 2101)',
+    institution: 'มข',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  }
+];
+
+export const isAuthorizedStaffOrAdminEmail = (rawEmail, customAccountsList = []) => {
+  if (!rawEmail) return null;
+  const cleanEmail = String(rawEmail).trim().toLowerCase();
+  // 1. Check custom accounts list from project_settings or user_accounts
+  if (Array.isArray(customAccountsList) && customAccountsList.length > 0) {
+    const found = customAccountsList.find(a => (a.email || '').trim().toLowerCase() === cleanEmail && a.active !== false);
+    if (found && ['dev', 'admin', 'staff'].includes(found.role)) return found;
+  }
+  // 2. Check initial seeded staff admin accounts
+  const matchedInitial = INITIAL_STAFF_ADMIN_ACCOUNTS.find(a => a.email.toLowerCase() === cleanEmail && a.active !== false);
+  if (matchedInitial) return matchedInitial;
+  return null;
+};
+
 
 
 

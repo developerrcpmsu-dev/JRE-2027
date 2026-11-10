@@ -190,6 +190,71 @@ body.modal-scroll-locked {
     color: #0f172a !important;
   }
 
+  /* Roster & Document sheet: text contrast and layout fix for paper/PDF */
+  #printable-rooms-roster span,
+  #printable-rooms-roster div,
+  #printable-rooms-roster p,
+  #printable-document-sheet span,
+  #printable-document-sheet div,
+  #printable-document-sheet p {
+    color: #0f172a !important;
+    text-shadow: none !important;
+  }
+
+  #printable-rooms-roster .truncate,
+  #printable-document-sheet .truncate {
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+  }
+
+  #printable-rooms-roster .min-w-0,
+  #printable-document-sheet .min-w-0 {
+    min-width: auto !important;
+  }
+
+  #printable-rooms-roster .overflow-hidden,
+  #printable-document-sheet .overflow-hidden {
+    overflow: visible !important;
+  }
+
+  /* Active print hooks for rooms and documents */
+  body.rooms-print-active,
+  body.document-print-active {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  body.rooms-print-active > *:not(#root),
+  body.document-print-active > *:not(#root) {
+    display: none !important;
+  }
+
+  body.rooms-print-active #root,
+  body.rooms-print-active #root > div,
+  body.rooms-print-active main,
+  body.rooms-print-active main > div,
+  body.rooms-print-active .animate-in,
+  body.document-print-active #root,
+  body.document-print-active #root > div,
+  body.document-print-active main,
+  body.document-print-active main > div,
+  body.document-print-active .animate-in {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+
   /* Directory batch print: activate whole root hierarchy */
   body.directory-print-active {
     margin: 0 !important;

@@ -125,6 +125,7 @@ import AdminIDCardsDirectoryView from './AdminIDCardsDirectoryView';
 import AdminRoomsView from './AdminRoomsView';
 import AdminDocumentsView from './AdminDocumentsView';
 import AdminMedicalView from './AdminMedicalView';
+import AdminStaffAccountsView from './AdminStaffAccountsView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -205,6 +206,7 @@ export default function AdminDashboardView({
     if (tab === 'rooms' || tab === 'room' || tab === 'accommodation' || tab === 'dorm' || tab === 'dormitory') return 'rooms';
     if (tab === 'documents' || tab === 'document' || tab === 'rosters' || tab === 'roster' || tab === 'signing') return 'documents';
     if (tab === 'medical' || tab === 'dispensary' || tab === 'clinic' || tab === 'emr' || tab === 'firstaid' || tab === 'pharmacy') return 'medical';
+    if (tab === 'staff-accounts' || tab === 'staff_accounts' || tab === 'staff-account' || tab === 'rbac' || tab === 'whitelist') return 'staff-accounts';
     return tab || 'applicants';
   };
 
@@ -313,6 +315,7 @@ export default function AdminDashboardView({
     if (t === 'rooms') return 'rooms';
     if (t === 'documents') return 'documents';
     if (t === 'medical') return 'medical';
+    if (t === 'staff-accounts' || t === 'staff_accounts' || t === 'staff-account') return 'staff-accounts';
     return t;
   };
 
@@ -5977,6 +5980,7 @@ export default function AdminDashboardView({
               <option value="speakers_speaker">🎖️ วิทยากรประจำโครงการ ({speakerStats.speakersCount} ท่าน)</option>
               <option value="team">👥 คณะดำเนินงาน & ทีมงาน ({localTeam.length} คน)</option>
               <option value="users">👤 จัดการบัญชีผู้ใช้ ({userAccounts.length} บัญชี)</option>
+              <option value="staff-accounts">🛡️ สิทธิ์ Staff & Admin Whitelist (Google RBAC)</option>
             </select>
           </div>
         </div>
@@ -6223,6 +6227,19 @@ export default function AdminDashboardView({
           >
             <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>บัญชีผู้ใช้ ({userAccounts.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('staff-accounts')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'staff-accounts'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:text-white bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80'
+            }`}
+            title="จัดการรายชื่อและสิทธิ์ Staff & Admin (Google Account Whitelist RBAC)"
+          >
+            <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>🛡️ สิทธิ์ Staff & Admin</span>
           </button>
         </div>
       </div>
@@ -17744,6 +17761,15 @@ export default function AdminDashboardView({
           registrations={registrations}
           merchandiseOrders={merchandiseOrders}
           triggerToast={triggerToast}
+        />
+      )}
+
+      {/* TAB: STAFF & ADMIN RBAC ACCOUNTS MANAGEMENT (/admin/staff-accounts) */}
+      {activeTab === 'staff-accounts' && (
+        <AdminStaffAccountsView
+          user={user}
+          triggerToast={triggerToast}
+          onRefreshUserAccounts={loadUserAccounts}
         />
       )}
 

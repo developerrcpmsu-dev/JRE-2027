@@ -6,6 +6,9 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        print: { raw: 'print' },
+      },
       colors: {
         rescue: {
           50: '#fff7ed',

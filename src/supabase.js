@@ -16,7 +16,9 @@ import {
   formatStaffCallsign,
   resolveGender,
   resolveCommitteeDutyNote,
-  findMatchingCommitteeMemberSpec
+  findMatchingCommitteeMemberSpec,
+  INITIAL_STAFF_ADMIN_ACCOUNTS,
+  isAuthorizedStaffOrAdminEmail
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
 import { 
@@ -690,11 +692,14 @@ function hasClientAdminPrivilege() {
       if (token && expires && Date.now() < expires) return true;
     }
     if (typeof localStorage !== 'undefined') {
+      if (localStorage.getItem('jre2027_is_admin') === 'true') return true;
       const rawUser = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
       if (rawUser) {
         const parsed = JSON.parse(rawUser);
-        if (String(parsed?.email || '').trim().toLowerCase() === 'developer.rcpmsu@gmail.com') return true;
-        if (parsed?.role === 'admin') return true;
+        const email = String(parsed?.email || '').trim().toLowerCase();
+        if (email === 'developer.rcpmsu@gmail.com') return true;
+        if (['admin', 'dev', 'staff'].includes(parsed?.role)) return true;
+        if (isAuthorizedStaffOrAdminEmail(email)) return true;
       }
     }
   } catch (e) {}
@@ -2123,12 +2128,16 @@ export const DataService = {
 
     let userObj;
     const isDevAccount = cleanEmail === 'developer.rcpmsu@gmail.com';
+    const authStaff = isAuthorizedStaffOrAdminEmail(cleanEmail);
+    const assignedRole = isDevAccount ? 'dev' : (authStaff ? authStaff.role : (existing?.role || 'applicant'));
+
     if (existing) {
       userObj = {
         ...existing,
         name: cleanName || existing.name,
         avatar: avatarUrl || existing.avatar,
-        role: isDevAccount ? 'admin' : (existing.role || 'applicant'),
+        role: assignedRole,
+        role_label: authStaff?.role_label || existing.role_label || '',
         provider: existing.password_hash ? 'both' : 'google',
         verified: true,
         email_verified: true,
@@ -2144,7 +2153,8 @@ export const DataService = {
         email: cleanEmail,
         avatar: avatarUrl,
         provider: 'google',
-        role: isDevAccount ? 'admin' : 'applicant',
+        role: assignedRole,
+        role_label: authStaff?.role_label || '',
         verified: true,
         email_verified: true,
         created_at: new Date().toISOString(),
@@ -2154,13 +2164,27 @@ export const DataService = {
 
     await this.syncUserAccount(userObj);
 
+    // If account has staff, admin, or dev privileges, issue client admin token automatically
+    if (['dev', 'admin', 'staff'].includes(assignedRole) || Boolean(authStaff)) {
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('jre2027_admin_token', 'staff_' + Date.now());
+          sessionStorage.setItem('jre2027_admin_expires', String(Date.now() + 86400000 * 7));
+        }
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('jre2027_is_admin', 'true');
+        }
+      } catch (e) {}
+    }
+
     return {
       id: userObj.id,
       name: userObj.name,
       email: userObj.email,
       avatar: userObj.avatar,
       provider: userObj.provider,
-      role: isDevAccount ? 'admin' : (userObj.role || 'applicant'),
+      role: assignedRole,
+      role_label: userObj.role_label,
       verified: true,
       email_verified: true
     };
@@ -2418,6 +2442,69 @@ export const DataService = {
       }
     }
     return null;
+  },
+
+  // STAFF & ADMIN WHITELIST MANAGEMENT
+  async getStaffAdminAccounts() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'staff_admin_whitelist')
+          .maybeSingle();
+        if (!error && data?.value && Array.isArray(data.value) && data.value.length > 0) {
+          return data.value;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch staff_admin_whitelist:', e);
+      }
+    }
+    return INITIAL_STAFF_ADMIN_ACCOUNTS;
+  },
+
+  async saveStaffAdminAccounts(accountsList) {
+    if (!Array.isArray(accountsList)) return accountsList;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({
+            key: 'staff_admin_whitelist',
+            value: accountsList,
+            updated_at: new Date().toISOString()
+          });
+
+        // Also sync roles to user_accounts table in project_settings
+        const { data } = await supabase.from('project_settings').select('value').eq('key', 'user_accounts').maybeSingle();
+        if (data?.value && Array.isArray(data.value)) {
+          const userAccs = data.value;
+          let changed = false;
+          for (const staff of accountsList) {
+            const clean = (staff.email || '').trim().toLowerCase();
+            const idx = userAccs.findIndex(u => (u.email || '').trim().toLowerCase() === clean);
+            if (idx >= 0) {
+              userAccs[idx].role = staff.active ? staff.role : 'applicant';
+              userAccs[idx].role_label = staff.active ? staff.role_label : '';
+              userAccs[idx].active = staff.active;
+              changed = true;
+            }
+          }
+          if (changed) {
+            await supabase.from('project_settings').upsert({
+              key: 'user_accounts',
+              value: userAccs,
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to save staff_admin_whitelist:', e);
+      }
+    }
+    safeSetLocalStorage('jre2027_staff_admin_whitelist', JSON.stringify(accountsList));
+    broadcastRealtimeChange('staff_admin_whitelist', { action: 'update' });
+    return accountsList;
   }
 };
 
