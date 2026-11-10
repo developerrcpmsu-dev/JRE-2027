@@ -8583,16 +8583,16 @@ export default function AdminDashboardView({
                                   )}
                                 </div>
                                 <div className="text-[10px] text-purple-300/90 font-mono">
-                                  {staffPayInfo.isMsu ? (
+                                  {staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0 ? (
+                                    'Staff: 0 บ. (บัตร Staff อย่างเดียว • ไม่รับเสื้อ • ไม่มีค่าใช้จ่าย)'
+                                  ) : staffPayInfo.isMsu ? (
                                     staffPayInfo.isOverpaid
                                       ? `มมส 280 บ. • โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกิน +${staffPayInfo.overpaidAmount} บ.)`
-                                      : (staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0 ? 'Staff มมส: 0 บ. (บัตร Staff อย่างเดียว • ไม่รับเสื้อ • ไม่มีค่าใช้จ่าย)' : 'Staff มมส: เฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)')
+                                      : 'Staff มมส: เฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)'
                                   ) : staffPayInfo.isOffsetApplied ? (
                                     `โอน ${staffPayInfo.r1SlipAmount} บ. → หักเสื้อ 280 + หักที่พัก ${staffPayInfo.offsetToAccommodation} บ.`
                                   ) : (
-                                    staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0
-                                      ? 'Staff ต่างสถาบัน: 0 บ. (บัตร Staff อย่างเดียว • ไม่มีค่าใช้จ่าย)'
-                                      : 'ต่างมหาลัย: เสื้อ 280 + ที่พัก 200 = 480 บ.'
+                                    'ต่างมหาลัย: เสื้อ 280 + ที่พัก 200 = 480 บ.'
                                   )}
                                 </div>
                                 {!staffPayInfo.isMsu && staffPayInfo.accommodationRemaining > 0 && (
@@ -18173,7 +18173,9 @@ export default function AdminDashboardView({
                                       <span className="text-xs text-slate-400">แผนการชำระเงินที่เลือก:</span>
                                       <div className="text-sm font-black text-white">
                                         {isRowStaff
-                                          ? (rowStaffSum.isMsu
+                                          ? (rowStaffSum.isIdCardOnlyStaff || rowStaffSum.totalStaffFee === 0
+                                              ? '🛠️ คณะทำงาน / Staff (0 บ. • บัตรประจำตัวอย่างเดียว ไม่รับเสื้อ)'
+                                              : rowStaffSum.isMsu
                                               ? '🛠️ คณะทำงาน / Staff มมส (เฉพาะค่าเสื้อ 280 บ. • ไม่มีแบ่งจ่าย 2 งวด)'
                                               : '🛠️🏨 คณะทำงาน / Staff ต่างมหาลัย (งวดแรกค่าเสื้อ 280 บ. + งวด 2 ค่าที่พัก 200 บ. = 480 บ.)')
                                           : reg.payment_plan === 'installment'
@@ -18223,10 +18225,10 @@ export default function AdminDashboardView({
                                     <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
                                       <div className="flex items-center justify-between">
                                         <span className="text-xs font-bold text-white">
-                                          {isRowStaff ? 'ยอดชำระเฉพาะค่าเสื้อ Staff มมส' : 'ยอดชำระเต็มจำนวน (1 รอบ)'}
+                                          {isRowStaff ? (rowStaffSum.isIdCardOnlyStaff || rowStaffSum.totalStaffFee === 0 ? 'ยอดชำระ Staff (บัตรอย่างเดียว)' : 'ยอดชำระเฉพาะค่าเสื้อ Staff มมส') : 'ยอดชำระเต็มจำนวน (1 รอบ)'}
                                         </span>
                                         <span className="text-xs font-black text-purple-300">
-                                          {isRowStaff ? '280 บ.' : `${reg.payment_amount || (displayStudentId ? 650 : 850)} บ.`}
+                                          {isRowStaff ? (rowStaffSum.isIdCardOnlyStaff || rowStaffSum.totalStaffFee === 0 ? '0 บ.' : '280 บ.') : `${reg.payment_amount || (displayStudentId ? 650 : 850)} บ.`}
                                         </span>
                                       </div>
                                       <div className="flex items-center justify-between text-xs">

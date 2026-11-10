@@ -1592,7 +1592,12 @@ export const getStaffPaymentSummary = (rawReg) => {
     isMsu,
     staffRoleType,
     staffRoleLabel: isStaff
-      ? (isIdCardOnlyStaff ? `${matchedOption.badge || 'STAFF'} (0 บ.)` : `${matchedOption.badge || 'STAFF'} (280 บ.)`)
+      ? (() => {
+          const rawBadge = (matchedOption.badge || 'STAFF').replace(/\s*\([0-9]+\s*บ\.\)/g, '').trim();
+          if (isIdCardOnlyStaff || totalStaffFee === 0) return `${rawBadge} (0 บ.)`;
+          if (isMsu) return `${rawBadge} (280 บ.)`;
+          return `${rawBadge} (480 บ.)`;
+        })()
       : 'ผู้เข้าอบรมทั่วไป',
     isIdCardOnlyStaff,
     shirtFee,

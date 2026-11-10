@@ -27,6 +27,7 @@ export default function Navbar({
   setCurrentTab, 
   user, 
   isAdmin, 
+  hasStaffPrivilege = false,
   onOpenGoogleLogin, 
   onOpenAdminLogin, 
   onLogout,
@@ -210,7 +211,7 @@ export default function Navbar({
             )}
 
             {/* Admin Panel Tab in Nav with attached Admin Logout button */}
-            {isAdmin && (
+            {isAdmin ? (
               <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-2 rounded-xl shrink-0 shadow-sm">
                 <button
                   onClick={() => handleNav('admin')}
@@ -235,7 +236,16 @@ export default function Navbar({
                   <span className="text-[11px] whitespace-nowrap hidden 2xl:inline font-medium">ออก Admin</span>
                 </button>
               </div>
-            )}
+            ) : hasStaffPrivilege ? (
+              <button
+                onClick={onOpenAdminLogin}
+                className="px-2.5 py-1 rounded-lg text-xs xl:text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-sm"
+                title="ท่านมีสิทธิ์ Staff/Admin: คลิกเพื่อเข้าสู่ระบบ Admin Console"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-amber-400 shrink-0" />
+                <span>เข้า Admin</span>
+              </button>
+            ) : null}
           </nav>
 
           {/* Desktop Right Action Area: Auth & Status */}
@@ -590,6 +600,20 @@ export default function Navbar({
               >
                 <LogOut className="w-4 h-4" />
                 <span>ออกจากระบบ Admin</span>
+              </button>
+            </div>
+          ) : hasStaffPrivilege ? (
+            <div className="pt-2 border-t border-slate-800 space-y-1">
+              <button
+                onClick={() => { setMobileMenuOpen(false); onOpenAdminLogin(); }}
+                className="w-full text-left px-4 py-3 rounded-xl font-bold flex items-center justify-between transition-all bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/30 cursor-pointer shadow-md"
+                title="ท่านมีสิทธิ์ Staff/Admin: คลิกเพื่อเข้าสู่ระบบ Admin Console"
+              >
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+                  <span>เข้าสู่ระบบ Admin Console</span>
+                </div>
+                <span className="text-xs bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full font-bold">1-Click</span>
               </button>
             </div>
           ) : (
