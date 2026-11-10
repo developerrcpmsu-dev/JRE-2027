@@ -10,7 +10,10 @@ import {
   Sparkles,
   Loader2,
   Edit3,
-  ArrowRight
+  ArrowRight,
+  Building,
+  Layers,
+  Key
 } from 'lucide-react';
 import {
   getAttendanceConfirmationInfo
@@ -18,6 +21,65 @@ import {
 import {
   resolveUniversityInfo
 } from '../data/defaultData';
+
+export function resolveDormitoryDetails(reg, uniInfo) {
+  if (!reg) return null;
+  const isMsu = Boolean(uniInfo?.isMsu);
+  if (isMsu) {
+    return {
+      isMsu: true,
+      dormName: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+      roomNumber: 'ไป-กลับเอง',
+      floorText: 'ไม่เข้าพักหอพัก',
+      isAssigned: true,
+      note: 'นิสิตและบุคลากร มมส เดินทางไป-กลับเอง'
+    };
+  }
+
+  const rawRoom = String(reg.room_assigned || '').trim();
+  const rawDorm = String(reg.dormitory || '').trim();
+
+  // Dormitory Name
+  let dormName = rawDorm || 'หอพักกุดรัง มหาวิทยาลัยมหาสารคาม';
+  if (rawRoom.includes('หอกุดรัง') || rawRoom.includes('กุดรัง')) {
+    dormName = 'หอพักกุดรัง มหาวิทยาลัยมหาสารคาม';
+  } else if (rawRoom.includes('หอพัก')) {
+    const match = rawRoom.match(/(หอพัก[^\s\d]+|หอ[^\s\d]+)/);
+    if (match) dormName = match[1];
+  }
+
+  // Room number and floor resolution
+  const matchNum = rawRoom.match(/(\d{3,4})/);
+  let roomNumber = '';
+  let floorText = '';
+  let isAssigned = false;
+
+  if (matchNum) {
+    const num = matchNum[1];
+    roomNumber = `ห้อง ${num}`;
+    const floorDigit = num.length === 3 ? num[0] : num.slice(0, 2);
+    floorText = `ชั้น ${floorDigit}`;
+    isAssigned = true;
+  } else if (rawRoom && !['-', 'รอจัดห้อง', 'ยังไม่จัดห้อง', 'รอจัดสรร', ''].includes(rawRoom)) {
+    roomNumber = rawRoom.startsWith('ห้อง') ? rawRoom : `ห้อง ${rawRoom}`;
+    floorText = 'ตามที่ระบุ';
+    isAssigned = true;
+  } else {
+    roomNumber = 'รอเจ้าหน้าที่แจ้งเลขห้อง (เช็คอินหน้างาน)';
+    floorText = 'รอระบบจัดสรร';
+    isAssigned = false;
+  }
+
+  return {
+    isMsu: false,
+    dormName,
+    roomNumber,
+    floorText,
+    isAssigned,
+    rawRoom,
+    note: 'ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม โต๊ะเขียนงาน และตู้เสื้อผ้า'
+  };
+}
 
 export default function AttendanceConfirmationCard({
   myRegistration,
@@ -29,6 +91,7 @@ export default function AttendanceConfirmationCard({
   const confirmInfo = getAttendanceConfirmationInfo(myRegistration);
   const uniInfo = myRegistration ? resolveUniversityInfo(myRegistration) : null;
   const isMsu = Boolean(uniInfo?.isMsu);
+  const dormInfo = resolveDormitoryDetails(myRegistration, uniInfo);
 
   const [statusChoice, setStatusChoice] = useState(
     confirmInfo.status === 'pending' ? 'confirmed' : confirmInfo.status
@@ -235,25 +298,93 @@ export default function AttendanceConfirmationCard({
 
       {/* Summary Pills when already confirmed and form collapsed */}
       {!isExpandedForm && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
-          <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
-            <BedDouble className="w-4 h-4 text-sky-400 shrink-0" />
-            <div>
-              <span className="text-[10px] text-slate-400 block">การจัดเตรียมที่พัก & อาหาร</span>
-              <span className="font-bold text-white">
-                {isMsu ? '🏠 มมส: เดินทางไป-กลับเอง' : '🏨 ต่างสถาบัน: โครงการจัดเตรียมหอพักให้'} • {confirmInfo.needMeals ? '🍱 อาหารครบมื้อ' : 'ไม่รับอาหาร'}
-              </span>
-            </div>
-          </div>
+        <div className="space-y-3 pt-2 border-t border-slate-800/80 text-xs">
+          {/* Detailed Dormitory Accommodation Box for External Universities */}
+          {!isMsu && confirmInfo.isConfirmed && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-sky-950/80 via-slate-900 to-indigo-950/80 border-2 border-sky-500/50 space-y-2 shadow-lg">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-500/30">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-400/40">
+                    <BedDouble className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white flex items-center gap-1.5">
+                      <span>🏨 ข้อมูลห้องพักหอพัก มมส ({uniInfo?.shortTag || 'มหาวิทยาลัยเครือข่าย'})</span>
+                    </h4>
+                    <p className="text-[11px] text-sky-200">
+                      {dormInfo.dormName} (โครงการจัดเตรียมรองรับผู้เข้าร่วมจากต่างมหาวิทยาลัย)
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black">
+                  ✓ ยืนยันสิทธิ์ห้องพักเรียบร้อย
+                </span>
+              </div>
 
-          <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
-            <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>
-              <span className="text-[10px] text-slate-400 block">ช่วงเวลาเดินทางมาถึง / หมายเหตุ</span>
-              <span className="font-bold text-white">
-                {confirmInfo.arrivalDate || 'เช้าวันที่ 14 พ.ย. 2569'}
-                {confirmInfo.note ? ` • ${confirmInfo.note}` : ''}
-              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-0.5">
+                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                    <Building className="w-3.5 h-3.5 text-sky-400" /> อาคารหอพัก
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-white block">
+                    {dormInfo.dormName}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-0.5">
+                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-amber-400" /> ชั้นที่พัก
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-amber-300 block">
+                    {dormInfo.floorText}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-0.5">
+                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                    <Key className="w-3.5 h-3.5 text-emerald-400" /> เลขห้องพัก
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-sky-300 block">
+                    {dormInfo.roomNumber}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-300 pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80">
+                <span className="flex items-center gap-2 text-slate-300">
+                  <span>❄️ แอร์</span>
+                  <span>•</span>
+                  <span>🚿 เครื่องทำน้ำอุ่น</span>
+                  <span>•</span>
+                  <span>🛏️ เตียง/หมอน/ผ้าห่มพร้อม</span>
+                </span>
+                <span className="text-amber-300 font-mono text-[10px]">
+                  🔑 เช็คอินรับกุญแจห้องพัก ณ จุดลงทะเบียนหน้างาน JRE 2027
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
+              <BedDouble className="w-4 h-4 text-sky-400 shrink-0" />
+              <div>
+                <span className="text-[10px] text-slate-400 block">การจัดเตรียมที่พัก & อาหาร</span>
+                <span className="font-bold text-white">
+                  {isMsu ? '🏠 มมส: เดินทางไป-กลับเอง' : `🏨 ${dormInfo.dormName} (${dormInfo.roomNumber})`} • {confirmInfo.needMeals ? '🍱 อาหารครบมื้อ' : 'ไม่รับอาหาร'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
+              <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div>
+                <span className="text-[10px] text-slate-400 block">ช่วงเวลาเดินทางมาถึง / หมายเหตุ</span>
+                <span className="font-bold text-white">
+                  {confirmInfo.arrivalDate || 'เช้าวันที่ 14 พ.ย. 2569'}
+                  {confirmInfo.note ? ` • ${confirmInfo.note}` : ''}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -297,61 +428,102 @@ export default function AttendanceConfirmationCard({
           </div>
 
           {statusChoice !== 'declined' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-              {/* ช่วงเวลาเดินทางมาถึง มมส */}
-              <div>
-                <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                  ช่วงเวลาเดินทางมาถึง มมส
-                </label>
-                <select
-                  value={arrivalDate}
-                  onChange={(e) => setArrivalDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:border-emerald-400 outline-none cursor-pointer"
-                >
-                  <option value="เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)">
-                    เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)
-                  </option>
-                  <option value="เดินทางมาถึงล่วงหน้า คืนวันที่ 13 พ.ย. 2569">
-                    เดินทางมาถึงล่วงหน้า คืนวันที่ 13 พ.ย. 2569
-                  </option>
-                  <option value="เดินทางมาพร้อมขบวนรถของมหาวิทยาลัย">
-                    เดินทางมาพร้อมขบวนรถของมหาวิทยาลัย
-                  </option>
-                  <option value="นิสิต/บุคลากร มมส (อยู่ในพื้นที่)">
-                    นิสิต/บุคลากร มมส (อยู่ในพื้นที่)
-                  </option>
-                </select>
-              </div>
+            <div className="space-y-3 pt-1">
+              {/* For External Universities: Show Accommodation Preview (หอไหน ชั้นไหน ห้องไหน) */}
+              {!isMsu ? (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-sky-950/80 via-slate-900 to-indigo-950/80 border-2 border-sky-500/40 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-black text-sky-300 flex items-center gap-1.5">
+                      <BedDouble className="w-4 h-4 text-sky-400" />
+                      <span>🏨 ข้อมูลที่พักหอพักสำหรับสังกัด {uniInfo?.shortTag || 'มหาวิทยาลัยเครือข่าย'}</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                      โครงการจัดเตรียมให้
+                    </span>
+                  </div>
 
-              {/* หมายเหตุเพิ่มเติม (ถ้ามี) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                  หมายเหตุเพิ่มเติม (ถ้ามี)
-                </label>
-                <input
-                  type="text"
-                  value={confirmNote}
-                  onChange={(e) => setConfirmNote(e.target.value)}
-                  placeholder="เช่น ขอพักห้องเดียวกับเพื่อนชื่อ..., ถึงเวลา 07:30 น."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-emerald-400 outline-none"
-                />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                        <Building className="w-3.5 h-3.5 text-sky-400" /> อาคารหอพัก
+                      </span>
+                      <span className="font-black text-white text-xs mt-0.5 block">{dormInfo.dormName}</span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" /> ชั้นที่พัก
+                      </span>
+                      <span className="font-black text-amber-300 text-xs mt-0.5 block">{dormInfo.floorText}</span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                        <Key className="w-3.5 h-3.5 text-emerald-400" /> เลขห้องพัก
+                      </span>
+                      <span className="font-black text-sky-300 text-xs mt-0.5 block">{dormInfo.roomNumber}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-300 flex items-center gap-2 pt-0.5">
+                    <span>❄️ ห้องแอร์</span>
+                    <span>•</span>
+                    <span>🚿 เครื่องทำน้ำอุ่น</span>
+                    <span>•</span>
+                    <span>🛏️ เตียงและเครื่องนอนพร้อม</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-bold text-amber-300">
+                    🏠 สังกัด มมส: เดินทางไป-กลับเอง
+                  </span>
+                  <span className="text-slate-400 text-[11px]">(ไม่มีค่าใช้จ่ายและไม่ต้องเข้าพักหอพัก)</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* ช่วงเวลาเดินทางมาถึง มมส */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                    ช่วงเวลาเดินทางมาถึง มมส
+                  </label>
+                  <select
+                    value={arrivalDate}
+                    onChange={(e) => setArrivalDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:border-emerald-400 outline-none cursor-pointer"
+                  >
+                    <option value="เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)">
+                      เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)
+                    </option>
+                    <option value="เดินทางมาถึงล่วงหน้า คืนวันที่ 13 พ.ย. 2569">
+                      เดินทางมาถึงล่วงหน้า คืนวันที่ 13 พ.ย. 2569
+                    </option>
+                    <option value="เดินทางมาพร้อมขบวนรถของมหาวิทยาลัย">
+                      เดินทางมาพร้อมขบวนรถของมหาวิทยาลัย
+                    </option>
+                    <option value="นิสิต/บุคลากร มมส (อยู่ในพื้นที่)">
+                      นิสิต/บุคลากร มมส (อยู่ในพื้นที่)
+                    </option>
+                  </select>
+                </div>
+
+                {/* หมายเหตุเพิ่มเติม (ถ้ามี) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                    หมายเหตุเพิ่มเติม (ถ้ามี)
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmNote}
+                    onChange={(e) => setConfirmNote(e.target.value)}
+                    placeholder="เช่น ขอพักห้องเดียวกับเพื่อนชื่อ..., ถึงเวลา 07:30 น."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-emerald-400 outline-none"
+                  />
+                </div>
               </div>
             </div>
           )}
-
-          {/* Auto accommodation indicator info */}
-          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 flex items-center justify-between flex-wrap gap-2">
-            <span className="flex items-center gap-1.5">
-              {isMsu ? (
-                <>🏠 <strong>สังกัด มมส:</strong> เดินทางไป-กลับเอง</>
-              ) : (
-                <>🏨 <strong>ต่างสถาบัน ({uniInfo?.shortTag || 'มหาวิทยาลัยเครือข่าย'}):</strong> โครงการจัดเตรียมห้องพักหอพัก มมส ไว้รองรับเรียบร้อยแล้ว</>
-              )}
-            </span>
-            <span className="text-slate-400 text-[10px]">
-              (จัดสรรที่พักและอาหารคำนวณตามสถาบันอัตโนมัติ)
-            </span>
-          </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
             <button
