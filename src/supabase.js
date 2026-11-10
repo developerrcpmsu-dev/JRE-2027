@@ -14,7 +14,9 @@ import {
   isStaffRegistration,
   getStaffPaymentSummary,
   formatStaffCallsign,
-  resolveGender
+  resolveGender,
+  resolveCommitteeDutyNote,
+  findMatchingCommitteeMemberSpec
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
 import { 
@@ -294,7 +296,15 @@ const unpackRegistration = (row) => {
       };
     }
 
-    if (staffSum.isMsu) {
+    if (staffSum.totalStaffFee === 0) {
+      // คณะกรรมการดำเนินงาน / Staff ที่เพิ่งเพิ่มเข้าตาราง (ยังไม่ได้สั่งซื้อเสื้อ 280 บ.) ไม่มียอดค้างชำระเทียม
+      unpacked.payment_plan = 'full';
+      unpacked.installment_1_amount = 0;
+      unpacked.installment_2_amount = 0;
+      unpacked.payment_status = 'paid';
+      unpacked.installment_1_status = 'paid';
+      unpacked.payment_amount = 0;
+    } else if (staffSum.isMsu) {
       // Staff มมส: ชำระเฉพาะค่าเสื้อ 280 บาท (ไม่มีค่าที่พัก)
       unpacked.payment_plan = 'full';
       unpacked.installment_1_amount = STAFF_SHIRT_FEE;
@@ -347,6 +357,8 @@ const unpackRegistration = (row) => {
   }
 
   unpacked.gender = resolveGender(unpacked);
+  unpacked.committee_member_key = unpacked.committee_member_key || findMatchingCommitteeMemberSpec(unpacked)?.key || '';
+  unpacked.committee_duty_note = unpacked.committee_duty_note || resolveCommitteeDutyNote(unpacked) || '';
 
   // Auto-normalize full_name_affiliation when institution is KKU (มข) or MSU (มมส) so stale tags in local cache never show the wrong university
   const instLower = String(unpacked.institution || unpacked.affiliation || '').toLowerCase();
@@ -425,12 +437,22 @@ const packRegistrationForSupabase = (fullData) => {
     attendance_checked_in: Boolean(fullData.attendance_checked_in),
     attendance_checked_in_at: fullData.attendance_checked_in_at || '',
     attendance_checked_in_by: fullData.attendance_checked_in_by || '',
+    attendance_confirmed_status: fullData.attendance_confirmed_status || (fullData.attendance_checked_in ? 'confirmed' : ''),
+    attendance_confirmed_at: fullData.attendance_confirmed_at || '',
+    attendance_confirmed_by: fullData.attendance_confirmed_by || '',
+    attendance_need_accommodation: typeof fullData.attendance_need_accommodation === 'boolean' ? fullData.attendance_need_accommodation : undefined,
+    attendance_meal_confirmed: typeof fullData.attendance_meal_confirmed === 'boolean' ? fullData.attendance_meal_confirmed : undefined,
+    attendance_arrival_date: fullData.attendance_arrival_date || '',
+    attendance_confirm_note: fullData.attendance_confirm_note || '',
     id_card_received: Boolean(fullData.id_card_received),
     id_card_received_at: fullData.id_card_received_at || '',
     id_card_received_by: fullData.id_card_received_by || '',
     id_card_photo: fullData.id_card_photo || fullData.id_card_url || '',
     is_staff: Boolean(isStaff),
     staff_role_type: fullData.staff_role_type || (isStaff ? 'committee' : 'participant'),
+    staff_id_card_only: Boolean(fullData.staff_id_card_only),
+    committee_member_key: fullData.committee_member_key || '',
+    committee_duty_note: fullData.committee_duty_note || '',
     staff_accommodation_paid: Boolean(fullData.staff_accommodation_paid),
     registration_type: isStaff ? 'staff' : (fullData.registration_type || 'participant'),
     gender: fullData.gender || resolveGender(fullData),
@@ -2338,3 +2360,60 @@ export async function ensureHostedUrl(urlOrBase64, defaultName = 'slip.jpg') {
   }
   return trimmed;
 }
+
+/**
+ * Helper to resolve Attendance Confirmation / RSVP status & logistics needs
+ * for preparing exact food & dormitory accommodation quantities.
+ */
+export function getAttendanceConfirmationInfo(reg) {
+  if (!reg) {
+    return {
+      status: 'pending',
+      isConfirmed: false,
+      isDeclined: false,
+      isPending: true,
+      needAccommodation: false,
+      needMeals: true,
+      confirmedAt: '',
+      confirmedBy: '',
+      arrivalDate: '',
+      note: ''
+    };
+  }
+
+  let status = 'pending';
+  if (reg.attendance_confirmed_status === 'declined') {
+    status = 'declined';
+  } else if (reg.attendance_confirmed_status === 'confirmed' || reg.attendance_checked_in) {
+    status = 'confirmed';
+  }
+
+  const isConfirmed = status === 'confirmed';
+  const isDeclined = status === 'declined';
+  const isPending = status === 'pending';
+
+  const isMsu = isMsuInstitution(reg);
+  // Default accommodation need: external university participants/staff need dormitory accommodation unless declined or explicitly set to false
+  const defaultNeedAccom = !isMsu || Boolean(reg.room_assigned);
+  const needAccommodation = isDeclined
+    ? false
+    : (typeof reg.attendance_need_accommodation === 'boolean' ? reg.attendance_need_accommodation : defaultNeedAccom);
+
+  const needMeals = isDeclined
+    ? false
+    : (typeof reg.attendance_meal_confirmed === 'boolean' ? reg.attendance_meal_confirmed : true);
+
+  return {
+    status,
+    isConfirmed,
+    isDeclined,
+    isPending,
+    needAccommodation,
+    needMeals,
+    confirmedAt: reg.attendance_confirmed_at || reg.attendance_checked_in_at || '',
+    confirmedBy: reg.attendance_confirmed_by || (reg.attendance_checked_in ? 'qr' : ''),
+    arrivalDate: reg.attendance_arrival_date || '',
+    note: reg.attendance_confirm_note || ''
+  };
+}
+

@@ -29,6 +29,7 @@ import {
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
 import RegistrationCountdown from '../components/RegistrationCountdown';
+import AttendanceConfirmationCard from '../components/AttendanceConfirmationCard';
 import ModalPortal from '../components/ModalPortal';
 import { getRegistrationScheduleStatus } from '../utils/registrationSchedule';
 import { DEFAULT_SPEAKERS, getSpeakerCategory, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
@@ -41,6 +42,7 @@ export default function HomeView({
   onNavigateMerchandise,
   onOpenScanner,
   myRegistration,
+  onUpdateRegistration,
   onOpenGoogleLogin,
   paymentConfig
 }) {
@@ -251,6 +253,14 @@ export default function HomeView({
 
         </div>
       </section>
+
+      {/* Attendance Confirmation / RSVP Survey Card */}
+      <AttendanceConfirmationCard
+        myRegistration={myRegistration}
+        onUpdateRegistration={onUpdateRegistration}
+        onNavigateDashboard={onNavigateRegister}
+        onOpenGoogleLogin={onOpenGoogleLogin}
+      />
 
       {/* Urgent Round 2 & Accommodation Final Deadline Banner */}
       <section className="rounded-3xl border-2 border-rose-500/70 bg-gradient-to-r from-rose-950/90 via-red-950/85 to-amber-950/80 p-5 sm:p-6 shadow-2xl shadow-rose-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

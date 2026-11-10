@@ -827,6 +827,8 @@ export const OFFICIAL_COMMITTEE_NAMES = [
   { match: 'พีรณัฐ พาลึก', role: 'committee' },
   { match: 'เศรษฐบุตร อากานิส', role: 'committee' },
   { match: 'อนุสรา แสนขรยาง', role: 'committee' },
+  { match: 'น้องฟิล์ม', role: 'mc' },
+  { match: 'น้องน้ำหวาน', role: 'mc' },
   { match: 'อพัชนิภา ไวมาตร', role: 'committee' },
   { match: 'ณัฐพล เชื้อคนแข็ง', role: 'committee' },
   { match: 'ณัฐพล เชืิอคนแข็ง', role: 'committee' },
@@ -839,6 +841,254 @@ export const OFFICIAL_COMMITTEE_NAMES = [
   { match: 'วารัทยา เรืองเวทย์วัฒนา', role: 'committee' },
   { match: 'พงศ์ภรณ์ ทองศิริ', role: 'dev' }
 ];
+
+/**
+ * รายชื่อคณะกรรมการดำเนินงานหลัก 8 ท่าน (Organizing Committee Roster)
+ * สำหรับตรวจสอบว่ามีชื่อในตารางผู้เข้าร่วมหรือยัง (ป้องกันชื่อซ้ำ 100%)
+ * และรองรับให้ Dev / Admin เพิ่ม-ลบ เลือกมหาวิทยาลัยผ่านดรอปดาวน์ ปรับสถานะ มาแน่/รอยืนยัน/ไม่มา และระบุหมายเหตุหน้าที่รับผิดชอบได้
+ */
+export const OFFICIAL_8_COMMITTEE_ROSTER = [
+  {
+    key: 'committee_1_peeranut',
+    order: 1,
+    title_th: 'นาย',
+    first_name: 'พีรณัฐ',
+    last_name: 'พาลึก',
+    display_name: 'นายพีรณัฐ พาลึก',
+    nickname: 'เยลโล่',
+    gender: 'ชาย',
+    callsign: 'RCP15-46 (STAFF)',
+    staff_role_type: 'committee',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายปฏิบัติการและประสานงานฝึก (RCP15-46)',
+    photo: '/images/speakers/โฟกัส2.jpg',
+    matchTokens: ['พีรณัฐ พาลึก', 'พีรณัฐ']
+  },
+  {
+    key: 'committee_2_setthabut',
+    order: 2,
+    title_th: 'นาย',
+    first_name: 'เศรษฐบุตร',
+    last_name: 'อากานิส',
+    display_name: 'นายเศรษฐบุตร อากานิส',
+    nickname: 'โฟกัส',
+    gender: 'ชาย',
+    callsign: 'RCP15-05 (STAFF)',
+    staff_role_type: 'committee',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายอำนวยการและควบคุมการฝึก (RCP15-05)',
+    photo: '/images/speakers/โฟกัส1.jpg',
+    matchTokens: ['เศรษฐบุตร อากานิส', 'เศรษฐบุตร']
+  },
+  {
+    key: 'committee_3_anusara',
+    order: 3,
+    title_th: 'นางสาว',
+    first_name: 'อนุสรา',
+    last_name: 'แสนขรยาง',
+    display_name: 'น.ส. อนุสรา แสนขรยาง',
+    nickname: 'อนุสรา',
+    gender: 'หญิง',
+    callsign: '(STAFF)',
+    staff_role_type: 'committee',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายทะเบียนและประสานงาน',
+    photo: '/images/speakers/อนุสรา แสนขรยาง.jpg',
+    matchTokens: ['อนุสรา แสนขรยาง', 'อนุสรา']
+  },
+  {
+    key: 'committee_4_film',
+    order: 4,
+    title_th: '',
+    first_name: 'น้องฟิล์ม',
+    last_name: '',
+    display_name: 'น้องฟิล์ม',
+    nickname: 'ฟิล์ม',
+    gender: 'หญิง',
+    callsign: 'MC (STAFF)',
+    staff_role_type: 'mc',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
+    photo: '/images/speakers/น้องฟิล์ม.jpg',
+    matchTokens: ['น้องฟิล์ม']
+  },
+  {
+    key: 'committee_5_namwan',
+    order: 5,
+    title_th: '',
+    first_name: 'น้องน้ำหวาน',
+    last_name: '',
+    display_name: 'น้องน้ำหวาน',
+    nickname: 'น้ำหวาน',
+    gender: 'หญิง',
+    callsign: 'MC (STAFF)',
+    staff_role_type: 'mc',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
+    photo: '/images/speakers/น้องน้ำหวาน.jpg',
+    matchTokens: ['น้องน้ำหวาน']
+  },
+  {
+    key: 'committee_6_woraphat',
+    order: 6,
+    title_th: 'นาย',
+    first_name: 'วรภัทร',
+    last_name: 'เวสสุริยา',
+    display_name: 'นายวรภัทร เวสสุริยา',
+    nickname: 'นิก',
+    gender: 'ชาย',
+    callsign: '17-02 (STAFF)',
+    staff_role_type: 'photographer',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ช่างภาพและสื่อโสตทัศนูปกรณ์ (17-02)',
+    photo: '/images/speakers/นิก.jpg',
+    matchTokens: ['วรภัทร เวสสุริยา', 'วรภัทร']
+  },
+  {
+    key: 'committee_7_apatchanipha',
+    order: 7,
+    title_th: 'นางสาว',
+    first_name: 'อพัชนิภา',
+    last_name: 'ไวมาตร',
+    display_name: 'น.ส. อพัชนิภา ไวมาตร',
+    nickname: 'อพัชนิภา',
+    gender: 'หญิง',
+    callsign: '(STAFF)',
+    staff_role_type: 'committee',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายพยาบาลและสวัสดิการ',
+    photo: '/images/speakers/อพัชนิภา ไวมาตร.jpg',
+    matchTokens: ['อพัชนิภา ไวมาตร', 'อพัชนิภา']
+  },
+  {
+    key: 'committee_8_nattapon',
+    order: 8,
+    title_th: 'นาย',
+    first_name: 'ณัฐพล',
+    last_name: 'เชื้อคนแข็ง',
+    display_name: 'นายณัฐพล เชื้อคนแข็ง',
+    nickname: 'ณัฐพล',
+    gender: 'ชาย',
+    callsign: '(STAFF)',
+    staff_role_type: 'committee',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายสนับสนุนและอุปกรณ์ภาคสนาม',
+    photo: '/images/speakers/ณัฐพล เชื้อคนแข็ง.jpg',
+    matchTokens: ['ณัฐพล เชื้อคนแข็ง', 'ณัฐพล เชืิอคนแข็ง', 'ณัฐพล']
+  }
+];
+
+/**
+ * ตรวจสอบว่ารายการผู้สมัครนี้ตรงกับคณะกรรมการดำเนินงาน 8 ท่านคนใดหรือไม่
+ */
+export const findMatchingCommitteeMemberSpec = (reg) => {
+  if (!reg) return null;
+  if (reg.committee_member_key) {
+    const byKey = OFFICIAL_8_COMMITTEE_ROSTER.find(c => c.key === reg.committee_member_key);
+    if (byKey) return byKey;
+  }
+  const combinedName = `${reg.first_name || ''} ${reg.last_name || ''} ${reg.full_name_affiliation || ''}`
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!combinedName) return null;
+
+  for (const spec of OFFICIAL_8_COMMITTEE_ROSTER) {
+    const fullTarget = `${spec.first_name} ${spec.last_name}`.trim();
+    if (fullTarget && combinedName.includes(fullTarget)) {
+      return spec;
+    }
+    if (Array.isArray(spec.matchTokens)) {
+      for (const token of spec.matchTokens) {
+        if (token && token.length >= 4 && combinedName.includes(token)) {
+          // ถ้าระบุแค่นามต้น เช่น ณัฐพล หรือ วรภัทร ให้เช็คด้วยว่านามสกุลไม่ขัดแย้งกัน (หรือไม่มีนามสกุลอื่น)
+          if (!spec.last_name || !reg.last_name || String(reg.last_name).includes(spec.last_name.slice(0, 3))) {
+            return spec;
+          }
+        }
+      }
+    }
+  }
+  return null;
+};
+
+/**
+ * ค้นหาว่าคณะกรรมการดำเนินงานท่านนี้มีรายชื่ออยู่ใน registrations แล้วหรือยัง (เพื่อป้องกันการสร้างซ้ำ 100%)
+ */
+export const findExistingRegForCommitteeSpec = (registrations = [], spec) => {
+  if (!spec || !Array.isArray(registrations)) return null;
+  // 1. ค้นหาจาก committee_member_key หรือ user_id ที่ตรงกัน
+  const byKey = registrations.find(r => r && (r.committee_member_key === spec.key || r.user_id === `staff_${spec.key}`));
+  if (byKey) return byKey;
+
+  // 2. ค้นหาจากชื่อ-นามสกุลจริงในระบบ
+  const fullTarget = `${spec.first_name} ${spec.last_name}`.trim();
+  for (const r of registrations) {
+    if (!r) continue;
+    const rName = `${r.first_name || ''} ${r.last_name || ''} ${r.full_name_affiliation || ''}`
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (fullTarget && rName.includes(fullTarget)) {
+      return r;
+    }
+    if (Array.isArray(spec.matchTokens)) {
+      for (const token of spec.matchTokens) {
+        if (token && rName.includes(token)) {
+          if (!spec.last_name || !r.last_name || String(r.last_name).includes(spec.last_name.slice(0, 3))) {
+            return r;
+          }
+        }
+      }
+    }
+  }
+  return null;
+};
+
+/**
+ * ดึงหมายเหตุหน้าที่รับผิดชอบของคณะกรรมการ/Staff หรือผู้เข้าร่วม ("คือใคร ทำอะไร")
+ */
+export const resolveCommitteeDutyNote = (reg) => {
+  if (!reg) return '';
+  if (reg.committee_duty_note && String(reg.committee_duty_note).trim() !== '') {
+    return String(reg.committee_duty_note).trim();
+  }
+  const matchedSpec = findMatchingCommitteeMemberSpec(reg);
+  if (matchedSpec && matchedSpec.committee_duty_note) {
+    return matchedSpec.committee_duty_note;
+  }
+  if (isStaffRegistration(reg)) {
+    const roleType = resolveStaffRoleType(reg);
+    if (roleType === 'dev') return 'คณะทำงาน • ผู้พัฒนาระบบ (Dev / Staff)';
+    if (roleType === 'mc') return 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)';
+    if (roleType === 'photographer') return 'คณะกรรมการดำเนินงาน • ช่างภาพและสื่อโสตทัศนูปกรณ์';
+    if (roleType === 'committee') return 'คณะกรรมการดำเนินงาน (Organizing Committee)';
+    return 'สตาฟโครงการ (Project Staff)';
+  }
+  return '';
+};
 
 export const resolveStaffRoleType = (reg) => {
   if (!reg) return 'participant';

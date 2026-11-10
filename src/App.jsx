@@ -1255,6 +1255,7 @@ export default function App() {
               setPublicScannerOpen(true);
             }}
             myRegistration={myRegistration}
+            onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             paymentConfig={paymentConfig}
           />

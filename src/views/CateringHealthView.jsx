@@ -29,8 +29,10 @@ import {
   getApplicantAllergy,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
-  getCateringCategory
+  getCateringCategory,
+  resolveUniversityInfo
 } from '../data/defaultData';
+import { getAttendanceConfirmationInfo } from '../supabase';
 import { getRegistrationCardData } from '../utils/idCard';
 
 export default function CateringHealthView({
@@ -39,14 +41,45 @@ export default function CateringHealthView({
   onRefresh
 }) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [uniFilter, setUniFilter] = useState('all');
+  const [confirmFilter, setConfirmFilter] = useState('all'); // 'all' | 'confirmed' | 'active_expected'
   const [activeFilter, setActiveFilter] = useState('all_restrictions'); // 'all_restrictions', 'allergy_only', 'medical_only', 'special_only', 'all_participants'
   const [categoryFilter, setCategoryFilter] = useState('all'); // 'all', 'seafood', 'vegetarian', 'halal', 'nutsOrDairy', 'drug'
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Grouped datasets
+  // University options (dynamic counts)
+  const uniOptions = useMemo(() => {
+    const map = new Map();
+    (registrations || []).forEach((r) => {
+      const u = resolveUniversityInfo(r);
+      if (!map.has(u.key)) {
+        map.set(u.key, { key: u.key, shortTag: u.shortTag, label: u.label, isMsu: u.isMsu, count: 0 });
+      }
+      map.get(u.key).count++;
+    });
+    return Array.from(map.values()).sort((a, b) => (a.isMsu ? -1 : b.isMsu ? 1 : b.count - a.count));
+  }, [registrations]);
+
+  // Scoped base by university & attendance confirmation status
+  const scopedRegistrations = useMemo(() => {
+    return (registrations || []).filter((r) => {
+      if (uniFilter !== 'all') {
+        const u = resolveUniversityInfo(r);
+        if (u.key !== uniFilter) return false;
+      }
+      if (confirmFilter !== 'all') {
+        const cInfo = getAttendanceConfirmationInfo(r);
+        if (confirmFilter === 'confirmed' && !cInfo.isConfirmed) return false;
+        if (confirmFilter === 'active_expected' && cInfo.isDeclined) return false;
+      }
+      return true;
+    });
+  }, [registrations, uniFilter, confirmFilter]);
+
+  // Grouped datasets (computed from scopedRegistrations so selecting a university updates all counts!)
   const metrics = useMemo(() => {
-    const all = registrations || [];
+    const all = scopedRegistrations || [];
     const withAllergy = all.filter(r => hasFoodOrDrugAllergy(r));
     const withMedical = all.filter(r => hasMedicalCondition(r));
     const withSpecial = all.filter(r => Boolean(r.is_special_care || (r.special_notes && r.special_notes.trim() !== '')));
@@ -86,7 +119,7 @@ export default function CateringHealthView({
       withAnyRestriction,
       categories
     };
-  }, [registrations]);
+  }, [scopedRegistrations]);
 
   // Filtered list
   const filteredList = useMemo(() => {
@@ -98,7 +131,7 @@ export default function CateringHealthView({
     } else if (activeFilter === 'special_only') {
       base = metrics.withSpecial;
     } else if (activeFilter === 'all_participants') {
-      base = registrations || [];
+      base = scopedRegistrations || [];
     } else {
       // all_restrictions
       base = metrics.withAnyRestriction;
@@ -592,16 +625,41 @@ export default function CateringHealthView({
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="ค้นหาชื่อ, สังกัด, กลุ่ม, อาหารที่แพ้..."
+        {/* Search & University / Attendance Filters */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <select
+            value={uniFilter}
+            onChange={(e) => setUniFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-950 border border-indigo-500/40 rounded-xl text-xs text-indigo-200 font-bold focus:outline-none cursor-pointer"
+          >
+            <option value="all">🏛️ ทุกมหาวิทยาลัย ({(registrations || []).length} คน)</option>
+            {uniOptions.map((u) => (
+              <option key={u.key} value={u.key}>
+                {u.shortTag} ({u.count} คน)
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={confirmFilter}
+            onChange={(e) => setConfirmFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-950 border border-emerald-500/40 rounded-xl text-xs text-emerald-200 font-bold focus:outline-none cursor-pointer"
+          >
+            <option value="all">📋 ทุกคนที่ลงทะเบียน</option>
+            <option value="confirmed">✅ เฉพาะคนที่ยืนยันมาแน่แล้ว</option>
+            <option value="active_expected">🎯 รวมรอยืนยัน (ตัดคนสละสิทธิ์ออก)</option>
+          </select>
+
+          <div className="relative flex-1 md:w-64">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="ค้นหาชื่อ, สังกัด, กลุ่ม, อาหารที่แพ้..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
+          </div>
         </div>
       </div>
 

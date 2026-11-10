@@ -74,7 +74,7 @@ import {
   Table,
   ChevronRight
 } from 'lucide-react';
-import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl } from '../supabase';
+import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl, getAttendanceConfirmationInfo } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
@@ -114,6 +114,7 @@ import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
 import CateringHealthModal from '../components/CateringHealthModal';
 import CateringHealthView from './CateringHealthView';
+import AdminExecutiveSummaryView from './AdminExecutiveSummaryView';
 import AdminIDCardsDirectoryView from './AdminIDCardsDirectoryView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
@@ -191,6 +192,7 @@ export default function AdminDashboardView({
     if (tab === 'team' || tab === 'staff') return 'team';
     if (tab === 'scanner' || tab === 'qr') return 'merchandise';
     if (tab === 'catering' || tab === 'health' || tab === 'catering-health' || tab === 'food' || tab === 'welfare') return 'catering';
+    if (tab === 'summary' || tab === 'overview' || tab === 'attendance' || tab === 'rsvp') return 'summary';
     return tab || 'applicants';
   };
 
@@ -275,6 +277,7 @@ export default function AdminDashboardView({
     if (t === 'payment_settings') return 'payment';
     if (t === 'merchandise') return 'shirts';
     if (t === 'catering') return 'catering';
+    if (t === 'summary') return 'summary';
     return t;
   };
 
@@ -1059,6 +1062,79 @@ export default function AdminDashboardView({
       return true;
     });
   }, [traineeShirtRecords, merchandiseStoreRecords, merchSourceFilter, merchUniFilter, merchRoleFilter, merchSizeFilter, merchDeliveryFilter, merchPaymentFilter, merchStatusFilter, merchSearchQuery]);
+
+  // Cascading / Faceted Counts for Merchandise Filter Dropdowns
+  const merchFacetCounts = React.useMemo(() => {
+    const allItems = [...traineeShirtRecords, ...merchandiseStoreRecords];
+    const matchesSearchAndSource = (item) => {
+      if (merchSourceFilter !== 'all' && item.source !== merchSourceFilter) return false;
+      if (merchSearchQuery.trim()) {
+        const q = merchSearchQuery.toLowerCase().trim();
+        const matchesName = item.customer_name?.toLowerCase().includes(q);
+        const matchesCallsign = item.callsign?.toLowerCase().includes(q);
+        const matchesNickname = item.nickname?.toLowerCase().includes(q);
+        const matchesPhone = item.phone?.includes(q);
+        const matchesEmail = item.user_email?.toLowerCase().includes(q);
+        const matchesOrder = item.order_number?.toLowerCase().includes(q);
+        const matchesInst = item.institution?.toLowerCase().includes(q) || item.uni_short?.toLowerCase().includes(q);
+        const matchesSize = item.size?.toLowerCase().includes(q);
+        if (!(matchesName || matchesCallsign || matchesNickname || matchesPhone || matchesEmail || matchesOrder || matchesInst || matchesSize)) return false;
+      }
+      return true;
+    };
+
+    const getShirtQty = (item, targetSize = null) => {
+      if (item.source === 'registration') {
+        if (targetSize && item.normalized_size !== targetSize) return 0;
+        return 1;
+      }
+      if (Array.isArray(item.items) && item.items.length > 0) {
+        return item.items.reduce((sum, it) => {
+          const sz = normalizeSize(it.size);
+          if (targetSize && sz !== targetSize) return sum;
+          return sum + (Number(it.quantity) || 1);
+        }, 0);
+      }
+      if (targetSize && item.normalized_size !== targetSize) return 0;
+      return Number(item.total_quantity) || 1;
+    };
+
+    const baseList = allItems.filter(matchesSearchAndSource);
+    const afterUniList = baseList.filter(item => merchUniFilter === 'all' || item.uni_short === merchUniFilter);
+    const afterRoleList = afterUniList.filter(item => {
+      if (merchRoleFilter === 'staff') return Boolean(item.is_staff);
+      if (merchRoleFilter === 'participant') return !item.is_staff && item.source === 'registration';
+      return true;
+    });
+    const afterSizeList = afterRoleList.filter(item => {
+      if (merchSizeFilter === 'all') return true;
+      if (item.source === 'registration') return item.normalized_size === merchSizeFilter;
+      const hasSize = (item.items || []).some(it => normalizeSize(it.size) === merchSizeFilter);
+      return hasSize || item.normalized_size === merchSizeFilter;
+    });
+    const afterDeliveryList = afterSizeList.filter(item => merchDeliveryFilter === 'all' || item.pickup_status === merchDeliveryFilter);
+
+    const sizeCounts = {};
+    (sizeStats.STANDARD_SIZES || ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อื่นๆ']).forEach(sz => {
+      sizeCounts[sz] = afterRoleList.reduce((sum, item) => sum + getShirtQty(item, sz), 0);
+    });
+    const totalRoleShirts = afterRoleList.reduce((sum, item) => sum + getShirtQty(item, null), 0);
+
+    return {
+      afterUniTotal: afterUniList.reduce((sum, item) => sum + getShirtQty(item, null), 0),
+      staffCount: afterUniList.filter(item => item.is_staff).reduce((sum, item) => sum + getShirtQty(item, null), 0),
+      participantCount: afterUniList.filter(item => !item.is_staff && item.source === 'registration').reduce((sum, item) => sum + getShirtQty(item, null), 0),
+      totalRoleShirts,
+      sizeCounts,
+      deliveryTotal: afterSizeList.length,
+      deliveryPending: afterSizeList.filter(item => item.pickup_status === 'pending').length,
+      deliveryReceived: afterSizeList.filter(item => item.pickup_status === 'received').length,
+      paymentTotal: afterDeliveryList.length,
+      paymentPaid: afterDeliveryList.filter(item => item.payment_status === 'paid_verified').length,
+      paymentPending: afterDeliveryList.filter(item => item.payment_status === 'pending_verification').length,
+      paymentUnpaid: afterDeliveryList.filter(item => item.payment_status === 'unpaid').length
+    };
+  }, [traineeShirtRecords, merchandiseStoreRecords, merchSourceFilter, merchSearchQuery, merchUniFilter, merchRoleFilter, merchSizeFilter, merchDeliveryFilter, sizeStats.STANDARD_SIZES]);
 
   React.useEffect(() => {
     if (merchandiseConfig) {
@@ -3707,8 +3783,9 @@ export default function AdminDashboardView({
     return computeStaffAndRefundMetrics(registrations || []);
   }, [registrations]);
 
-  // Calculate comprehensive registration payment, gender & Staff (MSU 280 / Non-MSU 480) metrics
-  const regMetrics = (() => {
+  // Reusable helper to calculate comprehensive registration payment, gender, Staff & attendance confirmation metrics for any subset
+  const computeRegMetrics = React.useCallback((regsSubset) => {
+    const list = regsSubset || [];
     let fullPlanCount = 0;
     let fullPlanPaidCount = 0;
     let installmentPlanCount = 0;
@@ -3735,11 +3812,43 @@ export default function AdminDashboardView({
     let clubMemberCount = 0;
     let volunteerCount = 0;
 
-    (registrations || []).forEach(reg => {
+    let noGroupCount = 0;
+    let hasGroupCount = 0;
+    let noRoomCount = 0;
+    let hasRoomCount = 0;
+
+    let confirmedAttendingCount = 0;
+    let pendingConfirmationCount = 0;
+    let declinedAttendingCount = 0;
+    let needAccommodationCount = 0;
+
+    const bloodCounts = { A: 0, B: 0, O: 0, AB: 0 };
+
+    list.forEach(reg => {
       const isStaff = isStaffRegistration(reg);
       const gender = resolveGender(reg);
       const isMsu = isMsuInstitution(reg.institution);
       const memberTypeInfo = resolveApplicantMemberType(reg);
+      const attInfo = getAttendanceConfirmationInfo(reg);
+
+      if (attInfo.isConfirmed) confirmedAttendingCount++;
+      else if (attInfo.isDeclined) declinedAttendingCount++;
+      else pendingConfirmationCount++;
+
+      if (!attInfo.isDeclined && attInfo.needAccommodation) {
+        needAccommodationCount++;
+      }
+
+      if (reg.group_assigned) hasGroupCount++;
+      else noGroupCount++;
+
+      if (reg.room_assigned) hasRoomCount++;
+      else noRoomCount++;
+
+      const bg = String(reg.blood_group || '').trim().toUpperCase();
+      if (bloodCounts[bg] !== undefined) {
+        bloodCounts[bg]++;
+      }
 
       if (memberTypeInfo.isClubMember) clubMemberCount++;
       else volunteerCount++;
@@ -3868,13 +3977,12 @@ export default function AdminDashboardView({
       }
     });
 
-    const all = registrations || [];
-    const allergyCount = all.filter(r => hasFoodOrDrugAllergy(r)).length;
-    const medicalCount = all.filter(r => hasMedicalCondition(r)).length;
-    const specialCareCount = all.filter(r => Boolean(r.is_special_care)).length;
+    const allergyCount = list.filter(r => hasFoodOrDrugAllergy(r)).length;
+    const medicalCount = list.filter(r => hasMedicalCondition(r)).length;
+    const specialCareCount = list.filter(r => Boolean(r.is_special_care)).length;
 
     return {
-      total: all.length,
+      total: list.length,
       participantCount,
       msuParticipantCount,
       externalParticipantCount,
@@ -3902,52 +4010,29 @@ export default function AdminDashboardView({
       totalOutstandingBalance,
       allergyCount,
       medicalCount,
-      specialCareCount
+      specialCareCount,
+      noGroupCount,
+      hasGroupCount,
+      noRoomCount,
+      hasRoomCount,
+      confirmedAttendingCount,
+      pendingConfirmationCount,
+      declinedAttendingCount,
+      needAccommodationCount,
+      bloodCounts
     };
-  })();
+  }, [paymentConfig]);
 
-  // Filtered registrations
-  const filteredRegs = registrations.filter(reg => {
+  // Global metrics across all registrations
+  const regMetrics = React.useMemo(() => computeRegMetrics(registrations || []), [registrations, computeRegMetrics]);
+
+  // Helper to evaluate filterType condition on a single registration
+  const matchesFilterTypeCondition = React.useCallback((reg, targetFilterType) => {
+    if (!targetFilterType || targetFilterType === 'all') return true;
     const isStaff = isStaffRegistration(reg);
     const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
-    const gender = resolveGender(reg);
-    const uniInfo = resolveUniversityInfo(reg);
-    const memberTypeInfo = resolveApplicantMemberType(reg);
-    const medText = getApplicantMedical(reg);
-    const allergyText = getApplicantAllergy(reg);
-    const textTarget = (
-      (reg.first_name || '') + ' ' + 
-      (reg.last_name || '') + ' ' + 
-      (reg.full_name_affiliation || '') + ' ' +
-      (reg.nickname || '') + ' ' +
-      (reg.nickname_th || '') + ' ' +
-      (reg.nickname_en || '') + ' ' +
-      (reg.callsign || '') + ' ' +
-      (memberTypeInfo.shortLabel || '') + ' ' +
-      (memberTypeInfo.unitDisplay || '') + ' ' +
-      (reg.shirt_size || '') + ' ' +
-      (reg.phone || '') + ' ' + 
-      (reg.institution || '') + ' ' +
-      (uniInfo.shortTag || '') + ' ' +
-      (gender || '') + ' ' +
-      (isStaff ? 'staff สตาฟ คณะทำงาน 280 480 ค่าที่พัก โอนคืน' : 'ผู้เข้าอบรม') + ' ' +
-      (staffSum?.summaryNote || '') + ' ' +
-      (reg.user_email || '') + ' ' +
-      (reg.group_assigned || '') + ' ' +
-      (reg.room_assigned || '') + ' ' +
-      (reg.special_notes || '') + ' ' +
-      medText + ' ' +
-      allergyText
-    ).toLowerCase();
+    const attInfo = getAttendanceConfirmationInfo(reg);
 
-    const matchSearch = textTarget.includes(searchTerm.toLowerCase());
-    const matchBlood = bloodFilter === 'all' || reg.blood_group === bloodFilter;
-    const matchUni = uniFilter === 'all' || uniInfo.shortTag === uniFilter;
-    const matchGender = genderFilter === 'all' || gender === genderFilter;
-    const matchRole = roleFilter === 'all' || (roleFilter === 'staff' ? isStaff : !isStaff);
-    const matchMemberType = memberTypeFilter === 'all' || (memberTypeFilter === 'club' ? memberTypeInfo.isClubMember : memberTypeInfo.isVolunteer);
-    
-    let matchFilter = true;
     const isInstallment = isStaff
       ? (!staffSum.isMsu && (staffSum.accommodationRemaining > 0 || Boolean(reg.installment_2_slip_url)))
       : (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
@@ -3971,31 +4056,121 @@ export default function AdminDashboardView({
       : (!isBothPaid && !hasPendingReview);
     const hasOutstanding = isPartialPaid || isUnpaid;
 
-    if (filterType === 'special_care') matchFilter = Boolean(reg.is_special_care);
-    else if (filterType === 'staff') matchFilter = isStaff;
-    else if (filterType === 'staff_accom_unpaid') matchFilter = Boolean(isStaff && !staffSum.isMsu && staffSum.accommodationRemaining > 0);
-    else if (filterType === 'staff_offset') matchFilter = Boolean(isStaff && !staffSum.isMsu && staffSum.isOffsetApplied);
-    else if (filterType === 'refund_needed') matchFilter = Boolean(isStaff && staffSum.isOverpaid);
-    else if (filterType === 'refund_pending') matchFilter = Boolean(isStaff && staffSum.isOverpaid && !staffSum.isRefunded);
-    else if (filterType === 'refund_done') matchFilter = Boolean(isStaff && staffSum.isOverpaid && staffSum.isRefunded);
-    else if (filterType === 'participant_only') matchFilter = !isStaff;
-    else if (filterType === 'has_allergy') matchFilter = hasFoodOrDrugAllergy(reg);
-    else if (filterType === 'has_medical') matchFilter = hasMedicalCondition(reg);
-    else if (filterType === 'full_plan') matchFilter = !isInstallment;
-    else if (filterType === 'installment_plan') matchFilter = isInstallment;
-    else if (filterType === 'fully_paid') matchFilter = isBothPaid;
-    else if (filterType === 'paid') matchFilter = isBothPaid;
-    else if (filterType === 'partial_paid') matchFilter = isPartialPaid;
-    else if (filterType === 'pending_review') matchFilter = hasPendingReview;
-    else if (filterType === 'unpaid') matchFilter = hasOutstanding;
-    else if (filterType === 'unpaid_pure') matchFilter = isUnpaid;
-    else if (filterType === 'no_group') matchFilter = !reg.group_assigned;
-    else if (filterType === 'has_group') matchFilter = Boolean(reg.group_assigned);
-    else if (filterType === 'no_room') matchFilter = !reg.room_assigned;
-    else if (filterType === 'has_room') matchFilter = Boolean(reg.room_assigned);
+    if (targetFilterType === 'confirmed_attending') return attInfo.isConfirmed;
+    if (targetFilterType === 'pending_confirmation') return attInfo.isPending;
+    if (targetFilterType === 'declined_attending') return attInfo.isDeclined;
+    if (targetFilterType === 'need_accommodation') return !attInfo.isDeclined && attInfo.needAccommodation;
+    if (targetFilterType === 'special_care') return Boolean(reg.is_special_care);
+    if (targetFilterType === 'staff') return isStaff;
+    if (targetFilterType === 'staff_accom_unpaid') return Boolean(isStaff && !staffSum.isMsu && staffSum.accommodationRemaining > 0);
+    if (targetFilterType === 'staff_offset') return Boolean(isStaff && !staffSum.isMsu && staffSum.isOffsetApplied);
+    if (targetFilterType === 'refund_needed') return Boolean(isStaff && staffSum.isOverpaid);
+    if (targetFilterType === 'refund_pending') return Boolean(isStaff && staffSum.isOverpaid && !staffSum.isRefunded);
+    if (targetFilterType === 'refund_done') return Boolean(isStaff && staffSum.isOverpaid && staffSum.isRefunded);
+    if (targetFilterType === 'participant_only') return !isStaff;
+    if (targetFilterType === 'has_allergy') return hasFoodOrDrugAllergy(reg);
+    if (targetFilterType === 'has_medical') return hasMedicalCondition(reg);
+    if (targetFilterType === 'full_plan') return !isInstallment;
+    if (targetFilterType === 'installment_plan') return isInstallment;
+    if (targetFilterType === 'fully_paid' || targetFilterType === 'paid') return isBothPaid;
+    if (targetFilterType === 'partial_paid') return isPartialPaid;
+    if (targetFilterType === 'pending_review') return hasPendingReview;
+    if (targetFilterType === 'unpaid') return hasOutstanding;
+    if (targetFilterType === 'unpaid_pure') return isUnpaid;
+    if (targetFilterType === 'no_group') return !reg.group_assigned;
+    if (targetFilterType === 'has_group') return Boolean(reg.group_assigned);
+    if (targetFilterType === 'no_room') return !reg.room_assigned;
+    if (targetFilterType === 'has_room') return Boolean(reg.room_assigned);
+    return true;
+  }, []);
 
-    return matchSearch && matchBlood && matchUni && matchGender && matchRole && matchMemberType && matchFilter;
-  });
+  // Helper to evaluate searchTerm on a single registration
+  const matchesSearchTermCondition = React.useCallback((reg, qStr) => {
+    if (!qStr || !qStr.trim()) return true;
+    const isStaff = isStaffRegistration(reg);
+    const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
+    const gender = resolveGender(reg);
+    const uniInfo = resolveUniversityInfo(reg);
+    const memberTypeInfo = resolveApplicantMemberType(reg);
+    const medText = getApplicantMedical(reg);
+    const allergyText = getApplicantAllergy(reg);
+    const attInfo = getAttendanceConfirmationInfo(reg);
+    const textTarget = (
+      (reg.first_name || '') + ' ' +
+      (reg.last_name || '') + ' ' +
+      (reg.full_name_affiliation || '') + ' ' +
+      (reg.nickname || '') + ' ' +
+      (reg.nickname_th || '') + ' ' +
+      (reg.nickname_en || '') + ' ' +
+      (reg.callsign || '') + ' ' +
+      (memberTypeInfo.shortLabel || '') + ' ' +
+      (memberTypeInfo.unitDisplay || '') + ' ' +
+      (reg.shirt_size || '') + ' ' +
+      (reg.phone || '') + ' ' +
+      (reg.institution || '') + ' ' +
+      (uniInfo.shortTag || '') + ' ' +
+      (gender || '') + ' ' +
+      (isStaff ? 'staff สตาฟ คณะทำงาน 280 480 ค่าที่พัก โอนคืน' : 'ผู้เข้าอบรม') + ' ' +
+      (staffSum?.summaryNote || '') + ' ' +
+      (attInfo.isConfirmed ? 'ยืนยันมาแน่นอน มาแน่' : attInfo.isDeclined ? 'ไม่สะดวกเข้าร่วม ไม่มา' : 'รอยืนยัน') + ' ' +
+      (reg.user_email || '') + ' ' +
+      (reg.group_assigned || '') + ' ' +
+      (reg.room_assigned || '') + ' ' +
+      (reg.special_notes || '') + ' ' +
+      medText + ' ' +
+      allergyText
+    ).toLowerCase();
+    return textTarget.includes(qStr.toLowerCase());
+  }, []);
+
+  // Cascading / Faceted Filter Subsets & Metrics for Applicants Tab
+  // Ensures that selecting a University in Box 1 dynamically updates counts in Box 2 -> Box 3 -> Box 4 -> Box 5 -> Box 6 and Summary Cards!
+  const searchScopedRegs = React.useMemo(() => {
+    return (registrations || []).filter(reg => matchesSearchTermCondition(reg, searchTerm));
+  }, [registrations, searchTerm, matchesSearchTermCondition]);
+
+  const afterUniRegs = React.useMemo(() => {
+    return searchScopedRegs.filter(reg => uniFilter === 'all' || resolveUniversityInfo(reg).shortTag === uniFilter);
+  }, [searchScopedRegs, uniFilter]);
+
+  const uniScopedMetrics = React.useMemo(() => computeRegMetrics(afterUniRegs), [afterUniRegs, computeRegMetrics]);
+
+  const afterMemberTypeRegs = React.useMemo(() => {
+    return afterUniRegs.filter(reg => {
+      if (memberTypeFilter === 'all') return true;
+      const mInfo = resolveApplicantMemberType(reg);
+      return memberTypeFilter === 'club' ? mInfo.isClubMember : mInfo.isVolunteer;
+    });
+  }, [afterUniRegs, memberTypeFilter]);
+
+  const genderFacetMetrics = React.useMemo(() => computeRegMetrics(afterMemberTypeRegs), [afterMemberTypeRegs, computeRegMetrics]);
+
+  const afterGenderRegs = React.useMemo(() => {
+    return afterMemberTypeRegs.filter(reg => genderFilter === 'all' || resolveGender(reg) === genderFilter);
+  }, [afterMemberTypeRegs, genderFilter]);
+
+  const roleFacetMetrics = React.useMemo(() => computeRegMetrics(afterGenderRegs), [afterGenderRegs, computeRegMetrics]);
+
+  const afterRoleRegs = React.useMemo(() => {
+    return afterGenderRegs.filter(reg => {
+      if (roleFilter === 'all') return true;
+      const isStaff = isStaffRegistration(reg);
+      return roleFilter === 'staff' ? isStaff : !isStaff;
+    });
+  }, [afterGenderRegs, roleFilter]);
+
+  const filterTypeFacetMetrics = React.useMemo(() => computeRegMetrics(afterRoleRegs), [afterRoleRegs, computeRegMetrics]);
+
+  const afterFilterTypeRegs = React.useMemo(() => {
+    return afterRoleRegs.filter(reg => matchesFilterTypeCondition(reg, filterType));
+  }, [afterRoleRegs, filterType, matchesFilterTypeCondition]);
+
+  const bloodFacetMetrics = React.useMemo(() => computeRegMetrics(afterFilterTypeRegs), [afterFilterTypeRegs, computeRegMetrics]);
+
+  // Final filtered registrations for the table
+  const filteredRegs = React.useMemo(() => {
+    return afterFilterTypeRegs.filter(reg => bloodFilter === 'all' || reg.blood_group === bloodFilter);
+  }, [afterFilterTypeRegs, bloodFilter]);
 
   const getBulkMessageRecipientId = (reg) => String(reg?.user_id || reg?.id || '');
   const visibleBulkMessageIds = filteredRegs.map(getBulkMessageRecipientId).filter(Boolean);
@@ -5117,6 +5292,20 @@ export default function AdminDashboardView({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
+              onClick={() => handleTabChange('summary')}
+              className={`px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-lg border transition-all active:scale-95 cursor-pointer ${
+                activeTab === 'summary'
+                  ? 'bg-emerald-400 text-slate-950 font-black border-emerald-200 ring-2 ring-emerald-300/60 shadow-emerald-500/30'
+                  : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black border-emerald-300/60 shadow-emerald-950/40'
+              }`}
+              title="เปิดศูนย์สรุปยอดทั้งหมด & ระบบยืนยันการเข้าร่วมกิจกรรมจริง เพื่อเตรียมอาหารและห้องพักพอดีกับจำนวน (URL: /admin/summary)"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>📊 สรุปยอดทั้งหมด & ยืนยันเข้าร่วมจริง ({regMetrics.confirmedAttendingCount}/{regMetrics.total} คน)</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleBroadcastRound2UrgentDeadline}
               className="px-4 py-2.5 bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-rose-950/40 border border-rose-400/40 transition-all active:scale-95 cursor-pointer animate-pulse"
               title="ส่งข้อความแจ้งเตือนด่วน 'ชำระเงินรอบที่ 2 วันนี้วันสุดท้าย ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี' ถึงทุกคนที่มียอดค้าง"
@@ -5579,6 +5768,38 @@ export default function AdminDashboardView({
               <span>เปิดศูนย์จัดเตรียมอาหาร & สุขภาวะ</span>
             </button>
           </div>
+
+          {/* Dedicated Executive Summary & Attendance Confirmation (RSVP) Notice Banner */}
+          <div className="p-3.5 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-cyan-950/40 border border-emerald-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-inner">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-white text-xs sm:text-sm">
+                    📊 ศูนย์สรุปยอดทั้งหมด & ระบบยืนยันการเข้าร่วมกิจกรรมจริง (Executive Summary & RSVP)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                    ✅ ยืนยันมาแน่ {regMetrics.confirmedAttendingCount} คน • ⏳ รอยืนยัน {regMetrics.pendingConfirmationCount} คน • ❌ ไม่มา {regMetrics.declinedAttendingCount} คน • 🏨 พักหอพัก {regMetrics.needAccommodationCount} คน
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  สำรวจว่าผู้สมัครและ Staff มาแน่นอนกี่คน พักหอพักกี่คน เพื่อจัดเตรียมอาหารและห้องพักไว้พอดีกับจำนวนจริง (URL: <span className="text-emerald-300 font-mono">/admin/summary</span>)
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleTabChange('summary')}
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 self-start sm:self-auto cursor-pointer active:scale-95 shrink-0"
+              title="เปิดหน้าสรุปยอดทั้งหมด & ยืนยันการเข้าร่วมกิจกรรมจริง (URL: /admin/summary)"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>เปิดหน้าสรุปยอดทั้งหมด & ยืนยันเข้าร่วม</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -5612,6 +5833,7 @@ export default function AdminDashboardView({
               className="w-full px-4 py-3 bg-slate-900 border-2 border-purple-500/60 rounded-2xl text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 shadow-xl shadow-purple-950/40 cursor-pointer"
             >
               <option value="applicants">📋 จัดการผู้สมัครทั้งหมด ({registrations.length} คน)</option>
+              <option value="summary">📊 สรุปยอดทั้งหมด & ยืนยันเข้าร่วมจริง ({regMetrics.confirmedAttendingCount}/{regMetrics.total} คน)</option>
               <option value="sub_id-cards">🪪 รวมบัตร ID Card แนวตั้ง 1200×1500 & ส่งออกปริ้น ({registrations.length} ใบ)</option>
               <option value="sub_staff-accommodation">🏨 สรุปค่าที่พัก Staff & โอนเงินคืน ({staffAndRefundMetrics.allStaff.length} คน)</option>
               <option value="sub_full-payment">💳 แผนจ่ายครบ 1 รอบ ({regMetrics.fullPlanCount} คน • ชำระครบ {regMetrics.fullPlanPaidCount} คน)</option>
@@ -5643,6 +5865,18 @@ export default function AdminDashboardView({
           >
             <Users className="w-4 h-4 shrink-0" />
             <span>จัดการผู้สมัคร ({registrations.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('summary')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'summary'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/50 font-black'
+                : 'text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/40'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>📊 สรุปยอดทั้งหมด & ยืนยันเข้าร่วม ({regMetrics.confirmedAttendingCount}/{regMetrics.total})</span>
           </button>
 
           <button
@@ -7197,7 +7431,7 @@ export default function AdminDashboardView({
               </div>
             </div>
 
-            {/* Club Member (Callsign) vs General University Student Volunteer Highlight Cards */}
+            {/* Club Member (Callsign) vs General University Student Volunteer Highlight Cards (Dynamically scoped to selected university!) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div
                 onClick={() => setMemberTypeFilter(memberTypeFilter === 'club' ? 'all' : 'club')}
@@ -7208,8 +7442,8 @@ export default function AdminDashboardView({
                 }`}
               >
                 <div className="flex items-center justify-between text-sky-300 font-bold">
-                  <span>📡 มีนามเรียกขาน (องค์กร / ชมรมกู้ภัยในมหาวิทยาลัยนั้นๆ)</span>
-                  <span className="font-mono font-black text-sm">{regMetrics.clubMemberCount} คน</span>
+                  <span>📡 มีนามเรียกขาน (องค์กร / ชมรมกู้ภัย{uniFilter !== 'all' ? ` • เฉพาะ ${uniFilter}` : 'ในมหาวิทยาลัยนั้นๆ'})</span>
+                  <span className="font-mono font-black text-sm">{uniScopedMetrics.clubMemberCount} คน</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
                   สมาชิกองค์กร/ชมรมกู้ภัยประจำมหาวิทยาลัยที่มีรหัสนามเรียกขาน (เช่น RCP, TSI, 16-xx, 17-xx) • คลิกเพื่อกรองดูเฉพาะกลุ่มนี้
@@ -7225,8 +7459,8 @@ export default function AdminDashboardView({
                 }`}
               >
                 <div className="flex items-center justify-between text-emerald-300 font-bold">
-                  <span>🙋 อาสา (นิสิต / นักศึกษาทั่วไปของมหาวิทยาลัยนั้นๆ)</span>
-                  <span className="font-mono font-black text-sm">{regMetrics.volunteerCount} คน</span>
+                  <span>🙋 อาสา (นิสิต / นักศึกษาทั่วไป{uniFilter !== 'all' ? ` • เฉพาะ ${uniFilter}` : 'ของมหาวิทยาลัยนั้นๆ'})</span>
+                  <span className="font-mono font-black text-sm">{uniScopedMetrics.volunteerCount} คน</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
                   นิสิต/นักศึกษาทั่วไปของแต่ละมหาวิทยาลัยที่สมัครเข้าร่วมในนามอาสา (เช่น อาสาคิม, อาสาจำลอง, อาสาชิงชิง) • คลิกเพื่อกรองดูเฉพาะกลุ่มนี้
@@ -7234,12 +7468,12 @@ export default function AdminDashboardView({
               </div>
             </div>
 
-            {/* Financial & Role Highlight Summary Cards */}
+            {/* Financial & Role Highlight Summary Cards (Dynamically scoped to selected university!) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-1">
                 <div className="flex items-center justify-between text-amber-300 font-bold">
                   <span>🏫 ผู้เข้าอบรม มมส (650 บ.)</span>
-                  <span className="font-mono font-black">{regMetrics.msuParticipantCount} คน</span>
+                  <span className="font-mono font-black">{uniScopedMetrics.msuParticipantCount} คน</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
                   แบ่งจ่าย 2 งวดได้ (400 + 250 บ.) หรือจ่ายเต็ม 650 บ.
@@ -7249,7 +7483,7 @@ export default function AdminDashboardView({
               <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-blue-500/30 space-y-1">
                 <div className="flex items-center justify-between text-blue-300 font-bold">
                   <span>🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)</span>
-                  <span className="font-mono font-black">{regMetrics.externalParticipantCount} คน</span>
+                  <span className="font-mono font-black">{uniScopedMetrics.externalParticipantCount} คน</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
                   รวมค่าหอพัก • แบ่งจ่าย 2 งวดได้ (400 + 450 บ.) หรือจ่ายเต็ม 850 บ.
@@ -7269,21 +7503,21 @@ export default function AdminDashboardView({
                 }`}
               >
                 <div className="flex items-center justify-between text-purple-300 font-bold">
-                  <span>🛠️ Staff คณะทำงาน (ค่าเสื้อ 280 บ.)</span>
-                  <span className="font-mono font-black">{regMetrics.staffCount} คน</span>
+                  <span>🛠️ Staff คณะทำงาน ({uniFilter !== 'all' ? uniFilter : '280/480 บ.'})</span>
+                  <span className="font-mono font-black">{uniScopedMetrics.staffCount} คน</span>
                 </div>
                 <p className="text-[11px] text-purple-200/80">
-                  ชำระแล้ว <strong className="text-emerald-400">{regMetrics.staffPaidCount}</strong> คน (฿{regMetrics.staffCollectedAmount.toLocaleString()}) • <span className="underline">ไม่มีแบ่งจ่าย 2 งวด</span>
+                  ชำระแล้ว <strong className="text-emerald-400">{uniScopedMetrics.staffPaidCount}</strong> คน (฿{uniScopedMetrics.staffCollectedAmount.toLocaleString()})
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-emerald-500/30 space-y-1">
                 <div className="flex items-center justify-between text-emerald-300 font-bold">
-                  <span>💰 สรุปยอดเงินรับจริงรวม</span>
-                  <span className="font-mono font-black text-sm">฿{regMetrics.totalCollectedAmount.toLocaleString()}</span>
+                  <span>💰 สรุปยอดเงินรับจริง{uniFilter !== 'all' ? ` (${uniFilter})` : 'รวม'}</span>
+                  <span className="font-mono font-black text-sm">฿{uniScopedMetrics.totalCollectedAmount.toLocaleString()}</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  จากยอดรวม ฿{regMetrics.expectedTotalAmount.toLocaleString()} • ค้างชำระ <strong className="text-rose-400">฿{regMetrics.totalOutstandingBalance.toLocaleString()}</strong>
+                  จากยอดรวม ฿{uniScopedMetrics.expectedTotalAmount.toLocaleString()} • ค้างชำระ <strong className="text-rose-400">฿{uniScopedMetrics.totalOutstandingBalance.toLocaleString()}</strong>
                 </p>
               </div>
             </div>
@@ -7644,86 +7878,103 @@ export default function AdminDashboardView({
               </div>
             </div>
 
-            {/* Row 2: Responsive Filter Grid */}
+            {/* Row 2: Responsive Cascading Filter Grid (Box 1 -> Box 2 -> Box 3 -> Box 4 -> Box 5 -> Box 6) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
-              {/* University Filter */}
+              {/* 1. University Filter */}
               <select
                 value={uniFilter}
                 onChange={e => setUniFilter(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-bold"
               >
-                <option value="all">🏛️ ทุกมหาวิทยาลัย ({regMetrics.total} คน)</option>
-                {universitySummary.list.map(u => (
-                  <option key={u.shortTag} value={u.shortTag}>
-                    {u.shortTag} - {u.university} ({u.totalPeople} คน | ชาย {u.maleCount} หญิง {u.femaleCount})
-                  </option>
-                ))}
+                <option value="all">🏛️ ทุกมหาวิทยาลัย ({searchScopedRegs.length} คน)</option>
+                {universitySummary.list.map(u => {
+                  const cntInSearch = searchTerm.trim()
+                    ? searchScopedRegs.filter(r => resolveUniversityInfo(r).shortTag === u.shortTag).length
+                    : u.totalPeople;
+                  return (
+                    <option key={u.shortTag} value={u.shortTag}>
+                      {u.shortTag} - {u.university} ({cntInSearch} คน | ชาย {u.maleCount} หญิง {u.femaleCount})
+                    </option>
+                  );
+                })}
               </select>
 
-              {/* Member Type Filter: Club (มีนามเรียกขาน) vs Volunteer (อาสาทั่วไป) */}
+              {/* 2. Member Type Filter (Scoped to Selected University!) */}
               <select
                 value={memberTypeFilter}
                 onChange={e => setMemberTypeFilter(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-teal-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-teal-500 font-bold"
               >
-                <option value="all">🏷️ ทุกประเภทสังกัด (ชมรม {regMetrics.clubMemberCount} / อาสา {regMetrics.volunteerCount})</option>
-                <option value="club">📡 มีนามเรียกขาน • องค์กร/ชมรม ({regMetrics.clubMemberCount} คน)</option>
-                <option value="volunteer">🙋 อาสา • นิสิต/นักศึกษาทั่วไป ({regMetrics.volunteerCount} คน)</option>
+                <option value="all">
+                  🏷️ ทุกสังกัด{uniFilter !== 'all' ? `ใน ${uniFilter}` : ''} ({uniScopedMetrics.total} คน: ชมรม {uniScopedMetrics.clubMemberCount} / อาสา {uniScopedMetrics.volunteerCount})
+                </option>
+                <option value="club">📡 มีนามเรียกขาน • องค์กร/ชมรม ({uniScopedMetrics.clubMemberCount} คน)</option>
+                <option value="volunteer">🙋 อาสา • นิสิต/นักศึกษาทั่วไป ({uniScopedMetrics.volunteerCount} คน)</option>
               </select>
 
-              {/* Gender Filter for Room Allocation */}
+              {/* 3. Gender Filter for Room Allocation (Scoped to University + Member Type!) */}
               <select
                 value={genderFilter}
                 onChange={e => setGenderFilter(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-sky-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-sky-500 font-bold"
               >
-                <option value="all">🚻 ทุกเพศ (ชาย {regMetrics.maleCount} / หญิง {regMetrics.femaleCount})</option>
-                <option value="ชาย">👨 เฉพาะผู้ชาย ({regMetrics.maleCount} คน)</option>
-                <option value="หญิง">👩 เฉพาะผู้หญิง ({regMetrics.femaleCount} คน)</option>
+                <option value="all">
+                  🚻 ทุกเพศ{uniFilter !== 'all' ? `ใน ${uniFilter}` : ''} ({genderFacetMetrics.total} คน: ชาย {genderFacetMetrics.maleCount} / หญิง {genderFacetMetrics.femaleCount})
+                </option>
+                <option value="ชาย">👨 เฉพาะผู้ชาย ({genderFacetMetrics.maleCount} คน)</option>
+                <option value="หญิง">👩 เฉพาะผู้หญิง ({genderFacetMetrics.femaleCount} คน)</option>
               </select>
 
-              {/* Role Filter (Participant vs Staff 280) */}
+              {/* 4. Role Filter: Participant vs Staff (Scoped to University + Member Type + Gender!) */}
               <select
                 value={roleFilter}
                 onChange={e => setRoleFilter(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-amber-500 font-bold"
               >
-                <option value="all">👥 ทุกประเภท (ผู้เข้าอบรม + Staff)</option>
-                <option value="participant">🎓 เฉพาะผู้เข้าอบรม ({regMetrics.participantCount} คน)</option>
-                <option value="staff">🛠️ เฉพาะ Staff ค่าเสื้อ 280 บ. ({regMetrics.staffCount} คน)</option>
+                <option value="all">
+                  👥 ทุกประเภท{uniFilter !== 'all' ? `ใน ${uniFilter}` : ''} ({roleFacetMetrics.total} คน)
+                </option>
+                <option value="participant">🎓 เฉพาะผู้เข้าอบรม ({roleFacetMetrics.participantCount} คน)</option>
+                <option value="staff">🛠️ เฉพาะ Staff คณะทำงาน ({roleFacetMetrics.staffCount} คน)</option>
               </select>
 
+              {/* 5. Status / Condition / Attendance Filter (Scoped to University + Member Type + Gender + Role!) */}
               <select
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
               >
-                <option value="all">สถานะชำระเงิน & เงื่อนไข ({regMetrics.total} คน)</option>
-                <option value="full_plan">💳 แผนจ่ายครบ ({regMetrics.fullPlanCount} คน)</option>
-                <option value="installment_plan">📦 แผนแบ่งจ่าย 2 งวด ({regMetrics.installmentPlanCount} คน)</option>
-                <option value="fully_paid">🟢 ชำระครบถ้วนแล้ว ({regMetrics.fullyPaidCount} คน)</option>
-                <option value="partial_paid">🟡 ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน)</option>
-                <option value="unpaid">🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน)</option>
-                <option value="pending_review">⏳ รอตรวจสลิป ({regMetrics.pendingReviewCount} คน)</option>
-                <option value="has_allergy">🍽️ แพ้อาหาร / ยา ({regMetrics.allergyCount} คน)</option>
-                <option value="has_medical">🩺 มีโรคประจำตัว ({regMetrics.medicalCount} คน)</option>
-                <option value="special_care">⭐ ดูแลเป็นพิเศษ ({regMetrics.specialCareCount} คน)</option>
-                <option value="no_group">ยังไม่จัดกลุ่ม ({registrations.filter(r => !r.group_assigned).length} คน)</option>
-                <option value="has_group">จัดกลุ่มแล้ว ({registrations.filter(r => r.group_assigned).length} คน)</option>
-                <option value="no_room">ยังไม่จัดห้องนอน ({registrations.filter(r => !r.room_assigned).length} คน)</option>
-                <option value="has_room">จัดห้องนอนแล้ว ({registrations.filter(r => r.room_assigned).length} คน)</option>
+                <option value="all">สถานะชำระเงิน & ยืนยันเข้าร่วม ({filterTypeFacetMetrics.total} คน)</option>
+                <option value="confirmed_attending">✅ ยืนยันมาเข้าร่วมจริงแล้ว ({filterTypeFacetMetrics.confirmedAttendingCount} คน)</option>
+                <option value="pending_confirmation">⏳ รอยืนยันการเข้าร่วมจริง ({filterTypeFacetMetrics.pendingConfirmationCount} คน)</option>
+                <option value="declined_attending">❌ แจ้งไม่สะดวกเข้าร่วม ({filterTypeFacetMetrics.declinedAttendingCount} คน)</option>
+                <option value="need_accommodation">🏨 ต้องการพักหอพักโครงการ ({filterTypeFacetMetrics.needAccommodationCount} คน)</option>
+                <option value="full_plan">💳 แผนจ่ายครบ ({filterTypeFacetMetrics.fullPlanCount} คน)</option>
+                <option value="installment_plan">📦 แผนแบ่งจ่าย 2 งวด ({filterTypeFacetMetrics.installmentPlanCount} คน)</option>
+                <option value="fully_paid">🟢 ชำระครบถ้วนแล้ว ({filterTypeFacetMetrics.fullyPaidCount} คน)</option>
+                <option value="partial_paid">🟡 ชำระงวด 1 (ค้างงวด 2) ({filterTypeFacetMetrics.partialPaidCount} คน)</option>
+                <option value="unpaid">🔴 ค้างชำระ ({filterTypeFacetMetrics.totalOutstandingCount} คน)</option>
+                <option value="pending_review">⏳ รอตรวจสลิป ({filterTypeFacetMetrics.pendingReviewCount} คน)</option>
+                <option value="has_allergy">🍽️ แพ้อาหาร / ยา ({filterTypeFacetMetrics.allergyCount} คน)</option>
+                <option value="has_medical">🩺 มีโรคประจำตัว ({filterTypeFacetMetrics.medicalCount} คน)</option>
+                <option value="special_care">⭐ ดูแลเป็นพิเศษ ({filterTypeFacetMetrics.specialCareCount} คน)</option>
+                <option value="no_group">ยังไม่จัดกลุ่ม ({filterTypeFacetMetrics.noGroupCount} คน)</option>
+                <option value="has_group">จัดกลุ่มแล้ว ({filterTypeFacetMetrics.hasGroupCount} คน)</option>
+                <option value="no_room">ยังไม่จัดห้องนอน ({filterTypeFacetMetrics.noRoomCount} คน)</option>
+                <option value="has_room">จัดห้องนอนแล้ว ({filterTypeFacetMetrics.hasRoomCount} คน)</option>
               </select>
 
+              {/* 6. Blood Group Filter (Scoped to preceding filters!) */}
               <select
                 value={bloodFilter}
                 onChange={e => setBloodFilter(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-purple-500"
               >
-                <option value="all">ทุกกรุ๊ปเลือด</option>
-                <option value="A">กรุ๊ป A</option>
-                <option value="B">กรุ๊ป B</option>
-                <option value="O">กรุ๊ป O</option>
-                <option value="AB">กรุ๊ป AB</option>
+                <option value="all">🩸 ทุกกรุ๊ปเลือด ({bloodFacetMetrics.total} คน)</option>
+                <option value="A">กรุ๊ป A ({bloodFacetMetrics.bloodCounts.A} คน)</option>
+                <option value="B">กรุ๊ป B ({bloodFacetMetrics.bloodCounts.B} คน)</option>
+                <option value="O">กรุ๊ป O ({bloodFacetMetrics.bloodCounts.O} คน)</option>
+                <option value="AB">กรุ๊ป AB ({bloodFacetMetrics.bloodCounts.AB} คน)</option>
               </select>
             </div>
           </div>
@@ -7909,6 +8160,45 @@ export default function AdminDashboardView({
                                       title="🔒 ป้องกันการเผลอกดเปลี่ยนไซส์ที่หน้าแรก — คลิกเพื่อเปิดหน้าดูประวัติของบุคคลนี้หากต้องการแก้ไขไซส์เสื้อ"
                                     >
                                       <span>{szDetail.badgeText}</span>
+                                    </span>
+                                  );
+                                })()}
+                                {(() => {
+                                  const attInfo = getAttendanceConfirmationInfo(reg);
+                                  const nextStatus = attInfo.isConfirmed ? 'pending' : 'confirmed';
+                                  return (
+                                    <span
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (!onUpdateAllocation) return;
+                                        const targetUserId = reg.user_id || reg.id;
+                                        await onUpdateAllocation(targetUserId, {
+                                          attendance_confirmed_status: nextStatus,
+                                          attendance_confirmed_at: nextStatus === 'confirmed' ? new Date().toISOString() : null,
+                                          attendance_confirmed_by: 'admin'
+                                        });
+                                        triggerToast(
+                                          nextStatus === 'confirmed'
+                                            ? `✅ บันทึกยืนยันการเข้าร่วมของ ${resolvePersonFullNameWithTitle(reg).fullName} เรียบร้อยแล้ว`
+                                            : `⏳ เปลี่ยนสถานะเป็นรอยืนยันเรียบร้อยแล้ว`
+                                        );
+                                      }}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all inline-flex items-center gap-1 ${
+                                        attInfo.isConfirmed
+                                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                          : attInfo.isDeclined
+                                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                                          : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-300'
+                                      }`}
+                                      title="คลิกเพื่อสลับสถานะยืนยันการเข้าร่วมกิจกรรมจริง (สำหรับเตรียมอาหารและห้องพัก)"
+                                    >
+                                      <span>
+                                        {attInfo.isConfirmed
+                                          ? `✅ ยืนยันมาแน่${attInfo.needAccommodation ? ' • 🏨 พักหอ' : ' • 🏠 ไม่พักหอ'}`
+                                          : attInfo.isDeclined
+                                          ? '❌ แจ้งไม่สะดวกมา'
+                                          : '⏳ รอยืนยันเข้าร่วม (คลิกยืนยัน)'}
+                                      </span>
                                     </span>
                                   );
                                 })()}
@@ -14551,7 +14841,7 @@ export default function AdminDashboardView({
                   onChange={(e) => setMerchUniFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-950 border border-indigo-500/40 rounded-xl text-xs text-indigo-200 font-bold focus:outline-none"
                 >
-                  <option value="all">🏛️ ทุกมหาวิทยาลัย</option>
+                  <option value="all">🏛️ ทุกมหาวิทยาลัย ({sizeStats.totalShirts} ตัว)</option>
                   {universitySummary.list.map(u => (
                     <option key={u.key} value={u.key}>
                       {u.shortTag} ({u.totalShirts} ตัว)
@@ -14564,9 +14854,9 @@ export default function AdminDashboardView({
                   onChange={(e) => setMerchRoleFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-950 border border-purple-500/40 rounded-xl text-xs text-purple-200 font-bold focus:outline-none"
                 >
-                  <option value="all">👥 ทุกประเภท (ผู้สมัคร + Staff)</option>
-                  <option value="staff">🛠️ เฉพาะ Staff (280 บ.)</option>
-                  <option value="participant">🎓 เฉพาะผู้เข้าอบรมปกติ</option>
+                  <option value="all">👥 ทุกประเภท{merchUniFilter !== 'all' ? `ใน ${merchUniFilter}` : ''} ({merchFacetCounts.afterUniTotal} ตัว)</option>
+                  <option value="participant">🎓 เฉพาะผู้เข้าอบรมปกติ ({merchFacetCounts.participantCount} ตัว)</option>
+                  <option value="staff">🛠️ เฉพาะ Staff 280 บ. ({merchFacetCounts.staffCount} ตัว)</option>
                 </select>
 
                 <select
@@ -14574,9 +14864,9 @@ export default function AdminDashboardView({
                   onChange={(e) => setMerchSizeFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
                 >
-                  <option value="all">ไซส์ทั้งหมด</option>
+                  <option value="all">👕 ไซส์ทั้งหมด{merchUniFilter !== 'all' ? `ใน ${merchUniFilter}` : ''} ({merchFacetCounts.totalRoleShirts} ตัว)</option>
                   {sizeStats.STANDARD_SIZES.map(s => (
-                    <option key={s} value={s}>ไซส์ {s} ({sizeStats.counts[s] || 0} ตัว)</option>
+                    <option key={s} value={s}>ไซส์ {s} ({merchFacetCounts.sizeCounts[s] || 0} ตัว)</option>
                   ))}
                 </select>
 
@@ -14585,9 +14875,9 @@ export default function AdminDashboardView({
                   onChange={(e) => setMerchDeliveryFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
                 >
-                  <option value="all">การส่งมอบทั้งหมด</option>
-                  <option value="pending">⏳ ยังไม่ส่งมอบ (รอรับ)</option>
-                  <option value="received">✓ ส่งมอบแล้ว</option>
+                  <option value="all">📦 การส่งมอบทั้งหมด ({merchFacetCounts.deliveryTotal} รายการ)</option>
+                  <option value="pending">⏳ ยังไม่ส่งมอบ • รอรับ ({merchFacetCounts.deliveryPending} รายการ)</option>
+                  <option value="received">✓ ส่งมอบแล้ว ({merchFacetCounts.deliveryReceived} รายการ)</option>
                 </select>
 
                 <select
@@ -14595,10 +14885,10 @@ export default function AdminDashboardView({
                   onChange={(e) => setMerchPaymentFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
                 >
-                  <option value="all">การชำระเงินทั้งหมด</option>
-                  <option value="paid">✓ ชำระแล้ว</option>
-                  <option value="pending">⏳ รอตรวจสลิป</option>
-                  <option value="unpaid">ยังไม่ชำระ</option>
+                  <option value="all">💳 การชำระเงินทั้งหมด ({merchFacetCounts.paymentTotal} รายการ)</option>
+                  <option value="paid">✓ ชำระแล้ว ({merchFacetCounts.paymentPaid} รายการ)</option>
+                  <option value="pending">⏳ รอตรวจสลิป ({merchFacetCounts.paymentPending} รายการ)</option>
+                  <option value="unpaid">ยังไม่ชำระ ({merchFacetCounts.paymentUnpaid} รายการ)</option>
                 </select>
 
                 {(merchSearchQuery || merchUniFilter !== 'all' || merchRoleFilter !== 'all' || merchSizeFilter !== 'all' || merchDeliveryFilter !== 'all' || merchPaymentFilter !== 'all' || merchSourceFilter !== 'all') && (
@@ -17134,6 +17424,29 @@ export default function AdminDashboardView({
         <CateringHealthView
           registrations={registrations}
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
+          onRefresh={onRefreshRegistrations}
+        />
+      )}
+
+      {/* TAB: EXECUTIVE SUMMARY & ATTENDANCE CONFIRMATION HUB (DEDICATED FULL-PAGE VIEW WITH INDEPENDENT URL /admin/summary) */}
+      {activeTab === 'summary' && (
+        <AdminExecutiveSummaryView
+          registrations={registrations}
+          paymentConfig={paymentConfig}
+          merchandiseOrders={merchandiseOrders}
+          onUpdateAllocation={onUpdateAllocation}
+          onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
+          onOpenProfileModal={(reg) => handleOpenProfileModal(reg, 'info')}
+          onDeleteRegistration={handleDeleteReg}
+          triggerToast={triggerToast}
+          askConfirm={askConfirm}
+          onNavigateTab={(targetTab) => {
+            if (targetTab === 'id-cards' || targetTab === 'staff-accommodation' || targetTab === 'full-payment' || targetTab === 'round1-paid' || targetTab === 'unpaid') {
+              handleNavigateSubpage(targetTab);
+            } else {
+              handleTabChange(targetTab);
+            }
+          }}
           onRefresh={onRefreshRegistrations}
         />
       )}

@@ -88,6 +88,7 @@ import {
   OFFICIAL_GROUP_CHAT_URL
 } from '../data/defaultData';
 import RegistrationCountdown from '../components/RegistrationCountdown';
+import AttendanceConfirmationCard from '../components/AttendanceConfirmationCard';
 import { 
   getRegistrationScheduleStatus, 
   formatThaiDateTime 
@@ -2510,6 +2511,12 @@ export default function RegisterView({
             </div>
           </div>
 
+          <AttendanceConfirmationCard
+            myRegistration={myRegistration}
+            onUpdateRegistration={onUpdateRegistration}
+            onToast={triggerToast}
+          />
+
           <section className="rounded-3xl border border-orange-500/25 bg-gradient-to-br from-slate-900 via-[#0b1f3a] to-slate-950 p-4 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
@@ -2685,6 +2692,13 @@ export default function RegisterView({
             </div>
           );
         })()}
+
+        {/* ATTENDANCE CONFIRMATION / RSVP CARD (For preparing exact food & dormitory room quantities) */}
+        <AttendanceConfirmationCard
+          myRegistration={myRegistration}
+          onUpdateRegistration={onUpdateRegistration}
+          onToast={triggerToast}
+        />
 
         {/* Official JRE 2027 Participant Group Chat Banner (Mandatory Join) */}
         <section className="rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-purple-950/90 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 relative overflow-hidden">
