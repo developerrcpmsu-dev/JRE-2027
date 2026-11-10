@@ -268,11 +268,30 @@ export default function AdminDashboardView({
   const [pendingSpeakerCatDrafts, setPendingSpeakerCatDrafts] = useState({});
   const [isRefreshingData, setIsRefreshingData] = useState(false);
 
-  const getRoleBadgeLabel = (roleVal, isMsuRow) => {
-    const feeText = isMsuRow ? '280 บ.' : '480 บ.: เสื้อ 280 + ที่พัก 200';
+  const getRoleBadgeLabel = (roleVal, isMsuRow, reg = null) => {
+    let extra = {};
+    if (reg?.special_notes && typeof reg.special_notes === 'string' && reg.special_notes.startsWith('{')) {
+      try { extra = JSON.parse(reg.special_notes); } catch (e) {}
+    } else if (reg?.special_notes && typeof reg.special_notes === 'object') {
+      extra = reg.special_notes;
+    }
+
+    const isCardOnly = Boolean(
+      reg?.staff_id_card_only === true ||
+      extra.staff_id_card_only === true ||
+      reg?.shirt_size === '-' ||
+      extra.shirt_size === '-' ||
+      roleVal === 'mc' ||
+      reg?.role === 'mc' ||
+      (reg?.callsign && String(reg.callsign).includes('MC')) ||
+      (extra.callsign && String(extra.callsign).includes('MC')) ||
+      (Number(reg?.payment_amount || 0) === 0 && !reg?.payment_slip_url && !reg?.installment_1_slip_url)
+    );
+
+    const feeText = isCardOnly ? '0 บ.' : (isMsuRow ? '280 บ.' : '480 บ.: เสื้อ 280 + ที่พัก 200');
     if (roleVal === 'committee') return `🛠️ (STAFF) คณะกรรมการดำเนินงาน (${feeText})`;
     if (roleVal === 'dev') return `💻 (STAFF) ผู้พัฒนาระบบ Dev (${feeText})`;
-    if (roleVal === 'mc') return `🎤 (STAFF) พิธีกรดำเนินรายการ (${feeText})`;
+    if (roleVal === 'mc') return `🎤 (STAFF) พิธีกรดำเนินรายการ (0 บ.)`;
     if (roleVal === 'photographer') return `📸 (STAFF) ช่างภาพ / โสตฯ (${feeText})`;
     if (roleVal === 'staff') return `🛠️ (STAFF) สตาฟโครงการทั่วไป (${feeText})`;
     return isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)';
@@ -8347,7 +8366,7 @@ export default function AdminDashboardView({
                                           title="🔒 ล็อคป้องกันการแก้ไขโดยไม่ตั้งใจ — กรุณาเปิด '🛡️ โหมดแก้ไขขั้นสูง' ด้านบนก่อน จึงจะสามารถเลือกดรอปดาวน์และกดบันทึกได้"
                                         >
                                           <Lock className="w-2.5 h-2.5 opacity-80 shrink-0" />
-                                          <span>{getRoleBadgeLabel(currentRoleVal, isMsuRow)}</span>
+                                          <span>{getRoleBadgeLabel(currentRoleVal, isMsuRow, reg)}</span>
                                         </span>
                                       ) : (
                                         <div className="inline-flex flex-wrap items-center gap-1">
@@ -8372,19 +8391,19 @@ export default function AdminDashboardView({
                                               {isMsuRow ? '🏫 ผู้เข้าอบรม มมส (650 บ.)' : '🏢 ผู้เข้าอบรม ต่างสถาบัน (850 บ.)'}
                                             </option>
                                             <option value="committee" className="bg-slate-900 text-purple-200">
-                                              🛠️ (STAFF) คณะกรรมการดำเนินงาน (280 บ.)
+                                              🛠️ (STAFF) คณะกรรมการดำเนินงาน ({isMsuRow ? '280 บ.' : '480 บ.'})
                                             </option>
                                             <option value="dev" className="bg-slate-900 text-purple-200">
-                                              💻 (STAFF) ผู้พัฒนาระบบ Dev (280 บ.)
+                                              💻 (STAFF) ผู้พัฒนาระบบ Dev ({isMsuRow ? '280 บ.' : '480 บ.'})
                                             </option>
                                             <option value="mc" className="bg-slate-900 text-purple-200">
-                                              🎤 (STAFF) พิธีกรดำเนินรายการ (280 บ.)
+                                              🎤 (STAFF) พิธีกรดำเนินรายการ (0 บ. • บัตรอย่างเดียว)
                                             </option>
                                             <option value="photographer" className="bg-slate-900 text-purple-200">
-                                              📸 (STAFF) ช่างภาพ / โสตฯ (280 บ.)
+                                              📸 (STAFF) ช่างภาพ / โสตฯ ({isMsuRow ? '280 บ.' : '480 บ.'})
                                             </option>
                                             <option value="staff" className="bg-slate-900 text-purple-200">
-                                              🛠️ (STAFF) สตาฟโครงการทั่วไป (280 บ.)
+                                              🛠️ (STAFF) สตาฟโครงการทั่วไป ({isMsuRow ? '280 บ.' : '480 บ.'})
                                             </option>
                                           </select>
 
@@ -8506,9 +8525,11 @@ export default function AdminDashboardView({
                               >
                                 <div className="flex items-center gap-1.5">
                                   <span className="px-1.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/40 rounded text-[9px] font-black">
-                                    🛠️ {staffPayInfo.staffRoleLabel} ({staffPayInfo.totalStaffFee} บ.)
+                                    🛠️ {staffPayInfo.staffRoleLabel}
                                   </span>
-                                  {isStaffFullyPaid ? (
+                                  {staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0 ? (
+                                    <span className="text-[10px] text-sky-300 font-bold">✓ บัตรอย่างเดียว (0 บ.)</span>
+                                  ) : isStaffFullyPaid ? (
                                     <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระครบแล้ว</span>
                                   ) : isStaffPending ? (
                                     <span className="text-[10px] text-amber-300 font-bold animate-pulse">⏳ รอตรวจสลิป</span>
@@ -8522,7 +8543,7 @@ export default function AdminDashboardView({
                                   {staffPayInfo.isMsu ? (
                                     staffPayInfo.isOverpaid
                                       ? `มมส 280 บ. • โอนจริง ${staffPayInfo.actualSlipAmount} บ. (เกิน +${staffPayInfo.overpaidAmount} บ.)`
-                                      : 'Staff มมส: เฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)'
+                                      : (staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0 ? 'Staff มมส: 0 บ. (บัตร Staff อย่างเดียว • ไม่รับเสื้อ • ไม่มีค่าใช้จ่าย)' : 'Staff มมส: เฉพาะค่าเสื้อ 280 บ. (ไม่มีค่าที่พัก)')
                                   ) : staffPayInfo.isOffsetApplied ? (
                                     `โอน ${staffPayInfo.r1SlipAmount} บ. → หักเสื้อ 280 + หักที่พัก ${staffPayInfo.offsetToAccommodation} บ.`
                                   ) : (
