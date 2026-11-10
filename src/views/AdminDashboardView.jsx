@@ -105,6 +105,8 @@ import {
   getCleanSpecialNotes,
   hasSpecialCareCondition,
   isHealthSharedWithRoommate,
+  getParticipantPhoto,
+  getMedicalEquipmentNeeded,
   hasHealthCondition,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
@@ -122,6 +124,7 @@ import AdminExecutiveSummaryView from './AdminExecutiveSummaryView';
 import AdminIDCardsDirectoryView from './AdminIDCardsDirectoryView';
 import AdminRoomsView from './AdminRoomsView';
 import AdminDocumentsView from './AdminDocumentsView';
+import AdminMedicalView from './AdminMedicalView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -201,6 +204,7 @@ export default function AdminDashboardView({
     if (tab === 'summary' || tab === 'overview' || tab === 'attendance' || tab === 'rsvp') return 'summary';
     if (tab === 'rooms' || tab === 'room' || tab === 'accommodation' || tab === 'dorm' || tab === 'dormitory') return 'rooms';
     if (tab === 'documents' || tab === 'document' || tab === 'rosters' || tab === 'roster' || tab === 'signing') return 'documents';
+    if (tab === 'medical' || tab === 'dispensary' || tab === 'clinic' || tab === 'emr' || tab === 'firstaid' || tab === 'pharmacy') return 'medical';
     return tab || 'applicants';
   };
 
@@ -307,6 +311,7 @@ export default function AdminDashboardView({
     if (t === 'summary') return 'summary';
     if (t === 'rooms') return 'rooms';
     if (t === 'documents') return 'documents';
+    if (t === 'medical') return 'medical';
     return t;
   };
 
@@ -1345,6 +1350,7 @@ export default function AdminDashboardView({
   const [modalCustomShirtNote, setModalCustomShirtNote] = useState('');
   const [modalSpecialCare, setModalSpecialCare] = useState(false);
   const [modalNotes, setModalNotes] = useState('');
+  const [modalMedicalEquipmentNeeded, setModalMedicalEquipmentNeeded] = useState('');
   const [modalPhone, setModalPhone] = useState('');
   const [modalInstitution, setModalInstitution] = useState('');
   const [modalMedical, setModalMedical] = useState('');
@@ -2519,6 +2525,7 @@ export default function AdminDashboardView({
     setModalCustomShirtNote(reg.custom_shirt_note || '');
     setModalSpecialCare(hasSpecialCareCondition(reg));
     setModalNotes(getCleanSpecialNotes(reg) || '');
+    setModalMedicalEquipmentNeeded(getMedicalEquipmentNeeded(reg) || reg.medical_equipment_needed || '');
     setModalPhone(reg.phone || '');
     setModalInstitution(reg.institution || '');
     setModalMedical(getApplicantMedical(reg));
@@ -2779,6 +2786,7 @@ export default function AdminDashboardView({
         custom_shirt_note: trimmedCustomNote,
         is_special_care: modalSpecialCare,
         special_notes: modalNotes.trim(),
+        medical_equipment_needed: modalMedicalEquipmentNeeded.trim(),
         phone: modalPhone.trim(),
         institution: cleanInstitution,
         medical_history: modalMedical.trim(),
@@ -5956,7 +5964,9 @@ export default function AdminDashboardView({
               <option value="sub_round1-paid">⏳ ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน)</option>
               <option value="sub_unpaid">🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน)</option>
               <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
+              <option value="medical">🩺 หน่วยพยาบาลสนาม & เบิกจ่ายยา/เวชระเบียน</option>
               <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 1 (ห้อง 101 - 110)</option>
+              <option value="documents">📑 ศูนย์รวมใบเซ็นชื่อทางการ 3-in-1</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
@@ -6065,6 +6075,18 @@ export default function AdminDashboardView({
           >
             <UtensilsCrossed className="w-4 h-4 text-amber-400 shrink-0" />
             <span>อาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('medical')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'medical'
+                ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-400/50 font-black'
+                : 'text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/50 border border-rose-500/40'
+            }`}
+          >
+            <Stethoscope className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>🩺 พยาบาล & เบิกจ่ายยา</span>
           </button>
 
           <button
@@ -10130,6 +10152,24 @@ export default function AdminDashboardView({
                         !isEditingProfileModal 
                           ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
                           : 'bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-emerald-300 flex items-center gap-1.5 mb-1">
+                      <Stethoscope className="w-3.5 h-3.5 text-emerald-400" />
+                      🩺 ยาและเวชภัณฑ์ที่ต้องเตรียม (Medical Equipment & Medicine Prep)
+                    </label>
+                    <textarea
+                      rows="2"
+                      disabled={!isEditingProfileModal}
+                      value={modalMedicalEquipmentNeeded}
+                      onChange={e => setModalMedicalEquipmentNeeded(e.target.value)}
+                      placeholder="ระบุยาหรือเวชภัณฑ์ที่ต้องจัดเตรียมไว้ให้ผู้สมัคร เช่น ยาพาราเซตามอล, ยาแก้แพ้, ยาทากันยุง, คาลาไมน์, ยาประจำตัว (คนปกติก็สามารถขอเตรียมยาไว้ได้)"
+                      className={`w-full px-3 py-2 rounded-xl text-xs text-white transition-all ${
+                        !isEditingProfileModal 
+                          ? 'bg-slate-950/70 border border-slate-800 cursor-not-allowed opacity-80' 
+                          : 'bg-slate-900 border border-emerald-500/40 focus:ring-2 focus:ring-emerald-500'
                       }`}
                     />
                   </div>
@@ -17671,6 +17711,17 @@ export default function AdminDashboardView({
           registrations={registrations}
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
           onRefresh={onRefreshRegistrations}
+        />
+      )}
+
+      {/* TAB: MEDICAL DISPENSARY & EMR RECORDS (DEDICATED FULL-PAGE VIEW WITH INDEPENDENT URL /admin/medical) */}
+      {activeTab === 'medical' && (
+        <AdminMedicalView
+          registrations={registrations}
+          currentUser={currentUser || user}
+          onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
+          onUpdateAllocation={onUpdateAllocation}
+          triggerToast={triggerToast}
         />
       )}
 

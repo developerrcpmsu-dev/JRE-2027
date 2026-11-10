@@ -59,7 +59,8 @@ const STORAGE_KEYS = {
   AUTH_USER: 'jre2027_auth_user',
   ADMIN_AUTH: 'jre2027_is_admin',
   TEAM: 'jre2027_team',
-  SPEAKERS: 'jre2027_speakers'
+  SPEAKERS: 'jre2027_speakers',
+  MEDICAL_LOGS: 'jre2027_medical_logs'
 };
 
 // In-memory session cache so full objects (including base64 photos) remain accessible
@@ -275,6 +276,7 @@ const unpackRegistration = (row) => {
     shirt_size: extra.shirt_size !== undefined ? extra.shirt_size : row.shirt_size,
     staff_id_card_only: extra.staff_id_card_only !== undefined ? extra.staff_id_card_only : row.staff_id_card_only,
     share_health_with_roommate: shareConsent,
+    medical_equipment_needed: extra.medical_equipment_needed || row.medical_equipment_needed || '',
     special_notes: cleanSpecialNotes,
     raw_special_notes: row.special_notes
   };
@@ -436,6 +438,7 @@ const packRegistrationForSupabase = (fullData) => {
   const extra = {
     user_notes: cleanNotes,
     share_health_with_roommate: fullData.share_health_with_roommate !== undefined ? Boolean(fullData.share_health_with_roommate) : true,
+    medical_equipment_needed: fullData.medical_equipment_needed || '',
     full_name_affiliation: fullData.full_name_affiliation || '',
     title_th: fullData.title_th || '',
     title_other_th: fullData.title_other_th || '',
@@ -1766,6 +1769,74 @@ export const DataService = {
     localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(speakers));
     broadcastRealtimeChange('speakers_config', { action: 'save' });
     return speakers;
+  },
+
+  // MEDICAL DISPENSE & FIELD EMR RECORDS (ระบบเวชระเบียนและการเบิกจ่ายยาประจำโครงการ)
+  async getMedicalDispenseLogs() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('project_settings')
+          .select('value')
+          .eq('key', 'medical_dispense_logs')
+          .maybeSingle();
+        if (!error && data?.value && Array.isArray(data.value)) {
+          safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(data.value));
+          return data.value;
+        }
+      } catch (e) {
+        console.warn('Supabase getMedicalDispenseLogs notice, fallback to local', e);
+      }
+    }
+    const raw = localStorage.getItem(STORAGE_KEYS.MEDICAL_LOGS);
+    try {
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  async saveMedicalDispenseLog(log) {
+    const existing = await this.getMedicalDispenseLogs();
+    const newEntry = {
+      ...log,
+      id: log.id || `dispense_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      created_at: log.created_at || new Date().toISOString()
+    };
+    const updated = [
+      newEntry,
+      ...existing.filter(item => item.id !== newEntry.id)
+    ];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ key: 'medical_dispense_logs', value: updated, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn('Supabase saveMedicalDispenseLog error', e);
+      }
+    }
+    safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(updated));
+    broadcastRealtimeChange('medical_dispense_logs', { action: 'save', logId: newEntry.id });
+    return newEntry;
+  },
+
+  async deleteMedicalDispenseLog(id) {
+    const existing = await this.getMedicalDispenseLogs();
+    const updated = existing.filter(item => item.id !== id);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('project_settings')
+          .upsert({ key: 'medical_dispense_logs', value: updated, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn('Supabase deleteMedicalDispenseLog error', e);
+      }
+    }
+    safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(updated));
+    broadcastRealtimeChange('medical_dispense_logs', { action: 'delete', logId: id });
+    return updated;
   },
 
   // USER ACCOUNTS & SECURE AUTHENTICATION (Password Hashing, Verification & Admin Management)

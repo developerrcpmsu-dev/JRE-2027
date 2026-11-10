@@ -143,6 +143,11 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'documents', canonicalPath: '/admin/documents' };
   }
 
+  // Standalone shortcuts for Medical Dispensary & EMR Records (/medical, /dispensary, /clinic, /admin/medical)
+  if (first === 'medical' || first === 'dispensary' || first === 'clinic' || first === 'emr' || first === 'firstaid' || first === 'first-aid' || first === 'pharmacy') {
+    return { mainTab: 'admin', subRoute: 'medical', canonicalPath: '/admin/medical' };
+  }
+
   // Standalone shortcuts for Staff Accommodation & Payment Filter Pages
   if (first === 'staff-accommodation' || first === 'staff-hotel' || first === 'staff-refund') {
     return { mainTab: 'admin', subRoute: 'staff-accommodation', canonicalPath: '/admin/staff-accommodation' };
@@ -249,6 +254,14 @@ export function parseCurrentRoute() {
       'catering-health': 'catering',
       'food': 'catering',
       'welfare': 'catering',
+
+      'medical': 'medical',
+      'dispensary': 'medical',
+      'clinic': 'medical',
+      'emr': 'medical',
+      'pharmacy': 'medical',
+      'firstaid': 'medical',
+      'first-aid': 'medical',
 
       'rooms': 'rooms',
       'room': 'rooms',
@@ -415,6 +428,7 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
       if (subRoute === 'rooms' || subRoute === 'room' || subRoute === 'accommodation' || subRoute === 'dorm' || subRoute === 'dormitory') return '/admin/rooms';
       if (subRoute === 'documents' || subRoute === 'rosters' || subRoute === 'document' || subRoute === 'roster' || subRoute === 'signing') return '/admin/documents';
+      if (subRoute === 'medical' || subRoute === 'dispensary' || subRoute === 'clinic' || subRoute === 'emr' || subRoute === 'pharmacy') return '/admin/medical';
       if (subRoute === 'catering' || subRoute === 'health' || subRoute === 'catering-health' || subRoute === 'food' || subRoute === 'welfare') return '/admin/catering';
       if (subRoute === 'staff-accommodation' || subRoute === 'staff_accommodation' || subRoute === 'staff-hotel' || subRoute === 'staff-refund') return '/admin/staff-accommodation';
       if (subRoute === 'full-payment' || subRoute === 'full_plan' || subRoute === 'full-plan') return '/admin/full-payment';

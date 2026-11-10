@@ -88,6 +88,8 @@ import {
   normalizeCallsignSpacing,
   isHealthSharedWithRoommate,
   getCleanSpecialNotes,
+  getMedicalEquipmentNeeded,
+  getParticipantPhoto,
   resolveMessageSenderInfo,
   OFFICIAL_GROUP_CHAT_URL
 } from '../data/defaultData';
@@ -443,6 +445,45 @@ export default function RegisterView({
 
   useEffect(() => {
     setConsentHealthShare(isHealthSharedWithRoommate(myRegistration));
+  }, [myRegistration]);
+
+  // Medicine & Equipment Preparation request
+  const [userMedicalEquipment, setUserMedicalEquipment] = useState(() => getMedicalEquipmentNeeded(myRegistration));
+  const [isSavingMedEquip, setIsSavingMedEquip] = useState(false);
+  const [medDispenseLogs, setMedDispenseLogs] = useState([]);
+  const [isLoadingMedLogs, setIsLoadingMedLogs] = useState(false);
+
+  useEffect(() => {
+    setUserMedicalEquipment(getMedicalEquipmentNeeded(myRegistration));
+  }, [myRegistration]);
+
+  // Load personal medical dispense logs
+  useEffect(() => {
+    if (!myRegistration) return;
+    let isCancelled = false;
+    const fetchLogs = async () => {
+      setIsLoadingMedLogs(true);
+      try {
+        const logs = await DataService.getMedicalDispenseLogs();
+        if (!isCancelled) {
+          const myId = myRegistration.id || myRegistration.user_id;
+          const myName = myRegistration.first_name;
+          const myCallsign = myRegistration.callsign;
+          const filtered = (logs || []).filter(l => 
+            (myId && (l.recipient_id === myId || l.recipient_user_id === myId)) ||
+            (myName && l.recipient_name && l.recipient_name.includes(myName)) ||
+            (myCallsign && l.recipient_callsign && l.recipient_callsign === myCallsign)
+          );
+          setMedDispenseLogs(filtered);
+        }
+      } catch (err) {
+        console.error('Error fetching medical dispense logs:', err);
+      } finally {
+        if (!isCancelled) setIsLoadingMedLogs(false);
+      }
+    };
+    fetchLogs();
+    return () => { isCancelled = true; };
   }, [myRegistration]);
 
   const handleTitleThChange = (newTitleTh) => {
@@ -2782,15 +2823,20 @@ export default function RegisterView({
             <div className="flex items-start sm:items-center gap-4">
               <div className="relative group shrink-0">
                 <img
-                  src={myRegistration.id_card_photo || myRegistration.user_avatar || user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'}
+                  src={getParticipantPhoto(myRegistration, user) || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'}
                   alt="Avatar"
-                  className="w-20 h-20 rounded-2xl object-cover border-2 border-rescue-500 shadow-md"
+                  onClick={() => {
+                    const photo = getParticipantPhoto(myRegistration, user);
+                    if (photo) setPreviewSlipModal(photo);
+                  }}
+                  className="w-20 h-20 rounded-2xl object-cover border-2 border-rescue-500 shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                  title="คลิกเพื่อขยายดูรูปภาพ (Lightbox Popup)"
                 />
-                {myRegistration.id_card_photo && (
+                {getParticipantPhoto(myRegistration, user) && (
                   <button
                     type="button"
-                    onClick={() => setPreviewSlipModal(myRegistration.id_card_photo)}
-                    className="absolute -bottom-1 -right-1 p-1 bg-slate-950/90 hover:bg-slate-900 text-rescue-400 border border-slate-700 rounded-lg text-[10px] font-bold shadow flex items-center gap-0.5"
+                    onClick={() => setPreviewSlipModal(getParticipantPhoto(myRegistration, user))}
+                    className="absolute -bottom-1 -right-1 p-1 bg-slate-950/90 hover:bg-slate-900 text-rescue-400 border border-slate-700 rounded-lg text-[10px] font-bold shadow flex items-center gap-0.5 cursor-pointer"
                     title="คลิกดูรูปถ่ายเต็มจอ"
                   >
                     <Maximize2 className="w-3 h-3" />
@@ -4417,6 +4463,163 @@ export default function RegisterView({
                   </div>
                 );
               })()}
+            </div>
+          </div>
+
+          {/* SECTION: 🩺 คำขอเตรียมยา / เวชภัณฑ์ประจำตัว (Medical Equipment & Medicine Request) */}
+          <div className="mt-6 p-5 sm:p-6 rounded-3xl bg-slate-950/80 border border-emerald-500/30 space-y-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                  <Stethoscope className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
+                    <span>🩺 คำขอเตรียมยา / เวชภัณฑ์ภาคสนาม</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Medical Support
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    แจ้งรายการยาหรือเวชภัณฑ์ที่ต้องการให้ทีมแพทย์สนามและฝ่ายพยาบาลจัดเตรียมล่วงหน้า (ทั้งผู้มีโรคประจำตัวและคนปกติ)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isSavingMedEquip || userMedicalEquipment === (getMedicalEquipmentNeeded(myRegistration) || '')}
+                onClick={async () => {
+                  setIsSavingMedEquip(true);
+                  try {
+                    const targetId = myRegistration.id || myRegistration.user_id;
+                    const val = userMedicalEquipment.trim();
+                    if (onUpdateRegistration) {
+                      await onUpdateRegistration(targetId, { medical_equipment_needed: val });
+                    } else {
+                      await DataService.updateRegistrationDetails(targetId, { medical_equipment_needed: val });
+                    }
+                    triggerToast('✓ บันทึกคำขอเตรียมยาและเวชภัณฑ์เรียบร้อยแล้ว คณะทำงานและทีมแพทย์สนามจะจัดเตรียมไว้ให้ครับ', 'success');
+                  } catch (err) {
+                    console.error(err);
+                    triggerToast('เกิดข้อผิดพลาดในการบันทึกคำขอเตรียมยา', 'error');
+                  } finally {
+                    setIsSavingMedEquip(false);
+                  }
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
+                  userMedicalEquipment !== (getMedicalEquipmentNeeded(myRegistration) || '')
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
+                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                }`}
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingMedEquip ? 'กำลังบันทึก...' : '💾 บันทึกคำขอเตรียมยา'}</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <textarea
+                rows="3"
+                value={userMedicalEquipment}
+                onChange={e => setUserMedicalEquipment(e.target.value)}
+                placeholder="เช่น ขอยาพาราเซตามอลสำรอง, ขอยาทากันยุง / คาลาไมน์แก้คัน, ยาแก้แพ้แก้คัดจมูก, ผงเกลือแร่ ORS, ผ้าพันแผล หรือระบุยาประจำตัวที่ต้องนำติดตัวมา"
+                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1">
+                  <span>💡 คำแนะนำ:</span>
+                  <span className="text-slate-300">กดปุ่มเพื่อเพิ่มข้อความอัตโนมัติ:</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    'ยาพาราเซตามอล',
+                    'ยาแก้แพ้ / คัดจมูก',
+                    'ผงเกลือแร่ ORS',
+                    'ยาทากันยุง / คาลาไมน์',
+                    'พลาสเตอร์ยา / ทำแผล'
+                  ].map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const cur = userMedicalEquipment.trim();
+                        if (!cur.includes(tag)) {
+                          setUserMedicalEquipment(cur ? `${cur}, ${tag}` : tag);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500/40 border border-slate-700 text-[10px] text-slate-300 cursor-pointer transition-colors"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* PERSONAL MEDICAL DISPENSE RECORDS (เวชระเบียนสนามของผู้ใช้) */}
+            <div className="pt-4 border-t border-slate-800/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                  <HeartPulse className="w-4 h-4 text-rose-400" />
+                  <span>📋 ประวัติการรับยาและเวชระเบียนสนามของคุณ (Field EMR Records)</span>
+                </h4>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                  {medDispenseLogs.length} รายการ
+                </span>
+              </div>
+
+              {isLoadingMedLogs ? (
+                <div className="p-4 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl">
+                  กำลังโหลดข้อมูลเวชระเบียน...
+                </div>
+              ) : medDispenseLogs.length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-500">
+                  ยังไม่มีประวัติการเบิกรับยา ณ จุดปฐมพยาบาลสนาม JRE 2027 (หากท่านมารับยา ระบบจะบันทึกและแสดงที่นี่แบบเรียลไทม์)
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {medDispenseLogs.map((log, idx) => (
+                    <div
+                      key={log.id || idx}
+                      className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 space-y-2 text-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
+                            จ่ายยาแล้ว ✓
+                          </span>
+                          <span className="font-bold text-white">
+                            อาการ: <span className="text-amber-300">{log.symptoms || log.chief_complaint || 'ไม่ระบุ'}</span>
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          📅 {log.dispensed_at || log.created_at || 'เมื่อเร็วๆ นี้'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">💊 ยาและเวชภัณฑ์ที่ได้รับ:</span>
+                          <span className="font-bold text-emerald-300">{log.medications_dispensed || '-'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">🩺 คำแนะนำในการใช้ยา:</span>
+                          <span className="text-slate-200">{log.instructions || 'ตามแพทย์/พยาบาลสั่ง'}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-1.5 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-400">
+                        <span>
+                          👨‍⚕️ ผู้จ่ายยา: <strong className="text-purple-300">{log.dispenser_name || 'เจ้าหน้าที่พยาบาล'}</strong>
+                          {log.dispenser_callsign && <span className="font-mono text-slate-400"> ({log.dispenser_callsign})</span>}
+                        </span>
+                        <span className="font-mono text-slate-500">ID: {log.id ? String(log.id).slice(0, 8) : `#${idx + 1}`}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

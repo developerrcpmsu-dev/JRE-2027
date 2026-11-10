@@ -2421,6 +2421,88 @@ export const isHealthSharedWithRoommate = (reg) => {
   return true;
 };
 
+/**
+ * ดึงภาพถ่ายประจำตัวของผู้เข้าร่วม โดยให้ความสำคัญสูงสุดกับรูปถ่ายที่อัปโหลดจริง (ID Card Portrait)
+ * แทนรูปโปรไฟล์อีเมล Google เพื่อให้ภาพตรงกับตัวตนจริงในทุกจุดของระบบ
+ */
+export const getParticipantPhoto = (reg, user = null) => {
+  if (!reg && !user) return '';
+
+  // 1. ลำดับความสำคัญสูงสุด: รูปถ่ายสำหรับทำบัตรประจำตัว / ภาพถ่ายหน้าตรงที่อัปโหลดเอง
+  if (reg?.id_card_photo && typeof reg.id_card_photo === 'string' && reg.id_card_photo.trim()) {
+    return reg.id_card_photo.trim();
+  }
+  if (reg?.id_card_url && typeof reg.id_card_url === 'string' && reg.id_card_url.trim()) {
+    return reg.id_card_url.trim();
+  }
+
+  // 2. ลำดับรอง: รูปอวาตาร์ที่บันทึกในใบสมัครที่ไม่ใช่รูปโปรไฟล์อีเมล Google ทั่วไป
+  if (
+    reg?.user_avatar &&
+    typeof reg.user_avatar === 'string' &&
+    reg.user_avatar.trim() &&
+    !reg.user_avatar.includes('googleusercontent.com')
+  ) {
+    return reg.user_avatar.trim();
+  }
+  if (
+    reg?.avatar &&
+    typeof reg.avatar === 'string' &&
+    reg.avatar.trim() &&
+    !reg.avatar.includes('googleusercontent.com')
+  ) {
+    return reg.avatar.trim();
+  }
+
+  // 3. Fallback กรณีไม่มีรูปถ่ายอัปโหลดเลย ให้ใช้ user_avatar หรือรูปจาก session
+  if (reg?.user_avatar && typeof reg.user_avatar === 'string' && reg.user_avatar.trim()) {
+    return reg.user_avatar.trim();
+  }
+  if (user?.avatar && typeof user.avatar === 'string' && user.avatar.trim()) {
+    return user.avatar.trim();
+  }
+  if (user?.photoURL && typeof user.photoURL === 'string' && user.photoURL.trim()) {
+    return user.photoURL.trim();
+  }
+
+  return '';
+};
+
+/**
+ * ดึงรายการยาและอุปกรณ์ทางการแพทย์ที่ต้องเตรียมให้ผู้สมัครท่านนี้
+ * รองรับทั้งผู้มีโรคประจำตัว/ประวัติแพ้ และผู้มีสุขภาพปกติที่ขอให้เตรียมยา/เวชภัณฑ์สำรองไว้ล่วงหน้า
+ */
+export const getMedicalEquipmentNeeded = (reg) => {
+  if (!reg) return '';
+  if (reg.medical_equipment_needed && typeof reg.medical_equipment_needed === 'string') {
+    const trimmed = reg.medical_equipment_needed.trim();
+    if (trimmed && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(trimmed.toLowerCase())) {
+      return trimmed;
+    }
+  }
+
+  if (reg.special_notes && typeof reg.special_notes === 'string' && reg.special_notes.startsWith('{')) {
+    try {
+      const p = JSON.parse(reg.special_notes);
+      if (p.medical_equipment_needed && typeof p.medical_equipment_needed === 'string') {
+        const trimmed = p.medical_equipment_needed.trim();
+        if (trimmed && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(trimmed.toLowerCase())) {
+          return trimmed;
+        }
+      }
+    } catch (e) {}
+  } else if (reg.special_notes && typeof reg.special_notes === 'object') {
+    if (reg.special_notes.medical_equipment_needed && typeof reg.special_notes.medical_equipment_needed === 'string') {
+      const trimmed = reg.special_notes.medical_equipment_needed.trim();
+      if (trimmed && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(trimmed.toLowerCase())) {
+        return trimmed;
+      }
+    }
+  }
+
+  return '';
+};
+
 export const getCateringCategory = (text) => {
   if (!text || typeof text !== 'string') return 'ทั่วไป';
   const s = text.toLowerCase();

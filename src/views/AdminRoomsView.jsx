@@ -37,8 +37,11 @@ import {
   resolvePersonFullNameWithTitle,
   normalizeCallsignSpacing,
   isHealthSharedWithRoommate,
-  getCleanSpecialNotes
+  getCleanSpecialNotes,
+  getParticipantPhoto,
+  getMedicalEquipmentNeeded
 } from '../data/defaultData';
+import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import {
   exportDormitoryRosterToExcel,
   exportElementToPng,
@@ -57,6 +60,7 @@ export default function AdminRoomsView({
   const [roomFilter, setRoomFilter] = useState('all'); // 'all' or '101'..'110'
   const [copiedAll, setCopiedAll] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
+  const [previewDocModal, setPreviewDocModal] = useState(null);
 
   // Define the 10 rooms of Kut Rang Dormitory (Floor 1)
   const ROOM_CONFIGS = useMemo(() => [
@@ -127,7 +131,8 @@ export default function AdminRoomsView({
         gender,
         phone: reg.phone || extra.phone || '-',
         email: reg.user_email || '',
-        avatar: reg.user_avatar || '',
+        avatar: getParticipantPhoto(reg) || reg.user_avatar || '',
+        medicalEquipmentNeeded: getMedicalEquipmentNeeded(reg),
         institution: reg.institution || '-',
         uniShort: uniInfo.shortTag,
         uniName: uniInfo.fullName,
@@ -300,13 +305,14 @@ export default function AdminRoomsView({
 
   // Helper to trigger clean paper print
   const handlePrint = () => {
+    setViewMode('table');
     document.body.classList.add('rooms-print-active');
     setTimeout(() => {
       window.print();
       setTimeout(() => {
         document.body.classList.remove('rooms-print-active');
       }, 1000);
-    }, 150);
+    }, 250);
   };
 
   // Helper to open interactive profile popup
@@ -322,7 +328,7 @@ export default function AdminRoomsView({
   return (
     <div className="space-y-6">
       {/* HEADER BANNER */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-950 via-slate-900 to-indigo-950 border border-sky-500/30 p-6 sm:p-8 shadow-2xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-950 via-slate-900 to-indigo-950 border border-sky-500/30 p-6 sm:p-8 shadow-2xl no-print">
         <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -435,6 +441,16 @@ export default function AdminRoomsView({
               {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedAll ? 'คัดลอกแล้ว ✓' : 'คัดลอกผัง'}</span>
             </button>
+
+            {/* Official Signing Documents Hub */}
+            <a
+              href="/admin/documents"
+              className="px-3.5 py-2 rounded-2xl bg-indigo-950/80 hover:bg-indigo-900/90 text-indigo-200 border border-indigo-500/50 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+              title="เปิดหน้ารวมเอกสารใบลงนามจุดลงทะเบียน (เซ็นชื่อเข้าร่วม / รับเสื้อ / เข้าห้องพัก)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+              <span>📑 ใบเซ็นชื่อจุดลงทะเบียน</span>
+            </a>
 
             {/* Print paper */}
             <button
@@ -633,21 +649,50 @@ export default function AdminRoomsView({
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
-                                      <span>{p1.name}</span>
-                                      {p1.nickname !== '-' && (
-                                        <span className="text-amber-300 font-normal">({p1.nickname})</span>
-                                      )}
-                                    </div>
-                                    <div className="text-[11px] text-sky-200/80 font-mono mt-0.5">
-                                      {p1.callsign} • โทร: {p1.phone}
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {p1.avatar ? (
+                                      <img
+                                        src={p1.avatar}
+                                        alt={p1.name}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPreviewDocModal({
+                                            title: `ภาพประจำตัว: ${p1.name}`,
+                                            url: p1.avatar,
+                                            file_type: 'image'
+                                          });
+                                        }}
+                                        className="w-8 h-8 rounded-full object-cover border border-sky-400/50 hover:scale-110 transition-transform cursor-pointer shadow-sm shrink-0"
+                                        title="คลิกเพื่อขยายดูรูปภาพ (Lightbox Popup)"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700">
+                                        {p1.firstName?.charAt(0) || '👤'}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5 truncate">
+                                        <span>{p1.name}</span>
+                                        {p1.nickname !== '-' && (
+                                          <span className="text-amber-300 font-normal">({p1.nickname})</span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-sky-200/80 font-mono mt-0.5 truncate">
+                                        {p1.callsign} • โทร: {p1.phone}
+                                      </div>
                                     </div>
                                   </div>
                                   <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
+                                {p1.medicalEquipmentNeeded && (
+                                  <div className="mt-1.5 text-[10px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md">
+                                    <Stethoscope className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>เตรียมยา:</span>
+                                    <span className="font-normal text-emerald-200 truncate">{p1.medicalEquipmentNeeded}</span>
+                                  </div>
+                                )}
 
                                 {/* Medical and Allergy Notes */}
                                 {(p1.hasMedicalHistory || p1.hasFoodAllergy) && (
@@ -694,21 +739,50 @@ export default function AdminRoomsView({
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
-                                      <span>{p2.name}</span>
-                                      {p2.nickname !== '-' && (
-                                        <span className="text-amber-300 font-normal">({p2.nickname})</span>
-                                      )}
-                                    </div>
-                                    <div className="text-[11px] text-sky-200/80 font-mono mt-0.5">
-                                      {p2.callsign} • โทร: {p2.phone}
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {p2.avatar ? (
+                                      <img
+                                        src={p2.avatar}
+                                        alt={p2.name}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPreviewDocModal({
+                                            title: `ภาพประจำตัว: ${p2.name}`,
+                                            url: p2.avatar,
+                                            file_type: 'image'
+                                          });
+                                        }}
+                                        className="w-8 h-8 rounded-full object-cover border border-sky-400/50 hover:scale-110 transition-transform cursor-pointer shadow-sm shrink-0"
+                                        title="คลิกเพื่อขยายดูรูปภาพ (Lightbox Popup)"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700">
+                                        {p2.firstName?.charAt(0) || '👤'}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5 truncate">
+                                        <span>{p2.name}</span>
+                                        {p2.nickname !== '-' && (
+                                          <span className="text-amber-300 font-normal">({p2.nickname})</span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-sky-200/80 font-mono mt-0.5 truncate">
+                                        {p2.callsign} • โทร: {p2.phone}
+                                      </div>
                                     </div>
                                   </div>
                                   <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
+                                {p2.medicalEquipmentNeeded && (
+                                  <div className="mt-1.5 text-[10px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md">
+                                    <Stethoscope className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>เตรียมยา:</span>
+                                    <span className="font-normal text-emerald-200 truncate">{p2.medicalEquipmentNeeded}</span>
+                                  </div>
+                                )}
 
                                 {/* Medical and Allergy Notes */}
                                 {(p2.hasMedicalHistory || p2.hasFoodAllergy) && (
@@ -831,21 +905,50 @@ export default function AdminRoomsView({
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5">
-                                      <span>{p1.name}</span>
-                                      {p1.nickname !== '-' && (
-                                        <span className="text-amber-300 font-normal">({p1.nickname})</span>
-                                      )}
-                                    </div>
-                                    <div className="text-[11px] text-pink-200/80 font-mono mt-0.5">
-                                      {p1.callsign} • โทร: {p1.phone}
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {p1.avatar ? (
+                                      <img
+                                        src={p1.avatar}
+                                        alt={p1.name}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPreviewDocModal({
+                                            title: `ภาพประจำตัว: ${p1.name}`,
+                                            url: p1.avatar,
+                                            file_type: 'image'
+                                          });
+                                        }}
+                                        className="w-8 h-8 rounded-full object-cover border border-pink-400/50 hover:scale-110 transition-transform cursor-pointer shadow-sm shrink-0"
+                                        title="คลิกเพื่อขยายดูรูปภาพ (Lightbox Popup)"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700">
+                                        {p1.firstName?.charAt(0) || '👤'}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5 truncate">
+                                        <span>{p1.name}</span>
+                                        {p1.nickname !== '-' && (
+                                          <span className="text-amber-300 font-normal">({p1.nickname})</span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-pink-200/80 font-mono mt-0.5 truncate">
+                                        {p1.callsign} • โทร: {p1.phone}
+                                      </div>
                                     </div>
                                   </div>
                                   <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
+                                {p1.medicalEquipmentNeeded && (
+                                  <div className="mt-1.5 text-[10px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md">
+                                    <Stethoscope className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>เตรียมยา:</span>
+                                    <span className="font-normal text-emerald-200 truncate">{p1.medicalEquipmentNeeded}</span>
+                                  </div>
+                                )}
 
                                 {/* Medical and Allergy Notes */}
                                 {(p1.hasMedicalHistory || p1.hasFoodAllergy) && (
@@ -892,21 +995,50 @@ export default function AdminRoomsView({
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5">
-                                      <span>{p2.name}</span>
-                                      {p2.nickname !== '-' && (
-                                        <span className="text-amber-300 font-normal">({p2.nickname})</span>
-                                      )}
-                                    </div>
-                                    <div className="text-[11px] text-pink-200/80 font-mono mt-0.5">
-                                      {p2.callsign} • โทร: {p2.phone}
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {p2.avatar ? (
+                                      <img
+                                        src={p2.avatar}
+                                        alt={p2.name}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPreviewDocModal({
+                                            title: `ภาพประจำตัว: ${p2.name}`,
+                                            url: p2.avatar,
+                                            file_type: 'image'
+                                          });
+                                        }}
+                                        className="w-8 h-8 rounded-full object-cover border border-pink-400/50 hover:scale-110 transition-transform cursor-pointer shadow-sm shrink-0"
+                                        title="คลิกเพื่อขยายดูรูปภาพ (Lightbox Popup)"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700">
+                                        {p2.firstName?.charAt(0) || '👤'}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5 truncate">
+                                        <span>{p2.name}</span>
+                                        {p2.nickname !== '-' && (
+                                          <span className="text-amber-300 font-normal">({p2.nickname})</span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-pink-200/80 font-mono mt-0.5 truncate">
+                                        {p2.callsign} • โทร: {p2.phone}
+                                      </div>
                                     </div>
                                   </div>
                                   <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
                                     🔍 ดูโปรไฟล์
                                   </span>
                                 </div>
+                                {p2.medicalEquipmentNeeded && (
+                                  <div className="mt-1.5 text-[10px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md">
+                                    <Stethoscope className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>เตรียมยา:</span>
+                                    <span className="font-normal text-emerald-200 truncate">{p2.medicalEquipmentNeeded}</span>
+                                  </div>
+                                )}
 
                                 {/* Medical and Allergy Notes */}
                                 {(p2.hasMedicalHistory || p2.hasFoodAllergy) && (
@@ -1106,7 +1238,7 @@ export default function AdminRoomsView({
       )}
 
       {/* MSU PARTICIPANTS SUMMARY (GOING HOME / NO DORM) */}
-      <div className="p-5 rounded-3xl bg-slate-950/80 border border-slate-800 space-y-3 shadow-lg">
+      <div className="p-5 rounded-3xl bg-slate-950/80 border border-slate-800 space-y-3 shadow-lg no-print">
         <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <span className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30">
@@ -1160,7 +1292,7 @@ export default function AdminRoomsView({
             <div className="flex items-start gap-4 pr-8">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shrink-0 overflow-hidden border-2 border-sky-400/40">
                 {selectedPerson.avatar ? (
-                  <img src={selectedPerson.avatar} alt={selectedPerson.name} className="w-full h-full object-cover" />
+                  <img src={selectedPerson.avatar} alt={selectedPerson.name} onClick={() => setPreviewDocModal({ title: `ภาพประจำตัว: ${selectedPerson.name}`, url: selectedPerson.avatar, file_type: 'image' })} className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity" title="คลิกดูภาพขยาย (Lightbox)" />
                 ) : (
                   <span>{selectedPerson.firstName?.charAt(0) || 'U'}</span>
                 )}
