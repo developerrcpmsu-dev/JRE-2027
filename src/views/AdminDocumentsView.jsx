@@ -207,12 +207,23 @@ export default function AdminDocumentsView({
       let extra = {};
       try { if (reg.special_notes && reg.special_notes.startsWith('{')) extra = JSON.parse(reg.special_notes); } catch (e) {}
 
+      const med = reg.medical_history || extra.medical_history || '-';
+      const alg = reg.food_allergy || extra.food_allergy || '-';
+      const bloodGroup = reg.blood_group || extra.blood_group || '-';
+      const hasMed = med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim());
+      const hasAlg = alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim());
+
       const person = {
         name: nameData.fullName,
         nickname: extra.nickname || reg.nickname || '-',
         callsign: normalizeCallsignSpacing(extra.callsign || reg.callsign || '-'),
         phone: reg.phone || extra.phone || '-',
-        uni: uniInfo.shortTag
+        uni: uniInfo.shortTag,
+        bloodGroup,
+        medical: med,
+        allergy: alg,
+        hasMed,
+        hasAlg
       };
 
       if (isMsu) {
@@ -645,7 +656,16 @@ export default function AdminDocumentsView({
                                 </td>
                               )}
                               <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
-                              <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">{p ? p.name : '(ว่าง)'}</td>
+                              <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
+                                <div>{p ? p.name : '(ว่าง)'}</div>
+                                {p && (p.hasMed || p.hasAlg) && (
+                                  <div className="text-[10px] text-rose-700 font-semibold mt-0.5">
+                                    {p.hasMed && <span>🩺 โรค: {p.medical} </span>}
+                                    {p.hasAlg && <span>⚠️ แพ้: {p.allergy} </span>}
+                                    <span className="font-mono">(เลือด: {p.bloodGroup})</span>
+                                  </div>
+                                )}
+                              </td>
                               <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
                               <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
                               <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>
@@ -700,7 +720,16 @@ export default function AdminDocumentsView({
                                 </td>
                               )}
                               <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
-                              <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">{p ? p.name : '(ว่าง)'}</td>
+                              <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
+                                <div>{p ? p.name : '(ว่าง)'}</div>
+                                {p && (p.hasMed || p.hasAlg) && (
+                                  <div className="text-[10px] text-rose-700 font-semibold mt-0.5">
+                                    {p.hasMed && <span>🩺 โรค: {p.medical} </span>}
+                                    {p.hasAlg && <span>⚠️ แพ้: {p.allergy} </span>}
+                                    <span className="font-mono">(เลือด: {p.bloodGroup})</span>
+                                  </div>
+                                )}
+                              </td>
                               <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
                               <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
                               <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>

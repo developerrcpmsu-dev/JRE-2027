@@ -1278,6 +1278,7 @@ export default function App() {
             user={user}
             isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
             myRegistration={myRegistration}
+            allRegistrations={registrations}
             onSaveRegistration={handleSaveRegistration}
             onUpdateRegistration={handleUpdateRegistration}
             onDeleteRegistration={handleDeleteRegistration}

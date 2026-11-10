@@ -84,6 +84,8 @@ import {
   resolveGender,
   resolveUniversityInfo,
   resolveApplicantMemberType,
+  resolvePersonFullNameWithTitle,
+  normalizeCallsignSpacing,
   resolveMessageSenderInfo,
   OFFICIAL_GROUP_CHAT_URL
 } from '../data/defaultData';
@@ -298,6 +300,7 @@ export default function RegisterView({
   user, 
   isAdmin = false,
   myRegistration, 
+  allRegistrations = [],
   onSaveRegistration, 
   onUpdateRegistration,
   onDeleteRegistration,
@@ -4077,40 +4080,228 @@ export default function RegisterView({
                 </div>
               </div>
 
-              {/* Room Assigned Card */}
-              <div className="bg-slate-900/90 border border-amber-600/50 p-5 rounded-2xl relative overflow-hidden shadow-lg">
-                <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
-                  <span>🛏️</span> ห้องนอน / ที่พักค้างแรม (Assigned Room)
-                </p>
-                <div className="mt-2.5">
-                  {myRegistration.room_assigned ? (
-                    <div>
-                      <p className="text-2xl sm:text-3xl font-black text-white text-amber-200">
-                        {myRegistration.room_assigned}
-                      </p>
-                      <p className="text-[11px] text-slate-300 mt-1.5 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>เข้าพักตามห้องนอนที่ระบุ ณ หอพักกุดรัง มมส</span>
-                      </p>
-                      <div className="mt-2.5 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex flex-wrap gap-2">
-                        <span className="text-sky-300">❄️ แอร์</span>
-                        <span className="text-amber-300">🚿 เครื่องทำน้ำอุ่น</span>
-                        <span className="text-emerald-300">🛏️ มีหมอน & ผ้าห่มพร้อม</span>
+              {/* Room Assigned & Roommate Comprehensive Card */}
+              {(() => {
+                const isMsuUser = isMsuInstitution(myRegistration?.institution);
+                const rawRoom = String(myRegistration?.room_assigned || '').trim();
+                const roomMatch = rawRoom.match(/(\d{3})/);
+                const roomNum = roomMatch ? roomMatch[1] : null;
+                const hasRoom = Boolean(roomNum && rawRoom !== '-' && rawRoom !== 'ไม่มี');
+
+                // Find Roommate from allRegistrations
+                const roommate = (() => {
+                  if (!hasRoom || !roomNum) return null;
+                  const match = (allRegistrations || []).find(r => {
+                    const isSelf = r.id === myRegistration.id || (r.user_id && r.user_id === myRegistration.user_id);
+                    if (isSelf) return false;
+                    const rMatch = String(r.room_assigned || '').match(/(\d{3})/);
+                    return rMatch && rMatch[1] === roomNum;
+                  });
+                  if (!match) return null;
+
+                  const nameData = resolvePersonFullNameWithTitle(match);
+                  let extra = {};
+                  try {
+                    if (match.special_notes && typeof match.special_notes === 'string' && match.special_notes.startsWith('{')) {
+                      extra = JSON.parse(match.special_notes);
+                    } else if (match.special_notes && typeof match.special_notes === 'object') {
+                      extra = match.special_notes;
+                    }
+                  } catch (e) {}
+
+                  const med = match.medical_history || extra.medical_history || '-';
+                  const alg = match.food_allergy || extra.food_allergy || '-';
+                  const hasMed = med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim());
+                  const hasAlg = alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim());
+
+                  return {
+                    raw: match,
+                    name: nameData.fullName,
+                    nickname: extra.nickname || match.nickname || '-',
+                    callsign: normalizeCallsignSpacing(extra.callsign || match.callsign || '-'),
+                    phone: match.phone || extra.phone || '-',
+                    bloodGroup: match.blood_group || extra.blood_group || '-',
+                    medical: med,
+                    hasMed,
+                    allergy: alg,
+                    hasAlg,
+                    emergencyName: match.emergency_name || extra.emergency_name || '-',
+                    emergencyPhone: match.emergency_phone || extra.emergency_phone || '-'
+                  };
+                })();
+
+                if (!hasRoom) {
+                  return (
+                    <div className="bg-slate-900/90 border border-slate-700/60 p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
+                          <span>🏠</span> ข้อมูลที่พักค้างแรม (Accommodation Status)
+                        </p>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                          {isMsuUser ? 'มมส (ไป-กลับเอง)' : 'รอจัดสรร'}
+                        </span>
                       </div>
+
+                      {isMsuUser ? (
+                        <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
+                          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                            <span>🏠 ไม่ได้พักหอพัก (เดินทางไป-กลับเอง)</span>
+                          </div>
+                          <p className="text-xs text-amber-100/90 leading-relaxed">
+                            ท่านสังกัดมหาวิทยาลัยมหาสารคาม (มมส) พักอาศัยในพื้นที่ จึงไม่ได้จัดสรรห้องพักหอพักกุดรัง โดยท่านสามารถเดินทางมาเข้าร่วมการฝึกตามกำหนดการในแต่ละวันได้ตามปกติครับ
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                          <div className="flex items-center gap-2 text-sky-300 font-bold text-sm">
+                            <Clock className="w-4 h-4 animate-spin-slow text-sky-400" />
+                            <span>กำลังรอ Admin ฝ่ายสถานที่จัดสรรเลขห้องพัก...</span>
+                          </div>
+                          <p className="text-xs text-slate-400 leading-relaxed">
+                            ท่านยืนยันสิทธิ์ที่พักแล้ว เข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม เตียงเดี่ยวคู่ ห้องละ 2 คน)
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center gap-2 text-amber-400 py-1">
-                        <Clock className="w-4 h-4 animate-spin-slow" />
-                        <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรห้องพักค้างแรม...</span>
+                  );
+                }
+
+                // HAS ROOM:
+                return (
+                  <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/40 border border-sky-500/40 p-5 sm:p-6 rounded-3xl relative overflow-hidden shadow-2xl space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                      <div>
+                        <span className="text-[10px] uppercase font-black text-sky-400 tracking-wider flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5" /> หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)
+                        </span>
+                        <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex items-center gap-2">
+                          <span>ห้อง {roomNum}</span>
+                          <span className="text-xs font-normal text-sky-300 bg-sky-950/60 px-2.5 py-0.5 rounded-full border border-sky-500/30">
+                            ชั้น 1 • ห้องละ 2 คน
+                          </span>
+                        </h3>
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        เข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม โต๊ะเขียนงาน และตู้เสื้อผ้า)
-                      </p>
+
+                      <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>จัดสรรห้องแล้ว ✓</span>
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
+
+                    {/* Facilities row */}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                      <span className="text-sky-300 font-semibold">❄️ ห้องปรับอากาศ (แอร์)</span>
+                      <span>•</span>
+                      <span className="text-amber-300 font-semibold">🚿 น้ำอุ่น</span>
+                      <span>•</span>
+                      <span className="text-emerald-300 font-semibold">🛏️ เตียงเดี่ยวคู่ (2 เตียง)</span>
+                      <span>•</span>
+                      <span className="text-slate-400">หมอนและผ้าห่มพร้อม</span>
+                    </div>
+
+                    {/* ROOMMATE CARD SECTION */}
+                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-white flex items-center gap-2">
+                          <span>🤝 เพื่อนร่วมห้องของคุณ (Your Roommate):</span>
+                        </span>
+                        {roommate && (
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+                            พักห้องเดียวกัน 2/2 คน
+                          </span>
+                        )}
+                      </div>
+
+                      {roommate ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-700/60">
+                            <div>
+                              <div className="font-bold text-white text-sm flex items-center gap-2">
+                                <span>{roommate.name}</span>
+                                {roommate.nickname !== '-' && (
+                                  <span className="text-amber-300 font-normal">({roommate.nickname})</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-sky-300 font-mono mt-0.5">
+                                📡 นามเรียกขาน: <strong>{roommate.callsign}</strong>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`tel:${roommate.phone}`}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                              >
+                                <Phone className="w-3.5 h-3.5" />
+                                <span>โทรหาเมท: {roommate.phone}</span>
+                              </a>
+                            </div>
+                          </div>
+
+                          {/* Roommate Medical & Emergency Health Card */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                            {/* Allergy Alert */}
+                            <div className={`p-2.5 rounded-xl border ${
+                              roommate.hasAlg 
+                                ? 'bg-amber-950/40 border-amber-500/50 text-amber-200' 
+                                : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                            }`}>
+                              <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                                <UtensilsCrossed className={`w-3.5 h-3.5 ${roommate.hasAlg ? 'text-amber-400' : 'text-slate-400'}`} />
+                                <span>ประวัติแพ้อาหาร/ยาของเมท:</span>
+                              </div>
+                              <div className={roommate.hasAlg ? 'font-black text-amber-300' : 'text-slate-400'}>
+                                {roommate.hasAlg ? `⚠️ ${roommate.allergy}` : 'ปกติ (ไม่มีประวัติแพ้อาหาร/ยา)'}
+                              </div>
+                            </div>
+
+                            {/* Medical Condition Alert */}
+                            <div className={`p-2.5 rounded-xl border ${
+                              roommate.hasMed 
+                                ? 'bg-rose-950/40 border-rose-500/50 text-rose-200' 
+                                : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                            }`}>
+                              <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                                <Stethoscope className={`w-3.5 h-3.5 ${roommate.hasMed ? 'text-rose-400' : 'text-slate-400'}`} />
+                                <span>โรคประจำตัว/ข้อจำกัดของเมท:</span>
+                              </div>
+                              <div className={roommate.hasMed ? 'font-black text-rose-300' : 'text-slate-400'}>
+                                {roommate.hasMed ? `🩺 ${roommate.medical}` : 'ปกติ (ไม่มีโรคประจำตัว)'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Roommate Blood Group & Emergency Contact */}
+                          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-400">🩸 กรุ๊ปเลือดเมท:</span>
+                              <strong className="text-rose-300 font-mono text-sm">{roommate.bloodGroup}</strong>
+                            </div>
+
+                            {roommate.emergencyName !== '-' && (
+                              <div className="flex items-center gap-1.5 text-[11px]">
+                                <span className="text-slate-400">🚨 ติดต่อฉุกเฉินของเมท:</span>
+                                <span className="text-white font-bold">{roommate.emergencyName}</span>
+                                <a href={`tel:${roommate.emergencyPhone}`} className="text-sky-300 underline font-mono">
+                                  ({roommate.emergencyPhone})
+                                </a>
+                              </div>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-slate-400 italic">
+                            💡 หมายเหตุเพื่อความปลอดภัย: ช่วยกันดูแลสังเกตอาการของเพื่อนร่วมห้อง หากเกิดอาการแพ้หรือเจ็บป่วยฉุกเฉินยามวิกาล สามารถโทรหาผู้ติดต่อฉุกเฉินของเมท หรือแจ้งสายด่วนพยาบาลสนามได้ทันที
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-3 text-center text-xs text-slate-500 italic">
+                          เตียงเดี่ยวคู่ (ยังไม่พบเพื่อนร่วมห้องในระบบ หรืออยู่ระหว่างการลงทะเบียน)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

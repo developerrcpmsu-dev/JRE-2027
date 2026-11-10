@@ -101,6 +101,9 @@ export default function AdminRoomsView({
       const emergencyName = reg.emergency_name || extra.emergency_name || '-';
       const emergencyPhone = reg.emergency_phone || extra.emergency_phone || '-';
 
+      const hasFoodAllergy = Boolean(foodAllergy && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(foodAllergy.toLowerCase().trim()));
+      const hasMedicalHistory = Boolean(medicalHistory && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(medicalHistory.toLowerCase().trim()));
+
       const person = {
         raw: reg,
         id: reg.id || reg.user_id,
@@ -122,6 +125,8 @@ export default function AdminRoomsView({
         bloodGroup,
         foodAllergy,
         medicalHistory,
+        hasFoodAllergy,
+        hasMedicalHistory,
         emergencyName,
         emergencyPhone,
         isMsu,
@@ -487,9 +492,10 @@ export default function AdminRoomsView({
                     {roomData.maleRooms.map(room => {
                       const p1 = room.occupants[0];
                       const p2 = room.occupants[1];
+                      const hasRoomMedicalAlert = room.occupants.some(p => p.hasMedicalHistory || p.hasFoodAllergy);
 
                       return (
-                        <tr key={room.room} className="hover:bg-blue-950/20 transition-colors">
+                        <tr key={room.room} className={`transition-colors ${hasRoomMedicalAlert ? 'bg-rose-950/15 hover:bg-rose-950/25' : 'hover:bg-blue-950/20'}`}>
                           {/* Room Number */}
                           <td className="py-3.5 px-4 text-center">
                             <div className="inline-flex flex-col items-center">
@@ -497,6 +503,11 @@ export default function AdminRoomsView({
                                 {room.roomLabel}
                               </span>
                               <span className="text-[10px] text-slate-400 mt-1">ชั้น 1</span>
+                              {hasRoomMedicalAlert && (
+                                <span className="mt-1 px-2 py-0.5 rounded-full bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] font-black animate-pulse flex items-center gap-0.5" title="มีผู้พักอาศัยที่มีประวัติโรคประจำตัวหรือแพ้อาหาร/ยา">
+                                  🚨 เฝ้าระวังสุขภาพ
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -505,22 +516,49 @@ export default function AdminRoomsView({
                             {p1 ? (
                               <div 
                                 onClick={() => handleOpenPersonProfile(p1, room)}
-                                className="group p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-sky-400/60 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
+                                className={`group p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                  p1.hasMedicalHistory || p1.hasFoodAllergy
+                                    ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-400'
+                                    : 'bg-slate-900/80 border-slate-800 hover:border-sky-400/60'
+                                }`}
                               >
-                                <div>
-                                  <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
-                                    <span>{p1.name}</span>
-                                    {p1.nickname !== '-' && (
-                                      <span className="text-amber-300 font-normal">({p1.nickname})</span>
-                                    )}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
+                                      <span>{p1.name}</span>
+                                      {p1.nickname !== '-' && (
+                                        <span className="text-amber-300 font-normal">({p1.nickname})</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-sky-200/80 font-mono mt-0.5">
+                                      {p1.callsign} • โทร: {p1.phone}
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-sky-200/80 font-mono mt-0.5">
-                                    {p1.callsign}
-                                  </div>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
+                                    🔍 ดูโปรไฟล์
+                                  </span>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
-                                  🔍 ดูโปรไฟล์
-                                </span>
+
+                                {/* Medical and Allergy Notes */}
+                                {(p1.hasMedicalHistory || p1.hasFoodAllergy) && (
+                                  <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                                    {p1.hasMedicalHistory && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <Stethoscope className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                        <span>โรค: {p1.medicalHistory}</span>
+                                      </span>
+                                    )}
+                                    {p1.hasFoodAllergy && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <UtensilsCrossed className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                        <span>แพ้: {p1.foodAllergy}</span>
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                      🩸 {p1.bloodGroup}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-500 italic text-xs">- ห้องว่าง -</span>
@@ -532,22 +570,49 @@ export default function AdminRoomsView({
                             {p2 ? (
                               <div 
                                 onClick={() => handleOpenPersonProfile(p2, room)}
-                                className="group p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-sky-400/60 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
+                                className={`group p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                  p2.hasMedicalHistory || p2.hasFoodAllergy
+                                    ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-400'
+                                    : 'bg-slate-900/80 border-slate-800 hover:border-sky-400/60'
+                                }`}
                               >
-                                <div>
-                                  <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
-                                    <span>{p2.name}</span>
-                                    {p2.nickname !== '-' && (
-                                      <span className="text-amber-300 font-normal">({p2.nickname})</span>
-                                    )}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="font-bold text-white text-xs group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
+                                      <span>{p2.name}</span>
+                                      {p2.nickname !== '-' && (
+                                        <span className="text-amber-300 font-normal">({p2.nickname})</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-sky-200/80 font-mono mt-0.5">
+                                      {p2.callsign} • โทร: {p2.phone}
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-sky-200/80 font-mono mt-0.5">
-                                    {p2.callsign}
-                                  </div>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
+                                    🔍 ดูโปรไฟล์
+                                  </span>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-sky-900/40 group-hover:text-sky-200">
-                                  🔍 ดูโปรไฟล์
-                                </span>
+
+                                {/* Medical and Allergy Notes */}
+                                {(p2.hasMedicalHistory || p2.hasFoodAllergy) && (
+                                  <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                                    {p2.hasMedicalHistory && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <Stethoscope className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                        <span>โรค: {p2.medicalHistory}</span>
+                                      </span>
+                                    )}
+                                    {p2.hasFoodAllergy && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <UtensilsCrossed className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                        <span>แพ้: {p2.foodAllergy}</span>
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                      🩸 {p2.bloodGroup}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-500 italic text-xs">- ห้องว่าง -</span>
@@ -559,6 +624,11 @@ export default function AdminRoomsView({
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-block">
                               ครบ 2/2 คน ✓
                             </span>
+                            {hasRoomMedicalAlert && (
+                              <span className="block mt-1 text-[9px] font-bold text-rose-300/90">
+                                🩺 เตรียมยา/อุปกรณ์
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -606,9 +676,10 @@ export default function AdminRoomsView({
                     {roomData.femaleRooms.map(room => {
                       const p1 = room.occupants[0];
                       const p2 = room.occupants[1];
+                      const hasRoomMedicalAlert = room.occupants.some(p => p.hasMedicalHistory || p.hasFoodAllergy);
 
                       return (
-                        <tr key={room.room} className="hover:bg-pink-950/20 transition-colors">
+                        <tr key={room.room} className={`transition-colors ${hasRoomMedicalAlert ? 'bg-rose-950/15 hover:bg-rose-950/25' : 'hover:bg-pink-950/20'}`}>
                           {/* Room Number */}
                           <td className="py-3.5 px-4 text-center">
                             <div className="inline-flex flex-col items-center">
@@ -616,6 +687,11 @@ export default function AdminRoomsView({
                                 {room.roomLabel}
                               </span>
                               <span className="text-[10px] text-slate-400 mt-1">ชั้น 1</span>
+                              {hasRoomMedicalAlert && (
+                                <span className="mt-1 px-2 py-0.5 rounded-full bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] font-black animate-pulse flex items-center gap-0.5" title="มีผู้พักอาศัยที่มีประวัติโรคประจำตัวหรือแพ้อาหาร/ยา">
+                                  🚨 เฝ้าระวังสุขภาพ
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -624,22 +700,49 @@ export default function AdminRoomsView({
                             {p1 ? (
                               <div 
                                 onClick={() => handleOpenPersonProfile(p1, room)}
-                                className="group p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-pink-400/60 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
+                                className={`group p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                  p1.hasMedicalHistory || p1.hasFoodAllergy
+                                    ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-400'
+                                    : 'bg-slate-900/80 border-slate-800 hover:border-pink-400/60'
+                                }`}
                               >
-                                <div>
-                                  <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5">
-                                    <span>{p1.name}</span>
-                                    {p1.nickname !== '-' && (
-                                      <span className="text-amber-300 font-normal">({p1.nickname})</span>
-                                    )}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5">
+                                      <span>{p1.name}</span>
+                                      {p1.nickname !== '-' && (
+                                        <span className="text-amber-300 font-normal">({p1.nickname})</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-pink-200/80 font-mono mt-0.5">
+                                      {p1.callsign} • โทร: {p1.phone}
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-pink-200/80 font-mono mt-0.5">
-                                    {p1.callsign}
-                                  </div>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
+                                    🔍 ดูโปรไฟล์
+                                  </span>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
-                                  🔍 ดูโปรไฟล์
-                                </span>
+
+                                {/* Medical and Allergy Notes */}
+                                {(p1.hasMedicalHistory || p1.hasFoodAllergy) && (
+                                  <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                                    {p1.hasMedicalHistory && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <Stethoscope className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                        <span>โรค: {p1.medicalHistory}</span>
+                                      </span>
+                                    )}
+                                    {p1.hasFoodAllergy && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <UtensilsCrossed className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                        <span>แพ้: {p1.foodAllergy}</span>
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                      🩸 {p1.bloodGroup}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-500 italic text-xs">- ห้องว่าง -</span>
@@ -651,22 +754,49 @@ export default function AdminRoomsView({
                             {p2 ? (
                               <div 
                                 onClick={() => handleOpenPersonProfile(p2, room)}
-                                className="group p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-pink-400/60 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
+                                className={`group p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                  p2.hasMedicalHistory || p2.hasFoodAllergy
+                                    ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-400'
+                                    : 'bg-slate-900/80 border-slate-800 hover:border-pink-400/60'
+                                }`}
                               >
-                                <div>
-                                  <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5">
-                                    <span>{p2.name}</span>
-                                    {p2.nickname !== '-' && (
-                                      <span className="text-amber-300 font-normal">({p2.nickname})</span>
-                                    )}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="font-bold text-white text-xs group-hover:text-pink-300 transition-colors flex items-center gap-1.5">
+                                      <span>{p2.name}</span>
+                                      {p2.nickname !== '-' && (
+                                        <span className="text-amber-300 font-normal">({p2.nickname})</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-pink-200/80 font-mono mt-0.5">
+                                      {p2.callsign} • โทร: {p2.phone}
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-pink-200/80 font-mono mt-0.5">
-                                    {p2.callsign}
-                                  </div>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
+                                    🔍 ดูโปรไฟล์
+                                  </span>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 group-hover:bg-pink-900/40 group-hover:text-pink-200">
-                                  🔍 ดูโปรไฟล์
-                                </span>
+
+                                {/* Medical and Allergy Notes */}
+                                {(p2.hasMedicalHistory || p2.hasFoodAllergy) && (
+                                  <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                                    {p2.hasMedicalHistory && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <Stethoscope className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                        <span>โรค: {p2.medicalHistory}</span>
+                                      </span>
+                                    )}
+                                    {p2.hasFoodAllergy && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[10px] font-black flex items-center gap-1">
+                                        <UtensilsCrossed className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                        <span>แพ้: {p2.foodAllergy}</span>
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                      🩸 {p2.bloodGroup}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-500 italic text-xs">- ห้องว่าง -</span>
@@ -678,6 +808,11 @@ export default function AdminRoomsView({
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-block">
                               ครบ 2/2 คน ✓
                             </span>
+                            {hasRoomMedicalAlert && (
+                              <span className="block mt-1 text-[9px] font-bold text-rose-300/90">
+                                🩺 เตรียมยา/อุปกรณ์
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -787,6 +922,27 @@ export default function AdminRoomsView({
                               📞 {person.phone}
                             </span>
                           </div>
+
+                          {/* Medical and Allergy Alerts */}
+                          {(person.hasMedicalHistory || person.hasFoodAllergy) && (
+                            <div className="pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                              {person.hasMedicalHistory && (
+                                <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-black flex items-center gap-1">
+                                  <Stethoscope className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                  <span>โรค: {person.medicalHistory}</span>
+                                </span>
+                              )}
+                              {person.hasFoodAllergy && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[10px] font-black flex items-center gap-1">
+                                  <UtensilsCrossed className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                  <span>แพ้: {person.foodAllergy}</span>
+                                </span>
+                              )}
+                              <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                🩸 {person.bloodGroup}
+                              </span>
+                            </div>
+                          )}
 
                           {roommate && (
                             <div className="pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">

@@ -284,6 +284,7 @@ export async function exportDormitoryRosterToExcel(roomList, msuList = [], filen
     { header: 'ชื่อเล่น', key: 'nickname', width: 12, align: 'center' },
     { header: 'นามเรียกขาน', key: 'callsign', width: 16, align: 'center' },
     { header: 'เบอร์โทร', key: 'phone', width: 15, align: 'center' },
+    { header: 'ข้อมูลสุขภาพ / โรคประจำตัว / แพ้อาหาร', key: 'health', width: 32, align: 'left' },
     { header: 'ลายมือชื่อรับกุญแจ (Check-in)', key: 'checkin', width: 22, align: 'center' },
     { header: 'ลายมือชื่อคืนกุญแจ (Check-out)', key: 'checkout', width: 22, align: 'center' }
   ];
@@ -318,8 +319,26 @@ export async function exportDormitoryRosterToExcel(roomList, msuList = [], filen
       row.getCell(5).value = p ? p.nickname : '-';
       row.getCell(6).value = p ? p.callsign : '-';
       row.getCell(7).value = p ? p.phone : '-';
-      row.getCell(8).value = '';
+
+      let healthNote = 'ปกติ';
+      if (p) {
+        const parts = [];
+        const med = p.medical || p.medicalHistory;
+        const alg = p.allergy || p.foodAllergy;
+        if (med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim())) {
+          parts.push(`โรค: ${med}`);
+        }
+        if (alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim())) {
+          parts.push(`แพ้: ${alg}`);
+        }
+        if (p.bloodGroup && p.bloodGroup !== '-') {
+          parts.push(`(เลือด: ${p.bloodGroup})`);
+        }
+        if (parts.length > 0) healthNote = parts.join(' | ');
+      }
+      row.getCell(8).value = healthNote;
       row.getCell(9).value = '';
+      row.getCell(10).value = '';
 
       headers.forEach((h, i) => {
         const cell = row.getCell(i + 1);
@@ -478,6 +497,7 @@ export async function exportAllRostersToMasterExcel({
     { header: 'ชื่อเล่น', width: 12, align: 'center' },
     { header: 'นามเรียกขาน', width: 16, align: 'center' },
     { header: 'เบอร์โทร', width: 15, align: 'center' },
+    { header: 'ข้อมูลสุขภาพ / โรคประจำตัว / แพ้อาหาร', width: 32, align: 'left' },
     { header: 'ลายมือชื่อรับกุญแจ', width: 22, align: 'center' },
     { header: 'ลายมือชื่อคืนกุญแจ', width: 22, align: 'center' }
   ];
@@ -505,8 +525,26 @@ export async function exportAllRostersToMasterExcel({
       row.getCell(5).value = p ? p.nickname : '-';
       row.getCell(6).value = p ? p.callsign : '-';
       row.getCell(7).value = p ? p.phone : '-';
-      row.getCell(8).value = '';
+
+      let healthNote = 'ปกติ';
+      if (p) {
+        const parts = [];
+        const med = p.medical || p.medicalHistory;
+        const alg = p.allergy || p.foodAllergy;
+        if (med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim())) {
+          parts.push(`โรค: ${med}`);
+        }
+        if (alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim())) {
+          parts.push(`แพ้: ${alg}`);
+        }
+        if (p.bloodGroup && p.bloodGroup !== '-') {
+          parts.push(`(เลือด: ${p.bloodGroup})`);
+        }
+        if (parts.length > 0) healthNote = parts.join(' | ');
+      }
+      row.getCell(8).value = healthNote;
       row.getCell(9).value = '';
+      row.getCell(10).value = '';
       h3.forEach((h, i) => {
         const c = row.getCell(i + 1);
         c.font = { name: 'TH Sarabun New', size: 11, bold: i === 0 };
