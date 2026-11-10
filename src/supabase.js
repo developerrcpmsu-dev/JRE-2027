@@ -2105,21 +2105,6 @@ export const DataService = {
     const cleanName = name.trim();
     const avatarUrl = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 
-    // Establish a Supabase Auth session from the verified Google credential.
-    // The legacy JRE profile remains in use for app data, while RLS-protected
-    // features (including group chat) use this authenticated session.
-    if (googleIdToken && isSupabaseConfigured && supabase?.auth?.signInWithIdToken) {
-      try {
-        await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: googleIdToken,
-          ...(googleAccessToken ? { access_token: googleAccessToken } : {})
-        });
-      } catch (authError) {
-        // Non-blocking notice for optional Supabase Auth session
-      }
-    }
-
     const accounts = await this.getUserAccounts({ includeSecrets: true });
     const existing = accounts.find(a => (a.email || '').trim().toLowerCase() === cleanEmail);
 
@@ -2395,18 +2380,6 @@ export const DataService = {
     const cleanEmail = payload.email.trim().toLowerCase();
     const cleanName = payload.name || cleanEmail.split('@')[0];
     const avatar = payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-
-    // Try Supabase auth signInWithIdToken if Supabase project has Google enabled
-    if (isSupabaseConfigured && supabase?.auth?.signInWithIdToken) {
-      try {
-        await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: credentialResponse.credential
-        });
-      } catch (e) {
-        console.warn('Supabase signInWithIdToken note:', e?.message);
-      }
-    }
 
     return this.loginWithGoogleProfile({
       name: cleanName,
