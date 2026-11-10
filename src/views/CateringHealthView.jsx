@@ -27,6 +27,8 @@ import ExcelJS from 'exceljs';
 import {
   getApplicantMedical,
   getApplicantAllergy,
+  getCleanSpecialNotes,
+  hasSpecialCareCondition,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
   getCateringCategory,
@@ -218,7 +220,7 @@ export default function CateringHealthView({
       text += `⭐ 3. ผู้ที่ต้องได้รับการดูแลเป็นพิเศษ (${metrics.withSpecial.length} คน):\n`;
       metrics.withSpecial.forEach((r, idx) => {
         text += `${idx + 1}. ${r.first_name || ''} ${r.last_name || ''} [${r.institution || '-'}]\n`;
-        text += `   - ⚠️ หมายเหตุพิเศษ: ${r.special_notes || 'ดูแลพิเศษ'}\n`;
+        text += `   - ⚠️ หมายเหตุพิเศษ: ${getCleanSpecialNotes(r) || 'ดูแลพิเศษ'}\n`;
       });
     }
 
@@ -696,7 +698,7 @@ export default function CateringHealthView({
               const allergyText = getApplicantAllergy(reg);
               const hasMed = hasMedicalCondition(reg);
               const hasAllergy = hasFoodOrDrugAllergy(reg);
-              const hasSpecial = Boolean(reg.is_special_care || reg.special_notes);
+              const hasSpecial = hasSpecialCareCondition(reg);
 
               return (
                 <div
@@ -827,11 +829,11 @@ export default function CateringHealthView({
                   </div>
 
                   {/* Special Care Notes (if any) */}
-                  {hasSpecial && reg.special_notes && (
+                  {hasSpecial && (
                     <div className="mt-2.5 p-2.5 bg-purple-950/30 border border-purple-500/30 rounded-xl text-xs text-purple-200 flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-purple-300">หมายเหตุการดูแลพิเศษ:</span> {reg.special_notes}
+                        <span className="font-bold text-purple-300">หมายเหตุการดูแลพิเศษ:</span> {getCleanSpecialNotes(reg) || 'จำเป็นต้องได้รับการดูแลพิเศษ'}
                       </div>
                     </div>
                   )}

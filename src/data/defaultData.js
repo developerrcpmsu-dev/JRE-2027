@@ -2350,6 +2350,77 @@ export const hasFoodOrDrugAllergy = (reg) => {
   return hasHealthCondition(getApplicantAllergy(reg));
 };
 
+/**
+ * สกัดข้อความหมายเหตุการดูแลพิเศษที่เป็นภาษามนุษย์อ่านเข้าใจ
+ * โดยป้องกันไม่ให้โครงสร้าง JSON ดิบ (เช่น {"title_th":...}) รั่วไหลออกมาแสดงผลใน UI อย่างเด็ดขาด
+ */
+export const getCleanSpecialNotes = (reg) => {
+  if (!reg) return '';
+  let str = reg.special_notes;
+  if (!str && reg.special_care_note) str = reg.special_care_note;
+  if (!str && reg.special_care_notes) str = reg.special_care_notes;
+
+  if (typeof str === 'object' && str !== null) {
+    str = str.special_care_notes || str.admin_private_notes || str.user_notes || str.special_notes || '';
+  }
+
+  while (typeof str === 'string' && str.trim().startsWith('{') && str.trim().endsWith('}')) {
+    try {
+      const parsed = JSON.parse(str);
+      str = parsed.special_care_notes || parsed.admin_private_notes || parsed.user_notes || parsed.special_notes || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  if (typeof str !== 'string') return '';
+  const trimmed = str.trim();
+  // หากยังพบฟิลด์ JSON ของตารางระบบ ให้ถือว่าไม่มีบันทึกสุขภาพ
+  if (
+    trimmed.startsWith('{') ||
+    trimmed.includes('"title_th"') ||
+    trimmed.includes('"nickname"') ||
+    trimmed.includes('"callsign"') ||
+    trimmed.includes('"is_staff"')
+  ) {
+    return '';
+  }
+  if (NEGATIVE_HEALTH_TERMS.has(trimmed.toLowerCase())) {
+    return '';
+  }
+  return trimmed;
+};
+
+export const hasSpecialCareCondition = (reg) => {
+  if (!reg) return false;
+  if (reg.is_special_care === true) return true;
+  const notes = getCleanSpecialNotes(reg);
+  return Boolean(notes && notes.length > 0);
+};
+
+/**
+ * ตรวจสอบความยินยอมในการเปิดเผยข้อมูลสุขภาพ (โรคประจำตัว/ประวัติแพ้ยาและอาหาร) ให้เพื่อนร่วมห้องทราบ
+ * ค่าเริ่มต้น: ยินยอม (true) เพื่อความปลอดภัยสูงสุดในการปฐมพยาบาลยามวิกาล
+ * แต่ผู้ใช้และ Admin สามารถตั้งค่าปิด (false) ได้ตลอดเวลา
+ */
+export const isHealthSharedWithRoommate = (reg) => {
+  if (!reg) return true;
+  if (reg.share_health_with_roommate === false) return false;
+  if (reg.share_health_with_roommate === true) return true;
+
+  if (reg.special_notes && typeof reg.special_notes === 'string' && reg.special_notes.startsWith('{')) {
+    try {
+      const p = JSON.parse(reg.special_notes);
+      if (p.share_health_with_roommate === false) return false;
+      if (p.share_health_with_roommate === true) return true;
+    } catch (e) {}
+  } else if (reg.special_notes && typeof reg.special_notes === 'object') {
+    if (reg.special_notes.share_health_with_roommate === false) return false;
+    if (reg.special_notes.share_health_with_roommate === true) return true;
+  }
+  return true;
+};
+
 export const getCateringCategory = (text) => {
   if (!text || typeof text !== 'string') return 'ทั่วไป';
   const s = text.toLowerCase();

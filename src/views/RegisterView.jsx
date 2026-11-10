@@ -86,6 +86,8 @@ import {
   resolveApplicantMemberType,
   resolvePersonFullNameWithTitle,
   normalizeCallsignSpacing,
+  isHealthSharedWithRoommate,
+  getCleanSpecialNotes,
   resolveMessageSenderInfo,
   OFFICIAL_GROUP_CHAT_URL
 } from '../data/defaultData';
@@ -434,6 +436,14 @@ export default function RegisterView({
   // Anti-Spam & Bot Honeypot Protection
   const [botHoneypot, setBotHoneypot] = useState('');
   const [lastSubmitTime, setLastSubmitTime] = useState(0);
+
+  // Health privacy consent for roommate
+  const [consentHealthShare, setConsentHealthShare] = useState(() => isHealthSharedWithRoommate(myRegistration));
+  const [isSavingHealthConsent, setIsSavingHealthConsent] = useState(false);
+
+  useEffect(() => {
+    setConsentHealthShare(isHealthSharedWithRoommate(myRegistration));
+  }, [myRegistration]);
 
   const handleTitleThChange = (newTitleTh) => {
     setTitleTh(newTitleTh);
@@ -4116,6 +4126,7 @@ export default function RegisterView({
 
                   return {
                     raw: match,
+                    isHealthShared: isHealthSharedWithRoommate(match),
                     name: nameData.fullName,
                     nickname: extra.nickname || match.nickname || '-',
                     callsign: normalizeCallsignSpacing(extra.callsign || match.callsign || '-'),
@@ -4239,37 +4250,49 @@ export default function RegisterView({
                           </div>
 
                           {/* Roommate Medical & Emergency Health Card */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                            {/* Allergy Alert */}
-                            <div className={`p-2.5 rounded-xl border ${
-                              roommate.hasAlg 
-                                ? 'bg-amber-950/40 border-amber-500/50 text-amber-200' 
-                                : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                            }`}>
-                              <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                                <UtensilsCrossed className={`w-3.5 h-3.5 ${roommate.hasAlg ? 'text-amber-400' : 'text-slate-400'}`} />
-                                <span>ประวัติแพ้อาหาร/ยาของเมท:</span>
+                          {!roommate.isHealthShared ? (
+                            <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
+                              <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                                <span>🔒 เมทเลือกไม่ประสงค์เปิดเผยข้อมูลสุขภาพส่วนบุคคล</span>
                               </div>
-                              <div className={roommate.hasAlg ? 'font-black text-amber-300' : 'text-slate-400'}>
-                                {roommate.hasAlg ? `⚠️ ${roommate.allergy}` : 'ปกติ (ไม่มีประวัติแพ้อาหาร/ยา)'}
-                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                เพื่อนร่วมห้องของท่านขอสงวนสิทธิ์ไม่เปิดเผยรายละเอียดโรคประจำตัวหรืออาการแพ้ในระบบ หากเพื่อนร่วมห้องมีอาการผิดปกติ สามารถโทรติดต่อผู้ติดต่อฉุกเฉินของเมท ({roommate.emergencyPhone}) หรือแจ้ง Staff / ทีมแพทย์สนามได้ทันทีครับ
+                              </p>
                             </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                              {/* Allergy Alert */}
+                              <div className={`p-2.5 rounded-xl border ${
+                                roommate.hasAlg 
+                                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-200' 
+                                  : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                              }`}>
+                                <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                                  <UtensilsCrossed className={`w-3.5 h-3.5 ${roommate.hasAlg ? 'text-amber-400' : 'text-slate-400'}`} />
+                                  <span>ประวัติแพ้อาหาร/ยาของเมท:</span>
+                                </div>
+                                <div className={roommate.hasAlg ? 'font-black text-amber-300' : 'text-slate-400'}>
+                                  {roommate.hasAlg ? `⚠️ ${roommate.allergy}` : 'ปกติ (ไม่มีประวัติแพ้อาหาร/ยา)'}
+                                </div>
+                              </div>
 
-                            {/* Medical Condition Alert */}
-                            <div className={`p-2.5 rounded-xl border ${
-                              roommate.hasMed 
-                                ? 'bg-rose-950/40 border-rose-500/50 text-rose-200' 
-                                : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                            }`}>
-                              <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                                <Stethoscope className={`w-3.5 h-3.5 ${roommate.hasMed ? 'text-rose-400' : 'text-slate-400'}`} />
-                                <span>โรคประจำตัว/ข้อจำกัดของเมท:</span>
-                              </div>
-                              <div className={roommate.hasMed ? 'font-black text-rose-300' : 'text-slate-400'}>
-                                {roommate.hasMed ? `🩺 ${roommate.medical}` : 'ปกติ (ไม่มีโรคประจำตัว)'}
+                              {/* Medical Condition Alert */}
+                              <div className={`p-2.5 rounded-xl border ${
+                                roommate.hasMed 
+                                  ? 'bg-rose-950/40 border-rose-500/50 text-rose-200' 
+                                  : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                              }`}>
+                                <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                                  <Stethoscope className={`w-3.5 h-3.5 ${roommate.hasMed ? 'text-rose-400' : 'text-slate-400'}`} />
+                                  <span>โรคประจำตัว/ข้อจำกัดของเมท:</span>
+                                </div>
+                                <div className={roommate.hasMed ? 'font-black text-rose-300' : 'text-slate-400'}>
+                                  {roommate.hasMed ? `🩺 ${roommate.medical}` : 'ปกติ (ไม่มีโรคประจำตัว)'}
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
 
                           {/* Roommate Blood Group & Emergency Contact */}
                           <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
@@ -4298,6 +4321,98 @@ export default function RegisterView({
                           เตียงเดี่ยวคู่ (ยังไม่พบเพื่อนร่วมห้องในระบบ หรืออยู่ระหว่างการลงทะเบียน)
                         </div>
                       )}
+                    </div>
+
+                    {/* HEALTH PRIVACY CONSENT SETTING CARD */}
+                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-indigo-500/40 space-y-3 shadow-lg">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                            <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-white">
+                              🛡️ สิทธิ์ความเป็นส่วนตัวข้อมูลสุขภาพ (Roommate Health Privacy)
+                            </h4>
+                            <span className="text-[10px] text-slate-400">
+                              ควบคุมการแสดงข้อมูลโรคประจำตัวและประวัติการแพ้ให้เพื่อนร่วมห้อง
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                          consentHealthShare 
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        }`}>
+                          {consentHealthShare ? '👁️ ยินยอมเปิดเผยให้เมททราบ' : '🔒 ปิดเป็นความลับ (ซ่อนจากเมท)'}
+                        </span>
+                      </div>
+
+                      {/* Official explanation text requested by user */}
+                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-relaxed space-y-1.5">
+                        <p className="font-semibold text-sky-200">
+                          (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว)
+                        </p>
+                        <p>
+                          ทางเราขออนุญาตให้เมทของท่านทราบในกรณีที่ท่านมีอาการอะไร เมทของท่านจะได้ช่วยเหลือท่านได้อย่างถูกต้องเพื่อความปลอดภัยของตัวท่าน ทางเราไม่ได้มีเจตนาที่จะเปิดเผยประวัติสุขภาพของท่านไปในทางที่ไม่ดีหรือสู่สาธารณะแต่อย่างใด หากท่านไม่ยินยอม สามารถตั้งค่าปิดได้ตลอดเวลา หรือแจ้ง Staff ทุกคนให้ปิดข้อมูลของท่านได้ทุกเมื่อครับ
+                        </p>
+                      </div>
+
+                      {/* Interactive Toggle Switch & Save Button */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                        <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={consentHealthShare}
+                            onChange={(e) => setConsentHealthShare(e.target.checked)}
+                            className="w-4 h-4 mt-0.5 sm:mt-0 text-emerald-500 rounded border-slate-700 bg-slate-900 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                          />
+                          <span className="text-xs text-white font-medium">
+                            {consentHealthShare
+                              ? 'ยินยอมเปิดเผยข้อมูลสุขภาพ (โรคประจำตัว / อาการแพ้) ให้เพื่อนร่วมห้องทราบเพื่อความปลอดภัย'
+                              : 'ไม่ยินยอมเปิดเผยข้อมูลสุขภาพ (ซ่อนจากเพื่อนร่วมห้อง • ให้เฉพาะทีมแพทย์สนามและ Staff ทราบ)'}
+                          </span>
+                        </label>
+
+                        <button
+                          type="button"
+                          disabled={isSavingHealthConsent || consentHealthShare === isHealthSharedWithRoommate(myRegistration)}
+                          onClick={async () => {
+                            setIsSavingHealthConsent(true);
+                            try {
+                              if (onUpdateRegistration) {
+                                await onUpdateRegistration(myRegistration.id || myRegistration.user_id, {
+                                  share_health_with_roommate: consentHealthShare
+                                });
+                              } else {
+                                await DataService.updateRegistrationDetails(myRegistration.id || myRegistration.user_id, {
+                                  share_health_with_roommate: consentHealthShare
+                                });
+                              }
+                              triggerToast(
+                                consentHealthShare
+                                  ? '✓ บันทึกสำเร็จ: ยินยอมเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบเพื่อความปลอดภัยแล้ว'
+                                  : '✓ บันทึกสำเร็จ: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะทีมแพทย์สนามและ Staff ที่มองเห็นได้)',
+                                'success'
+                              );
+                            } catch (err) {
+                              console.error(err);
+                              triggerToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่าความเป็นส่วนตัว', 'error');
+                            } finally {
+                              setIsSavingHealthConsent(false);
+                            }
+                          }}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
+                            consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
+                              : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                          }`}
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>{isSavingHealthConsent ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่า'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

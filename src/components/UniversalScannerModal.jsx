@@ -35,7 +35,7 @@ import DocumentPreviewModal from './DocumentPreviewModal';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode, parseIdCardPayload } from '../utils/idCard';
 import { resolveFullAgeDetail } from '../utils/ageCalculator';
-import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, resolvePersonFullNameWithTitle, resolveUniversityInfo } from '../data/defaultData';
+import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, getCleanSpecialNotes, hasSpecialCareCondition, resolvePersonFullNameWithTitle, resolveUniversityInfo } from '../data/defaultData';
 
 /**
  * Web Audio API synthesizer for crisp scan confirmation chime
@@ -1511,7 +1511,7 @@ export default function UniversalScannerModal({
                           const allergy = getApplicantAllergy(p);
                           const hasMed = hasMedicalCondition(p);
                           const hasAllergy = hasFoodOrDrugAllergy(p);
-                          const hasSpecial = Boolean(p.is_special_care || p.special_care_note || p.special_notes);
+                          const hasSpecial = hasSpecialCareCondition(p);
                           
                           if (!hasMed && !hasAllergy && !hasSpecial) return null;
 
@@ -1533,7 +1533,7 @@ export default function UniversalScannerModal({
                               )}
                               {hasSpecial && (
                                 <p className="text-[11px] font-medium text-purple-200 bg-purple-900/30 px-2 py-1 rounded-md border border-purple-800/40">
-                                  ⚠️ ดูแลเป็นพิเศษ: <span className="font-bold text-white">{p.special_care_note || p.special_notes || 'ต้องได้รับการดูแลพิเศษ'}</span>
+                                  ⚠️ ดูแลเป็นพิเศษ: <span className="font-bold text-white">{getCleanSpecialNotes(p) || 'ต้องได้รับการดูแลพิเศษ'}</span>
                                 </p>
                               )}
                             </div>

@@ -252,12 +252,29 @@ const unpackRegistration = (row) => {
       }
     } catch (e) {}
   }
-  const cleanSpecialNotes = extra.admin_private_notes || extra.user_notes || (typeof row.special_notes === 'string' && !row.special_notes.startsWith('{') ? row.special_notes : '');
+  let cleanSpecialNotes = extra.admin_private_notes || extra.user_notes || (typeof row.special_notes === 'string' && !row.special_notes.startsWith('{') ? row.special_notes : '');
+  if (typeof cleanSpecialNotes === 'string' && cleanSpecialNotes.trim().startsWith('{')) {
+    try {
+      const p = JSON.parse(cleanSpecialNotes);
+      cleanSpecialNotes = p.admin_private_notes || p.user_notes || p.special_care_notes || '';
+    } catch (e) {
+      cleanSpecialNotes = '';
+    }
+  }
+  if (typeof cleanSpecialNotes === 'string' && (cleanSpecialNotes.trim().startsWith('{') || cleanSpecialNotes.includes('"title_th"') || cleanSpecialNotes.includes('"is_staff"'))) {
+    cleanSpecialNotes = '';
+  }
+
+  const shareConsent = extra.share_health_with_roommate !== undefined
+    ? Boolean(extra.share_health_with_roommate)
+    : (row.share_health_with_roommate !== undefined ? Boolean(row.share_health_with_roommate) : true);
+
   const unpacked = {
     ...extra,
     ...row,
     shirt_size: extra.shirt_size !== undefined ? extra.shirt_size : row.shirt_size,
     staff_id_card_only: extra.staff_id_card_only !== undefined ? extra.staff_id_card_only : row.staff_id_card_only,
+    share_health_with_roommate: shareConsent,
     special_notes: cleanSpecialNotes,
     raw_special_notes: row.special_notes
   };
@@ -411,8 +428,14 @@ const unpackRegistration = (row) => {
 
 const packRegistrationForSupabase = (fullData) => {
   const isStaff = isStaffRegistration(fullData);
+  const rawNotes = fullData.special_notes;
+  const cleanNotes = (typeof rawNotes === 'string' && !rawNotes.trim().startsWith('{') && !rawNotes.includes('"title_th"') && !rawNotes.includes('"is_staff"'))
+    ? rawNotes.trim()
+    : (fullData.user_notes || '');
+
   const extra = {
-    user_notes: fullData.special_notes || '',
+    user_notes: cleanNotes,
+    share_health_with_roommate: fullData.share_health_with_roommate !== undefined ? Boolean(fullData.share_health_with_roommate) : true,
     full_name_affiliation: fullData.full_name_affiliation || '',
     title_th: fullData.title_th || '',
     title_other_th: fullData.title_other_th || '',

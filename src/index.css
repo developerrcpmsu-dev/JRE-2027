@@ -152,6 +152,60 @@ body.modal-scroll-locked {
     print-color-adjust: exact !important;
   }
 
+  /* Specific Paper-Print Rendering for Rooms Roster (High Contrast Black on White) */
+  body.rooms-print-active #printable-rooms-roster {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 8mm !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+  }
+
+  body.rooms-print-active #printable-rooms-roster * {
+    visibility: visible !important;
+    color: #0f172a !important;
+    border-color: #94a3b8 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body.rooms-print-active #printable-rooms-roster table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 20px !important;
+  }
+
+  body.rooms-print-active #printable-rooms-roster th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    border: 1.5px solid #64748b !important;
+    padding: 6px 10px !important;
+  }
+
+  body.rooms-print-active #printable-rooms-roster td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 8px 10px !important;
+    color: #0f172a !important;
+    background: #ffffff !important;
+  }
+
+  body.rooms-print-active #printable-rooms-roster tr {
+    page-break-inside: avoid !important;
+  }
+
+  body.rooms-print-active #printable-rooms-roster h1,
+  body.rooms-print-active #printable-rooms-roster h2,
+  body.rooms-print-active #printable-rooms-roster h3,
+  body.rooms-print-active #printable-rooms-roster span,
+  body.rooms-print-active #printable-rooms-roster p,
+  body.rooms-print-active #printable-rooms-roster div {
+    color: #0f172a !important;
+  }
+
   /* Hide elements marked with .no-print */
   .no-print,
   nav,

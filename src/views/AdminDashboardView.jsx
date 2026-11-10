@@ -102,6 +102,9 @@ import {
   SPEAKER_CATEGORIES,
   getApplicantMedical,
   getApplicantAllergy,
+  getCleanSpecialNotes,
+  hasSpecialCareCondition,
+  isHealthSharedWithRoommate,
   hasHealthCondition,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
@@ -2514,8 +2517,8 @@ export default function AdminDashboardView({
     setModalRoom(reg.room_assigned || '');
     setModalShirtSize(reg.shirt_size || 'L');
     setModalCustomShirtNote(reg.custom_shirt_note || '');
-    setModalSpecialCare(Boolean(reg.is_special_care));
-    setModalNotes(reg.special_notes || '');
+    setModalSpecialCare(hasSpecialCareCondition(reg));
+    setModalNotes(getCleanSpecialNotes(reg) || '');
     setModalPhone(reg.phone || '');
     setModalInstitution(reg.institution || '');
     setModalMedical(getApplicantMedical(reg));
@@ -8686,20 +8689,8 @@ export default function AdminDashboardView({
                             const allergyText = getApplicantAllergy(reg);
                             const hasMed = hasMedicalCondition(reg);
                             const hasAllergy = hasFoodOrDrugAllergy(reg);
-                            let specialNotesClean = '';
-                            if (reg.special_notes) {
-                              if (typeof reg.special_notes === 'string' && reg.special_notes.trim().startsWith('{')) {
-                                try {
-                                  const parsed = JSON.parse(reg.special_notes);
-                                  specialNotesClean = parsed.admin_private_notes || parsed.user_notes || parsed.special_care_notes || '';
-                                } catch (e) {
-                                  specialNotesClean = '';
-                                }
-                              } else if (typeof reg.special_notes === 'string') {
-                                specialNotesClean = reg.special_notes.trim();
-                              }
-                            }
-                            const hasSpecial = Boolean(reg.is_special_care || (specialNotesClean && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(specialNotesClean.toLowerCase())));
+                            const specialNotesClean = getCleanSpecialNotes(reg);
+                            const hasSpecial = hasSpecialCareCondition(reg);
 
                             if (!hasMed && !hasAllergy && !hasSpecial) {
                               return (
@@ -9549,20 +9540,12 @@ export default function AdminDashboardView({
                       )}
                     </div>
                     {(() => {
-                      let cleanNotes = profileModalReg.special_notes || '';
-                      if (typeof cleanNotes === 'string' && cleanNotes.trim().startsWith('{')) {
-                        try {
-                          const p = JSON.parse(cleanNotes);
-                          cleanNotes = p.admin_private_notes || p.user_notes || p.special_care_notes || '';
-                        } catch (e) {
-                          cleanNotes = '';
-                        }
-                      }
-                      if (!profileModalReg.is_special_care || !cleanNotes) return null;
+                      const cleanNotes = getCleanSpecialNotes(profileModalReg);
+                      if (!cleanNotes && !profileModalReg.is_special_care) return null;
                       return (
                         <div className="bg-purple-950/50 border border-purple-500/40 p-2.5 rounded-xl">
                           <span className="text-purple-300 font-bold block text-[11px] mb-0.5">⚠️ บันทึกการดูแลพิเศษ:</span>
-                          <span className="text-purple-100">{cleanNotes}</span>
+                          <span className="text-purple-100">{cleanNotes || 'กำหนดเป็นบุคคลดูแลพิเศษ (Special Care)'}</span>
                         </div>
                       );
                     })()}

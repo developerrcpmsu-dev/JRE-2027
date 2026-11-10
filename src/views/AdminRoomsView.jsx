@@ -26,14 +26,24 @@ import {
   Calendar,
   X,
   LayoutGrid,
-  Table as TableIcon
+  Table as TableIcon,
+  FileSpreadsheet,
+  FileText,
+  Image as ImageIcon
 } from 'lucide-react';
 import { 
   resolveUniversityInfo, 
   resolveGender, 
   resolvePersonFullNameWithTitle,
-  normalizeCallsignSpacing
+  normalizeCallsignSpacing,
+  isHealthSharedWithRoommate,
+  getCleanSpecialNotes
 } from '../data/defaultData';
+import {
+  exportDormitoryRosterToExcel,
+  exportElementToPng,
+  downloadCsv
+} from '../utils/documentExporters';
 
 export default function AdminRoomsView({
   registrations = [],
@@ -130,6 +140,7 @@ export default function AdminRoomsView({
         emergencyName,
         emergencyPhone,
         isMsu,
+        isHealthShared: isHealthSharedWithRoommate(reg),
         rawRoom,
         roomNumber: null
       };
@@ -230,6 +241,63 @@ export default function AdminRoomsView({
     if (triggerToast) triggerToast('📋 คัดลอกผังห้องพัก 101-110 ลงคลิปบอร์ดเรียบร้อยแล้ว');
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Export to Excel (.xlsx)
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      await exportDormitoryRosterToExcel(roomData.rooms, roomData.localMsu, '3_ใบรายชื่อเข้าห้องพัก_หอพักกุดรัง_JRE2027.xlsx');
+      if (triggerToast) triggerToast('✓ ดาวน์โหลดไฟล์ Excel ผังห้องพัก (.xlsx) เรียบร้อยแล้ว', 'success');
+    } catch (e) {
+      console.error(e);
+      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการส่งออก Excel', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Export to CSV
+  const handleExportCsv = () => {
+    try {
+      let csv = '\uFEFFห้อง,เพศ,ผู้เข้าพักคนที่ 1,สังกัด 1,เบอร์โทร 1,โรค/แพ้ 1,ผู้เข้าพักคนที่ 2,สังกัด 2,เบอร์โทร 2,โรค/แพ้ 2\n';
+      roomData.rooms.forEach(r => {
+        const p1 = r.occupants[0];
+        const p2 = r.occupants[1];
+        const p1Name = p1 ? `"${p1.name} (${p1.nickname} / ${p1.callsign})"` : '""';
+        const p1Inst = p1 ? `"${p1.uniShort}"` : '""';
+        const p1Phone = p1 ? `"${p1.phone}"` : '""';
+        const p1Med = p1 ? `"${p1.medicalHistory !== 'ไม่มี' ? p1.medicalHistory : '-'} / ${p1.foodAllergy !== 'ไม่มี' ? p1.foodAllergy : '-'}"` : '""';
+
+        const p2Name = p2 ? `"${p2.name} (${p2.nickname} / ${p2.callsign})"` : '""';
+        const p2Inst = p2 ? `"${p2.uniShort}"` : '""';
+        const p2Phone = p2 ? `"${p2.phone}"` : '""';
+        const p2Med = p2 ? `"${p2.medicalHistory !== 'ไม่มี' ? p2.medicalHistory : '-'} / ${p2.foodAllergy !== 'ไม่มี' ? p2.foodAllergy : '-'}"` : '""';
+
+        csv += `"${r.roomLabel}","${r.gender}",${p1Name},${p1Inst},${p1Phone},${p1Med},${p2Name},${p2Inst},${p2Phone},${p2Med}\n`;
+      });
+      downloadCsv(csv, '3_ผังห้องพัก_หอพักกุดรัง_JRE2027.csv');
+      if (triggerToast) triggerToast('✓ ดาวน์โหลดไฟล์ CSV ผังห้องพักเรียบร้อยแล้ว', 'success');
+    } catch (e) {
+      console.error(e);
+      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการส่งออก CSV', 'error');
+    }
+  };
+
+  // Export to PNG Image
+  const handleExportPng = async () => {
+    try {
+      setIsExporting(true);
+      await exportElementToPng('printable-rooms-roster', 'ผังจัดสรรห้องพัก_หอพักกุดรัง_JRE2027.png');
+      if (triggerToast) triggerToast('✓ บันทึกภาพ PNG ผังห้องพักเรียบร้อยแล้ว', 'success');
+    } catch (e) {
+      console.error(e);
+      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการบันทึกภาพ PNG', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Helper to trigger clean paper print
   const handlePrint = () => {
     document.body.classList.add('rooms-print-active');
@@ -312,29 +380,71 @@ export default function AdminRoomsView({
               </button>
             </div>
 
+            {/* Roster Hub Link */}
+            <a
+              href="/admin/documents?tab=rooms"
+              className="px-3.5 py-2 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              title="เปิดหน้าใบเซ็นชื่อเข้าห้องพักทางการ 3-in-1 Roster Hub"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>📑 รวมใบเซ็นชื่อ 3-in-1</span>
+            </a>
+
+            {/* Export Excel */}
+            <button
+              type="button"
+              disabled={isExporting}
+              onClick={handleExportExcel}
+              className="px-3.5 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              title="ส่งออกผังห้องพักและผู้เข้าพักเป็นไฟล์ Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Excel (.xlsx)</span>
+            </button>
+
+            {/* Export CSV */}
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="px-3 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="ส่งออกผังห้องพักเป็นไฟล์ CSV (UTF-8)"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-400" />
+              <span>CSV</span>
+            </button>
+
+            {/* Export PNG */}
+            <button
+              type="button"
+              disabled={isExporting}
+              onClick={handleExportPng}
+              className="px-3 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              title="บันทึกภาพผังห้องพักเป็นไฟล์รูปภาพ PNG ความละเอียดสูง"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+              <span>รูปภาพ PNG</span>
+            </button>
+
+            {/* Copy text */}
             <button
               type="button"
               onClick={handleCopyRoster}
-              className="px-4 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow-lg shadow-sky-600/30 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+              className="px-3.5 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              title="คัดลอกรายชื่อแยกตามห้อง 101-110 ลงคลิปบอร์ด"
             >
-              {copiedAll ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedAll ? 'คัดลอกแล้ว ✓' : '📋 คัดลอกผังห้อง'}</span>
+              {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedAll ? 'คัดลอกแล้ว ✓' : 'คัดลอกผัง'}</span>
             </button>
 
-            <a
-              href="/admin/documents"
-              className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-lg flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <span>📄 รวมใบเซ็นชื่อ (3 ใบ)</span>
-            </a>
-
+            {/* Print paper */}
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+              className="px-3.5 py-2 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-600 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+              title="พิมพ์ผังห้องพักบนกระดาษ A4 หรือบันทึกเป็น PDF"
             >
-              <Printer className="w-4 h-4 text-amber-400" />
-              <span>พิมพ์ใบรายชื่อ</span>
+              <Printer className="w-3.5 h-3.5 text-amber-400" />
+              <span>🖨️ พิมพ์ / PDF</span>
             </button>
           </div>
         </div>
@@ -557,6 +667,13 @@ export default function AdminRoomsView({
                                     <span className="text-[10px] text-rose-400 font-mono font-bold">
                                       🩸 {p1.bloodGroup}
                                     </span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${
+                                      p1.isHealthShared
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    }`} title={p1.isHealthShared ? 'เปิดเผยให้เพื่อนร่วมห้องเห็น' : 'เมทมองไม่เห็น (ผู้พักขอซ่อนข้อมูลสุขภาพ)'}>
+                                      {p1.isHealthShared ? '👁️ เมทเห็น' : '🔒 เมทไม่เห็น'}
+                                    </span>
                                   </div>
                                 )}
                               </div>
@@ -610,6 +727,13 @@ export default function AdminRoomsView({
                                     )}
                                     <span className="text-[10px] text-rose-400 font-mono font-bold">
                                       🩸 {p2.bloodGroup}
+                                    </span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${
+                                      p2.isHealthShared
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    }`} title={p2.isHealthShared ? 'เปิดเผยให้เพื่อนร่วมห้องเห็น' : 'เมทมองไม่เห็น (ผู้พักขอซ่อนข้อมูลสุขภาพ)'}>
+                                      {p2.isHealthShared ? '👁️ เมทเห็น' : '🔒 เมทไม่เห็น'}
                                     </span>
                                   </div>
                                 )}
@@ -741,6 +865,13 @@ export default function AdminRoomsView({
                                     <span className="text-[10px] text-rose-400 font-mono font-bold">
                                       🩸 {p1.bloodGroup}
                                     </span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${
+                                      p1.isHealthShared
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    }`} title={p1.isHealthShared ? 'เปิดเผยให้เพื่อนร่วมห้องเห็น' : 'เมทมองไม่เห็น (ผู้พักขอซ่อนข้อมูลสุขภาพ)'}>
+                                      {p1.isHealthShared ? '👁️ เมทเห็น' : '🔒 เมทไม่เห็น'}
+                                    </span>
                                   </div>
                                 )}
                               </div>
@@ -794,6 +925,13 @@ export default function AdminRoomsView({
                                     )}
                                     <span className="text-[10px] text-rose-400 font-mono font-bold">
                                       🩸 {p2.bloodGroup}
+                                    </span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${
+                                      p2.isHealthShared
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    }`} title={p2.isHealthShared ? 'เปิดเผยให้เพื่อนร่วมห้องเห็น' : 'เมทมองไม่เห็น (ผู้พักขอซ่อนข้อมูลสุขภาพ)'}>
+                                      {p2.isHealthShared ? '👁️ เมทเห็น' : '🔒 เมทไม่เห็น'}
                                     </span>
                                   </div>
                                 )}
@@ -1168,6 +1306,52 @@ export default function AdminRoomsView({
                   <a href={`tel:${selectedPerson.emergencyPhone}`} className="text-sky-300 font-mono">
                     {selectedPerson.emergencyPhone}
                   </a>
+                </div>
+              )}
+            </div>
+
+            {/* Roommate Health Privacy Setting (Admin Controlled / Participant Synchronized) */}
+            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/40 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>การเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้อง:</span>
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                  selectedPerson.isHealthShared
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                }`}>
+                  {selectedPerson.isHealthShared ? '👁️ เปิดเผยให้เมททราบ' : '🔒 ซ่อนจากเมท (ปิดเป็นความลับ)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                {selectedPerson.isHealthShared
+                  ? 'ผู้เข้าพักยินยอมให้เพื่อนร่วมห้องเห็นข้อมูลโรคประจำตัวและอาการแพ้ เพื่อความปลอดภัยในการปฐมพยาบาล'
+                  : 'ผู้เข้าพักเลือกไม่เปิดเผยข้อมูลสุขภาพให้เมททราบ (เฉพาะ Admin และทีมแพทย์สนามเท่านั้นที่มองเห็น)'}
+              </p>
+              {onUpdateAllocation && (
+                <div className="pt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const nextVal = !selectedPerson.isHealthShared;
+                      const targetId = selectedPerson.id || selectedPerson.userId;
+                      await onUpdateAllocation(targetId, { share_health_with_roommate: nextVal });
+                      setSelectedPerson(prev => ({
+                        ...prev,
+                        isHealthShared: nextVal,
+                        raw: { ...(prev.raw || {}), share_health_with_roommate: nextVal }
+                      }));
+                      if (triggerToast) {
+                        triggerToast(nextVal ? '✓ บันทึก: เปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบแล้ว' : '✓ บันทึก: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะแพทย์/Admin มองเห็น)', 'info');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1.5 shadow"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>สลับเป็น: {selectedPerson.isHealthShared ? '🔒 ซ่อนจากเมท' : '👁️ เปิดเผยให้เมททราบ'}</span>
+                  </button>
                 </div>
               )}
             </div>
