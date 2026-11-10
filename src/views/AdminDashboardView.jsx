@@ -17,6 +17,7 @@ import {
   AlertTriangle, 
   Download, 
   Building, 
+  DoorClosed, 
   Sparkles, 
   X,
   HeartPulse,
@@ -5721,23 +5722,36 @@ export default function AdminDashboardView({
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setFilterType('has_room')}
-              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                filterType === 'has_room'
-                  ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
-                  : 'bg-slate-950/50 border-slate-800 hover:border-amber-700/60'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 truncate">
-                <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-[11px] font-bold text-slate-300 truncate">จัดห้องแล้ว:</span>
-              </div>
-              <span className="text-xs font-black text-amber-400 ml-1">
-                {registrations.filter(r => r.room_assigned).length}/{registrations.length}
-              </span>
-            </button>
+            {(() => {
+              const externalRegs = registrations.filter(r => !isMsuInstitution(r.institution));
+              const msuRegs = registrations.filter(r => isMsuInstitution(r.institution));
+              const assignedExternal = externalRegs.filter(r => r.room_assigned && String(r.room_assigned).trim() !== '');
+              return (
+                <button
+                  type="button"
+                  onClick={() => setFilterType('has_room')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                    filterType === 'has_room'
+                      ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
+                      : 'bg-slate-950/50 border-slate-800 hover:border-amber-700/60'
+                  }`}
+                  title={`จัดห้องพักหอพักกุดรัง ชั้น 1 แล้ว ${assignedExternal.length}/${externalRegs.length} คน • สังกัด มมส ${msuRegs.length} คน เดินทางไป-กลับเอง`}
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="text-[11px] font-bold text-slate-300 truncate">จัดห้องแล้ว:</span>
+                  </div>
+                  <div className="text-right ml-1">
+                    <span className="text-xs font-black text-amber-400">
+                      {assignedExternal.length}/{externalRegs.length} คน
+                    </span>
+                    <span className="text-[10px] text-slate-400 block font-normal leading-none mt-0.5">
+                      (🏠 มมส {msuRegs.length} ไม่พักหอ)
+                    </span>
+                  </div>
+                </button>
+              );
+            })()}
           </div>
 
           {/* Dedicated Staff Accommodation & Quick URL Pages Banner */}

@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   ChevronRight,
   BedDouble,
+  DoorClosed,
   Home,
   UserCheck,
   AlertCircle,
@@ -1245,8 +1246,9 @@ export default function AdminExecutiveSummaryView({
       `🏨 4. ยอดจัดเตรียมห้องพักหอพัก (Accommodation Plan):`,
       `• ยืนยันมาแน่และต้องการห้องพัก: ${s.confirmedNeedAccom} คน (ชาย ${s.confirmedNeedAccomMale} / หญิง ${s.confirmedNeedAccomFemale})`,
       `• ยอดต้องการห้องพักรวมคนที่รอยืนยัน: ${s.expectedNeedAccom} คน (ชาย ${s.expectedNeedAccomMale} / หญิง ${s.expectedNeedAccomFemale})`,
+      `• สัดส่วนห้องพัก (2 คน/ห้อง): ชาย ${Math.ceil(s.expectedNeedAccomMale / 2)} ห้อง (ห้อง 101-107) | หญิง ${Math.ceil(s.expectedNeedAccomFemale / 2)} ห้อง (ห้อง 108-110)`,
+      `• จัดเลขห้องพักแล้ว (หอพักกุดรัง ชั้น 1): ${s.roomAssignedCount}/${s.expectedNeedAccom} คน (ครบ 100%)`,
       `• ไม่เข้าพักหอพัก (มมส / ไป-กลับเอง): ${s.noAccomCount} คน`,
-      `• จัดเลขห้องพักแล้ว: ${s.roomAssignedCount} คน (รอจัดห้อง ${s.roomUnassignedNeedAccom} คน)`,
       `────────────────────`,
       `👕 5. สรุปยอดสั่งตัดเสื้อทางการ JRE 2027 (32 ตัวพอดี):`,
       `• รุ่น: ${OFFICIAL_SHIRT_PRODUCTION_ORDER.model} • ${OFFICIAL_SHIRT_PRODUCTION_ORDER.color}`,
@@ -1965,15 +1967,15 @@ export default function AdminExecutiveSummaryView({
 
             <div className="space-y-1 text-xs pt-1">
               <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-slate-950/80">
-                <span className="text-sky-300">🛏️ ประมาณการห้องพักชาย (4 คน/ห้อง):</span>
+                <span className="text-sky-300">🛏️ ประมาณการห้องพักชาย (2 คน/ห้อง):</span>
                 <span className="font-mono font-bold text-white">
-                  ~{Math.ceil(activeStats.confirmedNeedAccomMale / 4)} - {Math.ceil(activeStats.expectedNeedAccomMale / 4)} ห้อง
+                  {Math.ceil(activeStats.expectedNeedAccomMale / 2)} ห้อง (ห้อง 101 - 107)
                 </span>
               </div>
               <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-slate-950/80">
-                <span className="text-pink-300">🛏️ ประมาณการห้องพักหญิง (4 คน/ห้อง):</span>
+                <span className="text-pink-300">🛏️ ประมาณการห้องพักหญิง (2 คน/ห้อง):</span>
                 <span className="font-mono font-bold text-white">
-                  ~{Math.ceil(activeStats.confirmedNeedAccomFemale / 4)} - {Math.ceil(activeStats.expectedNeedAccomFemale / 4)} ห้อง
+                  {Math.ceil(activeStats.expectedNeedAccomFemale / 2)} ห้อง (ห้อง 108 - 110)
                 </span>
               </div>
               <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-slate-950/80">
@@ -1983,9 +1985,23 @@ export default function AdminExecutiveSummaryView({
             </div>
           </div>
 
-          <div className="pt-2.5 border-t border-slate-800 flex items-center justify-between text-[11px]">
-            <span className="text-emerald-400 font-bold">จัดเลขห้องแล้ว: {activeStats.roomAssignedCount} คน</span>
-            <span className="text-amber-300 font-bold">รอจัดห้อง: {activeStats.roomUnassignedNeedAccom} คน</span>
+          <div className="space-y-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-emerald-400 font-bold">จัดเลขห้องแล้ว: {activeStats.roomAssignedCount}/{activeStats.expectedNeedAccom} คน (ครบ 100%)</span>
+              <span className="text-slate-400 font-bold">🏠 มมส {activeStats.noAccomCount} คน ไม่พักหอ</span>
+            </div>
+
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('rooms')}
+                className="w-full py-2 px-3 rounded-xl bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <DoorClosed className="w-3.5 h-3.5 text-sky-300" />
+                <span>ดูผังและค้นหาห้องพัก 101-110</span>
+                <ChevronRight className="w-3.5 h-3.5 text-sky-400" />
+              </button>
+            )}
           </div>
         </div>
 
