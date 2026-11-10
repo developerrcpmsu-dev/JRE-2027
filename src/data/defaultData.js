@@ -876,6 +876,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายปฏิบัติการและประสานงานฝึก (RCP 15-46)',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792657788806_qkqpan',
+    shirt_size: 'S',
     matchTokens: ['พีรณัฐ พาลึก', 'พีรณัฐ']
   },
   {
@@ -895,6 +896,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายอำนวยการและควบคุมการฝึก (RCP 15-05)',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792659231387_t8ot9w',
+    shirt_size: 'XL',
     matchTokens: ['เศรษฐบุตร อากานิส', 'เศรษฐบุตร']
   },
   {
@@ -914,6 +916,8 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายทะเบียนและประสานงาน',
     photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Anusara_MSU&backgroundColor=b6e3f4',
+    shirt_size: '-',
+    staff_id_card_only: true,
     matchTokens: ['อนุสรา แสนขรยาง', 'อนุสรา']
   },
   {
@@ -933,6 +937,8 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
     photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Film_MC_JRE2027&backgroundColor=c0aede',
+    shirt_size: '-',
+    staff_id_card_only: true,
     matchTokens: ['น้องฟิล์ม']
   },
   {
@@ -952,6 +958,8 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
     photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Namwan_MC_JRE2027&backgroundColor=ffd5dc',
+    shirt_size: '-',
+    staff_id_card_only: true,
     matchTokens: ['น้องน้ำหวาน']
   },
   {
@@ -971,6 +979,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ช่างภาพและสื่อโสตทัศนูปกรณ์ (17-02)',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792034200329_4h02q2',
+    shirt_size: '6XL',
     matchTokens: ['วรภัทร เวสสุริยา', 'วรภัทร']
   },
   {
@@ -990,6 +999,8 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายพยาบาลและสวัสดิการ',
     photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Apatchanipha_MSU&backgroundColor=ffdfbf',
+    shirt_size: '-',
+    staff_id_card_only: true,
     matchTokens: ['อพัชนิภา ไวมาตร', 'อพัชนิภา']
   },
   {
@@ -1009,6 +1020,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายสนับสนุนและอุปกรณ์ภาคสนาม',
     photo: 'https://lh3.googleusercontent.com/a/ACg8ocL6a64t-MX62tV11cIUjlJzIMSONnc3oZZkFu9rMJbH7oRYKg=s96-c',
+    shirt_size: 'XL',
     matchTokens: ['ณัฐพล เชื้อคนแข็ง', 'ณัฐพล เชืิอคนแข็ง', 'ณัฐพล']
   },
   {
@@ -1028,6 +1040,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายเทคโนโลยีสารสนเทศและผู้พัฒนาระบบ (RCP 16-37)',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792543678934_ljitsl',
+    shirt_size: 'XL',
     matchTokens: ['พงศ์ภรณ์ ทองศิริ', 'พงศภรณ์ ทองศิริ', 'พงศ์ภรณ์', 'พงศภรณ์', 'ทองศิริ', 'เบส']
   }
 ];

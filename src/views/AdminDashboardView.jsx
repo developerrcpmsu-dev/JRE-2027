@@ -567,7 +567,16 @@ export default function AdminDashboardView({
         ? (r.payment_status === 'paid' || r.payment_status === 'full' || r.installment_1_status === 'paid')
         : (r.payment_status === 'paid' || r.payment_status === 'full' || (r.installment_1_status === 'paid' && isR2Paid));
       const isReceived = r.shirt_pickup_status === 'received' || r.shirt_received === true;
-      const rawSize = (r.shirt_size || 'L').trim();
+      const rawSize = (r.shirt_size || '').trim();
+      const hasShirt = Boolean(
+        rawSize &&
+        rawSize !== '-' &&
+        rawSize !== 'none' &&
+        rawSize !== 'ไม่มี' &&
+        !r.staff_id_card_only
+      );
+      if (!hasShirt) return null;
+
       const sizeDetail = resolveShirtSizeDetail(rawSize, r.custom_shirt_note);
       const normSize = sizeDetail.bucket;
       const orderNumber = `JRE27-SHIRT-${(r.id || r.user_id || 'REG').slice(0, 6).toUpperCase()}`;
@@ -615,7 +624,7 @@ export default function AdminDashboardView({
         created_at: r.created_at || new Date().toISOString(),
         rawRegistration: r
       };
-    });
+    }).filter(Boolean);
   }, [registrations]);
 
   // Merchandise store orders records
@@ -824,24 +833,35 @@ export default function AdminDashboardView({
       const isStaff = isStaffRegistration(reg);
       const gender = resolveGender(reg);
       const memberTypeInfo = resolveApplicantMemberType(reg);
-      const sizeDetail = resolveShirtSizeDetail(reg.shirt_size || 'L', reg.custom_shirt_note);
-      const sizeKey = STANDARD_SIZES.includes(sizeDetail.bucket) ? sizeDetail.bucket : 'อื่นๆ';
+      const rawShirtSize = (reg.shirt_size || '').trim();
+      const hasShirt = Boolean(
+        rawShirtSize &&
+        rawShirtSize !== '-' &&
+        rawShirtSize !== 'none' &&
+        rawShirtSize !== 'ไม่มี' &&
+        !reg.staff_id_card_only
+      );
       const hasRoom = Boolean(reg.room_assigned && String(reg.room_assigned).trim() !== '');
 
       bucket.totalPeople += 1;
-      bucket.totalShirts += 1;
       if (memberTypeInfo.isClubMember) bucket.clubMemberCount += 1;
       else bucket.volunteerCount += 1;
-      bucket.shirtSizes[sizeKey] = (bucket.shirtSizes[sizeKey] || 0) + 1;
 
-      if (sizeKey === 'อื่นๆ') {
-        const personName = reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim() || 'ผู้สมัคร';
-        if (sizeDetail.isSpecified) {
-          bucket.otherSpecifiedLabels.push(sizeDetail.shortLabel);
-          bucket.otherDetails.push(`${personName}: ${sizeDetail.fullLabel}`);
-        } else {
-          bucket.otherUnspecifiedCount += 1;
-          bucket.otherDetails.push(`${personName}: อื่นๆ (รอระบุไซส์จริง)`);
+      if (hasShirt) {
+        bucket.totalShirts += 1;
+        const sizeDetail = resolveShirtSizeDetail(rawShirtSize, reg.custom_shirt_note);
+        const sizeKey = STANDARD_SIZES.includes(sizeDetail.bucket) ? sizeDetail.bucket : 'อื่นๆ';
+        bucket.shirtSizes[sizeKey] = (bucket.shirtSizes[sizeKey] || 0) + 1;
+
+        if (sizeKey === 'อื่นๆ') {
+          const personName = reg.full_name_affiliation || `${reg.first_name || ''} ${reg.last_name || ''}`.trim() || 'ผู้สมัคร';
+          if (sizeDetail.isSpecified) {
+            bucket.otherSpecifiedLabels.push(sizeDetail.shortLabel);
+            bucket.otherDetails.push(`${personName}: ${sizeDetail.fullLabel}`);
+          } else {
+            bucket.otherUnspecifiedCount += 1;
+            bucket.otherDetails.push(`${personName}: อื่นๆ (รอระบุไซส์จริง)`);
+          }
         }
       }
 
@@ -957,6 +977,20 @@ export default function AdminDashboardView({
       }
 
       bucket.people.push(reg);
+    });
+
+    // Include standalone merchandise shirt orders (e.g. Newton RCP 16-02 XL shirt)
+    (merchandiseOrders || []).forEach(ord => {
+      const uTag = ord.affiliation || (ord.institution?.includes('มหาสารคาม') ? 'มมส' : ord.institution?.includes('ขอนแก่น') ? 'มข' : null);
+      if (uTag && uniMap[uTag]) {
+        const b = uniMap[uTag];
+        const sz = ord.shirt_size || ord.items?.[0]?.size || 'XL';
+        const sizeDetail = resolveShirtSizeDetail(sz);
+        const sizeKey = STANDARD_SIZES.includes(sizeDetail.bucket) ? sizeDetail.bucket : 'อื่นๆ';
+        const qty = ord.quantity || 1;
+        b.totalShirts += qty;
+        b.shirtSizes[sizeKey] = (b.shirtSizes[sizeKey] || 0) + qty;
+      }
     });
 
     const list = Object.values(uniMap);
