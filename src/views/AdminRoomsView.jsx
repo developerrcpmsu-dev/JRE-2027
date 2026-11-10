@@ -225,6 +225,17 @@ export default function AdminRoomsView({
     if (triggerToast) triggerToast('📋 คัดลอกผังห้องพัก 101-110 ลงคลิปบอร์ดเรียบร้อยแล้ว');
   };
 
+  // Helper to trigger clean paper print
+  const handlePrint = () => {
+    document.body.classList.add('rooms-print-active');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('rooms-print-active');
+      }, 1000);
+    }, 150);
+  };
+
   // Helper to open interactive profile popup
   const handleOpenPersonProfile = (person, room = null) => {
     const roommate = room ? room.occupants.find(p => p.id !== person.id) : null;
@@ -305,9 +316,16 @@ export default function AdminRoomsView({
               <span>{copiedAll ? 'คัดลอกแล้ว ✓' : '📋 คัดลอกผังห้อง'}</span>
             </button>
 
+            <a
+              href="/admin/documents"
+              className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-lg flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>📄 รวมใบเซ็นชื่อ (3 ใบ)</span>
+            </a>
+
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="px-4 py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4 text-amber-400" />
@@ -425,7 +443,13 @@ export default function AdminRoomsView({
 
       {/* VIEW MODE 1: FORMAL TABLE VIEW (ACTIVE BY DEFAULT) */}
       {viewMode === 'table' && (
-        <div className="space-y-8">
+        <div id="printable-rooms-roster" className="space-y-8 print:p-4 print:bg-white print:text-slate-900">
+          {/* Print only header banner */}
+          <div className="hidden print:block text-center pb-4 mb-4 border-b-2 border-slate-900">
+            <h1 className="text-xl font-black text-slate-950">หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (ชั้น 1 ห้อง 101 - 110)</h1>
+            <p className="text-xs font-bold text-slate-700">โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) • ผังจัดสรรห้องพัก 10 ห้อง (20 คน)</p>
+          </div>
+
           {/* 1. MALE ROOMS TABLE (ห้องพักชาย 7 ห้อง / 14 คน — ชั้น 1) */}
           {(genderFilter === 'all' || genderFilter === 'ชาย') && (
             <div className="rounded-3xl bg-slate-950/80 border border-blue-500/40 overflow-hidden shadow-2xl">

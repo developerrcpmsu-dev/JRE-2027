@@ -111,6 +111,47 @@ body.modal-scroll-locked {
     print-color-adjust: exact !important;
   }
 
+  /* Document signing hub & rooms print: full sheet activation */
+  body.document-print-active,
+  body.rooms-print-active {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body.document-print-active > *:not(#root),
+  body.rooms-print-active > *:not(#root) {
+    display: none !important;
+  }
+
+  body.document-print-active #root,
+  body.document-print-active #root > div,
+  body.document-print-active main,
+  body.document-print-active main > div,
+  body.rooms-print-active #root,
+  body.rooms-print-active #root > div,
+  body.rooms-print-active main,
+  body.rooms-print-active main > div {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body.document-print-active #printable-document-sheet,
+  body.document-print-active #printable-document-sheet *,
+  body.rooms-print-active #printable-rooms-roster,
+  body.rooms-print-active #printable-rooms-roster * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   /* Hide elements marked with .no-print */
   .no-print,
   nav,

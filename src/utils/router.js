@@ -138,6 +138,11 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'rooms', canonicalPath: '/admin/rooms' };
   }
 
+  // Standalone shortcuts for Official Signing Documents & Rosters (/documents, /rosters, /admin/documents)
+  if (first === 'documents' || first === 'document' || first === 'rosters' || first === 'roster' || first === 'sign' || first === 'signing') {
+    return { mainTab: 'admin', subRoute: 'documents', canonicalPath: '/admin/documents' };
+  }
+
   // Standalone shortcuts for Staff Accommodation & Payment Filter Pages
   if (first === 'staff-accommodation' || first === 'staff-hotel' || first === 'staff-refund') {
     return { mainTab: 'admin', subRoute: 'staff-accommodation', canonicalPath: '/admin/staff-accommodation' };
@@ -251,6 +256,12 @@ export function parseCurrentRoute() {
       'dorm': 'rooms',
       'dormitory': 'rooms',
 
+      'documents': 'documents',
+      'document': 'documents',
+      'rosters': 'documents',
+      'roster': 'documents',
+      'signing': 'documents',
+
       'staff-accommodation': 'staff-accommodation',
       'staff_accommodation': 'staff-accommodation',
       'staff-hotel': 'staff-accommodation',
@@ -307,6 +318,7 @@ export function parseCurrentRoute() {
     else if (targetSub === 'installment-plan') canonicalPath = '/admin/installment-plan';
     else if (targetSub === 'fully-paid') canonicalPath = '/admin/fully-paid';
     else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
+    else if (targetSub === 'documents') canonicalPath = '/admin/documents';
     else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
     else canonicalPath = '/admin';
 
@@ -402,6 +414,7 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
       if (subRoute === 'rooms' || subRoute === 'room' || subRoute === 'accommodation' || subRoute === 'dorm' || subRoute === 'dormitory') return '/admin/rooms';
+      if (subRoute === 'documents' || subRoute === 'rosters' || subRoute === 'document' || subRoute === 'roster' || subRoute === 'signing') return '/admin/documents';
       if (subRoute === 'catering' || subRoute === 'health' || subRoute === 'catering-health' || subRoute === 'food' || subRoute === 'welfare') return '/admin/catering';
       if (subRoute === 'staff-accommodation' || subRoute === 'staff_accommodation' || subRoute === 'staff-hotel' || subRoute === 'staff-refund') return '/admin/staff-accommodation';
       if (subRoute === 'full-payment' || subRoute === 'full_plan' || subRoute === 'full-plan') return '/admin/full-payment';

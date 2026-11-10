@@ -118,6 +118,7 @@ import CateringHealthView from './CateringHealthView';
 import AdminExecutiveSummaryView from './AdminExecutiveSummaryView';
 import AdminIDCardsDirectoryView from './AdminIDCardsDirectoryView';
 import AdminRoomsView from './AdminRoomsView';
+import AdminDocumentsView from './AdminDocumentsView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -196,6 +197,7 @@ export default function AdminDashboardView({
     if (tab === 'catering' || tab === 'health' || tab === 'catering-health' || tab === 'food' || tab === 'welfare') return 'catering';
     if (tab === 'summary' || tab === 'overview' || tab === 'attendance' || tab === 'rsvp') return 'summary';
     if (tab === 'rooms' || tab === 'room' || tab === 'accommodation' || tab === 'dorm' || tab === 'dormitory') return 'rooms';
+    if (tab === 'documents' || tab === 'document' || tab === 'rosters' || tab === 'roster' || tab === 'signing') return 'documents';
     return tab || 'applicants';
   };
 
@@ -282,6 +284,7 @@ export default function AdminDashboardView({
     if (t === 'catering') return 'catering';
     if (t === 'summary') return 'summary';
     if (t === 'rooms') return 'rooms';
+    if (t === 'documents') return 'documents';
     return t;
   };
 
@@ -6052,6 +6055,18 @@ export default function AdminDashboardView({
           >
             <Building className="w-4 h-4 text-sky-400 shrink-0" />
             <span>🏨 ห้องพักหอกุดรัง (101-110)</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('documents')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'documents'
+                ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-lg shadow-teal-500/30 ring-2 ring-teal-400/50 font-black'
+                : 'text-teal-300 hover:text-white bg-teal-950/40 hover:bg-teal-900/50 border border-teal-500/40'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-teal-400 shrink-0" />
+            <span>📄 รวมใบเซ็นชื่อ (3 ใบ)</span>
           </button>
 
           <button
@@ -17661,6 +17676,15 @@ export default function AdminDashboardView({
           registrations={registrations}
           onUpdateAllocation={onUpdateAllocation}
           onOpenProfileModal={(reg) => handleOpenProfileModal(reg, 'info')}
+          triggerToast={triggerToast}
+        />
+      )}
+
+      {/* TAB: OFFICIAL SIGNING DOCUMENTS & ROSTERS HUB (/admin/documents) */}
+      {activeTab === 'documents' && (
+        <AdminDocumentsView
+          registrations={registrations}
+          merchandiseOrders={merchandiseOrders}
           triggerToast={triggerToast}
         />
       )}
