@@ -48,6 +48,7 @@ import {
   STAFF_SHIRT_FEE,
   OFFICIAL_NETWORK_INSTITUTIONS,
   OFFICIAL_8_COMMITTEE_ROSTER,
+  OFFICIAL_SHIRT_PRODUCTION_ORDER,
   STAFF_ROLE_OPTIONS,
   resolveStaffRoleType,
   findMatchingCommitteeMemberSpec,
@@ -196,6 +197,7 @@ export default function AdminExecutiveSummaryView({
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [isSyncingCommittee, setIsSyncingCommittee] = useState(false);
   const [showCommitteeRosterPanel, setShowCommitteeRosterPanel] = useState(true);
+  const [showShirtSpecModal, setShowShirtSpecModal] = useState(false);
   // Protection switch: Admin must unlock Edit Mode before changing data, to prevent accidental clicks
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -1209,8 +1211,13 @@ export default function AdminExecutiveSummaryView({
       `• ไม่เข้าพักหอพัก (มมส / ไป-กลับเอง): ${s.noAccomCount} คน`,
       `• จัดเลขห้องพักแล้ว: ${s.roomAssignedCount} คน (รอจัดห้อง ${s.roomUnassignedNeedAccom} คน)`,
       `────────────────────`,
-      `👕 5. ยอดเสื้อฝึกผู้สมัครรวม: ${s.totalRegShirts} ตัว`,
-      `• ${STANDARD_SHIRT_SIZES.map((sz) => `${sz}:${s.shirtCounts[sz] || 0}`).join(' | ')}`,
+      `👕 5. สรุปยอดสั่งตัดเสื้อทางการ JRE 2027 (32 ตัวพอดี):`,
+      `• รุ่น: ${OFFICIAL_SHIRT_PRODUCTION_ORDER.model} • ${OFFICIAL_SHIRT_PRODUCTION_ORDER.color}`,
+      `• ด้านหน้า อกขวาข้อความ TSIKKU (รวม 19 ตัว):`,
+      `  S:3 | M:4 | L:4 | XL:2 | 2XL:2 | 4XL:3 | 5XL:1`,
+      `• ด้านหน้า อกขวาข้อความ RCPMSU (รวม 13 ตัว):`,
+      `  S:2 | M:1 | L:1 | XL:6 | 2XL:1 | 4XL:1 | 6XL:1`,
+      `  (*หมายเหตุ ตัวที่ 32: นายจินณวัตร ทิพย์รักษ์ RCP 16-02 สั่งไซส์ XL ไม่ได้เข้าอบรม)`,
       `────────────────────`,
       `💰 6. สรุปยอดการเงิน:`,
       `• รับเงินจริงแล้ว: ฿${s.collectedFeeTotal.toLocaleString()} / ฿${s.expectedFeeTotal.toLocaleString()}`,
@@ -1947,26 +1954,55 @@ export default function AdminExecutiveSummaryView({
               </p>
             </div>
 
-            <div className="p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1.5">
+            <div className="p-3 rounded-2xl bg-slate-950/90 border border-amber-500/30 space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-amber-300 font-bold flex items-center gap-1">
-                  <Shirt className="w-3.5 h-3.5" /> เสื้อผู้สมัคร/Staff:
+                <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                  <Shirt className="w-4 h-4 text-amber-400" /> สั่งตัดเสื้อทางการ (32 ตัว):
                 </span>
-                <span className="font-mono font-black text-white">{activeStats.totalRegShirts} ตัว</span>
+                <button
+                  type="button"
+                  onClick={() => setShowShirtSpecModal(true)}
+                  className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold cursor-pointer transition-all"
+                >
+                  🔍 ดูใบสั่งตัดโรงงาน
+                </button>
               </div>
-              <div className="flex flex-wrap gap-1 pt-0.5">
-                {STANDARD_SHIRT_SIZES.map((sz) => {
-                  const c = activeStats.shirtCounts[sz] || 0;
-                  if (c === 0) return null;
-                  return (
-                    <span
-                      key={sz}
-                      className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] font-mono text-amber-200 font-bold"
-                    >
-                      {sz}:{c}
-                    </span>
-                  );
-                })}
+
+              {/* TSIKKU Batch */}
+              <div className="text-[11px] bg-slate-900/90 p-2 rounded-xl border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between font-bold text-sky-300 text-[10px]">
+                  <span>🪡 อกขวา &ldquo;TSIKKU&rdquo; (มข):</span>
+                  <span className="font-mono text-white font-black">19 ตัว</span>
+                </div>
+                <div className="flex flex-wrap gap-1 text-[10px] font-mono text-slate-200">
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">S:3</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">M:4</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">L:4</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">XL:2</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">2XL:2</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">4XL:3</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">5XL:1</span>
+                </div>
+              </div>
+
+              {/* RCPMSU Batch */}
+              <div className="text-[11px] bg-slate-900/90 p-2 rounded-xl border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between font-bold text-amber-300 text-[10px]">
+                  <span>🪡 อกขวา &ldquo;RCPMSU&rdquo; (มมส):</span>
+                  <span className="font-mono text-white font-black">13 ตัว</span>
+                </div>
+                <div className="flex flex-wrap gap-1 text-[10px] font-mono text-slate-200">
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">S:2</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">M:1</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">L:1</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800 font-bold text-amber-300">XL:6</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">2XL:1</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">4XL:1</span>
+                  <span className="px-1.5 py-0.5 bg-slate-950 rounded border border-slate-800">6XL:1</span>
+                </div>
+                <div className="text-[10px] text-amber-300/90 pt-0.5 font-sans leading-tight">
+                  ⭐ <em>ตัวที่ 32: นิวตั้น (จินณวัตร ทิพย์รักษ์ RCP 16-02) ไซส์ XL (สั่งเฉพาะเสื้อ)</em>
+                </div>
               </div>
             </div>
           </div>
@@ -2872,6 +2908,192 @@ export default function AdminExecutiveSummaryView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* SHIRT PRODUCTION SPECIFICATION MODAL (32 SHIRTS OFFICIAL ORDER) */}
+      {showShirtSpecModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <Shirt className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white">
+                    👕 ใบสรุปยอดสั่งตัดเสื้อทางการ JRE 2027 (32 ตัวพอดี)
+                  </h3>
+                  <p className="text-xs text-amber-300 font-medium">
+                    {OFFICIAL_SHIRT_PRODUCTION_ORDER.model} • {OFFICIAL_SHIRT_PRODUCTION_ORDER.color}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShirtSpecModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Spec Box 1: TSIKKU */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-sky-500/40 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-200 border border-sky-500/30 font-black text-xs">
+                    ด้านหน้า อกขวาข้อความ: TSIKKU
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">ม.ขอนแก่น (มข)</span>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-sky-500 text-slate-950 font-black text-xs font-mono">
+                  รวม 19 ตัว
+                </span>
+              </div>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 pt-1 text-center font-mono">
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ S</span>
+                  <span className="text-sm font-black text-white">3</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ M</span>
+                  <span className="text-sm font-black text-white">4</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ L</span>
+                  <span className="text-sm font-black text-white">4</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ XL</span>
+                  <span className="text-sm font-black text-white">2</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ 2XL</span>
+                  <span className="text-sm font-black text-white">2</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ 4XL</span>
+                  <span className="text-sm font-black text-white">3</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ 5XL</span>
+                  <span className="text-sm font-black text-white">1</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Spec Box 2: RCPMSU */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-amber-500/40 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/30 font-black text-xs">
+                    ด้านหน้า อกขวาข้อความ: RCPMSU
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">ม.มหาสารคาม (มมส)</span>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 font-black text-xs font-mono">
+                  รวม 13 ตัว
+                </span>
+              </div>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 pt-1 text-center font-mono">
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ S</span>
+                  <span className="text-sm font-black text-white">2</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ M</span>
+                  <span className="text-sm font-black text-white">1</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ L</span>
+                  <span className="text-sm font-black text-white">1</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-amber-500/50 bg-amber-950/20">
+                  <span className="block text-[10px] text-amber-300 font-sans font-bold">ไซส์ XL</span>
+                  <span className="text-sm font-black text-amber-300">6</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ 2XL</span>
+                  <span className="text-sm font-black text-white">1</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ 4XL</span>
+                  <span className="text-sm font-black text-white">1</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <span className="block text-[10px] text-slate-400 font-sans">ไซส์ 6XL</span>
+                  <span className="text-sm font-black text-white">1</span>
+                </div>
+              </div>
+
+              {/* Special Note for 32nd Shirt */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>บันทึกตัวที่ 32 (โควตา RCPMSU):</span>
+                </div>
+                <p className="leading-relaxed pl-6 text-[11px] text-slate-300">
+                  <strong>นายจินณวัตร ทิพย์รักษ์</strong> (นิวตั้น / Jhinnawat Thiparak • Callsign: <strong className="text-sky-300 font-mono">RCP 16-02</strong>)
+                  <br />
+                  สั่งทำเสื้อไซส์ <strong className="text-amber-300 font-mono">XL (1 ตัว)</strong> • <em>ไม่ได้เข้าร่วมการฝึกอบรม (บันทึกเฉพาะในระบบยอดเสื้อ ไม่นับในตารางสมาชิกอบรม)</em>
+                </p>
+              </div>
+            </div>
+
+            {/* Total summary & Action buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800">
+              <div className="text-xs text-slate-300">
+                ยอดสั่งผลิตรวมสุทธิ: <strong className="text-emerald-400 font-mono text-sm">32 ตัว</strong> (TSIKKU 19 + RCPMSU 13)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = [
+                      `เสื้อพิมพ์ลาย คอปกซิปแขนสั้น + ไหล่สโลป (ผ้าไมโครเรียบ)`,
+                      `สีเทาดำ`,
+                      `ด้านหน้า อกขวาข้อความ TSIKKU`,
+                      `S = 3 ตัว`,
+                      `M = 4 ตัว`,
+                      `L = 4 ตัว`,
+                      `XL = 2 ตัว`,
+                      `2XL = 2 ตัว`,
+                      `4XL = 3 ตัว`,
+                      `5XL = 1 ตัว`,
+                      `รวม 19 ตัว`,
+                      `_____________________`,
+                      `ด้านหน้า อกขวาข้อความ RCPMSU`,
+                      `S = 2 ตัว`,
+                      `M = 1 ตัว`,
+                      `L = 1 ตัว`,
+                      `XL = 6 ตัว`,
+                      `2XL = 1 ตัว`,
+                      `4XL = 1 ตัว`,
+                      `6XL = 1 ตัว`,
+                      `รวม 13 ตัว`,
+                      ``,
+                      `รวมทั้งหมด 32 ตัว`,
+                      `(*ตัวที่ 32 RCPMSU: นิวตั้น Jhinnawat Thiparak นายจินณวัตร ทิพย์รักษ์ RCP 16-02 สั่งไซส์ XL ไม่ได้เข้าอบรม)`
+                    ].join('\n');
+                    navigator.clipboard?.writeText(text);
+                    if (triggerToast) triggerToast('📋 คัดลอกรายละเอียดใบสั่งตัดเสื้อ 32 ตัวส่งร้านเรียบร้อยแล้ว!');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>คัดลอกสเปคส่งร้านตัดเสื้อ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowShirtSpecModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

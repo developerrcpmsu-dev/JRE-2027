@@ -2373,8 +2373,81 @@ export const DEFAULT_MERCHANDISE_CONFIG = {
   ]
 };
 
-// Start with empty real merchandise orders (No mock data)
-export const DEFAULT_MERCHANDISE_ORDERS = [];
+// Official JRE 2027 Shirt Production Order (เสื้อพิมพ์ลาย คอปกซิปแขนสั้น + ไหล่สโลป ผ้าไมโครเรียบ สีเทาดำ)
+export const OFFICIAL_SHIRT_PRODUCTION_ORDER = {
+  model: 'เสื้อพิมพ์ลาย คอปกซิปแขนสั้น + ไหล่สโลป (ผ้าไมโครเรียบ)',
+  color: 'สีเทาดำ',
+  totalQuantity: 32,
+  batches: [
+    {
+      key: 'tsikku',
+      group: 'TSIKKU',
+      institution: 'มหาวิทยาลัยขอนแก่น (มข - TSI KKU)',
+      chestText: 'TSIKKU',
+      chestPosition: 'อกขวา',
+      total: 19,
+      sizes: {
+        S: 3,
+        M: 4,
+        L: 4,
+        XL: 2,
+        '2XL': 2,
+        '4XL': 3,
+        '5XL': 1
+      }
+    },
+    {
+      key: 'rcpmsu',
+      group: 'RCPMSU',
+      institution: 'มหาวิทยาลัยมหาสารคาม (มมส - ชมรมกู้ภัยราชพฤกษ์)',
+      chestText: 'RCPMSU',
+      chestPosition: 'อกขวา',
+      total: 13,
+      sizes: {
+        S: 2,
+        M: 1,
+        L: 1,
+        XL: 6,
+        '2XL': 1,
+        '4XL': 1,
+        '6XL': 1
+      },
+      specialOrders: [
+        {
+          name: 'นายจินณวัตร ทิพย์รักษ์',
+          nickname: 'นิวตั้น (Jhinnawat Thiparak)',
+          callsign: 'RCP 16-02',
+          institution: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+          size: 'XL',
+          isTrainingParticipant: false,
+          note: 'สั่งเฉพาะเสื้อ (ตัวที่ 32 ของโควตา RCPMSU) ไม่ได้เข้าร่วมการฝึกอบรม'
+        }
+      ]
+    }
+  ]
+};
+
+// Merchandise Orders (including standalone shirt orders outside training roster)
+export const DEFAULT_MERCHANDISE_ORDERS = [
+  {
+    id: 'order_shirt_rcp_1602_newton',
+    order_number: 'JRE-SHIRT-1602-NEWTON',
+    customer_name: 'นายจินณวัตร ทิพย์รักษ์',
+    nickname: 'นิวตั้น (Jhinnawat Thiparak)',
+    callsign: 'RCP 16-02',
+    institution: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    affiliation: 'มมส',
+    product_name: 'เสื้อพิมพ์ลาย คอปกซิปแขนสั้น + ไหล่สโลป (ผ้าไมโครเรียบ) สีเทาดำ',
+    chest_text: 'RCPMSU',
+    shirt_size: 'XL',
+    quantity: 1,
+    unit_price: 280,
+    total_price: 280,
+    payment_status: 'paid',
+    is_training_participant: false,
+    note: 'สั่งเฉพาะเสื้อ (ตัวที่ 32) ไม่ได้เข้าร่วมการฝึกอบรม'
+  }
+];
 
 // 8 Official Network Universities & Rescue Clubs (From Official Registration Form)
 export const OFFICIAL_NETWORK_INSTITUTIONS = [
