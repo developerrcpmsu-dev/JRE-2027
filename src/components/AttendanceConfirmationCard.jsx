@@ -28,29 +28,27 @@ export default function AttendanceConfirmationCard({
 }) {
   const confirmInfo = getAttendanceConfirmationInfo(myRegistration);
   const uniInfo = myRegistration ? resolveUniversityInfo(myRegistration) : null;
+  const isMsu = Boolean(uniInfo?.isMsu);
 
   const [statusChoice, setStatusChoice] = useState(
     confirmInfo.status === 'pending' ? 'confirmed' : confirmInfo.status
   );
-  const [needAccommodation, setNeedAccommodation] = useState(confirmInfo.needAccommodation);
-  const [needMeals, setNeedMeals] = useState(confirmInfo.needMeals);
   const [arrivalDate, setArrivalDate] = useState(
-    confirmInfo.arrivalDate || 'เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)'
+    confirmInfo.arrivalDate || (isMsu ? 'นิสิต/บุคลากร มมส (อยู่ในพื้นที่)' : 'เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)')
   );
   const [confirmNote, setConfirmNote] = useState(confirmInfo.note || '');
-  const [foodAllergyEdit, setFoodAllergyEdit] = useState(myRegistration?.food_allergy || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isExpandedForm, setIsExpandedForm] = useState(!confirmInfo.isConfirmed && !confirmInfo.isDeclined);
 
   useEffect(() => {
     if (!myRegistration) return;
     const info = getAttendanceConfirmationInfo(myRegistration);
+    const uInfo = resolveUniversityInfo(myRegistration);
+    const msuFlag = Boolean(uInfo?.isMsu);
+
     setStatusChoice(info.status === 'pending' ? 'confirmed' : info.status);
-    setNeedAccommodation(info.needAccommodation);
-    setNeedMeals(info.needMeals);
-    setArrivalDate(info.arrivalDate || 'เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)');
+    setArrivalDate(info.arrivalDate || (msuFlag ? 'นิสิต/บุคลากร มมส (อยู่ในพื้นที่)' : 'เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)'));
     setConfirmNote(info.note || '');
-    setFoodAllergyEdit(myRegistration.food_allergy || '');
     setIsExpandedForm(info.isPending);
   }, [
     myRegistration?.id,
@@ -102,8 +100,9 @@ export default function AttendanceConfirmationCard({
     try {
       const now = new Date().toISOString();
       const targetId = myRegistration.user_id || myRegistration.id;
-      const finalAccom = finalStatus === 'declined' ? false : Boolean(needAccommodation);
-      const finalMeals = finalStatus === 'declined' ? false : Boolean(needMeals);
+      // มมส ไป-กลับเองอยู่แล้ว (false) / มออื่นๆ จัดหาหอพักให้อยู่แล้ว (true)
+      const finalAccom = finalStatus === 'declined' ? false : (isMsu ? false : true);
+      const finalMeals = finalStatus === 'declined' ? false : true;
 
       const updates = {
         attendance_confirmed_status: finalStatus,
@@ -115,17 +114,13 @@ export default function AttendanceConfirmationCard({
         attendance_confirm_note: confirmNote.trim()
       };
 
-      if (foodAllergyEdit.trim() !== (myRegistration.food_allergy || '').trim()) {
-        updates.food_allergy = foodAllergyEdit.trim() || 'ไม่มี';
-      }
-
       await onUpdateRegistration(targetId, updates);
       setIsExpandedForm(false);
 
       if (onToast) {
         onToast(
           finalStatus === 'confirmed'
-            ? '✅ บันทึกการยืนยันเข้าร่วมกิจกรรมจริงเรียบร้อยแล้ว! ระบบได้ล็อคจำนวนอาหารและห้องพักให้ท่านแล้ว'
+            ? '✅ บันทึกการยืนยันเข้าร่วมกิจกรรมจริงเรียบร้อยแล้ว!'
             : 'บันทึกแจ้งไม่สะดวกเข้าร่วมกิจกรรมเรียบร้อยแล้ว',
           finalStatus === 'confirmed' ? 'success' : 'info'
         );
@@ -233,33 +228,20 @@ export default function AttendanceConfirmationCard({
             className="px-3.5 py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
           >
             <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isExpandedForm ? 'ซ่อนรายละเอียด' : 'ตั้งค่าที่พัก / อาหาร / เปลี่ยนสถานะ'}</span>
+            <span>{isExpandedForm ? 'ซ่อนรายละเอียด' : 'แก้ไขข้อมูล / เปลี่ยนสถานะ'}</span>
           </button>
         </div>
       </div>
 
       {/* Summary Pills when already confirmed and form collapsed */}
       {!isExpandedForm && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
           <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
             <BedDouble className="w-4 h-4 text-sky-400 shrink-0" />
             <div>
-              <span className="text-[10px] text-slate-400 block">การจัดเตรียมห้องพักหอพัก</span>
+              <span className="text-[10px] text-slate-400 block">การจัดเตรียมที่พัก & อาหาร</span>
               <span className="font-bold text-white">
-                {confirmInfo.needAccommodation
-                  ? `🏨 เข้าพักหอพักโครงการ${myRegistration.room_assigned ? ` (ห้อง ${myRegistration.room_assigned})` : ''}`
-                  : '🏠 ไม่เข้าพักหอพัก (ไป-กลับเอง)'}
-              </span>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
-            <UtensilsCrossed className="w-4 h-4 text-amber-400 shrink-0" />
-            <div>
-              <span className="text-[10px] text-slate-400 block">การจัดเตรียมอาหาร & แพ้อาหาร</span>
-              <span className="font-bold text-white">
-                {confirmInfo.needMeals ? '🍱 รับอาหารครบมื้อ' : 'ไม่รับอาหาร'} • แพ้อาหาร:{' '}
-                <strong className="text-amber-300">{myRegistration.food_allergy || 'ไม่มี'}</strong>
+                {isMsu ? '🏠 มมส: เดินทางไป-กลับเอง' : '🏨 ต่างสถาบัน: โครงการจัดเตรียมหอพักให้'} • {confirmInfo.needMeals ? '🍱 อาหารครบมื้อ' : 'ไม่รับอาหาร'}
               </span>
             </div>
           </div>
@@ -267,10 +249,10 @@ export default function AttendanceConfirmationCard({
           <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5">
             <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
             <div>
-              <span className="text-[10px] text-slate-400 block">การเดินทางมาถึง / หมายเหตุ</span>
+              <span className="text-[10px] text-slate-400 block">ช่วงเวลาเดินทางมาถึง / หมายเหตุ</span>
               <span className="font-bold text-white">
                 {confirmInfo.arrivalDate || 'เช้าวันที่ 14 พ.ย. 2569'}
-                {confirmInfo.note ? ` (${confirmInfo.note})` : ''}
+                {confirmInfo.note ? ` • ${confirmInfo.note}` : ''}
               </span>
             </div>
           </div>
@@ -280,101 +262,51 @@ export default function AttendanceConfirmationCard({
       {/* Expanded Interactive Form */}
       {isExpandedForm && (
         <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Step 1: Attendance Status */}
-            <div className="space-y-2">
-              <label className="block text-xs font-black text-emerald-300">
-                1. ยืนยันการเดินทางมาเข้าร่วมโครงการ (14 - 15 พ.ย. 2569) *
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStatusChoice('confirmed')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    statusChoice === 'confirmed'
-                      ? 'bg-emerald-500/25 border-emerald-400 text-white ring-2 ring-emerald-500/30'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="font-black text-xs sm:text-sm text-emerald-300">✅ ยืนยันมาแน่นอน</div>
-                  <div className="text-[11px] text-slate-300 mt-0.5">เข้าร่วมการฝึกซ้อมจริง 100%</div>
-                </button>
+          {/* 1. ยืนยันการเดินทางมาเข้าร่วมโครงการ (14 - 15 พ.ย. 2569) * */}
+          <div className="space-y-2">
+            <label className="block text-xs font-black text-emerald-300">
+              1. ยืนยันการเดินทางมาเข้าร่วมโครงการ (14 - 15 พ.ย. 2569) *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setStatusChoice('confirmed')}
+                className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                  statusChoice === 'confirmed'
+                    ? 'bg-emerald-500/25 border-emerald-400 text-white ring-2 ring-emerald-500/30'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div className="font-black text-sm text-emerald-300">✅ ยืนยันมาแน่นอน</div>
+                <div className="text-xs text-slate-300 mt-0.5">เข้าร่วมการฝึกซ้อมจริง 100%</div>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setStatusChoice('declined')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    statusChoice === 'declined'
-                      ? 'bg-rose-500/25 border-rose-400 text-white ring-2 ring-rose-500/30'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="font-black text-xs sm:text-sm text-rose-300">❌ ไม่สะดวกเข้าร่วม</div>
-                  <div className="text-[11px] text-slate-300 mt-0.5">แจ้งสละสิทธิ์ล่วงหน้า</div>
-                </button>
-              </div>
-            </div>
-
-            {/* Step 2: Dormitory Accommodation Need */}
-            <div className="space-y-2">
-              <label className="block text-xs font-black text-sky-300">
-                2. การจัดเตรียมห้องพักหอพัก (คืนวันที่ 14 พ.ย. 2569) *
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={statusChoice === 'declined'}
-                  onClick={() => setNeedAccommodation(true)}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    statusChoice !== 'declined' && needAccommodation
-                      ? 'bg-sky-500/25 border-sky-400 text-white ring-2 ring-sky-500/30'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="font-black text-xs sm:text-sm text-sky-300">🏨 ต้องการพักหอพัก</div>
-                  <div className="text-[11px] text-slate-300 mt-0.5">ให้โครงการจัดห้องพักให้</div>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={statusChoice === 'declined'}
-                  onClick={() => setNeedAccommodation(false)}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    statusChoice !== 'declined' && !needAccommodation
-                      ? 'bg-indigo-500/25 border-indigo-400 text-white ring-2 ring-indigo-500/30'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="font-black text-xs sm:text-sm text-indigo-300">🏠 ไม่เข้าพักหอพัก</div>
-                  <div className="text-[11px] text-slate-300 mt-0.5">ไป-กลับเอง / มีที่พักส่วนตัว</div>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setStatusChoice('declined')}
+                className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                  statusChoice === 'declined'
+                    ? 'bg-rose-500/25 border-rose-400 text-white ring-2 ring-rose-500/30'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div className="font-black text-sm text-rose-300">❌ ไม่สะดวกเข้าร่วม</div>
+                <div className="text-xs text-slate-300 mt-0.5">แจ้งสละสิทธิ์ล่วงหน้า</div>
+              </button>
             </div>
           </div>
 
           {statusChoice !== 'declined' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              {/* ช่วงเวลาเดินทางมาถึง มมส */}
               <div>
-                <label className="block text-xs font-bold text-amber-300 mb-1">
-                  3. ข้อมูลแพ้อาหาร / ข้อจำกัดอาหาร (ฮาลาล/มังสวิรัติ)
-                </label>
-                <input
-                  type="text"
-                  value={foodAllergyEdit}
-                  onChange={(e) => setFoodAllergyEdit(e.target.value)}
-                  placeholder="เช่น ไม่มี, ฮาลาล, แพ้กุ้ง, มังสวิรัติ..."
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:border-amber-400 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  4. ช่วงเวลาเดินทางมาถึง มมส
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                  ช่วงเวลาเดินทางมาถึง มมส
                 </label>
                 <select
                   value={arrivalDate}
                   onChange={(e) => setArrivalDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:border-emerald-400 outline-none"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:border-emerald-400 outline-none cursor-pointer"
                 >
                   <option value="เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)">
                     เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)
@@ -391,20 +323,35 @@ export default function AttendanceConfirmationCard({
                 </select>
               </div>
 
+              {/* หมายเหตุเพิ่มเติม (ถ้ามี) */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  5. หมายเหตุเพิ่มเติม (ถ้ามี)
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                  หมายเหตุเพิ่มเติม (ถ้ามี)
                 </label>
                 <input
                   type="text"
                   value={confirmNote}
                   onChange={(e) => setConfirmNote(e.target.value)}
                   placeholder="เช่น ขอพักห้องเดียวกับเพื่อนชื่อ..., ถึงเวลา 07:30 น."
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:border-emerald-400 outline-none"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-emerald-400 outline-none"
                 />
               </div>
             </div>
           )}
+
+          {/* Auto accommodation indicator info */}
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 flex items-center justify-between flex-wrap gap-2">
+            <span className="flex items-center gap-1.5">
+              {isMsu ? (
+                <>🏠 <strong>สังกัด มมส:</strong> เดินทางไป-กลับเอง</>
+              ) : (
+                <>🏨 <strong>ต่างสถาบัน ({uniInfo?.shortTag || 'มหาวิทยาลัยเครือข่าย'}):</strong> โครงการจัดเตรียมห้องพักหอพัก มมส ไว้รองรับเรียบร้อยแล้ว</>
+              )}
+            </span>
+            <span className="text-slate-400 text-[10px]">
+              (จัดสรรที่พักและอาหารคำนวณตามสถาบันอัตโนมัติ)
+            </span>
+          </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
             <button
@@ -416,7 +363,7 @@ export default function AttendanceConfirmationCard({
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>
                 {statusChoice === 'confirmed'
-                  ? '💾 บันทึกยืนยันการเข้าร่วมกิจกรรม & ล็อคอาหาร/ที่พัก'
+                  ? '💾 บันทึกยืนยันการเข้าร่วมกิจกรรม'
                   : 'บันทึกแจ้งไม่สะดวกเข้าร่วมกิจกรรม'}
               </span>
             </button>
