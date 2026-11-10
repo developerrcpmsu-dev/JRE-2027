@@ -249,11 +249,15 @@ export default function AdminDocumentsView({
   // Handler: Print Current Document Cleanly
   const handlePrintDocument = () => {
     document.body.classList.add('document-print-active');
+    const cleanup = () => {
+      document.body.classList.remove('document-print-active');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    // Safe fallback timeout (45s) in case afterprint does not fire
+    setTimeout(cleanup, 45000);
     setTimeout(() => {
       window.print();
-      setTimeout(() => {
-        document.body.classList.remove('document-print-active');
-      }, 1000);
     }, 150);
   };
 

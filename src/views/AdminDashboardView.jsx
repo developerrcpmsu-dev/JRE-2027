@@ -283,11 +283,12 @@ export default function AdminDashboardView({
       extra = reg.special_notes;
     }
 
+    const shirtSize = String(reg?.shirt_size || extra?.shirt_size || '').trim();
+    const isNoShirt = shirtSize === '-' || shirtSize === 'none' || shirtSize === 'ไม่มี' || shirtSize.includes('ไม่รับเสื้อ') || shirtSize.includes('0 บ') || shirtSize.includes('0บ');
     const isCardOnly = Boolean(
       reg?.staff_id_card_only === true ||
       extra.staff_id_card_only === true ||
-      reg?.shirt_size === '-' ||
-      extra.shirt_size === '-' ||
+      isNoShirt ||
       roleVal === 'mc' ||
       reg?.role === 'mc' ||
       (reg?.callsign && String(reg.callsign).includes('MC')) ||
@@ -8572,7 +8573,9 @@ export default function AdminDashboardView({
                                   ) : staffPayInfo.isOffsetApplied ? (
                                     `โอน ${staffPayInfo.r1SlipAmount} บ. → หักเสื้อ 280 + หักที่พัก ${staffPayInfo.offsetToAccommodation} บ.`
                                   ) : (
-                                    `ต่างมหาลัย: เสื้อ 280 + ที่พัก 200 = 480 บ.`
+                                    staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0
+                                      ? 'Staff ต่างสถาบัน: 0 บ. (บัตร Staff อย่างเดียว • ไม่มีค่าใช้จ่าย)'
+                                      : 'ต่างมหาลัย: เสื้อ 280 + ที่พัก 200 = 480 บ.'
                                   )}
                                 </div>
                                 {!staffPayInfo.isMsu && staffPayInfo.accommodationRemaining > 0 && (
@@ -9060,7 +9063,7 @@ export default function AdminDashboardView({
                                 💻 (STAFF) ผู้พัฒนาระบบ Dev ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                               </option>
                               <option value="mc" className="bg-slate-900 text-purple-200">
-                                🎤 (STAFF) พิธีกรดำเนินรายการ ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
+                                🎤 (STAFF) พิธีกรดำเนินรายการ (0 บ. • บัตรอย่างเดียว • ไม่มีค่าใช้จ่าย)
                               </option>
                               <option value="photographer" className="bg-slate-900 text-purple-200">
                                 📸 (STAFF) ช่างภาพ / โสตฯ ({isMsuModal ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
@@ -10586,7 +10589,7 @@ export default function AdminDashboardView({
                               💻 (STAFF) ผู้พัฒนาระบบ Dev ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
                             </option>
                             <option value="mc" className="bg-slate-900 text-purple-200">
-                              🎤 (STAFF) พิธีกรดำเนินรายการ ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})
+                              🎤 (STAFF) พิธีกรดำเนินรายการ (0 บ. • บัตรอย่างเดียว • ไม่มีค่าใช้จ่าย)
                             </option>
                             <option value="photographer" className="bg-slate-900 text-purple-200">
                               📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ ({isMsuInstitution(profileModalReg.institution) ? 'ค่าเสื้อ 280 บ.' : 'รวม 480 บ.: เสื้อ 280 + ที่พัก 200'})

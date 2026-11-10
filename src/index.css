@@ -70,12 +70,124 @@ body.modal-scroll-locked {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0mm !important;
+    margin: 8mm 6mm !important;
   }
 
-  /* Hide everything outside of print containers by default */
-  body > * {
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #root,
+  #root > div,
+  main,
+  main > div {
+    background: transparent !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide elements marked with .no-print and global non-print chrome */
+  .no-print,
+  nav,
+  header,
+  footer,
+  aside,
+  button:not(.print-include),
+  .toast-container,
+  [role="alert"],
+  .floating-btn {
+    display: none !important;
     visibility: hidden !important;
+  }
+
+  /* Document signing hub & rooms print: full sheet activation */
+  #printable-rooms-roster,
+  #printable-document-sheet {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4mm 2mm !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  #printable-rooms-roster *,
+  #printable-document-sheet * {
+    visibility: visible !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #printable-rooms-roster table,
+  #printable-document-sheet table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 16px !important;
+    background: #ffffff !important;
+  }
+
+  #printable-rooms-roster th,
+  #printable-document-sheet th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    border: 1.5px solid #475569 !important;
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+  }
+
+  #printable-rooms-roster td,
+  #printable-document-sheet td {
+    border: 1px solid #94a3b8 !important;
+    padding: 6px 8px !important;
+    color: #0f172a !important;
+    background: #ffffff !important;
+    font-size: 11px !important;
+  }
+
+  #printable-rooms-roster tr,
+  #printable-document-sheet tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #printable-rooms-roster .rounded-3xl,
+  #printable-rooms-roster .rounded-2xl,
+  #printable-rooms-roster .rounded-xl,
+  #printable-document-sheet .rounded-3xl,
+  #printable-document-sheet .rounded-2xl,
+  #printable-document-sheet .rounded-xl {
+    border-radius: 6px !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  #printable-rooms-roster h1,
+  #printable-rooms-roster h2,
+  #printable-rooms-roster h3,
+  #printable-document-sheet h1,
+  #printable-document-sheet h2,
+  #printable-document-sheet h3 {
+    color: #0f172a !important;
   }
 
   /* Directory batch print: activate whole root hierarchy */
@@ -109,101 +221,6 @@ body.modal-scroll-locked {
     visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-  }
-
-  /* Document signing hub & rooms print: full sheet activation */
-  body.document-print-active,
-  body.rooms-print-active {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  body.document-print-active > *:not(#root),
-  body.rooms-print-active > *:not(#root) {
-    display: none !important;
-  }
-
-  body.document-print-active #root,
-  body.document-print-active #root > div,
-  body.document-print-active main,
-  body.document-print-active main > div,
-  body.rooms-print-active #root,
-  body.rooms-print-active #root > div,
-  body.rooms-print-active main,
-  body.rooms-print-active main > div {
-    margin: 0 !important;
-    padding: 0 !important;
-    max-width: none !important;
-    width: 100% !important;
-    overflow: visible !important;
-    visibility: visible !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  body.document-print-active #printable-document-sheet,
-  body.document-print-active #printable-document-sheet *,
-  body.rooms-print-active #printable-rooms-roster,
-  body.rooms-print-active #printable-rooms-roster * {
-    visibility: visible !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Specific Paper-Print Rendering for Rooms Roster (High Contrast Black on White) */
-  body.rooms-print-active #printable-rooms-roster {
-    display: block !important;
-    visibility: visible !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 8mm !important;
-    background: #ffffff !important;
-    color: #0f172a !important;
-    overflow: visible !important;
-  }
-
-  body.rooms-print-active #printable-rooms-roster * {
-    visibility: visible !important;
-    color: #0f172a !important;
-    border-color: #94a3b8 !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-  }
-
-  body.rooms-print-active #printable-rooms-roster table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    margin-bottom: 20px !important;
-  }
-
-  body.rooms-print-active #printable-rooms-roster th {
-    background-color: #f1f5f9 !important;
-    color: #0f172a !important;
-    font-weight: 800 !important;
-    border: 1.5px solid #64748b !important;
-    padding: 6px 10px !important;
-  }
-
-  body.rooms-print-active #printable-rooms-roster td {
-    border: 1px solid #cbd5e1 !important;
-    padding: 8px 10px !important;
-    color: #0f172a !important;
-    background: #ffffff !important;
-  }
-
-  body.rooms-print-active #printable-rooms-roster tr {
-    page-break-inside: avoid !important;
-  }
-
-  body.rooms-print-active #printable-rooms-roster h1,
-  body.rooms-print-active #printable-rooms-roster h2,
-  body.rooms-print-active #printable-rooms-roster h3,
-  body.rooms-print-active #printable-rooms-roster span,
-  body.rooms-print-active #printable-rooms-roster p,
-  body.rooms-print-active #printable-rooms-roster div {
-    color: #0f172a !important;
   }
 
   /* Hide elements marked with .no-print */

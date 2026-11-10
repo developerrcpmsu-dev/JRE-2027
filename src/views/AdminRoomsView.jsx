@@ -307,11 +307,15 @@ export default function AdminRoomsView({
   const handlePrint = () => {
     setViewMode('table');
     document.body.classList.add('rooms-print-active');
+    const cleanup = () => {
+      document.body.classList.remove('rooms-print-active');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    // Safe fallback timeout (45s) in case afterprint does not fire
+    setTimeout(cleanup, 45000);
     setTimeout(() => {
       window.print();
-      setTimeout(() => {
-        document.body.classList.remove('rooms-print-active');
-      }, 1000);
     }, 250);
   };
 

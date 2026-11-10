@@ -1134,8 +1134,15 @@ export const resolveCommitteeDutyNote = (reg) => {
   return '';
 };
 
-export const resolveStaffRoleType = (reg) => {
-  if (!reg) return 'participant';
+export const resolveStaffRoleType = (rawReg) => {
+  if (!rawReg) return 'participant';
+  let extra = {};
+  if (rawReg?.special_notes && typeof rawReg.special_notes === 'string' && rawReg.special_notes.startsWith('{')) {
+    try { extra = JSON.parse(rawReg.special_notes); } catch (e) {}
+  } else if (rawReg?.special_notes && typeof rawReg.special_notes === 'object') {
+    extra = rawReg.special_notes;
+  }
+  const reg = { ...extra, ...rawReg };
   if (reg.admin_staff_override === false) return 'participant';
   if (reg.staff_role_type && reg.staff_role_type !== 'participant') return reg.staff_role_type;
   const fullNameStr = `${reg.first_name || ''} ${reg.last_name || ''} ${reg.full_name_affiliation || ''}`;
@@ -1155,9 +1162,16 @@ export const resolveStaffRoleType = (reg) => {
  * ตรวจสอบว่าผู้สมัครเป็น Staff โครงการ (โอน 280 บาท ค่าเสื้อ หรือหมายเหตุเป็น (STAFF) แม้โอนเกิน) หรือไม่
  * รองรับทั้งการติ๊กเลือก is_staff, การเลือกผ่าน Dropdown ของ Admin/Dev, รายชื่อคณะกรรมการดำเนินงาน 14 ท่าน และการตรวจจับอัตโนมัติจากยอดโอน 280 บาท
  */
-export const isStaffRegistration = (reg) => {
-  if (!reg) return false;
-  if (typeof reg === 'boolean') return reg;
+export const isStaffRegistration = (rawReg) => {
+  if (!rawReg) return false;
+  if (typeof rawReg === 'boolean') return rawReg;
+  let extra = {};
+  if (rawReg?.special_notes && typeof rawReg.special_notes === 'string' && rawReg.special_notes.startsWith('{')) {
+    try { extra = JSON.parse(rawReg.special_notes); } catch (e) {}
+  } else if (rawReg?.special_notes && typeof rawReg.special_notes === 'object') {
+    extra = rawReg.special_notes;
+  }
+  const reg = { ...extra, ...rawReg };
   if (reg.admin_staff_override === false) return false;
   if (reg.admin_staff_override === true || reg.is_staff === true || reg.is_staff === 'true') return true;
   if (reg.staff_role_type && reg.staff_role_type !== 'participant') return true;
@@ -1369,8 +1383,8 @@ export const compareRosterItems = (a, b) => {
  * คำนวณสรุปยอดโอนของ Staff ค่าเสื้อ (280 บ.) + ค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัยที่ไม่ใช่ มมส (200 บ.)
  * พร้อมระบบหักลบเงินที่โอนเกินมาในรอบแรกเข้ากับค่าที่พัก 200 บ. อัตโนมัติ และคำนวณยอดคงเหลือ/ยอดที่ต้องโอนคืนสุทธิ
  */
-export const getStaffPaymentSummary = (reg) => {
-  if (!reg) {
+export const getStaffPaymentSummary = (rawReg) => {
+  if (!rawReg) {
     return {
       isStaff: false,
       isMsu: false,
@@ -1410,21 +1424,32 @@ export const getStaffPaymentSummary = (reg) => {
     };
   }
 
+  // แกะข้อมูลจาก special_notes เผื่อกรณีข้อมูลเก็บบริบทแบบ json string หรือ object
+  let extra = {};
+  if (rawReg?.special_notes && typeof rawReg.special_notes === 'string' && rawReg.special_notes.startsWith('{')) {
+    try { extra = JSON.parse(rawReg.special_notes); } catch (e) {}
+  } else if (rawReg?.special_notes && typeof rawReg.special_notes === 'object') {
+    extra = rawReg.special_notes;
+  }
+  const reg = { ...extra, ...rawReg };
+
   const isStaff = isStaffRegistration(reg);
   const isMsu = isMsuInstitution(reg);
   const staffRoleType = isStaff ? resolveStaffRoleType(reg) : 'participant';
   const matchedOption = STAFF_ROLE_OPTIONS.find(o => o.value === staffRoleType) || STAFF_ROLE_OPTIONS[1];
+
+  const rawShirt = String(reg.shirt_size || '').trim();
+  const isNoShirt = rawShirt === '-' || rawShirt === 'none' || rawShirt === 'ไม่มี' || rawShirt.includes('ไม่รับเสื้อ') || rawShirt.includes('0 บ') || rawShirt.includes('0บ');
 
   const isIdCardOnlyStaff = Boolean(
     isStaff && (
       reg.staff_id_card_only === true ||
       reg.staff_role_type === 'mc' ||
       reg.role === 'mc' ||
+      staffRoleType === 'mc' ||
       (reg.callsign && typeof reg.callsign === 'string' && reg.callsign.includes('MC')) ||
-      reg.shirt_size === '-' ||
-      reg.shirt_size === 'none' ||
-      reg.shirt_size === 'ไม่มี' ||
-      ((!reg.shirt_size) &&
+      isNoShirt ||
+      (!rawShirt &&
        Number(reg.payment_amount || 0) === 0 &&
        !reg.payment_slip_url &&
        !reg.installment_1_slip_url &&
@@ -1432,9 +1457,9 @@ export const getStaffPaymentSummary = (reg) => {
     )
   );
 
-  const shirtFee = isIdCardOnlyStaff ? 0 : STAFF_SHIRT_FEE; // 280 บาท (หรือ 0 บ. กรณีสำรวจทำบัตรอย่างเดียว)
+  const shirtFee = isIdCardOnlyStaff ? 0 : STAFF_SHIRT_FEE; // 280 บาท (หรือ 0 บ. กรณีสำรวจทำบัตรอย่างเดียว / ไม่รับเสื้อ)
   const accommodationFee = isIdCardOnlyStaff ? 0 : (isStaff ? (isMsu ? 0 : STAFF_ACCOMMODATION_FEE) : 0); // มมส = 0 บาท, ต่างมหาลัย = 200 บาท
-  const totalStaffFee = shirtFee + accommodationFee; // มมส = 280 บาท, ต่างมหาลัย = 480 บาท
+  const totalStaffFee = shirtFee + accommodationFee; // 0 บาท หรือ 280 บาท หรือ 480 บาท
 
   const ocrFull = Number(reg.slip_ocr_full?.amount || 0);
   const ocrR1 = Number(reg.slip_ocr_round1?.amount || 0);
@@ -1443,7 +1468,9 @@ export const getStaffPaymentSummary = (reg) => {
   // ยอดสลิปรอบแรก / สลิปหลัก
   const primarySlipDetected = ocrR1 > 0 ? ocrR1 : (ocrFull > 0 ? ocrFull : 0);
   const isR1MarkedPaid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || primarySlipDetected >= shirtFee;
-  const r1SlipAmount = isIdCardOnlyStaff ? 0 : (primarySlipDetected > 0 ? primarySlipDetected : (isR1MarkedPaid ? shirtFee : 0));
+  const r1SlipAmount = isIdCardOnlyStaff
+    ? (primarySlipDetected > 0 ? primarySlipDetected : Number(reg.payment_amount || 0))
+    : (primarySlipDetected > 0 ? primarySlipDetected : (isR1MarkedPaid ? shirtFee : 0));
 
   // คำนวณส่วนเกินจากค่าเสื้อ 280 บ. และนำไปหักลบกับค่าที่พัก 200 บ. (เฉพาะ Staff ต่างมหาวิทยาลัยที่ไม่ใช่ มมส)
   const overpaidShirtAmount = isStaff ? Math.max(0, r1SlipAmount - shirtFee) : 0;
