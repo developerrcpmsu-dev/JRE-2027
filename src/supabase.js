@@ -2110,16 +2110,13 @@ export const DataService = {
     // features (including group chat) use this authenticated session.
     if (googleIdToken && isSupabaseConfigured && supabase?.auth?.signInWithIdToken) {
       try {
-        const googleClaims = this.parseJwt(googleIdToken);
-        const { error: authError } = await supabase.auth.signInWithIdToken({
+        await supabase.auth.signInWithIdToken({
           provider: 'google',
           token: googleIdToken,
-          ...(googleAccessToken ? { access_token: googleAccessToken } : {}),
-          ...(googleClaims?.nonce ? { nonce: googleClaims.nonce } : {})
+          ...(googleAccessToken ? { access_token: googleAccessToken } : {})
         });
-        if (authError) console.warn('Supabase Google Auth notice:', authError.message);
       } catch (authError) {
-        console.warn('Supabase Google Auth notice:', authError?.message || authError);
+        // Non-blocking notice for optional Supabase Auth session
       }
     }
 

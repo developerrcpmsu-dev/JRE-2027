@@ -418,7 +418,7 @@ export default function App() {
         // =====================================================================
         // STEP 2: Load Central Data (Scoped to Authenticated User)
         // =====================================================================
-        const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks, accs] = await Promise.all([
+        const [regs, anns, forms, payCfg, merchCfg, merchOrds, team, spks, accs, staffAccounts] = await Promise.all([
           hasValidAdminSession
             ? DataService.getRegistrations({ admin: true })
             : (authenticatedUser ? DataService.getRegistrations({ userId: authenticatedUser.id, email: authenticatedUser.email }) : DataService.getRegistrations()),
