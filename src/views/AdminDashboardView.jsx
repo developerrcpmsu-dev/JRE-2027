@@ -116,6 +116,7 @@ import CateringHealthModal from '../components/CateringHealthModal';
 import CateringHealthView from './CateringHealthView';
 import AdminExecutiveSummaryView from './AdminExecutiveSummaryView';
 import AdminIDCardsDirectoryView from './AdminIDCardsDirectoryView';
+import AdminRoomsView from './AdminRoomsView';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -193,6 +194,7 @@ export default function AdminDashboardView({
     if (tab === 'scanner' || tab === 'qr') return 'merchandise';
     if (tab === 'catering' || tab === 'health' || tab === 'catering-health' || tab === 'food' || tab === 'welfare') return 'catering';
     if (tab === 'summary' || tab === 'overview' || tab === 'attendance' || tab === 'rsvp') return 'summary';
+    if (tab === 'rooms' || tab === 'room' || tab === 'accommodation' || tab === 'dorm' || tab === 'dormitory') return 'rooms';
     return tab || 'applicants';
   };
 
@@ -278,6 +280,7 @@ export default function AdminDashboardView({
     if (t === 'merchandise') return 'shirts';
     if (t === 'catering') return 'catering';
     if (t === 'summary') return 'summary';
+    if (t === 'rooms') return 'rooms';
     return t;
   };
 
@@ -5914,6 +5917,7 @@ export default function AdminDashboardView({
               <option value="sub_round1-paid">⏳ ชำระงวด 1 (ค้างงวด 2) ({regMetrics.partialPaidCount} คน)</option>
               <option value="sub_unpaid">🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน)</option>
               <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
+              <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 1 (ห้อง 101 - 110)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
@@ -6022,6 +6026,18 @@ export default function AdminDashboardView({
           >
             <UtensilsCrossed className="w-4 h-4 text-amber-400 shrink-0" />
             <span>อาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('rooms')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'rooms'
+                ? 'bg-gradient-to-r from-sky-500 to-indigo-500 text-slate-950 shadow-lg shadow-sky-500/30 ring-2 ring-sky-400/50 font-black'
+                : 'text-sky-300 hover:text-white bg-sky-950/40 hover:bg-sky-900/50 border border-sky-500/40'
+            }`}
+          >
+            <Building className="w-4 h-4 text-sky-400 shrink-0" />
+            <span>🏨 ห้องพักหอกุดรัง (101-110)</span>
           </button>
 
           <button
@@ -17622,6 +17638,16 @@ export default function AdminDashboardView({
           registrations={registrations}
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
           onRefresh={onRefreshRegistrations}
+        />
+      )}
+
+      {/* TAB: ROOMS & DORMITORY LOOKUP (DEDICATED FULL-PAGE VIEW WITH INDEPENDENT URL /admin/rooms) */}
+      {activeTab === 'rooms' && (
+        <AdminRoomsView
+          registrations={registrations}
+          onUpdateAllocation={onUpdateAllocation}
+          onOpenProfileModal={(reg) => handleOpenProfileModal(reg, 'info')}
+          triggerToast={triggerToast}
         />
       )}
 

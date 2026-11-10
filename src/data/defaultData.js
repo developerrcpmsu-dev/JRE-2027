@@ -1020,7 +1020,8 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายสนับสนุนและอุปกรณ์ภาคสนาม',
     photo: 'https://lh3.googleusercontent.com/a/ACg8ocL6a64t-MX62tV11cIUjlJzIMSONnc3oZZkFu9rMJbH7oRYKg=s96-c',
-    shirt_size: 'XL',
+    shirt_size: '-',
+    staff_id_card_only: true,
     matchTokens: ['ณัฐพล เชื้อคนแข็ง', 'ณัฐพล เชืิอคนแข็ง', 'ณัฐพล']
   },
   {
@@ -1417,7 +1418,13 @@ export const getStaffPaymentSummary = (reg) => {
   const isIdCardOnlyStaff = Boolean(
     isStaff && (
       reg.staff_id_card_only === true ||
-      ((!reg.shirt_size || reg.shirt_size === '-') &&
+      reg.staff_role_type === 'mc' ||
+      reg.role === 'mc' ||
+      (reg.callsign && typeof reg.callsign === 'string' && reg.callsign.includes('MC')) ||
+      reg.shirt_size === '-' ||
+      reg.shirt_size === 'none' ||
+      reg.shirt_size === 'ไม่มี' ||
+      ((!reg.shirt_size) &&
        Number(reg.payment_amount || 0) === 0 &&
        !reg.payment_slip_url &&
        !reg.installment_1_slip_url &&
@@ -1519,7 +1526,9 @@ export const getStaffPaymentSummary = (reg) => {
   // สร้างข้อความสรุปและหมายเหตุชัดเจน
   let summaryNote = '';
   if (isStaff) {
-    if (isMsu) {
+    if (isIdCardOnlyStaff) {
+      summaryNote = `Staff ปฏิบัติหน้าที่ (0 บ. ไม่สั่งเสื้อ / รับบัตรประจำตัวอย่างเดียว ไม่มียอดชำระ)`;
+    } else if (isMsu) {
       if (isOverpaid) {
         if (isNoRefund) {
           summaryNote = `Staff มมส (ค่าเสื้อ ${shirtFee} บ. • ไม่มีค่าที่พัก) โอนมา ${actualSlipAmount} บ. • [Dev: ไม่ต้องโอนคืน] สรุปยอดเงินรายรับโครงการทั้งหมด: ${actualSlipAmount} บาท (สมทบเข้าโครงการ ไม่ต้องโอนคืน)`;
@@ -1555,7 +1564,10 @@ export const getStaffPaymentSummary = (reg) => {
     isStaff,
     isMsu,
     staffRoleType,
-    staffRoleLabel: isStaff ? (matchedOption.badge || 'คณะกรรมการดำเนินงาน (STAFF)') : 'ผู้เข้าอบรมทั่วไป',
+    staffRoleLabel: isStaff
+      ? (isIdCardOnlyStaff ? `${matchedOption.badge || 'STAFF'} (0 บ.)` : `${matchedOption.badge || 'STAFF'} (280 บ.)`)
+      : 'ผู้เข้าอบรมทั่วไป',
+    isIdCardOnlyStaff,
     shirtFee,
     accommodationFee,
     staffFee: totalStaffFee,

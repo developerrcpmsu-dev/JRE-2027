@@ -133,6 +133,11 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'shirt-roster', canonicalPath: '/admin/shirt-roster' };
   }
 
+  // Standalone shortcuts for Rooms & Accommodation Lookup (หอพักกุดรัง ชั้น 1 ห้อง 101 - 110)
+  if (first === 'rooms' || first === 'room' || first === 'accommodation' || first === 'dorm' || first === 'dormitory') {
+    return { mainTab: 'admin', subRoute: 'rooms', canonicalPath: '/admin/rooms' };
+  }
+
   // Standalone shortcuts for Staff Accommodation & Payment Filter Pages
   if (first === 'staff-accommodation' || first === 'staff-hotel' || first === 'staff-refund') {
     return { mainTab: 'admin', subRoute: 'staff-accommodation', canonicalPath: '/admin/staff-accommodation' };
@@ -239,6 +244,12 @@ export function parseCurrentRoute() {
       'catering-health': 'catering',
       'food': 'catering',
       'welfare': 'catering',
+
+      'rooms': 'rooms',
+      'room': 'rooms',
+      'accommodation': 'rooms',
+      'dorm': 'rooms',
+      'dormitory': 'rooms',
 
       'staff-accommodation': 'staff-accommodation',
       'staff_accommodation': 'staff-accommodation',
@@ -390,6 +401,7 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'advisors' || subRoute === 'advisor') return '/admin/advisors';
       if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
+      if (subRoute === 'rooms' || subRoute === 'room' || subRoute === 'accommodation' || subRoute === 'dorm' || subRoute === 'dormitory') return '/admin/rooms';
       if (subRoute === 'catering' || subRoute === 'health' || subRoute === 'catering-health' || subRoute === 'food' || subRoute === 'welfare') return '/admin/catering';
       if (subRoute === 'staff-accommodation' || subRoute === 'staff_accommodation' || subRoute === 'staff-hotel' || subRoute === 'staff-refund') return '/admin/staff-accommodation';
       if (subRoute === 'full-payment' || subRoute === 'full_plan' || subRoute === 'full-plan') return '/admin/full-payment';
