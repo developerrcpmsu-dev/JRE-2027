@@ -332,7 +332,7 @@ export default function AdminExecutiveSummaryView({
 
       if (!silent && triggerToast) {
         triggerToast(
-          `✅ ตรวจสอบคณะกรรมการ 8 ท่านเรียบร้อย: พบชื่อเดิมในระบบ ${matchedExistingCount} ท่าน (ไม่สร้างซ้ำ) • เพิ่มรายชื่อที่ยังไม่มีเข้าตาราง ${newlyAddedCount} ท่าน`
+          `✅ ตรวจสอบคณะกรรมการและฝ่ายอำนวยการ ${OFFICIAL_8_COMMITTEE_ROSTER.length} ท่านเรียบร้อย: พบชื่อเดิมในระบบ ${matchedExistingCount} ท่าน (ไม่สร้างซ้ำ) • เพิ่มรายชื่อที่ยังไม่มีเข้าตาราง ${newlyAddedCount} ท่าน`
         );
       }
     } catch (err) {
@@ -1273,10 +1273,10 @@ export default function AdminExecutiveSummaryView({
                   ? 'bg-amber-500/20 text-amber-200 border-amber-500/50 shadow'
                   : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-amber-400/50'
               }`}
-              title="ดูรายชื่อคณะกรรมการดำเนินงาน 8 ท่าน และสถานะการอยู่ในตาราง"
+              title={`ดูรายชื่อคณะกรรมการดำเนินงานและฝ่ายอำนวยการ ${OFFICIAL_8_COMMITTEE_ROSTER.length} ท่าน และสถานะการอยู่ในตาราง`}
             >
               <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span>คณะกรรมการ ({committee8StatusList.filter(c => c.isPresent).length}/8)</span>
+              <span>คณะกรรมการ ({committee8StatusList.filter(c => c.isPresent).length}/{OFFICIAL_8_COMMITTEE_ROSTER.length})</span>
             </button>
 
             <button
@@ -1320,10 +1320,10 @@ export default function AdminExecutiveSummaryView({
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-amber-400" />
                   <h3 className="text-sm sm:text-base font-black text-white">
-                    👥 คณะกรรมการดำเนินงาน 8 ท่าน (Official Organizing Committee)
+                    👥 คณะกรรมการและฝ่ายอำนวยการโครงการ ({OFFICIAL_8_COMMITTEE_ROSTER.length} ท่าน)
                   </h3>
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold">
-                    อยู่ในตาราง {committee8StatusList.filter(c => c.isPresent).length} / 8 คน
+                    อยู่ในตาราง {committee8StatusList.filter(c => c.isPresent).length} / {OFFICIAL_8_COMMITTEE_ROSTER.length} คน
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
@@ -1350,39 +1350,47 @@ export default function AdminExecutiveSummaryView({
                   onClick={handleSyncOfficial8Committee}
                   disabled={isSyncingCommittee}
                   className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95 disabled:opacity-50"
-                  title="ตรวจสอบรายชื่อทั้ง 8 ท่าน และเพิ่มท่านที่ยังไม่อยู่ในตารางให้ครบ"
+                  title={`ตรวจสอบรายชื่อทั้ง ${OFFICIAL_8_COMMITTEE_ROSTER.length} ท่าน และเพิ่มท่านที่ยังไม่อยู่ในตารางให้ครบ`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCommittee ? 'animate-spin' : ''}`} />
-                  <span>🔄 ซิงค์/ตรวจเช็คครบ 8 ท่าน</span>
+                  <span>🔄 ซิงค์/ตรวจเช็คครบ {OFFICIAL_8_COMMITTEE_ROSTER.length} ท่าน</span>
                 </button>
               </div>
             </div>
 
-            {/* Grid of the 8 members */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {/* Grid of the committee and leadership members */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {committee8StatusList.map(({ spec, matchedReg, matchedItem, isPresent, isPreExistingAccount }) => {
                 const item = matchedItem;
                 const isBusy = item && updatingId === item.id;
                 const dutyText = item ? (item.dutyNote || spec.committee_duty_note) : spec.committee_duty_note;
 
+                // Candidate photo resolution: prioritize real registered photo or ID photo, then spec.photo, then dynamic initials
+                const candidatePhoto =
+                  (matchedReg?.user_avatar && !matchedReg.user_avatar.includes('bottts') && matchedReg.user_avatar) ||
+                  (matchedReg?.id_card_photo && !matchedReg.id_card_photo.startsWith('data:') && matchedReg.id_card_photo) ||
+                  spec.photo ||
+                  `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(spec.display_name)}`;
+
                 return (
                   <div
                     key={spec.key}
-                    className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 ${
+                    className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                       isPresent
                         ? 'bg-slate-900/90 border-slate-700/80 hover:border-amber-500/50'
                         : 'bg-rose-950/20 border-rose-500/40'
                     }`}
                   >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="space-y-2.5">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <img
-                            src={spec.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                            src={candidatePhoto}
                             alt={spec.display_name}
-                            className="w-11 h-11 rounded-full object-cover border-2 border-amber-400/60 shadow shrink-0"
+                            className="w-12 h-12 rounded-full object-cover border-2 border-amber-400 shadow shrink-0 bg-slate-800"
                             onError={(e) => {
-                              e.currentTarget.src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(spec.display_name)}&backgroundColor=0284c7,d97706,4f46e5,059669`;
                             }}
                           />
                           <div className="min-w-0 flex-1">
@@ -1410,10 +1418,10 @@ export default function AdminExecutiveSummaryView({
                       </div>
 
                       {/* Role & Duty note */}
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/30 text-[10px] font-bold">
-                            {spec.role_label}
+                            {spec.role_label || 'คณะกรรมการดำเนินงาน'}
                           </span>
                           {isPreExistingAccount && (
                             <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[9px] font-bold" title="บัญชีผู้สมัครจริงที่มีประวัติชำระเงินในระบบ">
@@ -1421,14 +1429,14 @@ export default function AdminExecutiveSummaryView({
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-300 bg-slate-950/70 p-1.5 rounded-lg border border-slate-800">
+                        <div className="text-[11px] text-slate-300 bg-slate-950/70 p-2 rounded-xl border border-slate-800 leading-relaxed">
                           📌 <span className="font-semibold">{dutyText}</span>
                         </div>
                       </div>
 
                       {/* University selector & Attendance for this committee member */}
                       {item ? (
-                        <div className="space-y-1.5 pt-1">
+                        <div className="space-y-2 pt-1">
                           {isEditMode ? (
                             <>
                               <div className="flex items-center justify-between gap-1 text-[11px]">
@@ -1492,16 +1500,16 @@ export default function AdminExecutiveSummaryView({
                             </>
                           ) : (
                             /* Safe view: read-only badges */
-                            <div className="flex items-center justify-between gap-1 pt-0.5">
-                              <span className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                            <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                              <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
                                 🏛️ {item.uniInfo.shortTag}
                               </span>
-                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black border ${
                                 item.confirmInfo.isConfirmed
-                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50'
                                   : item.confirmInfo.isPending
-                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  ? 'bg-amber-500/25 text-amber-300 border-amber-500/50'
+                                  : 'bg-rose-500/25 text-rose-300 border-rose-500/50'
                               }`}>
                                 {item.confirmInfo.isConfirmed
                                   ? '✅ มาแน่นอน 100%'
@@ -1529,8 +1537,8 @@ export default function AdminExecutiveSummaryView({
 
                     {/* Footer action for present items */}
                     {item && (
-                      <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/80 text-[10px]">
-                        <span className="text-slate-400 font-semibold">
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+                        <span className="text-slate-300 font-medium">
                           {item.confirmInfo.needAccommodation ? '🏨 พักหอโครงการ' : '🏠 ไม่พักหอ (ไป-กลับ)'}
                         </span>
                         {isEditMode ? (
@@ -1541,11 +1549,13 @@ export default function AdminExecutiveSummaryView({
                             className="px-2 py-0.5 rounded text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer font-bold"
                             title="ลบออกจากตาราง (โหมดแก้ไขเปิดอยู่)"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                             <span>ลบ</span>
                           </button>
                         ) : (
-                          <span className="text-slate-500 font-mono text-[9px]">🔒 โหมดปลอดภัย</span>
+                          <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold border border-slate-700/80 text-[10px]">
+                            🔒 โหมดปลอดภัย (ล็อค)
+                          </span>
                         )}
                       </div>
                     )}
@@ -1585,72 +1595,72 @@ export default function AdminExecutiveSummaryView({
             {/* Box 1: University */}
             <div>
               <label className="block text-[10px] font-bold text-indigo-300 uppercase mb-1">
-                1. เลือกมหาวิทยาลัย / สถาบัน
+                🏛️ 1. สถาบัน / มหาวิทยาลัย
               </label>
               <select
                 value={uniFilter}
                 onChange={(e) => setUniFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs text-indigo-100 font-bold focus:outline-none focus:border-indigo-400 cursor-pointer"
               >
-                <option value="all">🏛️ ทุกมหาวิทยาลัย ({searchScoped.length} คน)</option>
+                <option value="all">ทุกมหาวิทยาลัย ({searchScoped.length} คน)</option>
                 {uniOptions.map((u) => (
                   <option key={u.key} value={u.key}>
-                    {u.shortTag} - {u.label} ({u.count} คน)
+                    {u.shortTag} - {u.label.replace(/^[-–\s]+/, '')} ({u.count} คน)
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Box 2: Role (Counts dynamically scoped to Box 1!) */}
+            {/* Box 2: Role */}
             <div>
               <label className="block text-[10px] font-bold text-purple-300 uppercase mb-1">
-                2. ประเภทผู้เข้าร่วม {uniFilter !== 'all' ? `(เฉพาะ ${uniFilter})` : ''}
+                👥 2. ประเภทผู้เข้าร่วม {uniFilter !== 'all' ? `(${uniFilter})` : ''}
               </label>
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-purple-100 font-bold focus:outline-none focus:border-purple-400 cursor-pointer"
               >
-                <option value="all">👥 ทุกประเภท ({roleFacetCounts.all} คน)</option>
-                <option value="participant">🎓 ผู้เข้าอบรมปกติ ({roleFacetCounts.participant} คน)</option>
-                <option value="staff">🛠️ Staff คณะทำงาน ({roleFacetCounts.staff} คน)</option>
+                <option value="all">ทุกประเภท ({roleFacetCounts.all} คน)</option>
+                <option value="participant">ผู้เข้าอบรมปกติ ({roleFacetCounts.participant} คน)</option>
+                <option value="staff">Staff คณะทำงาน ({roleFacetCounts.staff} คน)</option>
               </select>
             </div>
 
-            {/* Box 3: Gender (Counts dynamically scoped to Box 1 + Box 2!) */}
+            {/* Box 3: Gender */}
             <div>
               <label className="block text-[10px] font-bold text-sky-300 uppercase mb-1">
-                3. เพศ (จัดห้องพัก) {uniFilter !== 'all' ? `(เฉพาะ ${uniFilter})` : ''}
+                🚻 3. เพศ (จัดห้องพัก) {uniFilter !== 'all' ? `(${uniFilter})` : ''}
               </label>
               <select
                 value={genderFilter}
                 onChange={(e) => setGenderFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-900 border border-sky-500/50 rounded-xl text-xs text-sky-100 font-bold focus:outline-none focus:border-sky-400 cursor-pointer"
               >
-                <option value="all">🚻 ทุกเพศ ({genderFacetCounts.all} คน)</option>
-                <option value="ชาย">👨 เพศชาย ({genderFacetCounts.male} คน)</option>
-                <option value="หญิง">👩 เพศหญิง ({genderFacetCounts.female} คน)</option>
+                <option value="all">ทุกเพศ ({genderFacetCounts.all} คน)</option>
+                <option value="ชาย">เพศชาย ({genderFacetCounts.male} คน)</option>
+                <option value="หญิง">เพศหญิง ({genderFacetCounts.female} คน)</option>
               </select>
             </div>
 
-            {/* Box 4: Confirmation & Accommodation Status (Counts dynamically scoped to Box 1 + 2 + 3!) */}
+            {/* Box 4: Confirmation & Accommodation Status */}
             <div>
               <label className="block text-[10px] font-bold text-emerald-300 uppercase mb-1">
-                4. สถานะยืนยันมาจริง / ที่พัก / อาหาร
+                📋 4. ยืนยันมาจริง / ที่พัก / อาหาร
               </label>
               <select
                 value={confirmFilter}
                 onChange={(e) => setConfirmFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-900 border border-emerald-500/50 rounded-xl text-xs text-emerald-100 font-bold focus:outline-none focus:border-emerald-400 cursor-pointer"
               >
-                <option value="all">📋 ทุกสถานะ ({confirmFacetCounts.all} คน)</option>
-                <option value="confirmed">✅ ยืนยันมาแน่นอนแล้ว ({confirmFacetCounts.confirmed} คน)</option>
-                <option value="pending">⏳ รอกดยืนยัน ({confirmFacetCounts.pending} คน)</option>
-                <option value="declined">❌ ไม่สะดวกเข้าร่วม/สละสิทธิ์ ({confirmFacetCounts.declined} คน)</option>
-                <option value="need_accom">🏨 ต้องการพักหอพักโครงการ ({confirmFacetCounts.needAccom} คน)</option>
-                <option value="confirmed_accom">🛏️ ยืนยันมาแน่ + พักหอพัก ({confirmFacetCounts.confirmedAccom} คน)</option>
-                <option value="no_accom">🏠 ไม่พักหอพัก / ไป-กลับเอง ({confirmFacetCounts.noAccom} คน)</option>
-                <option value="special_food">🍱 แพ้อาหาร / ฮาลาล / มังสวิรัติ ({confirmFacetCounts.specialFood} คน)</option>
+                <option value="all">ทุกสถานะ ({confirmFacetCounts.all} คน)</option>
+                <option value="confirmed">ยืนยันมาแน่นอนแล้ว ({confirmFacetCounts.confirmed} คน)</option>
+                <option value="pending">รอกดยืนยัน ({confirmFacetCounts.pending} คน)</option>
+                <option value="declined">ไม่สะดวกเข้าร่วม / สละสิทธิ์ ({confirmFacetCounts.declined} คน)</option>
+                <option value="need_accom">ต้องการพักหอพักโครงการ ({confirmFacetCounts.needAccom} คน)</option>
+                <option value="confirmed_accom">ยืนยันมาแน่ + พักหอพัก ({confirmFacetCounts.confirmedAccom} คน)</option>
+                <option value="no_accom">ไม่พักหอพัก / ไป-กลับเอง ({confirmFacetCounts.noAccom} คน)</option>
+                <option value="special_food">อาหารพิเศษ (แพ้อาหาร / ฮาลาล) ({confirmFacetCounts.specialFood} คน)</option>
               </select>
             </div>
 

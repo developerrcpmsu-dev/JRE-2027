@@ -864,7 +864,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายปฏิบัติการและประสานงานฝึก (RCP15-46)',
-    photo: '/images/speakers/โฟกัส2.jpg',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792657788806_qkqpan',
     matchTokens: ['พีรณัฐ พาลึก', 'พีรณัฐ']
   },
   {
@@ -883,7 +883,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายอำนวยการและควบคุมการฝึก (RCP15-05)',
-    photo: '/images/speakers/โฟกัส1.jpg',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792659231387_t8ot9w',
     matchTokens: ['เศรษฐบุตร อากานิส', 'เศรษฐบุตร']
   },
   {
@@ -902,7 +902,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายทะเบียนและประสานงาน',
-    photo: '/images/speakers/อนุสรา แสนขรยาง.jpg',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Anusara_MSU&backgroundColor=b6e3f4',
     matchTokens: ['อนุสรา แสนขรยาง', 'อนุสรา']
   },
   {
@@ -921,7 +921,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
-    photo: '/images/speakers/น้องฟิล์ม.jpg',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Film_MC_JRE2027&backgroundColor=c0aede',
     matchTokens: ['น้องฟิล์ม']
   },
   {
@@ -940,7 +940,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
-    photo: '/images/speakers/น้องน้ำหวาน.jpg',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Namwan_MC_JRE2027&backgroundColor=ffd5dc',
     matchTokens: ['น้องน้ำหวาน']
   },
   {
@@ -959,7 +959,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ช่างภาพและสื่อโสตทัศนูปกรณ์ (17-02)',
-    photo: '/images/speakers/นิก.jpg',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792034200329_4h02q2',
     matchTokens: ['วรภัทร เวสสุริยา', 'วรภัทร']
   },
   {
@@ -978,7 +978,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายพยาบาลและสวัสดิการ',
-    photo: '/images/speakers/อพัชนิภา ไวมาตร.jpg',
+    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Apatchanipha_MSU&backgroundColor=ffdfbf',
     matchTokens: ['อพัชนิภา ไวมาตร', 'อพัชนิภา']
   },
   {
@@ -997,8 +997,27 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายสนับสนุนและอุปกรณ์ภาคสนาม',
-    photo: '/images/speakers/ณัฐพล เชื้อคนแข็ง.jpg',
+    photo: 'https://lh3.googleusercontent.com/a/ACg8ocL6a64t-MX62tV11cIUjlJzIMSONnc3oZZkFu9rMJbH7oRYKg=s96-c',
     matchTokens: ['ณัฐพล เชื้อคนแข็ง', 'ณัฐพล เชืิอคนแข็ง', 'ณัฐพล']
+  },
+  {
+    key: 'committee_9_pongporn',
+    order: 9,
+    title_th: 'นาย',
+    first_name: 'พงศ์ภรณ์',
+    last_name: 'ทองศิริ',
+    display_name: 'นายพงศ์ภรณ์ ทองศิริ',
+    nickname: 'เบส',
+    gender: 'ชาย',
+    callsign: 'RCP 16-37 (DEV / STAFF)',
+    staff_role_type: 'dev',
+    university_short: 'มมส',
+    institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมกู้ภัยราชพฤกษ์',
+    affiliation: 'มมส',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายเทคโนโลยีสารสนเทศและผู้พัฒนาระบบ (RCP 16-37)',
+    photo: 'https://jre-2027.vercel.app/api/file?id=file_1792543678934_ljitsl',
+    matchTokens: ['พงศ์ภรณ์ ทองศิริ', 'พงศภรณ์ ทองศิริ', 'พงศ์ภรณ์', 'พงศภรณ์', 'ทองศิริ', 'เบส']
   }
 ];
 
