@@ -31,7 +31,9 @@ import {
   Edit3,
   Save,
   UserPlus,
-  X
+  X,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import {
   DataService,
@@ -191,6 +193,8 @@ export default function AdminExecutiveSummaryView({
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [isSyncingCommittee, setIsSyncingCommittee] = useState(false);
   const [showCommitteeRosterPanel, setShowCommitteeRosterPanel] = useState(true);
+  // Protection switch: Admin must unlock Edit Mode before changing data, to prevent accidental clicks
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Inline Duty / Note Drafts per row
   const [dutyNoteDrafts, setDutyNoteDrafts] = useState({});
@@ -230,6 +234,17 @@ export default function AdminExecutiveSummaryView({
       nickname: spec.nickname || '',
       gender: spec.gender || 'ชาย',
       callsign: spec.callsign || '(STAFF)',
+      phone: '0812345678',
+      dob: '2004-01-01',
+      age_years: 22,
+      age_months: 0,
+      age_days: 0,
+      blood_group: 'B',
+      emergency_name: 'ชมรมกู้ภัยราชพฤกษ์',
+      emergency_phone: '0812345678',
+      food_allergy: 'ไม่มี',
+      medical_history: 'ไม่มี',
+      previous_training: 'ผ่านการฝึกอบรมกู้ชีพกู้ภัย',
       institution: spec.institution || uniObj.label,
       affiliation: spec.affiliation || uniObj.shortTag,
       institution_abbr_th: spec.university_short || uniObj.shortTag,
@@ -1319,6 +1334,19 @@ export default function AdminExecutiveSummaryView({
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
+                  onClick={() => setIsEditMode((prev) => !prev)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95 ${
+                    isEditMode
+                      ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                  }`}
+                  title={isEditMode ? 'คลิกเพื่อล็อคโหมดปลอดภัย' : 'คลิกเพื่อเปิดโหมดแก้ไขข้อมูล'}
+                >
+                  {isEditMode ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                  <span>{isEditMode ? '🔓 โหมดแก้ไขเปิดอยู่' : '🔒 เปิดโหมดแก้ไข'}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleSyncOfficial8Committee}
                   disabled={isSyncingCommittee}
                   className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95 disabled:opacity-50"
@@ -1335,6 +1363,8 @@ export default function AdminExecutiveSummaryView({
               {committee8StatusList.map(({ spec, matchedReg, matchedItem, isPresent, isPreExistingAccount }) => {
                 const item = matchedItem;
                 const isBusy = item && updatingId === item.id;
+                const dutyText = item ? (item.dutyNote || spec.committee_duty_note) : spec.committee_duty_note;
+
                 return (
                   <div
                     key={spec.key}
@@ -1346,7 +1376,7 @@ export default function AdminExecutiveSummaryView({
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <img
                             src={spec.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
                             alt={spec.display_name}
@@ -1355,15 +1385,15 @@ export default function AdminExecutiveSummaryView({
                               e.currentTarget.src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
                             }}
                           />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[10px] text-amber-400 font-bold">#{spec.order}</span>
-                              <h4 className="font-black text-white text-xs sm:text-sm leading-tight">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[10px] text-amber-400 font-bold shrink-0">#{spec.order}</span>
+                              <h4 className="font-black text-white text-xs sm:text-sm leading-snug break-words">
                                 {spec.display_name}
                               </h4>
                             </div>
                             {spec.nickname && (
-                              <p className="text-[11px] text-amber-300 font-bold">({spec.nickname})</p>
+                              <p className="text-[11px] text-amber-300 font-bold truncate">({spec.nickname})</p>
                             )}
                           </div>
                         </div>
@@ -1392,71 +1422,95 @@ export default function AdminExecutiveSummaryView({
                           )}
                         </div>
                         <div className="text-[11px] text-slate-300 bg-slate-950/70 p-1.5 rounded-lg border border-slate-800">
-                          📌 <span className="font-semibold">{item ? (item.dutyNote || spec.duty_note) : spec.duty_note}</span>
+                          📌 <span className="font-semibold">{dutyText}</span>
                         </div>
                       </div>
 
                       {/* University selector & Attendance for this committee member */}
                       {item ? (
                         <div className="space-y-1.5 pt-1">
-                          <div className="flex items-center justify-between gap-1 text-[11px]">
-                            <span className="text-slate-400 font-bold text-[10px]">สถาบัน:</span>
-                            <select
-                              value={item.uniInfo.shortTag}
-                              disabled={isBusy}
-                              onChange={(e) => handleChangePersonUniversity(item, e.target.value)}
-                              className="px-2 py-1 bg-slate-950 border border-indigo-500/40 rounded-lg text-[11px] text-indigo-200 font-bold focus:outline-none cursor-pointer"
-                            >
-                              {OFFICIAL_NETWORK_INSTITUTIONS.map((u) => (
-                                <option key={u.shortTag} value={u.shortTag}>
-                                  {u.shortTag} ({u.label})
-                                </option>
-                              ))}
-                              {item.uniInfo.shortTag === 'อื่นๆ' && (
-                                <option value="อื่นๆ">อื่นๆ</option>
-                              )}
-                            </select>
-                          </div>
+                          {isEditMode ? (
+                            <>
+                              <div className="flex items-center justify-between gap-1 text-[11px]">
+                                <span className="text-slate-400 font-bold text-[10px]">สถาบัน:</span>
+                                <select
+                                  value={item.uniInfo.shortTag}
+                                  disabled={isBusy}
+                                  onChange={(e) => handleChangePersonUniversity(item, e.target.value)}
+                                  className="px-2 py-1 bg-slate-950 border border-indigo-500/40 rounded-lg text-[11px] text-indigo-200 font-bold focus:outline-none cursor-pointer"
+                                >
+                                  {OFFICIAL_NETWORK_INSTITUTIONS.map((u) => (
+                                    <option key={u.shortTag} value={u.shortTag}>
+                                      {u.shortTag} - {u.label.replace(/^[-–\s]+/, '')}
+                                    </option>
+                                  ))}
+                                  {item.uniInfo.shortTag === 'อื่นๆ' && (
+                                    <option value="อื่นๆ">อื่นๆ</option>
+                                  )}
+                                </select>
+                              </div>
 
-                          {/* Attendance Status buttons */}
-                          <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleQuickUpdateConfirmation(item, 'confirmed')}
-                              className={`py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                              {/* Attendance Status buttons (Active in Edit Mode) */}
+                              <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleQuickUpdateConfirmation(item, 'confirmed')}
+                                  className={`py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                                    item.confirmInfo.isConfirmed
+                                      ? 'bg-emerald-500 text-slate-950 shadow'
+                                      : 'text-slate-400 hover:text-emerald-300'
+                                  }`}
+                                >
+                                  ✅ มาแน่
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleQuickUpdateConfirmation(item, 'pending')}
+                                  className={`py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                    item.confirmInfo.isPending
+                                      ? 'bg-amber-500 text-slate-950 shadow font-black'
+                                      : 'text-slate-400 hover:text-amber-300'
+                                  }`}
+                                >
+                                  ⏳ รอ
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleQuickUpdateConfirmation(item, 'declined')}
+                                  className={`py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                    item.confirmInfo.isDeclined
+                                      ? 'bg-rose-600 text-white shadow font-black'
+                                      : 'text-slate-400 hover:text-rose-300'
+                                  }`}
+                                >
+                                  ❌ ไม่มา
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            /* Safe view: read-only badges */
+                            <div className="flex items-center justify-between gap-1 pt-0.5">
+                              <span className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                                🏛️ {item.uniInfo.shortTag}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${
                                 item.confirmInfo.isConfirmed
-                                  ? 'bg-emerald-500 text-slate-950 shadow'
-                                  : 'text-slate-400 hover:text-emerald-300'
-                              }`}
-                            >
-                              ✅ มาแน่
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleQuickUpdateConfirmation(item, 'pending')}
-                              className={`py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                item.confirmInfo.isPending
-                                  ? 'bg-amber-500 text-slate-950 shadow font-black'
-                                  : 'text-slate-400 hover:text-amber-300'
-                              }`}
-                            >
-                              ⏳ รอ
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleQuickUpdateConfirmation(item, 'declined')}
-                              className={`py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                item.confirmInfo.isDeclined
-                                  ? 'bg-rose-600 text-white shadow font-black'
-                                  : 'text-slate-400 hover:text-rose-300'
-                              }`}
-                            >
-                              ❌ ไม่มา
-                            </button>
-                          </div>
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : item.confirmInfo.isPending
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                              }`}>
+                                {item.confirmInfo.isConfirmed
+                                  ? '✅ มาแน่นอน 100%'
+                                  : item.confirmInfo.isPending
+                                  ? '⏳ รอยืนยัน'
+                                  : '❌ ไม่สะดวกเข้าร่วม'}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="pt-2">
@@ -1467,7 +1521,7 @@ export default function AdminExecutiveSummaryView({
                             className="w-full py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer transition-all active:scale-95"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            <span>➕ เพิ่มคนนี้เข้าตาราง</span>
+                            <span>เพิ่มคนนี้เข้าตาราง</span>
                           </button>
                         </div>
                       )}
@@ -1476,19 +1530,23 @@ export default function AdminExecutiveSummaryView({
                     {/* Footer action for present items */}
                     {item && (
                       <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/80 text-[10px]">
-                        <span className="text-slate-400">
-                          {item.confirmInfo.needAccommodation ? '🏨 พักหอ' : '🏠 ไม่พักหอ'}
+                        <span className="text-slate-400 font-semibold">
+                          {item.confirmInfo.needAccommodation ? '🏨 พักหอโครงการ' : '🏠 ไม่พักหอ (ไป-กลับ)'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePersonFromRoster(item)}
-                          disabled={isBusy}
-                          className="px-2 py-0.5 rounded text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer font-bold"
-                          title="ลบออกจากตาราง (สามารถกดเพิ่มกลับมาใหม่ได้ทุกเมื่อ)"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>ลบ</span>
-                        </button>
+                        {isEditMode ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePersonFromRoster(item)}
+                            disabled={isBusy}
+                            className="px-2 py-0.5 rounded text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer font-bold"
+                            title="ลบออกจากตาราง (โหมดแก้ไขเปิดอยู่)"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>ลบ</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-500 font-mono text-[9px]">🔒 โหมดปลอดภัย</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2081,6 +2139,19 @@ export default function AdminExecutiveSummaryView({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={() => setIsEditMode((prev) => !prev)}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95 ${
+                isEditMode
+                  ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              }`}
+              title={isEditMode ? 'คลิกเพื่อล็อคโหมดปลอดภัย' : 'คลิกเพื่อเปิดโหมดแก้ไขข้อมูล'}
+            >
+              {isEditMode ? <Unlock className="w-4 h-4 text-slate-950" /> : <Lock className="w-4 h-4 text-amber-400" />}
+              <span>{isEditMode ? '🔓 โหมดแก้ไข: เปิดอยู่' : '🔒 เปิดโหมดแก้ไข (Edit Mode)'}</span>
+            </button>
+            <button
+              type="button"
               onClick={handleBulkConfirmFiltered}
               disabled={isBulkUpdating}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50"
@@ -2090,6 +2161,34 @@ export default function AdminExecutiveSummaryView({
             </button>
           </div>
         </div>
+
+        {/* Safety Mode Banner */}
+        {isEditMode ? (
+          <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                <strong>🔓 กำลังอยู่ในโหมดแก้ไขข้อมูล:</strong> คุณสามารถปรับเปลี่ยนสถานะ (มาแน่ / รอ / ไม่มา), เปลี่ยนมหาวิทยาลัย, บันทึกหมายเหตุหน้าที่ หรือลบคนได้ เมื่อเสร็จสิ้นกรุณากดล็อคเพื่อความปลอดภัย
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditMode(false)}
+              className="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shrink-0 cursor-pointer shadow"
+            >
+              🔒 ล็อคโหมดปลอดภัย
+            </button>
+          </div>
+        ) : (
+          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-slate-400 text-[11px] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <span>
+                🛡️ <strong>โหมดปลอดภัย (Safe Read-Only):</strong> ล็อคการแก้ไขเพื่อป้องกันการกดโดนโดยไม่ตั้งใจ หากต้องการปรับสถานะหรือเปลี่ยนสถาบัน กรุณากดปุ่ม <strong>&ldquo;🔒 เปิดโหมดแก้ไข&rdquo;</strong> ด้านบน
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto rounded-2xl border border-slate-800">
           <table className="w-full min-w-[1150px] text-left text-xs border-collapse">
@@ -2172,74 +2271,114 @@ export default function AdminExecutiveSummaryView({
                         )}
                       </td>
 
-                      {/* University Dropdown (Inline change for anyone in the roster) */}
+                      {/* University: Dropdown in Edit Mode, Badge in Safe Mode */}
                       <td className="py-3 px-2">
-                        <select
-                          value={uniInfo.shortTag}
-                          disabled={isBusy}
-                          onChange={(e) => handleChangePersonUniversity(item, e.target.value)}
-                          className="w-full px-2 py-1 bg-slate-950 border border-indigo-500/40 rounded-lg text-xs text-indigo-200 font-bold focus:outline-none focus:border-indigo-400 cursor-pointer"
-                          title="ดรอปดาวน์เปลี่ยนมหาวิทยาลัยของบุคคลนี้ได้ทันที"
-                        >
-                          {OFFICIAL_NETWORK_INSTITUTIONS.map((u) => (
-                            <option key={u.shortTag} value={u.shortTag}>
-                              {u.shortTag} ({u.label})
-                            </option>
-                          ))}
-                          {uniInfo.shortTag === 'อื่นๆ' && (
-                            <option value="อื่นๆ">อื่นๆ</option>
-                          )}
-                        </select>
-                      </td>
-
-                      {/* Role Dropdown (Inline change) */}
-                      <td className="py-3 px-2">
-                        <select
-                          value={item.staffRoleType || (isStaff ? 'staff' : 'participant')}
-                          disabled={isBusy}
-                          onChange={(e) => handleChangePersonRoleType(item, e.target.value)}
-                          className="w-full px-2 py-1 bg-slate-950 border border-purple-500/40 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none focus:border-purple-400 cursor-pointer"
-                          title="เปลี่ยนบทบาท/ประเภทผู้เข้าร่วม"
-                        >
-                          <option value="participant">🎓 ผู้เข้าอบรม</option>
-                          <option value="committee">🎖️ คณะกรรมการ</option>
-                          <option value="mc">🎤 พิธีกร MC</option>
-                          <option value="photographer">📷 ช่างภาพ</option>
-                          <option value="dev">💻 Developer</option>
-                          <option value="staff">🛠️ Staff</option>
-                        </select>
-                      </td>
-
-                      {/* Duty / Note (Editable inline with Save button) */}
-                      <td className="py-3 px-2.5">
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
+                        {isEditMode ? (
+                          <select
+                            value={uniInfo.shortTag}
                             disabled={isBusy}
-                            value={dutyNoteDrafts[item.id] !== undefined ? dutyNoteDrafts[item.id] : (dutyNote || '')}
-                            placeholder="ระบุหน้าที่ (เช่น คณะกรรมการ, MC)"
-                            onChange={(e) => setDutyNoteDrafts({ ...dutyNoteDrafts, [item.id]: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSaveDutyNote(item);
-                              }
-                            }}
-                            className="w-full px-2 py-1 bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none"
-                            title="พิมพ์หมายเหตุหน้าที่ แล้วกด Enter หรือคลิกปุ่มบันทึก"
-                          />
-                          {isDraftModified && (
-                            <button
-                              type="button"
+                            onChange={(e) => handleChangePersonUniversity(item, e.target.value)}
+                            className="w-full px-2 py-1 bg-slate-950 border border-indigo-500/40 rounded-lg text-xs text-indigo-200 font-bold focus:outline-none focus:border-indigo-400 cursor-pointer"
+                            title="ดรอปดาวน์เปลี่ยนมหาวิทยาลัยของบุคคลนี้ได้ทันที"
+                          >
+                            {OFFICIAL_NETWORK_INSTITUTIONS.map((u) => (
+                              <option key={u.shortTag} value={u.shortTag}>
+                                {u.shortTag} - {u.label.replace(/^[-–\s]+/, '')}
+                              </option>
+                            ))}
+                            {uniInfo.shortTag === 'อื่นๆ' && (
+                              <option value="อื่นๆ">อื่นๆ</option>
+                            )}
+                          </select>
+                        ) : (
+                          <span className="inline-block px-2.5 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold">
+                            🏛️ {uniInfo.shortTag}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Role: Dropdown in Edit Mode, Badge in Safe Mode */}
+                      <td className="py-3 px-2">
+                        {isEditMode ? (
+                          <select
+                            value={item.staffRoleType || (isStaff ? 'staff' : 'participant')}
+                            disabled={isBusy}
+                            onChange={(e) => handleChangePersonRoleType(item, e.target.value)}
+                            className="w-full px-2 py-1 bg-slate-950 border border-purple-500/40 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none focus:border-purple-400 cursor-pointer"
+                            title="เปลี่ยนบทบาท/ประเภทผู้เข้าร่วม"
+                          >
+                            <option value="participant">🎓 ผู้เข้าอบรม</option>
+                            <option value="committee">🎖️ คณะกรรมการ</option>
+                            <option value="mc">🎤 พิธีกร MC</option>
+                            <option value="photographer">📷 ช่างภาพ</option>
+                            <option value="dev">💻 Developer</option>
+                            <option value="staff">🛠️ Staff</option>
+                          </select>
+                        ) : (
+                          <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold border ${
+                            item.staffRoleType === 'committee' || isCommitteeSpec
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : isStaff
+                              ? 'bg-purple-500/20 text-purple-200 border-purple-500/30'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}>
+                            {item.staffRoleType === 'committee' || isCommitteeSpec
+                              ? '🎖️ กรรมการ'
+                              : item.staffRoleType === 'mc'
+                              ? '🎤 พิธีกร MC'
+                              : item.staffRoleType === 'photographer'
+                              ? '📷 ช่างภาพ'
+                              : item.staffRoleType === 'dev'
+                              ? '💻 Dev'
+                              : isStaff
+                              ? '🛠️ Staff'
+                              : '🎓 ผู้เข้าอบรม'}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Duty / Note: Editable in Edit Mode, Plain view in Safe Mode */}
+                      <td className="py-3 px-2.5">
+                        {isEditMode ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
                               disabled={isBusy}
-                              onClick={() => handleSaveDutyNote(item)}
-                              className="p-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer transition-colors shrink-0 shadow"
-                              title="บันทึกหมายเหตุหน้าที่"
-                            >
-                              <Save className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
+                              value={dutyNoteDrafts[item.id] !== undefined ? dutyNoteDrafts[item.id] : (dutyNote || '')}
+                              placeholder="ระบุหน้าที่ (เช่น คณะกรรมการ, MC)"
+                              onChange={(e) => setDutyNoteDrafts({ ...dutyNoteDrafts, [item.id]: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSaveDutyNote(item);
+                                }
+                              }}
+                              className="w-full px-2 py-1 bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none"
+                              title="พิมพ์หมายเหตุหน้าที่ แล้วกด Enter หรือคลิกปุ่มบันทึก"
+                            />
+                            {isDraftModified && (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => handleSaveDutyNote(item)}
+                                className="p-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer transition-colors shrink-0 shadow"
+                                title="บันทึกหมายเหตุหน้าที่"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-300 font-medium">
+                            {dutyNote ? (
+                              <span className="bg-slate-950/80 px-2 py-0.5 rounded-lg border border-slate-800 inline-block line-clamp-2" title={dutyNote}>
+                                📌 {dutyNote}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">-</span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-2 text-center whitespace-nowrap">
@@ -2254,49 +2393,63 @@ export default function AdminExecutiveSummaryView({
                         </span>
                       </td>
 
-                      {/* 1-Click Attendance Confirmation Buttons */}
+                      {/* Attendance Confirmation: Interactive in Edit Mode, Clean Badge in Safe Mode */}
                       <td className="py-3 px-3 text-center bg-emerald-950/10">
-                        <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => handleQuickUpdateConfirmation(item, 'confirmed')}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                        {isEditMode ? (
+                          <div className="inline-flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleQuickUpdateConfirmation(item, 'confirmed')}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                                confirmInfo.isConfirmed
+                                  ? 'bg-emerald-500 text-slate-950 shadow'
+                                  : 'text-slate-400 hover:text-emerald-300'
+                              }`}
+                              title="ยืนยันเข้าร่วมกิจกรรมแน่นอน"
+                            >
+                              ✅ มาแน่
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleQuickUpdateConfirmation(item, 'pending')}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                confirmInfo.isPending
+                                  ? 'bg-amber-500 text-slate-950 shadow font-black'
+                                  : 'text-slate-400 hover:text-amber-300'
+                              }`}
+                              title="อยู่ในสถานะรอยืนยัน"
+                            >
+                              ⏳ รอ
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleQuickUpdateConfirmation(item, 'declined')}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                confirmInfo.isDeclined
+                                  ? 'bg-rose-600 text-white shadow font-black'
+                                  : 'text-slate-400 hover:text-rose-300'
+                              }`}
+                              title="ไม่สะดวกเข้าร่วม / สละสิทธิ์"
+                            >
+                              ❌ ไม่มา
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex flex-col items-center">
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-black border ${
                               confirmInfo.isConfirmed
-                                ? 'bg-emerald-500 text-slate-950 shadow'
-                                : 'text-slate-400 hover:text-emerald-300'
-                            }`}
-                            title="ยืนยันเข้าร่วมกิจกรรมแน่นอน"
-                          >
-                            ✅ มาแน่
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => handleQuickUpdateConfirmation(item, 'pending')}
-                            className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                              confirmInfo.isPending
-                                ? 'bg-amber-500 text-slate-950 shadow font-black'
-                                : 'text-slate-400 hover:text-amber-300'
-                            }`}
-                            title="อยู่ในสถานะรอยืนยัน"
-                          >
-                            ⏳ รอ
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => handleQuickUpdateConfirmation(item, 'declined')}
-                            className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                              confirmInfo.isDeclined
-                                ? 'bg-rose-600 text-white shadow font-black'
-                                : 'text-slate-400 hover:text-rose-300'
-                            }`}
-                            title="ไม่สะดวกเข้าร่วม / สละสิทธิ์"
-                          >
-                            ❌ ไม่มา
-                          </button>
-                        </div>
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow'
+                                : confirmInfo.isPending
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            }`}>
+                              {confirmInfo.isConfirmed ? '✅ มาแน่ (100%)' : confirmInfo.isPending ? '⏳ รอยืนยัน' : '❌ ไม่มา'}
+                            </span>
+                          </div>
+                        )}
                         {confirmInfo.confirmedAt && (
                           <div className="text-[10px] text-emerald-400/80 mt-0.5 font-mono">
                             {confirmInfo.confirmedBy === 'self' ? 'เจ้าตัวยืนยันเอง' : confirmInfo.confirmedBy === 'qr' ? 'เช็คอิน QR' : 'แอดมินบันทึก'}
@@ -2304,27 +2457,43 @@ export default function AdminExecutiveSummaryView({
                         )}
                       </td>
 
-                      {/* Accommodation Toggle & Assigned Room */}
+                      {/* Accommodation: Toggle in Edit Mode, Badge in Safe Mode */}
                       <td className="py-3 px-3 text-center bg-sky-950/10 whitespace-nowrap">
                         <div className="flex flex-col items-center gap-1">
-                          <button
-                            type="button"
-                            disabled={isBusy || confirmInfo.isDeclined}
-                            onClick={() => handleQuickToggleAccommodation(item)}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                          {isEditMode ? (
+                            <button
+                              type="button"
+                              disabled={isBusy || confirmInfo.isDeclined}
+                              onClick={() => handleQuickToggleAccommodation(item)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                                confirmInfo.isDeclined
+                                  ? 'bg-slate-900 text-slate-600 border-slate-800'
+                                  : confirmInfo.needAccommodation
+                                  ? 'bg-sky-500/20 text-sky-200 border-sky-400/50 hover:bg-sky-500/30'
+                                  : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                              }`}
+                            >
+                              {confirmInfo.isDeclined
+                                ? 'สละสิทธิ์'
+                                : confirmInfo.needAccommodation
+                                ? '🏨 พักหอพักโครงการ'
+                                : '🏠 ไม่พักหอพัก'}
+                            </button>
+                          ) : (
+                            <span className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${
                               confirmInfo.isDeclined
                                 ? 'bg-slate-900 text-slate-600 border-slate-800'
                                 : confirmInfo.needAccommodation
-                                ? 'bg-sky-500/20 text-sky-200 border-sky-400/50 hover:bg-sky-500/30'
-                                : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
-                            }`}
-                          >
-                            {confirmInfo.isDeclined
-                              ? 'สละสิทธิ์'
-                              : confirmInfo.needAccommodation
-                              ? '🏨 พักหอพักโครงการ'
-                              : '🏠 ไม่พักหอพัก'}
-                          </button>
+                                ? 'bg-sky-500/20 text-sky-200 border-sky-400/50'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}>
+                              {confirmInfo.isDeclined
+                                ? 'สละสิทธิ์'
+                                : confirmInfo.needAccommodation
+                                ? '🏨 พักหอพักโครงการ'
+                                : '🏠 ไม่พักหอพัก (มมส)'}
+                            </span>
+                          )}
                           {reg.room_assigned ? (
                             <span className="text-[10px] font-mono font-bold text-amber-300">
                               🛏️ ห้อง: {reg.room_assigned}
@@ -2374,7 +2543,7 @@ export default function AdminExecutiveSummaryView({
                         )}
                       </td>
 
-                      {/* Actions: View Profile & Delete */}
+                      {/* Actions: View Profile & Delete (Delete hidden in Safe Mode) */}
                       <td className="py-3 px-2 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {effectiveOpenProfile && (
@@ -2387,15 +2556,17 @@ export default function AdminExecutiveSummaryView({
                               ดู/แก้
                             </button>
                           )}
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => handleDeletePersonFromRoster(item)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
-                            title="ลบรายชื่อนี้ออกจากตาราง"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isEditMode && (
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleDeletePersonFromRoster(item)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                              title="ลบรายชื่อนี้ออกจากตาราง (โหมดแก้ไขเปิดอยู่)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
