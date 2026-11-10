@@ -1193,7 +1193,8 @@ export default function AdminExecutiveSummaryView({
         patch.callsign = formatStaffCallsign(item.reg.callsign || '', isNextStaff);
       }
 
-      await onUpdateAllocation(item.id, patch);
+      const targetId = item.reg?.user_id || item.reg?.id || item.id;
+      await onUpdateAllocation(targetId, patch);
       handleDiscardRowDraft(item.id);
       if (triggerToast) {
         triggerToast(`✓ บันทึกการเปลี่ยนแปลงของคุณ ${item.fullName} เรียบร้อยแล้ว`, 'success');
@@ -1212,7 +1213,7 @@ export default function AdminExecutiveSummaryView({
     setIsSavingDrafts(true);
     try {
       for (const id of ids) {
-        const item = filteredItems.find((it) => it.id === id) || allItems.find((it) => it.id === id);
+        const item = filteredItems.find((it) => it.id === id) || (enrichedRegs || []).find((it) => it.id === id);
         if (item) {
           await handleSaveRowDraft(item);
         }
@@ -2443,25 +2444,85 @@ export default function AdminExecutiveSummaryView({
               {!isEditMode ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <CheckCircle2 className="w-4 h-4" />}
               <span>✅ ยืนยันมาแน่ทั้งกลุ่มที่แสดง ({filteredItems.filter((i) => !i.confirmInfo.isConfirmed).length} คน)</span>
             </button>
+
+            {/* Quick Save All Button in Table Header */}
+            {Object.keys(rowDrafts).length > 0 && (
+              <>
+                <button
+                  type="button"
+                  disabled={isSavingDrafts}
+                  onClick={handleSaveAllDrafts}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xl shadow-emerald-950/50 cursor-pointer active:scale-95 transition-all animate-pulse"
+                  title="บันทึกการแก้ไขทั้งหมดลงฐานข้อมูล Supabase ทันที"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSavingDrafts ? 'กำลังบันทึก...' : `💾 บันทึกทั้งหมด (${Object.keys(rowDrafts).length} คน)`}</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingDrafts}
+                  onClick={handleDiscardAllDrafts}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer border border-slate-700"
+                  title="ยกเลิกการแก้ไขทั้งหมดที่ยังไม่ได้บันทึก"
+                >
+                  <span>↩️ ยกเลิก</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         {/* Safety Mode Banner */}
         {isEditMode ? (
-          <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>
-                <strong>🔓 กำลังอยู่ในโหมดแก้ไขข้อมูล:</strong> คุณสามารถปรับเปลี่ยนสถานะ (มาแน่ / รอ / ไม่มา), เปลี่ยนมหาวิทยาลัย, บันทึกหมายเหตุหน้าที่ หรือลบคนได้ เมื่อเสร็จสิ้นกรุณากดล็อคเพื่อความปลอดภัย
-              </span>
+          <div className="space-y-3">
+            <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>🔓 กำลังอยู่ในโหมดแก้ไขข้อมูล:</strong> คุณสามารถปรับเปลี่ยนสถานะ (มาแน่ / รอ / ไม่มา), เปลี่ยนมหาวิทยาลัย, บันทึกหมายเหตุหน้าที่ หรือลบคนได้ เมื่อเสร็จสิ้นกรุณากดล็อคเพื่อความปลอดภัย
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditMode(false)}
+                className="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shrink-0 cursor-pointer shadow"
+              >
+                🔒 ล็อคโหมดปลอดภัย
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsEditMode(false)}
-              className="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shrink-0 cursor-pointer shadow"
-            >
-              🔒 ล็อคโหมดปลอดภัย
-            </button>
+
+            {Object.keys(rowDrafts).length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border-2 border-emerald-500/70 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs">
+                    💾 {Object.keys(rowDrafts).length}
+                  </span>
+                  <div>
+                    <div className="text-xs font-black text-white">คุณมีการแก้ไขข้อมูลที่รอกดบันทึก ({Object.keys(rowDrafts).length} รายการ)</div>
+                    <div className="text-[11px] text-emerald-300/90">กรุณากดปุ่ม &quot;💾 บันทึกทั้งหมด&quot; เพื่อยืนยันลงระบบจริง</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isSavingDrafts}
+                    onClick={handleSaveAllDrafts}
+                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-950/50 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingDrafts ? 'กำลังบันทึก...' : `💾 บันทึกทั้งหมด (${Object.keys(rowDrafts).length})`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingDrafts}
+                    onClick={handleDiscardAllDrafts}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer border border-slate-700"
+                  >
+                    ↩️ ยกเลิก
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-slate-400 text-[11px] flex items-center justify-between gap-2">
@@ -2770,9 +2831,32 @@ export default function AdminExecutiveSummaryView({
                                   {confirmInfo.confirmedBy === 'self' ? 'เจ้าตัวยืนยันเอง' : confirmInfo.confirmedBy === 'qr' ? 'เช็คอิน QR' : 'แอดมินบันทึก'}
                                 </div>
                               )}
-                              {isDraftChanged && (
-                                <div className="text-[10px] text-amber-300 font-bold mt-0.5 font-mono animate-pulse">
-                                  ⏳ รอกดบันทึก
+                              {rowDraft && (
+                                <div className="mt-1 flex flex-col items-center gap-1 animate-in fade-in">
+                                  <div className="text-[10px] text-amber-300 font-bold font-mono animate-pulse">
+                                    ⏳ รอกดบันทึก
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={updatingId === item.id || isBusy}
+                                      onClick={() => handleSaveRowDraft(item)}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center gap-1 shadow-md shadow-emerald-950/40 cursor-pointer active:scale-95 transition-all"
+                                      title="กดบันทึกการเปลี่ยนแปลงของคนนี้ลงฐานข้อมูลทันที"
+                                    >
+                                      <Save className="w-3 h-3" />
+                                      <span>{updatingId === item.id ? 'กำลังบันทึก...' : '💾 บันทึก'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={updatingId === item.id || isBusy}
+                                      onClick={() => handleDiscardRowDraft(item.id)}
+                                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] cursor-pointer border border-slate-700"
+                                      title="ยกเลิกการแก้ไขของคนนี้"
+                                    >
+                                      ↩️
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -2868,7 +2952,19 @@ export default function AdminExecutiveSummaryView({
 
                       {/* Actions: View Profile & Delete (Delete hidden in Safe Mode) */}
                       <td className="py-3 px-2 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {rowDrafts[item.id] && (
+                            <button
+                              type="button"
+                              disabled={updatingId === item.id || isBusy}
+                              onClick={() => handleSaveRowDraft(item)}
+                              className="px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center gap-1 shadow cursor-pointer active:scale-95 transition-all"
+                              title="บันทึกการแก้ไขของคนนี้ทันที"
+                            >
+                              <Save className="w-3 h-3" />
+                              <span>{updatingId === item.id ? '...' : 'บันทึก'}</span>
+                            </button>
+                          )}
                           {effectiveOpenProfile && (
                             <button
                               type="button"
@@ -3373,6 +3469,46 @@ export default function AdminExecutiveSummaryView({
                   ปิด
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING STICKY SAVE BAR: Always clearly visible when drafts exist anywhere on the screen */}
+      {Object.keys(rowDrafts).length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[95vw] animate-in slide-in-from-bottom duration-300">
+          <div className="px-5 py-3 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 shadow-2xl shadow-emerald-950/80 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-xs shadow shrink-0">
+                {Object.keys(rowDrafts).length}
+              </span>
+              <div className="text-left">
+                <div className="text-xs font-black text-white flex items-center gap-1.5">
+                  <span>คุณมีข้อมูลที่แก้ไขรอกดบันทึก</span>
+                  <span className="text-emerald-300 font-mono">({Object.keys(rowDrafts).length} คน)</span>
+                </div>
+                <div className="text-[10px] text-slate-300">กดปุ่ม &quot;บันทึกทั้งหมด&quot; เพื่อยืนยันลงระบบจริงทันที</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isSavingDrafts}
+                onClick={handleSaveAllDrafts}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-950/50 cursor-pointer active:scale-95 transition-all"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingDrafts ? 'กำลังบันทึก...' : `💾 บันทึกทั้งหมด (${Object.keys(rowDrafts).length})`}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSavingDrafts}
+                onClick={handleDiscardAllDrafts}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer border border-slate-700"
+              >
+                ↩️ ยกเลิก
+              </button>
             </div>
           </div>
         </div>

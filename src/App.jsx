@@ -1062,7 +1062,7 @@ export default function App() {
   };
 
   const handleUpdateAllocation = async (userId, allocations) => {
-    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn);
+    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist) || devGoogleSignedIn);
     // SECURITY GUARD: Group and room allocations are RESTRICTED to verified Admin!
     if (!hasAdminPrivilege) {
       console.warn('Unauthorized allocation update attempt rejected');
@@ -1080,7 +1080,7 @@ export default function App() {
   };
 
   const handleUpdateRegistration = async (userId, updates) => {
-    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user) || devGoogleSignedIn);
+    const hasAdminPrivilege = Boolean(isAdmin || isGoogleDevIdentity(user, staffAdminWhitelist) || devGoogleSignedIn);
     // SECURITY GUARD: Prevent editing other people's registration records!
     if (!hasAdminPrivilege) {
       if (!user) {
