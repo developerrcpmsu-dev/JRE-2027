@@ -10,22 +10,22 @@ export const DEFAULT_TEAM_MEMBERS = [
     id: 'team-msu-1',
     name: 'นายพีรณัฐ พาลึก',
     nickname: 'เยลโล่ / Yellow',
-    callsign: 'RCP15-46 (STAFF)',
+    callsign: 'RCP 15-46 (STAFF)',
     role: 'คณะกรรมการดำเนินงาน (ฝ่ายปฏิบัติการและประสานงานฝึก)',
     institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
     university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
-    tag: 'มมส 1 • RCP15-46',
+    tag: 'มมส 1 • RCP 15-46',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792657788806_qkqpan'
   },
   {
     id: 'team-msu-2',
     name: 'นายเศรษฐบุตร อากานิส',
     nickname: 'โฟกัส / FOCUS',
-    callsign: 'RCP15-05 (STAFF)',
+    callsign: 'RCP 15-05 (STAFF)',
     role: 'คณะกรรมการดำเนินงาน (ฝ่ายอำนวยการและควบคุมการฝึก)',
     institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
     university: 'มหาวิทยาลัยมหาสารคาม (มมส)',
-    tag: 'มมส 2 • RCP15-05',
+    tag: 'มมส 2 • RCP 15-05',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792659231387_t8ot9w'
   },
   {
@@ -106,11 +106,11 @@ export const DEFAULT_TEAM_MEMBERS = [
     id: 'team-kku-1',
     name: 'นายวชิรวิทย์ มังสระคู',
     nickname: 'โดโด้ / DoDo',
-    callsign: 'TSI1805 (STAFF)',
+    callsign: 'TSI 1805 (STAFF)',
     role: 'คณะกรรมการดำเนินงานร่วม (ฝ่ายปฏิบัติการและประสานงาน มข)',
     institution: 'TSI - มหาวิทยาลัยขอนแก่น (มข)',
     university: 'มหาวิทยาลัยขอนแก่น (มข)',
-    tag: 'มข 10 • TSI1805',
+    tag: 'มข 10 • TSI 1805',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792599946054_r0de70'
   },
   {
@@ -857,13 +857,13 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     display_name: 'นายพีรณัฐ พาลึก',
     nickname: 'เยลโล่',
     gender: 'ชาย',
-    callsign: 'RCP15-46 (STAFF)',
+    callsign: 'RCP 15-46 (STAFF)',
     staff_role_type: 'committee',
     university_short: 'มมส',
     institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
-    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายปฏิบัติการและประสานงานฝึก (RCP15-46)',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายปฏิบัติการและประสานงานฝึก (RCP 15-46)',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792657788806_qkqpan',
     matchTokens: ['พีรณัฐ พาลึก', 'พีรณัฐ']
   },
@@ -876,13 +876,13 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     display_name: 'นายเศรษฐบุตร อากานิส',
     nickname: 'โฟกัส',
     gender: 'ชาย',
-    callsign: 'RCP15-05 (STAFF)',
+    callsign: 'RCP 15-05 (STAFF)',
     staff_role_type: 'committee',
     university_short: 'มมส',
     institution: 'ชมรมกู้ภัยราชพฤกษ์ มหาวิทยาลัยมหาสารคาม (มมส)',
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
-    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายอำนวยการและควบคุมการฝึก (RCP15-05)',
+    committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายอำนวยการและควบคุมการฝึก (RCP 15-05)',
     photo: 'https://jre-2027.vercel.app/api/file?id=file_1792659231387_t8ot9w',
     matchTokens: ['เศรษฐบุตร อากานิส', 'เศรษฐบุตร']
   },
@@ -1178,16 +1178,92 @@ export const isStaffRegistration = (reg) => {
 };
 
 /**
+ * จัดรูปแบบนามเรียกขานให้อ่านง่าย มีการเว้นวรรคระหว่างอักษรย่อกับตัวเลข เช่น TSI2121 -> TSI 2121, RCP16-37 -> RCP 16-37
+ */
+export const normalizeCallsignSpacing = (callsign = '') => {
+  if (!callsign) return '';
+  let str = String(callsign).trim();
+  // เว้นวรรค TSI / RCP กับตัวเลข เช่น TSI2121 -> TSI 2121, RCP16-37 -> RCP 16-37
+  str = str.replace(/\b(TSI|RCP)\s*([0-9])/gi, (_, prefix, num) => `${prefix.toUpperCase()} ${num}`);
+  str = str.replace(/\s+/g, ' ');
+  return str;
+};
+
+/**
  * จัดรูปแบบนามเรียกขานให้มีคำว่า (STAFF) ต่อท้ายเสมอหากเป็น Staff (หรือลบออกหากยกเลิก Staff)
  */
 export const formatStaffCallsign = (rawCallsign = '', shouldBeStaff = false) => {
-  const cleaned = String(rawCallsign || '')
+  let cleaned = String(rawCallsign || '')
     .replace(/\s*\(\s*dev\s*\/\s*staff\s*\)/gi, '')
     .replace(/\s*\(\s*staff\s*\)/gi, '')
     .replace(/\s*\[\s*staff\s*\]/gi, '')
     .trim();
+  cleaned = normalizeCallsignSpacing(cleaned);
   if (!shouldBeStaff) return cleaned;
   return cleaned ? `${cleaned} (STAFF)` : '(STAFF)';
+};
+
+/**
+ * ลำดับการเรียงเริ่มต้นของตารางสรุปยอดและรายชื่อสำรวจการเข้าร่วม (JRE 2027 Roster Sort)
+ * 1. คณะกรรมการ/ฝ่ายอำนวยการ มมส (ชาย -> หญิง)
+ * 2. คณะกรรมการ/แกนนำ มข (ชาย -> หญิง)
+ * 3. ผู้เข้าร่วม มมส (RCP) (ชาย -> หญิง)
+ * 4. ผู้เข้าร่วม มข (TSI) (ชาย -> หญิง)
+ * 5. นิสิตอาสาของทาง มข (ชาย -> หญิง)
+ * 6. ผู้เข้าร่วมสถาบันอื่นๆ (ชาย -> หญิง)
+ */
+export const getRosterSortTier = (item) => {
+  if (!item) return 99;
+  const isMsu = item.uniInfo?.isMsu || item.uniInfo?.shortTag === 'มมส' || (item.reg?.institution || '').includes('มหาสารคาม') || (item.reg?.user_id || '').includes('msu');
+  const isKku = item.uniInfo?.shortTag === 'มข' || (item.reg?.institution || '').includes('ขอนแก่น') || (item.reg?.user_id || '').includes('kku');
+  const isCommittee = Boolean(
+    item.isCommitteeSpec ||
+    item.committeeSpec ||
+    item.staffRoleType === 'committee' ||
+    item.reg?.committee_member_key ||
+    String(item.dutyNote || '').includes('คณะกรรมการ') ||
+    String(item.reg?.user_id || '').startsWith('staff_committee_')
+  );
+  const cs = normalizeCallsignSpacing(item.reg?.callsign || item.callsign || '');
+  const isTsi = /TSI/i.test(cs);
+  const isVolunteer = /^อาสา/i.test(cs) || (!isTsi && isKku);
+
+  // 1. คณะกรรมการ มมส
+  if (isCommittee && isMsu) return 1;
+  // 2. คณะกรรมการ / แกนนำ มข
+  if (isKku && (isCommittee || item.isStaff || item.staffRoleType === 'committee')) return 2;
+  // 3. ผู้เข้าร่วม มมส (RCP)
+  if (isMsu) return 3;
+  // 4. ผู้เข้าร่วม มข (TSI)
+  if (isKku && isTsi) return 4;
+  // 5. นิสิตอาสาของทาง มข
+  if (isKku && isVolunteer) return 5;
+  // 6. มหาวิทยาลัยและสถาบันอื่นๆ
+  return 6;
+};
+
+export const compareRosterItems = (a, b) => {
+  const tierA = getRosterSortTier(a);
+  const tierB = getRosterSortTier(b);
+  if (tierA !== tierB) return tierA - tierB;
+
+  // เรียงแยก ชาย -> หญิง
+  const genderWeightA = a.gender === 'ชาย' ? 0 : 1;
+  const genderWeightB = b.gender === 'ชาย' ? 0 : 1;
+  if (genderWeightA !== genderWeightB) return genderWeightA - genderWeightB;
+
+  // ถ้า tier และเพศเดียวกัน ให้เรียงตาม committee order (ถ้ามี)
+  const orderA = a.committeeSpec?.order ?? 999;
+  const orderB = b.committeeSpec?.order ?? 999;
+  if (orderA !== orderB) return orderA - orderB;
+
+  // เรียงตามนามเรียกขาน (ถ้ามี)
+  const csA = normalizeCallsignSpacing(a.reg?.callsign || '');
+  const csB = normalizeCallsignSpacing(b.reg?.callsign || '');
+  if (csA && csB && csA !== csB) return csA.localeCompare(csB, 'th');
+
+  // เรียงตามชื่อ-นามสกุล
+  return (a.fullName || '').localeCompare(b.fullName || '', 'th');
 };
 
 /**

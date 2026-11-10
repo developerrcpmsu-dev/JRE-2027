@@ -53,7 +53,10 @@ import {
   findMatchingCommitteeMemberSpec,
   findExistingRegForCommitteeSpec,
   resolveCommitteeDutyNote,
-  formatStaffCallsign
+  formatStaffCallsign,
+  normalizeCallsignSpacing,
+  compareRosterItems,
+  getRosterSortTier
 } from '../data/defaultData';
 
 const DELETED_COMMITTEE_STORAGE_KEY = 'jre2027_deleted_committee_keys';
@@ -558,9 +561,11 @@ export default function AdminExecutiveSummaryView({
     };
   }, [afterGenderScoped]);
 
-  // Final filtered list for the table AND scoped summary metrics
+  // Final filtered list for the table AND scoped summary metrics (Sorted: Committee MSU -> Committee KKU -> RCP -> TSI -> KKU Volunteers, Male -> Female)
   const filteredItems = useMemo(() => {
-    return afterGenderScoped.filter((item) => matchesConfirmFilter(item, confirmFilter));
+    return afterGenderScoped
+      .filter((item) => matchesConfirmFilter(item, confirmFilter))
+      .sort(compareRosterItems);
   }, [afterGenderScoped, confirmFilter]);
 
   // ============================================================================
@@ -2265,7 +2270,7 @@ export default function AdminExecutiveSummaryView({
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-0.5">
                           {reg.callsign && (
-                            <span className="text-sky-300 font-mono font-bold">📡 {reg.callsign}</span>
+                            <span className="text-sky-300 font-mono font-bold">📡 {normalizeCallsignSpacing(reg.callsign)}</span>
                           )}
                           {reg.phone && (
                             <a href={`tel:${reg.phone}`} className="text-emerald-400 font-mono hover:underline">
