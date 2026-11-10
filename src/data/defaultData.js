@@ -814,13 +814,24 @@ export const isMsuInstitution = (inst) => {
   );
 };
 
+export const PARTICIPANT_ROLE_CATEGORIES = [
+  { key: 'all', label: 'ทุกประเภท / บทบาท', badge: 'ทั้งหมด' },
+  { key: 'committee', label: '🎖️ คณะกรรมการดำเนินงาน', badge: '🎖️ คณะกรรมการ', color: 'amber' },
+  { key: 'staff', label: '🛠️ Staff ทีมงาน (MC/ช่างภาพ/Dev/สตาฟ)', badge: '🛠️ Staff', color: 'purple' },
+  { key: 'club_org', label: '🏢 ชมรม / หน่วยงาน (RCP / TSI)', badge: '🏢 ชมรม/หน่วยงาน', color: 'indigo' },
+  { key: 'volunteer', label: '🤝 นิสิตอาสา (จิตอาสา มข/มมส)', badge: '🤝 นิสิตอาสา', color: 'emerald' },
+  { key: 'participant', label: '👤 ผู้เข้าอบรมทั่วไป', badge: '👤 ผู้เข้าอบรม', color: 'slate' }
+];
+
 export const STAFF_ROLE_OPTIONS = [
-  { value: 'participant', label: '👤 ผู้เข้าอบรมทั่วไป (Participant)', isStaff: false },
-  { value: 'committee', label: '🛠️ (STAFF) คณะกรรมการดำเนินงาน (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'คณะกรรมการดำเนินงาน (STAFF)' },
-  { value: 'dev', label: '💻 (STAFF) ผู้พัฒนาระบบ Dev (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'ผู้พัฒนาระบบ (DEV / STAFF)' },
-  { value: 'mc', label: '🎤 (STAFF) พิธีกรดำเนินรายการ (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'พิธีกร (STAFF)' },
-  { value: 'photographer', label: '📸 (STAFF) ช่างภาพ / โสตทัศนูปกรณ์ (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'ช่างภาพ (STAFF)' },
-  { value: 'staff', label: '🛠️ (STAFF) สตาฟโครงการทั่วไป (มมส 280 บ. / ต่างมหาลัย 480 บ.)', isStaff: true, badge: 'สตาฟโครงการ (STAFF)' }
+  { value: 'committee', label: '🎖️ คณะกรรมการดำเนินงาน (Organizing Committee)', category: 'committee', isStaff: true, badge: '🎖️ คณะกรรมการ' },
+  { value: 'staff', label: '🛠️ Staff สตาฟโครงการทั่วไป (Project Staff)', category: 'staff', isStaff: true, badge: '🛠️ Staff' },
+  { value: 'mc', label: '🎤 Staff พิธีกรดำเนินรายการ (MC)', category: 'staff', isStaff: true, badge: '🎤 พิธีกร MC' },
+  { value: 'photographer', label: '📸 Staff ช่างภาพและโสตฯ (Media)', category: 'staff', isStaff: true, badge: '📸 ช่างภาพ' },
+  { value: 'dev', label: '💻 Staff ผู้พัฒนาระบบ (Dev)', category: 'staff', isStaff: true, badge: '💻 Dev' },
+  { value: 'club_org', label: '🏢 ตัวแทนชมรม / หน่วยงาน (RCP / TSI)', category: 'club_org', isStaff: false, badge: '🏢 ชมรม/หน่วยงาน' },
+  { value: 'volunteer', label: '🤝 นิสิตอาสา (จิตอาสา มข/มมส)', category: 'volunteer', isStaff: false, badge: '🤝 นิสิตอาสา' },
+  { value: 'participant', label: '👤 ผู้เข้าอบรมทั่วไป (General Participant)', category: 'participant', isStaff: false, badge: '👤 ผู้เข้าอบรม' }
 ];
 
 export const OFFICIAL_COMMITTEE_NAMES = [
@@ -1204,42 +1215,116 @@ export const formatStaffCallsign = (rawCallsign = '', shouldBeStaff = false) => 
 };
 
 /**
+ * จำแนกประเภท/บทบาทของผู้เข้าร่วมโครงการอย่างชัดเจน (Category Resolver):
+ * 1. committee: คณะกรรมการดำเนินงานโครงการ
+ * 2. staff: Staff ทีมงาน (MC, ช่างภาพ, สื่อโสตฯ, Dev, สตาฟ)
+ * 3. club_org: ชมรม / หน่วยงาน (ชมรมกู้ภัยราชพฤกษ์ มมส (RCP), ชมรม TSI มข, หน่วยกู้ภัย)
+ * 4. volunteer: นิสิตอาสา (จิตอาสา มข/มมส)
+ * 5. participant: ผู้เข้าอบรมทั่วไป
+ */
+export const getParticipantCategory = (itemOrReg) => {
+  if (!itemOrReg) return 'participant';
+  const reg = itemOrReg.reg || itemOrReg;
+  let sn = {};
+  try {
+    sn = typeof reg.special_notes === 'string' ? JSON.parse(reg.special_notes) : (reg.special_notes || {});
+  } catch (e) {
+    sn = {};
+  }
+  const staffRoleType = itemOrReg.staffRoleType || reg.staff_role_type || sn.staff_role_type;
+  const duty = String(itemOrReg.dutyNote || reg.committee_duty_note || sn.committee_duty_note || '');
+  const cs = normalizeCallsignSpacing(reg.callsign || itemOrReg.callsign || sn.callsign || '');
+  const isCommitteeSpec = Boolean(
+    itemOrReg.committeeSpec ||
+    itemOrReg.isCommitteeSpec ||
+    reg.committee_member_key ||
+    sn.committee_member_key ||
+    (reg.user_id && String(reg.user_id).startsWith('staff_committee_'))
+  );
+
+  // 1. Explicit Overrides
+  if (staffRoleType === 'volunteer') return 'volunteer';
+  if (staffRoleType === 'club_org') return 'club_org';
+  if (staffRoleType === 'committee') return 'committee';
+
+  // 2. Staff: MC, Photographer, Dev, Explicit Staff
+  if (
+    ['staff', 'mc', 'photographer', 'dev'].includes(staffRoleType) ||
+    duty.includes('สตาฟ') ||
+    duty.includes('Staff') ||
+    duty.includes('พิธีกร') ||
+    duty.includes('ช่างภาพ') ||
+    duty.includes('โสต') ||
+    duty.includes('ผู้พัฒนาระบบ') ||
+    duty.includes('ฝ่ายเทคโนโลยี') ||
+    /^(MC|17-02)/i.test(cs) ||
+    (cs.includes('(STAFF)') && (cs.includes('MC') || cs.includes('17-02') || cs.includes('DEV')))
+  ) {
+    return 'staff';
+  }
+
+  // 3. Committee: Organizing Committee
+  if (
+    isCommitteeSpec ||
+    duty.includes('คณะกรรมการ')
+  ) {
+    return 'committee';
+  }
+
+  // 4. Volunteer: นิสิตจิตอาสา
+  if (
+    /^อาสา/i.test(cs) ||
+    cs.includes('อาสา') ||
+    duty.includes('อาสา') ||
+    (reg.unit && reg.unit.includes('อาสา')) ||
+    (reg.institution && reg.institution.includes('อาสา'))
+  ) {
+    return 'volunteer';
+  }
+
+  // 5. Club / Organization: RCP / TSI / สังกัดชมรม
+  if (
+    /^(RCP|TSI)/i.test(cs) ||
+    (reg.unit && (reg.unit.includes('ชมรม') || reg.unit.includes('กู้ภัย'))) ||
+    (reg.institution && (reg.institution.includes('ชมรม') || reg.institution.includes('กู้ภัย')))
+  ) {
+    return 'club_org';
+  }
+
+  return 'participant';
+};
+
+/**
  * ลำดับการเรียงเริ่มต้นของตารางสรุปยอดและรายชื่อสำรวจการเข้าร่วม (JRE 2027 Roster Sort)
- * 1. คณะกรรมการ/ฝ่ายอำนวยการ มมส (ชาย -> หญิง)
- * 2. คณะกรรมการ/แกนนำ มข (ชาย -> หญิง)
- * 3. ผู้เข้าร่วม มมส (RCP) (ชาย -> หญิง)
- * 4. ผู้เข้าร่วม มข (TSI) (ชาย -> หญิง)
- * 5. นิสิตอาสาของทาง มข (ชาย -> หญิง)
- * 6. ผู้เข้าร่วมสถาบันอื่นๆ (ชาย -> หญิง)
+ * Tier 1: คณะกรรมการ มมส (ชาย -> หญิง)
+ * Tier 2: คณะกรรมการ มข (ชาย -> หญิง)
+ * Tier 3: Staff ทีมงาน (MC, ช่างภาพ, Dev, สตาฟ) (ชาย -> หญิง)
+ * Tier 4: สมาชิกชมรมกู้ภัยราชพฤกษ์ มมส (RCP) (ชาย -> หญิง)
+ * Tier 5: สมาชิกชมรม TSI มข (ชาย -> หญิง)
+ * Tier 6: นิสิตอาสาของทาง มข (ชาย -> หญิง)
+ * Tier 7: ผู้เข้าร่วมสถาบันอื่นๆ / ผู้เข้าอบรมทั่วไป (ชาย -> หญิง)
  */
 export const getRosterSortTier = (item) => {
   if (!item) return 99;
-  const isMsu = item.uniInfo?.isMsu || item.uniInfo?.shortTag === 'มมส' || (item.reg?.institution || '').includes('มหาสารคาม') || (item.reg?.user_id || '').includes('msu');
-  const isKku = item.uniInfo?.shortTag === 'มข' || (item.reg?.institution || '').includes('ขอนแก่น') || (item.reg?.user_id || '').includes('kku');
-  const isCommittee = Boolean(
-    item.isCommitteeSpec ||
-    item.committeeSpec ||
-    item.staffRoleType === 'committee' ||
-    item.reg?.committee_member_key ||
-    String(item.dutyNote || '').includes('คณะกรรมการ') ||
-    String(item.reg?.user_id || '').startsWith('staff_committee_')
-  );
-  const cs = normalizeCallsignSpacing(item.reg?.callsign || item.callsign || '');
-  const isTsi = /TSI/i.test(cs);
-  const isVolunteer = /^อาสา/i.test(cs) || (!isTsi && isKku);
+  const reg = item.reg || item;
+  const isMsu = item.uniInfo?.isMsu || item.uniInfo?.shortTag === 'มมส' || (reg?.institution || '').includes('มหาสารคาม') || (reg?.user_id || '').includes('msu');
+  const isKku = item.uniInfo?.shortTag === 'มข' || (reg?.institution || '').includes('ขอนแก่น') || (reg?.user_id || '').includes('kku');
+  const cat = getParticipantCategory(item);
 
   // 1. คณะกรรมการ มมส
-  if (isCommittee && isMsu) return 1;
-  // 2. คณะกรรมการ / แกนนำ มข
-  if (isKku && (isCommittee || item.isStaff || item.staffRoleType === 'committee')) return 2;
-  // 3. ผู้เข้าร่วม มมส (RCP)
-  if (isMsu) return 3;
-  // 4. ผู้เข้าร่วม มข (TSI)
-  if (isKku && isTsi) return 4;
-  // 5. นิสิตอาสาของทาง มข
-  if (isKku && isVolunteer) return 5;
-  // 6. มหาวิทยาลัยและสถาบันอื่นๆ
-  return 6;
+  if (cat === 'committee' && isMsu) return 1;
+  // 2. คณะกรรมการ มข
+  if (cat === 'committee' && isKku) return 2;
+  // 3. Staff ทีมงาน (MC, ช่างภาพ, Dev, สตาฟ)
+  if (cat === 'staff') return 3;
+  // 4. สมาชิกชมรมกู้ภัยราชพฤกษ์ มมส (RCP)
+  if (cat === 'club_org' && isMsu) return 4;
+  // 5. สมาชิกชมรม TSI มข
+  if (cat === 'club_org' && isKku) return 5;
+  // 6. นิสิตอาสาของทาง มข
+  if (cat === 'volunteer') return 6;
+  // 7. ผู้เข้าร่วมสถาบันอื่นๆ / ผู้เข้าอบรมทั่วไป
+  return 7;
 };
 
 export const compareRosterItems = (a, b) => {

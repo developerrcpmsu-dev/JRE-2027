@@ -50,6 +50,8 @@ import {
   OFFICIAL_8_COMMITTEE_ROSTER,
   OFFICIAL_SHIRT_PRODUCTION_ORDER,
   STAFF_ROLE_OPTIONS,
+  PARTICIPANT_ROLE_CATEGORIES,
+  getParticipantCategory,
   resolveStaffRoleType,
   findMatchingCommitteeMemberSpec,
   findExistingRegForCommitteeSpec,
@@ -382,6 +384,13 @@ export default function AdminExecutiveSummaryView({
       );
       const shirtKey = normalizeShirtSizeKey(reg.shirt_size);
       const fullName = `${reg.title_th || reg.title || ''}${reg.first_name || ''} ${reg.last_name || ''}`.trim();
+      const category = getParticipantCategory({
+        reg,
+        isStaff,
+        staffRoleType,
+        committeeSpec,
+        dutyNote
+      });
 
       return {
         reg,
@@ -391,6 +400,7 @@ export default function AdminExecutiveSummaryView({
         gender,
         isStaff,
         staffRoleType,
+        category,
         committeeSpec,
         dutyNote,
         confirmInfo,
@@ -490,22 +500,35 @@ export default function AdminExecutiveSummaryView({
     return searchScoped.filter((item) => item.uniInfo.key === uniFilter);
   }, [searchScoped, uniFilter]);
 
-  // Level 2: Role options (scoped by search + uniFilter)
+  // Level 2: Role / Category options (scoped by search + uniFilter)
   const roleFacetCounts = useMemo(() => {
-    let participant = 0;
+    let committee = 0;
     let staff = 0;
+    let club_org = 0;
+    let volunteer = 0;
+    let participant = 0;
     afterUniScoped.forEach((item) => {
-      if (item.isStaff) staff++;
+      const c = item.category || 'participant';
+      if (c === 'committee') committee++;
+      else if (c === 'staff') staff++;
+      else if (c === 'club_org') club_org++;
+      else if (c === 'volunteer') volunteer++;
       else participant++;
     });
-    return { all: afterUniScoped.length, participant, staff };
+    return {
+      all: afterUniScoped.length,
+      committee,
+      staff,
+      club_org,
+      volunteer,
+      participant
+    };
   }, [afterUniScoped]);
 
-  // After Role Filter
+  // After Role / Category Filter
   const afterRoleScoped = useMemo(() => {
     if (roleFilter === 'all') return afterUniScoped;
-    if (roleFilter === 'staff') return afterUniScoped.filter((item) => item.isStaff);
-    return afterUniScoped.filter((item) => !item.isStaff);
+    return afterUniScoped.filter((item) => (item.category || 'participant') === roleFilter);
   }, [afterUniScoped, roleFilter]);
 
   // Level 3: Gender options (scoped by search + uniFilter + roleFilter)
@@ -578,6 +601,13 @@ export default function AdminExecutiveSummaryView({
       total: itemsSubset.length,
       participants: 0,
       staff: 0,
+      categoryCounts: {
+        committee: 0,
+        staff: 0,
+        club_org: 0,
+        volunteer: 0,
+        participant: 0
+      },
       msuTotal: 0,
       externalTotal: 0,
       male: 0,
@@ -641,6 +671,11 @@ export default function AdminExecutiveSummaryView({
 
       if (isStaff) stats.staff++;
       else stats.participants++;
+
+      const c = item.category || 'participant';
+      if (stats.categoryCounts[c] !== undefined) {
+        stats.categoryCounts[c]++;
+      }
 
       if (uniInfo.isMsu) stats.msuTotal++;
       else stats.externalTotal++;
@@ -870,18 +905,19 @@ export default function AdminExecutiveSummaryView({
     }
   };
 
-  // Inline Role Type change handler (Participant vs Committee / MC / Photographer / Dev / Staff)
+  // Inline Role Type change handler (Participant vs Committee / MC / Photographer / Dev / Staff / Club / Volunteer)
   const handleChangePersonRoleType = async (item, nextRoleType) => {
     if (!onUpdateAllocation || !item) return;
     setUpdatingId(item.id);
     try {
-      const isNextStaff = nextRoleType !== 'participant';
+      const isNextStaff = ['committee', 'staff', 'mc', 'photographer', 'dev'].includes(nextRoleType);
       const nextCallsign = formatStaffCallsign(item.reg.callsign || '', isNextStaff);
+      const nextRegType = isNextStaff ? 'staff' : (nextRoleType === 'volunteer' ? 'volunteer' : nextRoleType === 'club_org' ? 'club_org' : 'participant');
       const patch = {
         is_staff: isNextStaff,
         admin_staff_override: isNextStaff,
         staff_role_type: nextRoleType,
-        registration_type: isNextStaff ? 'staff' : 'participant',
+        registration_type: nextRegType,
         callsign: nextCallsign
       };
       if (isNextStaff && (!item.reg.shirt_size || item.reg.shirt_size === '-') && !item.reg.payment_slip_url && !item.reg.installment_1_slip_url) {
@@ -1018,7 +1054,7 @@ export default function AdminExecutiveSummaryView({
       const uniObj = OFFICIAL_NETWORK_INSTITUTIONS.find((u) => u.shortTag === newPersonUniShort);
       const finalAbbrTh = newPersonUniShort === 'อื่นๆ' ? (newPersonCustomUni.trim() || 'อื่นๆ') : (uniObj?.shortTag || newPersonUniShort);
       const finalInstitution = newPersonUniShort === 'อื่นๆ' ? (newPersonCustomUni.trim() || 'หน่วยงานภายนอก') : (uniObj?.label || newPersonUniShort);
-      const isStaffRole = newPersonRoleType !== 'participant';
+      const isStaffRole = ['committee', 'staff', 'mc', 'photographer', 'dev'].includes(newPersonRoleType);
       const cleanTitle = newPersonTitle === 'ไม่ระบุ' ? '' : newPersonTitle;
       const finalCallsign = isStaffRole
         ? formatStaffCallsign(newPersonCallsign.trim() || '(STAFF)', true)
@@ -1028,6 +1064,7 @@ export default function AdminExecutiveSummaryView({
         ? (duplicate.user_id || duplicate.id)
         : `manual_${isStaffRole ? 'staff' : 'reg'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
+      const newRegType = isStaffRole ? 'staff' : (newPersonRoleType === 'volunteer' ? 'volunteer' : newPersonRoleType === 'club_org' ? 'club_org' : 'participant');
       const payload = {
         ...(duplicate || {}),
         user_id: targetUserId,
@@ -1048,7 +1085,7 @@ export default function AdminExecutiveSummaryView({
         is_staff: isStaffRole,
         admin_staff_override: isStaffRole,
         staff_role_type: newPersonRoleType,
-        registration_type: isStaffRole ? 'staff' : 'participant',
+        registration_type: newRegType,
         staff_id_card_only: isStaffRole ? !newPersonOrderShirt : false,
         shirt_size: newPersonOrderShirt ? newPersonShirtSize : (duplicate?.shirt_size || '-'),
         committee_duty_note: newPersonDutyNote.trim(),
@@ -1189,7 +1226,7 @@ export default function AdminExecutiveSummaryView({
       `อัปเดตเมื่อ: ${new Date().toLocaleString('th-TH')}`,
       `────────────────────`,
       `👥 1. ยอดผู้ลงทะเบียนทั้งหมด: ${s.total} คน`,
-      `• ผู้เข้าอบรมปกติ: ${s.participants} คน | Staff คณะทำงาน: ${s.staff} คน`,
+      `• แยกประเภท/บทบาท: 🎖️ คณะกรรมการ ${s.categoryCounts.committee} คน | 🛠️ Staff ${s.categoryCounts.staff} คน | 🏢 ชมรม/หน่วยงาน ${s.categoryCounts.club_org} คน | 🤝 นิสิตอาสา ${s.categoryCounts.volunteer} คน${s.categoryCounts.participant > 0 ? ` | 👤 ทั่วไป ${s.categoryCounts.participant} คน` : ''}`,
       `• เพศชาย: ${s.male} คน | เพศหญิง: ${s.female} คน`,
       `• มมส: ${s.msuTotal} คน | ต่างมหาวิทยาลัย: ${s.externalTotal} คน`,
       `────────────────────`,
@@ -1623,19 +1660,24 @@ export default function AdminExecutiveSummaryView({
               </select>
             </div>
 
-            {/* Box 2: Role */}
+            {/* Box 2: Category / Role */}
             <div>
               <label className="block text-[10px] font-bold text-purple-300 uppercase mb-1">
-                👥 2. ประเภทผู้เข้าร่วม {uniFilter !== 'all' ? `(${uniFilter})` : ''}
+                👥 2. ประเภท / บทบาท {uniFilter !== 'all' ? `(${uniFilter})` : ''}
               </label>
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-900 border border-purple-500/50 rounded-xl text-xs text-purple-100 font-bold focus:outline-none focus:border-purple-400 cursor-pointer"
               >
-                <option value="all">ทุกประเภท ({roleFacetCounts.all} คน)</option>
-                <option value="participant">ผู้เข้าอบรมปกติ ({roleFacetCounts.participant} คน)</option>
-                <option value="staff">Staff คณะทำงาน ({roleFacetCounts.staff} คน)</option>
+                <option value="all">ทุกประเภท / บทบาท ({roleFacetCounts.all} คน)</option>
+                <option value="committee">🎖️ คณะกรรมการ ({roleFacetCounts.committee} คน)</option>
+                <option value="staff">🛠️ Staff ทีมงาน ({roleFacetCounts.staff} คน)</option>
+                <option value="club_org">🏢 ชมรม / หน่วยงาน ({roleFacetCounts.club_org} คน)</option>
+                <option value="volunteer">🤝 นิสิตอาสา ({roleFacetCounts.volunteer} คน)</option>
+                {roleFacetCounts.participant > 0 && (
+                  <option value="participant">👤 ผู้เข้าอบรมทั่วไป ({roleFacetCounts.participant} คน)</option>
+                )}
               </select>
             </div>
 
@@ -1806,8 +1848,22 @@ export default function AdminExecutiveSummaryView({
             </div>
           </div>
 
-          <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>ผู้เข้าอบรม {activeStats.participants} • Staff {activeStats.staff}</span>
+          <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-1">
+            <span className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-amber-300 font-bold">🎖️ กรรมการ {activeStats.categoryCounts.committee}</span>
+              <span>•</span>
+              <span className="text-purple-300 font-bold">🛠️ Staff {activeStats.categoryCounts.staff}</span>
+              <span>•</span>
+              <span className="text-indigo-300 font-bold">🏢 ชมรม {activeStats.categoryCounts.club_org}</span>
+              <span>•</span>
+              <span className="text-emerald-300 font-bold">🤝 อาสา {activeStats.categoryCounts.volunteer}</span>
+              {activeStats.categoryCounts.participant > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-slate-300">👤 ทั่วไป {activeStats.categoryCounts.participant}</span>
+                </>
+              )}
+            </span>
             <span className="text-emerald-300 font-bold">คาดการณ์สุทธิ: {activeStats.activeExpected} คน</span>
           </div>
         </div>
@@ -2348,43 +2404,67 @@ export default function AdminExecutiveSummaryView({
                         )}
                       </td>
 
-                      {/* Role: Dropdown in Edit Mode, Badge in Safe Mode */}
+                      {/* Role: Dropdown in Edit Mode, Distinct Badges in Safe Mode */}
                       <td className="py-3 px-2">
                         {isEditMode ? (
                           <select
-                            value={item.staffRoleType || (isStaff ? 'staff' : 'participant')}
+                            value={item.staffRoleType || (item.category === 'volunteer' ? 'volunteer' : item.category === 'club_org' ? 'club_org' : isStaff ? 'staff' : 'participant')}
                             disabled={isBusy}
                             onChange={(e) => handleChangePersonRoleType(item, e.target.value)}
                             className="w-full px-2 py-1 bg-slate-950 border border-purple-500/40 rounded-lg text-[11px] text-purple-200 font-bold focus:outline-none focus:border-purple-400 cursor-pointer"
                             title="เปลี่ยนบทบาท/ประเภทผู้เข้าร่วม"
                           >
-                            <option value="participant">🎓 ผู้เข้าอบรม</option>
-                            <option value="committee">🎖️ คณะกรรมการ</option>
-                            <option value="mc">🎤 พิธีกร MC</option>
-                            <option value="photographer">📷 ช่างภาพ</option>
-                            <option value="dev">💻 Developer</option>
-                            <option value="staff">🛠️ Staff</option>
+                            <optgroup label="🎖️ คณะกรรมการดำเนินงาน">
+                              <option value="committee">🎖️ คณะกรรมการ</option>
+                            </optgroup>
+                            <optgroup label="🛠️ Staff ทีมงาน">
+                              <option value="staff">🛠️ Staff สตาฟ</option>
+                              <option value="mc">🎤 พิธีกร MC</option>
+                              <option value="photographer">📸 ช่างภาพ / โสตฯ</option>
+                              <option value="dev">💻 ผู้พัฒนาระบบ Dev</option>
+                            </optgroup>
+                            <optgroup label="🏢 ชมรม / หน่วยงาน">
+                              <option value="club_org">🏢 ชมรม/หน่วยงาน (RCP/TSI)</option>
+                            </optgroup>
+                            <optgroup label="🤝 นิสิตอาสา">
+                              <option value="volunteer">🤝 นิสิตอาสา (จิตอาสา)</option>
+                            </optgroup>
+                            <optgroup label="👤 ทั่วไป">
+                              <option value="participant">👤 ผู้เข้าอบรมทั่วไป</option>
+                            </optgroup>
                           </select>
                         ) : (
-                          <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold border ${
-                            item.staffRoleType === 'committee' || isCommitteeSpec
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                              : isStaff
-                              ? 'bg-purple-500/20 text-purple-200 border-purple-500/30'
-                              : 'bg-slate-800 text-slate-300 border-slate-700'
-                          }`}>
-                            {item.staffRoleType === 'committee' || isCommitteeSpec
-                              ? '🎖️ กรรมการ'
-                              : item.staffRoleType === 'mc'
-                              ? '🎤 พิธีกร MC'
-                              : item.staffRoleType === 'photographer'
-                              ? '📷 ช่างภาพ'
-                              : item.staffRoleType === 'dev'
-                              ? '💻 Dev'
-                              : isStaff
-                              ? '🛠️ Staff'
-                              : '🎓 ผู้เข้าอบรม'}
-                          </span>
+                          item.category === 'committee' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border bg-amber-500/20 text-amber-300 border-amber-500/40 whitespace-nowrap shadow-sm">
+                              🎖️ คณะกรรมการ
+                            </span>
+                          ) : item.category === 'staff' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border bg-purple-500/20 text-purple-200 border-purple-500/30 whitespace-nowrap shadow-sm">
+                              {item.staffRoleType === 'mc'
+                                ? '🎤 พิธีกร MC'
+                                : item.staffRoleType === 'photographer'
+                                ? '📸 ช่างภาพ'
+                                : item.staffRoleType === 'dev'
+                                ? '💻 Dev'
+                                : '🛠️ Staff'}
+                            </span>
+                          ) : item.category === 'club_org' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border bg-indigo-500/20 text-indigo-300 border-indigo-500/40 whitespace-nowrap shadow-sm">
+                              {/RCP/i.test(item.reg?.callsign || '')
+                                ? '🏢 ชมรม (RCP)'
+                                : /TSI/i.test(item.reg?.callsign || '')
+                                ? '🏢 ชมรม (TSI)'
+                                : '🏢 ชมรม/หน่วยงาน'}
+                            </span>
+                          ) : item.category === 'volunteer' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 whitespace-nowrap shadow-sm">
+                              🤝 นิสิตอาสา
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-300 border-slate-700 whitespace-nowrap">
+                              👤 ผู้เข้าอบรม
+                            </span>
+                          )
                         )}
                       </td>
 
@@ -2791,6 +2871,12 @@ export default function AdminExecutiveSummaryView({
                       } else if (r === 'staff') {
                         setNewPersonDutyNote('Staff คณะทำงาน');
                         setNewPersonCallsign('(STAFF)');
+                      } else if (r === 'club_org') {
+                        setNewPersonDutyNote('สมาชิกชมรม / ตัวแทนหน่วยงาน');
+                        setNewPersonCallsign('');
+                      } else if (r === 'volunteer') {
+                        setNewPersonDutyNote('นิสิตจิตอาสา');
+                        setNewPersonCallsign('อาสา');
                       } else {
                         setNewPersonDutyNote('');
                         setNewPersonCallsign('');
@@ -2798,12 +2884,14 @@ export default function AdminExecutiveSummaryView({
                     }}
                     className="w-full px-3 py-2 bg-slate-950 border border-purple-500/50 rounded-xl text-purple-100 font-bold focus:outline-none focus:border-purple-400"
                   >
-                    <option value="committee">🎖️ คณะกรรมการดำเนินงาน (STAFF)</option>
-                    <option value="mc">🎤 พิธีกรดำเนินรายการ (MC)</option>
-                    <option value="photographer">📷 ฝ่ายภาพและสื่อ (Media)</option>
-                    <option value="dev">💻 ผู้พัฒนาระบบ (Dev)</option>
+                    <option value="committee">🎖️ คณะกรรมการดำเนินงาน (Organizing Committee)</option>
                     <option value="staff">🛠️ Staff คณะทำงานทั่วไป</option>
-                    <option value="participant">🎓 ผู้เข้าอบรมปกติ</option>
+                    <option value="mc">🎤 พิธีกรดำเนินรายการ (MC)</option>
+                    <option value="photographer">📸 ช่างภาพและโสตฯ (Media)</option>
+                    <option value="dev">💻 ผู้พัฒนาระบบ (Dev)</option>
+                    <option value="club_org">🏢 สมาชิกชมรม / หน่วยงาน (RCP / TSI)</option>
+                    <option value="volunteer">🤝 นิสิตอาสา (จิตอาสา มข/มมส)</option>
+                    <option value="participant">👤 ผู้เข้าอบรมทั่วไป</option>
                   </select>
                 </div>
               </div>
