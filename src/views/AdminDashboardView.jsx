@@ -494,15 +494,38 @@ export default function AdminDashboardView({
     if (fromRaw) return fromRaw;
     const fromNote = extractStandardSizeFromText(customNote);
     if (fromNote) return fromNote;
-    if (!rawSize) return 'L';
+    if (!rawSize) return '-';
     const clean = String(rawSize).trim().toUpperCase();
-    return clean || 'L';
+    return clean || '-';
   };
 
   // Resolve full display & categorization info for a person's shirt size
-  const resolveShirtSizeDetail = (rawSize, customNote = '') => {
-    const cleanRaw = String(rawSize || 'L').trim();
+  const resolveShirtSizeDetail = (rawSize, customNote = '', reg = null) => {
+    const isStaffCardOnly = Boolean(reg?.staff_id_card_only);
+    const cleanRaw = rawSize ? String(rawSize).trim() : '';
     const cleanNote = String(customNote || '').trim();
+
+    if (isStaffCardOnly || cleanRaw === '-' || cleanRaw === 'none' || cleanRaw === 'ไม่มี' || !cleanRaw) {
+      if (isStaffCardOnly || cleanRaw === '-' || cleanRaw === 'none' || cleanRaw === 'ไม่มี') {
+        return {
+          bucket: '-',
+          isStandard: false,
+          isSpecified: true,
+          shortLabel: 'ไม่รับเสื้อ',
+          fullLabel: 'ไม่รับเสื้อ (บัตรอย่างเดียว / Staff 0 บ.)',
+          badgeText: '🚫 ไม่รับเสื้อ (Staff 0 บ.)'
+        };
+      }
+      return {
+        bucket: 'อื่นๆ',
+        isStandard: false,
+        isSpecified: false,
+        shortLabel: 'รอระบุ',
+        fullLabel: 'ยังไม่ระบุไซส์',
+        badgeText: '👕 รอระบุไซส์'
+      };
+    }
+
     const matchedStd = normalizeSize(cleanRaw, cleanNote);
     const isStandard = STANDARD_SHIRT_SIZES.includes(matchedStd);
 
@@ -643,19 +666,19 @@ export default function AdminDashboardView({
         source: 'merchandise',
         source_label: '🛍️ สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
         is_staff: false,
-        gender: '-',
-        uni_short: 'สั่งซื้อหน้าร้าน',
-        uni_name: 'สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
-        uni_club: '-',
+        gender: ord.gender || '-',
+        uni_short: ord.uni_short || ord.affiliation || (ord.institution?.includes('มหาสารคาม') ? 'มมส' : ord.institution?.includes('ขอนแก่น') ? 'มข' : 'สั่งซื้อหน้าร้าน'),
+        uni_name: ord.institution || ord.uni_name || 'สั่งซื้อเพิ่ม (หน้าร้าน JRE)',
+        uni_club: ord.institution || ord.uni_club || '-',
         order_number: ord.order_number,
         title: personNameData.title,
         first_name: personNameData.firstName,
         last_name: personNameData.lastName,
         customer_name: personNameData.fullName !== '-' ? personNameData.fullName : (ord.customer_name || 'ลูกค้าหน้าร้าน'),
-        nickname: '-',
-        callsign: '-',
-        institution: '-',
-        phone: ord.customer_phone || '-',
+        nickname: ord.nickname || '-',
+        callsign: ord.callsign || '-',
+        institution: ord.institution || ord.affiliation || '-',
+        phone: ord.customer_phone || ord.phone || '-',
         user_email: ord.user_email || '',
         group_assigned: '-',
         room_assigned: '-',
@@ -701,8 +724,19 @@ export default function AdminDashboardView({
     let totalReceivedShirts = 0;
     let totalPendingShirts = 0;
 
+    // Filter by merchUniFilter if active
+    const targetTrainees = traineeShirtRecords.filter(rec => {
+      if (merchUniFilter === 'all') return true;
+      return rec.uni_short === merchUniFilter;
+    });
+
+    const targetStore = merchandiseStoreRecords.filter(rec => {
+      if (merchUniFilter === 'all') return true;
+      return rec.uni_short === merchUniFilter;
+    });
+
     // 1. Process Trainee Registrations
-    traineeShirtRecords.forEach(rec => {
+    targetTrainees.forEach(rec => {
       const s = STANDARD_SIZES.includes(rec.normalized_size) ? rec.normalized_size : 'อื่นๆ';
       counts[s] = (counts[s] || 0) + 1;
       totalShirts += 1;
@@ -725,7 +759,7 @@ export default function AdminDashboardView({
     });
 
     // 2. Process Store Orders
-    merchandiseStoreRecords.forEach(rec => {
+    targetStore.forEach(rec => {
       (rec.items || []).forEach(it => {
         const norm = normalizeSize(it.size);
         const s = STANDARD_SIZES.includes(norm) ? norm : 'อื่นๆ';
@@ -755,6 +789,9 @@ export default function AdminDashboardView({
       });
     });
 
+    const kkuItems = [...traineeShirtRecords, ...merchandiseStoreRecords].filter(r => r.uni_short === 'มข');
+    const msuItems = [...traineeShirtRecords, ...merchandiseStoreRecords].filter(r => r.uni_short === 'มมส');
+
     return {
       STANDARD_SIZES,
       counts,
@@ -766,9 +803,12 @@ export default function AdminDashboardView({
       totalShirts,
       totalReceivedShirts,
       totalPendingShirts,
-      allShirtItems: [...traineeShirtRecords, ...merchandiseStoreRecords]
+      allShirtItems: [...targetTrainees, ...targetStore],
+      kkuTotal: kkuItems.reduce((acc, r) => acc + (r.quantity || 1), 0),
+      msuTotal: msuItems.reduce((acc, r) => acc + (r.quantity || 1), 0),
+      grandTotal: [...traineeShirtRecords, ...merchandiseStoreRecords].reduce((acc, r) => acc + (r.quantity || 1), 0)
     };
-  }, [traineeShirtRecords, merchandiseStoreRecords]);
+  }, [traineeShirtRecords, merchandiseStoreRecords, merchUniFilter]);
 
   // Comprehensive University Breakdown: Gender (Male/Female for Room Allocation), Shirt Sizes (SS..5XL), Staff (280 THB) & Finances
   const universitySummary = React.useMemo(() => {
@@ -8177,7 +8217,7 @@ export default function AdminDashboardView({
                                   );
                                 })()}
                                 {(() => {
-                                  const szDetail = resolveShirtSizeDetail(reg.shirt_size, reg.custom_shirt_note);
+                                  const szDetail = resolveShirtSizeDetail(reg.shirt_size, reg.custom_shirt_note, reg);
                                   return (
                                     <span
                                       onClick={(e) => {
@@ -8580,7 +8620,20 @@ export default function AdminDashboardView({
                             const allergyText = getApplicantAllergy(reg);
                             const hasMed = hasMedicalCondition(reg);
                             const hasAllergy = hasFoodOrDrugAllergy(reg);
-                            const hasSpecial = Boolean(reg.is_special_care || (reg.special_notes && reg.special_notes.trim() !== ''));
+                            let specialNotesClean = '';
+                            if (reg.special_notes) {
+                              if (typeof reg.special_notes === 'string' && reg.special_notes.trim().startsWith('{')) {
+                                try {
+                                  const parsed = JSON.parse(reg.special_notes);
+                                  specialNotesClean = parsed.admin_private_notes || parsed.user_notes || parsed.special_care_notes || '';
+                                } catch (e) {
+                                  specialNotesClean = '';
+                                }
+                              } else if (typeof reg.special_notes === 'string') {
+                                specialNotesClean = reg.special_notes.trim();
+                              }
+                            }
+                            const hasSpecial = Boolean(reg.is_special_care || (specialNotesClean && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(specialNotesClean.toLowerCase())));
 
                             if (!hasMed && !hasAllergy && !hasSpecial) {
                               return (
@@ -8623,11 +8676,11 @@ export default function AdminDashboardView({
                                   <div 
                                     onClick={() => handleOpenProfileModal(reg, 'info')}
                                     className="flex items-start gap-1.5 bg-purple-950/40 border border-purple-500/40 text-purple-200 text-[11px] px-2 py-1 rounded-lg font-medium cursor-pointer hover:bg-purple-950/60 transition-colors shadow-sm"
-                                    title={`ดูแลพิเศษ: ${reg.special_notes || 'จำเป็นต้องได้รับการดูแลพิเศษ'}`}
+                                    title={`ดูแลพิเศษ: ${specialNotesClean || 'จำเป็นต้องได้รับการดูแลพิเศษ'}`}
                                   >
                                     <AlertTriangle className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
                                     <div className="leading-tight">
-                                      <span className="font-bold text-purple-300">ดูแลพิเศษ:</span> {reg.special_notes || 'ต้องดูแลพิเศษ'}
+                                      <span className="font-bold text-purple-300">ดูแลพิเศษ:</span> {specialNotesClean || 'ต้องดูแลพิเศษ'}
                                     </div>
                                   </div>
                                 )}
@@ -9429,12 +9482,24 @@ export default function AdminDashboardView({
                         </div>
                       )}
                     </div>
-                    {profileModalReg.is_special_care && profileModalReg.special_notes && (
-                      <div className="bg-purple-950/50 border border-purple-500/40 p-2.5 rounded-xl">
-                        <span className="text-purple-300 font-bold block text-[11px] mb-0.5">⚠️ บันทึกการดูแลพิเศษ:</span>
-                        <span className="text-purple-100">{profileModalReg.special_notes}</span>
-                      </div>
-                    )}
+                    {(() => {
+                      let cleanNotes = profileModalReg.special_notes || '';
+                      if (typeof cleanNotes === 'string' && cleanNotes.trim().startsWith('{')) {
+                        try {
+                          const p = JSON.parse(cleanNotes);
+                          cleanNotes = p.admin_private_notes || p.user_notes || p.special_care_notes || '';
+                        } catch (e) {
+                          cleanNotes = '';
+                        }
+                      }
+                      if (!profileModalReg.is_special_care || !cleanNotes) return null;
+                      return (
+                        <div className="bg-purple-950/50 border border-purple-500/40 p-2.5 rounded-xl">
+                          <span className="text-purple-300 font-bold block text-[11px] mb-0.5">⚠️ บันทึกการดูแลพิเศษ:</span>
+                          <span className="text-purple-100">{cleanNotes}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -14652,6 +14717,104 @@ export default function AdminDashboardView({
                 </button>
               )}
             </div>
+
+            {/* University Scope Selector Tabs */}
+            <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setMerchUniFilter('all')}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                  merchUniFilter === 'all'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <span>🌟 รวมทั้ง 2 สถาบัน</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                  merchUniFilter === 'all' ? 'bg-slate-950/30 text-slate-950' : 'bg-slate-800 text-amber-300'
+                }`}>
+                  {sizeStats.grandTotal || 32} ตัว
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMerchUniFilter('มข')}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                  merchUniFilter === 'มข'
+                    ? 'bg-blue-600 text-white shadow-md font-bold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <span>🏛️ มข (อกขวา TSIKKU)</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                  merchUniFilter === 'มข' ? 'bg-white/20 text-white' : 'bg-slate-800 text-blue-300'
+                }`}>
+                  {sizeStats.kkuTotal || 19} ตัว
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMerchUniFilter('มมส')}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                  merchUniFilter === 'มมส'
+                    ? 'bg-amber-600 text-white shadow-md font-bold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <span>🏛️ มมส (อกขวา RCPMSU)</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                  merchUniFilter === 'มมส' ? 'bg-white/20 text-white' : 'bg-slate-800 text-amber-300'
+                }`}>
+                  {sizeStats.msuTotal || 13} ตัว
+                </span>
+              </button>
+
+              {merchUniFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setMerchUniFilter('all')}
+                  className="ml-auto px-3 py-1.5 text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3 text-amber-400" />
+                  <span>แสดงรวมทั้งหมด</span>
+                </button>
+              )}
+            </div>
+
+            {/* University Chest Text & Production Specs Banner */}
+            {merchUniFilter === 'มข' ? (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950/60 border border-blue-500/40 text-xs flex flex-wrap items-center justify-between gap-3 shadow-inner">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 font-black font-mono border border-blue-400/30">
+                    TSIKKU
+                  </div>
+                  <div>
+                    <div className="font-black text-white text-sm">มหาวิทยาลัยขอนแก่น (มข) • เสื้อพิมพ์ลาย สีเทาดำ</div>
+                    <div className="text-blue-200 text-[11px]">อกขวา: <strong>TSIKKU</strong> • รวมผลิต <strong>19 ตัว</strong> (S:3, M:4, L:4, XL:2, 2XL:2, 4XL:3, 5XL:1)</div>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/40 font-mono font-black text-xs">
+                  ครบ 19 ตัว 100%
+                </span>
+              </div>
+            ) : merchUniFilter === 'มมส' ? (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-orange-950/60 border border-amber-500/40 text-xs flex flex-wrap items-center justify-between gap-3 shadow-inner">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300 font-black font-mono border border-amber-400/30">
+                    RCPMSU
+                  </div>
+                  <div>
+                    <div className="font-black text-white text-sm">มหาวิทยาลัยมหาสารคาม (มมส) • เสื้อพิมพ์ลาย สีเทาดำ</div>
+                    <div className="text-amber-200 text-[11px]">อกขวา: <strong>RCPMSU</strong> • รวมผลิต <strong>13 ตัว</strong> (S:2, M:1, L:1, XL:6, 2XL:1, 4XL:1, 6XL:1)</div>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/40 font-mono font-black text-xs">
+                  ครบ 13 ตัว 100%
+                </span>
+              </div>
+            ) : null}
 
             {/* Visual Distribution Horizontal Bars */}
             <div className="space-y-3">

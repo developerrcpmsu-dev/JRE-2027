@@ -252,10 +252,14 @@ const unpackRegistration = (row) => {
       }
     } catch (e) {}
   }
+  const cleanSpecialNotes = extra.admin_private_notes || extra.user_notes || (typeof row.special_notes === 'string' && !row.special_notes.startsWith('{') ? row.special_notes : '');
   const unpacked = {
     ...extra,
     ...row,
-    special_notes: extra.user_notes !== undefined ? extra.user_notes : row.special_notes
+    shirt_size: extra.shirt_size !== undefined ? extra.shirt_size : row.shirt_size,
+    staff_id_card_only: extra.staff_id_card_only !== undefined ? extra.staff_id_card_only : row.staff_id_card_only,
+    special_notes: cleanSpecialNotes,
+    raw_special_notes: row.special_notes
   };
 
   // Auto-detect Staff (280 THB MSU / 480 THB Non-MSU or manually marked as (STAFF) even when overpaid) & Gender
