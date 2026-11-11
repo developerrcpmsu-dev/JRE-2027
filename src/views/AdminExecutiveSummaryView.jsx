@@ -2936,53 +2936,72 @@ export default function AdminExecutiveSummaryView({
                           )}
                           {(() => {
                             const isHealthShared = isHealthSharedWithRoommate(reg);
+                            const consentBy = reg.health_consent_by === 'user' ? '👤 เจ้าตัวกดยินยอมเอง' : '🛡️ แอดมินบันทึก';
                             return (
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const nextVal = !isHealthShared;
-                                  if (!onUpdateAllocation) return;
-                                  const targetUserId = reg.user_id || reg.id || item.id;
-                                  try {
-                                    await onUpdateAllocation(targetUserId, {
-                                      share_health_with_roommate: nextVal
-                                    });
-                                    if (triggerToast) {
-                                      triggerToast(
-                                        nextVal
-                                          ? `✓ ปรับ "${item.fullName}": ยินยอมเปิดเผยข้อมูลสุขภาพแล้ว`
-                                          : `✓ ปรับ "${item.fullName}": ปฏิเสธ/ปิดข้อมูลสุขภาพแล้ว`,
-                                        'success'
-                                      );
+                              <div className="flex flex-col items-start gap-0.5 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (!isEditMode) {
+                                      if (triggerToast) {
+                                        triggerToast('🔒 ต้องกดเปิด "โหมดแก้ไข (Edit Mode)" ด้านบนก่อน จึงจะสามารถปรับสถานะเปิดเผยข้อมูลสุขภาพได้', 'warning');
+                                      }
+                                      return;
                                     }
-                                  } catch (err) {
-                                    if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการปรับสถานะข้อมูลสุขภาพ', 'error');
+                                    const nextVal = !isHealthShared;
+                                    if (!onUpdateAllocation) return;
+                                    const targetUserId = reg.user_id || reg.id || item.id;
+                                    try {
+                                      await onUpdateAllocation(targetUserId, {
+                                        share_health_with_roommate: nextVal,
+                                        health_consent_by: 'admin',
+                                        health_consent_at: new Date().toISOString()
+                                      });
+                                      if (triggerToast) {
+                                        triggerToast(
+                                          nextVal
+                                            ? `✓ ปรับ "${item.fullName}": ยินยอมเปิดเผยข้อมูลสุขภาพแล้ว (แอดมินบันทึก)`
+                                            : `✓ ปรับ "${item.fullName}": ปฏิเสธ/ปิดข้อมูลสุขภาพแล้ว (แอดมินบันทึก)`,
+                                          'success'
+                                        );
+                                      }
+                                    } catch (err) {
+                                      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการปรับสถานะข้อมูลสุขภาพ', 'error');
+                                    }
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all inline-flex items-center gap-1 ${
+                                    !isEditMode ? 'opacity-85 cursor-not-allowed' : 'cursor-pointer'
+                                  } ${
+                                    isHealthShared
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                  }`}
+                                  title={
+                                    !isEditMode
+                                      ? '🔒 ต้องกดเปิด "โหมดแก้ไข (Edit Mode)" ด้านบนก่อน จึงจะสามารถปรับสถานะได้'
+                                      : (isHealthShared
+                                          ? 'สถานะ: ยินยอมเปิดเผยข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นปฏิเสธ/ปิด)'
+                                          : 'สถานะ: ปฏิเสธ/ปิดข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นยินยอม/เปิดเผย)')
                                   }
-                                }}
-                                className={`mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer inline-flex items-center gap-1 ${
-                                  isHealthShared
-                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                                }`}
-                                title={
-                                  isHealthShared
-                                    ? 'สถานะ: ยินยอมเปิดเผยข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นปฏิเสธ/ปิด)'
-                                    : 'สถานะ: ปฏิเสธ/ปิดข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นยินยอม/เปิดเผย)'
-                                }
-                              >
-                                {isHealthShared ? (
-                                  <>
-                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
-                                    <span>เปิดเผยสุขภาพ (ยินยอม)</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
-                                    <span>ปิดสุขภาพ (ปฏิเสธ)</span>
-                                  </>
-                                )}
-                              </button>
+                                >
+                                  {!isEditMode && <Lock className="w-2.5 h-2.5 text-amber-400" />}
+                                  {isHealthShared ? (
+                                    <>
+                                      <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                                      <span>เปิดเผยสุขภาพ (ยินยอม)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                      <span>ปิดสุขภาพ (ปฏิเสธ)</span>
+                                    </>
+                                  )}
+                                </button>
+                                <span className="text-[8.5px] text-slate-400 font-medium tracking-tight">
+                                  {consentBy}
+                                </span>
+                              </div>
                             );
                           })()}
                         </div>

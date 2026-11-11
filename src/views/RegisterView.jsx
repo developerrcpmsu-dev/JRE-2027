@@ -1689,6 +1689,9 @@ export default function RegisterView({
       group_assigned: myRegistration?.group_assigned || '',
       room_assigned: myRegistration?.room_assigned || '',
       is_special_care: myRegistration?.is_special_care || false,
+      share_health_with_roommate: consentHealthShare !== undefined ? consentHealthShare : true,
+      health_consent_by: 'user',
+      health_consent_at: new Date().toISOString(),
       special_notes: myRegistration?.special_notes || '',
       admin_private_notes: myRegistration?.admin_private_notes || '',
       payment_plan: myRegistration?.payment_plan || 'full',
@@ -1998,6 +2001,9 @@ export default function RegisterView({
         group_assigned: myRegistration?.group_assigned || '',
         room_assigned: myRegistration?.room_assigned || '',
         is_special_care: myRegistration?.is_special_care || false,
+        share_health_with_roommate: consentHealthShare !== undefined ? consentHealthShare : true,
+        health_consent_by: 'user',
+        health_consent_at: new Date().toISOString(),
         special_notes: myRegistration?.special_notes || '',
         admin_private_notes: myRegistration?.admin_private_notes || '',
         payment_plan: effectivePlan,
@@ -4470,14 +4476,15 @@ export default function RegisterView({
                           onClick={async () => {
                             setIsSavingHealthConsent(true);
                             try {
+                              const healthPayload = {
+                                share_health_with_roommate: consentHealthShare,
+                                health_consent_by: 'user',
+                                health_consent_at: new Date().toISOString()
+                              };
                               if (onUpdateRegistration) {
-                                await onUpdateRegistration(myRegistration.id || myRegistration.user_id, {
-                                  share_health_with_roommate: consentHealthShare
-                                });
+                                await onUpdateRegistration(myRegistration.id || myRegistration.user_id, healthPayload);
                               } else {
-                                await DataService.updateRegistrationDetails(myRegistration.id || myRegistration.user_id, {
-                                  share_health_with_roommate: consentHealthShare
-                                });
+                                await DataService.updateRegistrationDetails(myRegistration.id || myRegistration.user_id, healthPayload);
                               }
                               triggerToast(
                                 consentHealthShare

@@ -3320,16 +3320,22 @@ export default function AdminDashboardView({
     triggerToast(`🔔 ส่งข้อความแจ้งเตือนงวดที่ 2 ครบทั้ง ${list.length} คน เรียบร้อยแล้ว!`);
   };
 
-  // Admin & Staff Health Privacy Consent Toggle (Adjustable for EVERY applicant)
+  // Admin & Staff Health Privacy Consent Toggle (Adjustable for EVERY applicant with Advanced Mode)
   const handleToggleHealthShare = async (reg, customVal = null) => {
     if (!reg || !onUpdateAllocation) return;
+    if (!isAdvancedMode) {
+      triggerToast('🔒 ต้องเปิด "🛡️ โหมดแก้ไขขั้นสูง" ด้านบนก่อน จึงจะสามารถปรับสถานะเปิดเผยข้อมูลสุขภาพได้', 'warning');
+      return;
+    }
     const currentVal = isHealthSharedWithRoommate(reg);
     const nextVal = typeof customVal === 'boolean' ? customVal : !currentVal;
     const targetKey = reg.user_id || reg.id || reg.user_email;
     const pName = resolvePersonFullNameWithTitle(reg).fullName || 'ผู้สมัคร';
 
     const updates = {
-      share_health_with_roommate: nextVal
+      share_health_with_roommate: nextVal,
+      health_consent_by: 'admin',
+      health_consent_at: new Date().toISOString()
     };
 
     try {
@@ -3339,8 +3345,8 @@ export default function AdminDashboardView({
       }
       triggerToast(
         nextVal
-          ? `✓ บันทึกสำเร็จ: "${pName}" ยินยอมเปิดเผยข้อมูลสุขภาพ`
-          : `✓ บันทึกสำเร็จ: "${pName}" ปฏิเสธ/ปิดการเปิดเผยข้อมูลสุขภาพ`,
+          ? `✓ บันทึกสำเร็จ: "${pName}" ยินยอมเปิดเผยข้อมูลสุขภาพ (แอดมินบันทึก)`
+          : `✓ บันทึกสำเร็จ: "${pName}" ปฏิเสธ/ปิดการเปิดเผยข้อมูลสุขภาพ (แอดมินบันทึก)`,
         'success'
       );
     } catch (err) {
@@ -8571,36 +8577,47 @@ export default function AdminDashboardView({
                                 )}
                                 {(() => {
                                   const isHealthShared = isHealthSharedWithRoommate(reg);
+                                  const consentBy = reg.health_consent_by === 'user' ? '👤 เจ้าตัวยินยอมเอง' : '🛡️ แอดมินบันทึก';
                                   return (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleHealthShare(reg);
-                                      }}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer inline-flex items-center gap-1 ${
-                                        isHealthShared
-                                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                                      }`}
-                                      title={
-                                        isHealthShared
-                                          ? 'สถานะ: ยินยอมเปิดเผยข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นปฏิเสธ/ปิด)'
-                                          : 'สถานะ: ปฏิเสธ/ปิดข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นยินยอม/เปิดเผย)'
-                                      }
-                                    >
-                                      {isHealthShared ? (
-                                        <>
-                                          <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
-                                          <span>เปิดเผยสุขภาพ (ยินยอม)</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Lock className="w-2.5 h-2.5 text-amber-400" />
-                                          <span>ปิดสุขภาพ (ปฏิเสธ)</span>
-                                        </>
-                                      )}
-                                    </button>
+                                    <div className="flex flex-col items-start gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleHealthShare(reg);
+                                        }}
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all inline-flex items-center gap-1 ${
+                                          !isAdvancedMode ? 'opacity-85 cursor-not-allowed' : 'cursor-pointer'
+                                        } ${
+                                          isHealthShared
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                        }`}
+                                        title={
+                                          !isAdvancedMode
+                                            ? '🔒 ต้องเปิด "🛡️ โหมดแก้ไขขั้นสูง" ด้านบนก่อน จึงจะสามารถปรับสถานะได้'
+                                            : (isHealthShared
+                                                ? 'สถานะ: ยินยอมเปิดเผยข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นปฏิเสธ/ปิด)'
+                                                : 'สถานะ: ปฏิเสธ/ปิดข้อมูลสุขภาพ (คลิกเพื่อสลับเป็นยินยอม/เปิดเผย)')
+                                        }
+                                      >
+                                        {!isAdvancedMode && <Lock className="w-2.5 h-2.5 text-amber-400" />}
+                                        {isHealthShared ? (
+                                          <>
+                                            <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                                            <span>เปิดเผยสุขภาพ (ยินยอม)</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                            <span>ปิดสุขภาพ (ปฏิเสธ)</span>
+                                          </>
+                                        )}
+                                      </button>
+                                      <span className="text-[8.5px] text-slate-400 font-medium">
+                                        {consentBy}
+                                      </span>
+                                    </div>
                                   );
                                 })()}
                               </div>
@@ -9657,47 +9674,58 @@ export default function AdminDashboardView({
                   </div>
                 )}
 
-                {/* Health Privacy Consent Management (Admin can toggle for everyone) */}
+                {/* Health Privacy Consent Management (Admin can toggle for everyone with Advanced Mode) */}
                 <div className="p-4 bg-slate-950/90 border border-indigo-500/40 rounded-2xl space-y-2.5 text-xs shadow-md">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-indigo-400" />
                       <span className="font-bold text-white">สิทธิ์การเปิดเผยข้อมูลสุขภาพ (Health Privacy Consent)</span>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                      isHealthSharedWithRoommate(profileModalReg)
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    }`}>
-                      {isHealthSharedWithRoommate(profileModalReg) ? '👁️ ยินยอมเปิดเผยข้อมูลสุขภาพ' : '🔒 ปิดเป็นความลับ (ปฏิเสธ)'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        isHealthSharedWithRoommate(profileModalReg)
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      }`}>
+                        {isHealthSharedWithRoommate(profileModalReg) ? '👁️ ยินยอมเปิดเผยข้อมูลสุขภาพ' : '🔒 ปิดเป็นความลับ (ปฏิเสธ)'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                        {profileModalReg?.health_consent_by === 'user' ? '👤 เจ้าตัวยินยอมเอง' : '🛡️ แอดมินบันทึก'}
+                      </span>
+                    </div>
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
-                    (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว) Admin สามารถช่วยผู้สมัครปรับการเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องและทีมงานทราบเพื่อความปลอดภัยในกรณีฉุกเฉินได้ทันที
+                    (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว) Admin สามารถช่วยผู้สมัครปรับการเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องและทีมงานทราบเพื่อความปลอดภัยในกรณีฉุกเฉินได้ทันที (ต้องเปิดโหมดขั้นสูง)
                   </p>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => handleToggleHealthShare(profileModalReg, true)}
-                      className={`px-3 py-1.5 rounded-xl font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-xl font-bold border transition-all flex items-center gap-1.5 ${
+                        !isAdvancedMode ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                      } ${
                         isHealthSharedWithRoommate(profileModalReg)
                           ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
                           : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
                       }`}
+                      title={!isAdvancedMode ? '🔒 ต้องเปิดโหมดแก้ไขขั้นสูงก่อน' : 'ยินยอมเปิดเผยข้อมูลสุขภาพ'}
                     >
-                      <CheckCircle className="w-3.5 h-3.5 text-white" />
+                      {!isAdvancedMode ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <CheckCircle className="w-3.5 h-3.5 text-white" />}
                       <span>ยินยอม / ตกลงเปิดเผย (Agree)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToggleHealthShare(profileModalReg, false)}
-                      className={`px-3 py-1.5 rounded-xl font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-xl font-bold border transition-all flex items-center gap-1.5 ${
+                        !isAdvancedMode ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                      } ${
                         !isHealthSharedWithRoommate(profileModalReg)
                           ? 'bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30'
                           : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
                       }`}
+                      title={!isAdvancedMode ? '🔒 ต้องเปิดโหมดแก้ไขขั้นสูงก่อน' : 'ปฏิเสธ/ปิดข้อมูลสุขภาพ'}
                     >
-                      <Lock className="w-3.5 h-3.5 text-white" />
+                      {!isAdvancedMode ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Lock className="w-3.5 h-3.5 text-white" />}
                       <span>ปฏิเสธ / ปิดข้อมูล (Decline)</span>
                     </button>
                   </div>

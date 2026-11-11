@@ -272,12 +272,17 @@ const unpackRegistration = (row) => {
     ? Boolean(extra.share_health_with_roommate)
     : (row.share_health_with_roommate !== undefined ? Boolean(row.share_health_with_roommate) : true);
 
+  const healthConsentBy = extra.health_consent_by || row.health_consent_by || (extra.share_health_with_roommate !== undefined ? 'user' : 'admin');
+  const healthConsentAt = extra.health_consent_at || row.health_consent_at || '';
+
   const unpacked = {
     ...extra,
     ...row,
     shirt_size: extra.shirt_size !== undefined ? extra.shirt_size : row.shirt_size,
     staff_id_card_only: extra.staff_id_card_only !== undefined ? extra.staff_id_card_only : row.staff_id_card_only,
     share_health_with_roommate: shareConsent,
+    health_consent_by: healthConsentBy,
+    health_consent_at: healthConsentAt,
     medical_equipment_needed: extra.medical_equipment_needed || row.medical_equipment_needed || '',
     special_notes: cleanSpecialNotes,
     raw_special_notes: row.special_notes
@@ -440,6 +445,8 @@ const packRegistrationForSupabase = (fullData) => {
   const extra = {
     user_notes: cleanNotes,
     share_health_with_roommate: fullData.share_health_with_roommate !== undefined ? Boolean(fullData.share_health_with_roommate) : true,
+    health_consent_by: fullData.health_consent_by || 'admin',
+    health_consent_at: fullData.health_consent_at || '',
     medical_equipment_needed: fullData.medical_equipment_needed || '',
     full_name_affiliation: fullData.full_name_affiliation || '',
     title_th: fullData.title_th || '',
@@ -2150,6 +2157,7 @@ export const DataService = {
     if (['dev', 'admin', 'staff'].includes(assignedRole) || Boolean(authStaff)) {
       try {
         if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('jre2027_admin_logged_out');
           sessionStorage.setItem('jre2027_admin_token', 'staff_' + Date.now());
           sessionStorage.setItem('jre2027_admin_expires', String(Date.now() + 86400000 * 7));
         }

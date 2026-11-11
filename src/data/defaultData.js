@@ -3194,6 +3194,24 @@ export const isAuthorizedStaffOrAdminEmail = (rawEmail, customAccountsList = [])
   return null;
 };
 
+// Known dual-email & alias cross-mapping for students and committee members
+export const KNOWN_EMAIL_ALIASES = {
+  'khaohom.sutti@gmail.com': ['chakriya.tu@kkumail.com'],
+  'chakriya.tu@kkumail.com': ['khaohom.sutti@gmail.com'],
+  'phatsakon0934173296@gmail.com': ['69011310123@msu.ac.th'],
+  'phatsakon0934173296@gamil.com': ['69011310123@msu.ac.th'],
+  '69011310123@msu.ac.th': ['phatsakon0934173296@gmail.com'],
+  'bestasic22@gmail.com': ['68011211206@msu.ac.th', '68011211206@gmail.com'],
+  '68011211206@gmail.com': ['68011211206@msu.ac.th', 'bestasic22@gmail.com'],
+  '68011211206@msu.ac.th': ['bestasic22@gmail.com', '68011211206@gmail.com'],
+  'developer.rcpmsu@gmail.com': ['68011211206@msu.ac.th'],
+  '67011312136@msu.ac.th': ['committee_7_apatchanipha', '3a8fa419-542a-42de-b106-9f3dcd270c4c'],
+  '68010310504@msu.ac.th': ['committee_8_nattapon', 'ec3cd05f-9470-4ac2-af44-b8dc98e4b311'],
+  '67011312130@msu.ac.th': ['committee_2_setthabut', '63dc21e0-1f05-413d-8b82-45868af596fb'],
+  '67012310106@msu.ac.th': ['committee_1_peeranut', '87df7bf1-e178-4dbb-bd3d-60835f4c14d7'],
+  'nickworaphat2542@gmail.com': ['committee_6_woraphat', '77967a8a-ae71-4bfc-bb93-d0a20711279f']
+};
+
 
 
 

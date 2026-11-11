@@ -26,7 +26,7 @@ import { parseCurrentRoute, getPathForRoute, syncUrlToRoute } from './utils/rout
 import { decodeJwtResponse } from './utils/googleAuth';
 import { forceUnlockAll } from './utils/scrollLock';
 import { getRegistrationScheduleStatus } from './utils/registrationSchedule';
-import { isAuthorizedStaffOrAdminEmail, INITIAL_STAFF_ADMIN_ACCOUNTS } from './data/defaultData';
+import { isAuthorizedStaffOrAdminEmail, INITIAL_STAFF_ADMIN_ACCOUNTS, KNOWN_EMAIL_ALIASES } from './data/defaultData';
 
 const DEV_ADMIN_EMAIL = 'developer.rcpmsu@gmail.com';
 const isGoogleDevIdentity = (identity, whitelist = INITIAL_STAFF_ADMIN_ACCOUNTS) => {
@@ -297,15 +297,69 @@ export default function App() {
   });
   const [loading, setLoading] = useState(true);
 
-  // Helper to match registration robustly (by user_id or case-insensitive email)
+  // Helper to normalize Thai/English names for robust user-to-registration matching
+  const normalizePersonName = (str) => {
+    if (!str) return '';
+    return String(str)
+      .replace(/^(นาย|นางสาว|น\.ส\.|ด\.ช\.|ด\.ญ\.|นาง)/g, '')
+      .replace(/^(mr\.|mrs\.|ms\.)/gi, '')
+      .replace(/\s+/g, '')
+      .toLowerCase()
+      .trim();
+  };
+
+  // Helper to match registration robustly (by user_id, case-insensitive email, known aliases, normalized name, committee key, or phone)
   const matchRegistration = (userTarget, regList) => {
     if (!userTarget || !Array.isArray(regList) || regList.length === 0) return null;
     const targetEmail = userTarget.email?.toLowerCase().trim();
     const targetId = userTarget.id;
-    return regList.find(r => 
-      (targetId && (r.user_id === targetId || r.id === targetId)) ||
-      (targetEmail && r.user_email?.toLowerCase().trim() === targetEmail)
-    ) || null;
+    const targetNameNorm = normalizePersonName(userTarget.name || userTarget.user_metadata?.full_name);
+    const targetPhone = userTarget.phone ? String(userTarget.phone).replace(/[^0-9]/g, '') : '';
+
+    // 1. Direct match by user_id or registration id
+    let matched = regList.find(r => targetId && (r.user_id === targetId || r.id === targetId));
+
+    // 2. Direct case-insensitive email match
+    if (!matched && targetEmail) {
+      matched = regList.find(r => r.user_email?.toLowerCase().trim() === targetEmail);
+    }
+
+    // 3. Known dual-email & alias cross-mapping match
+    if (!matched && targetEmail && KNOWN_EMAIL_ALIASES[targetEmail]) {
+      const aliases = KNOWN_EMAIL_ALIASES[targetEmail];
+      matched = regList.find(r => {
+        const rEmail = (r.user_email || '').toLowerCase().trim();
+        const rKey = r.committee_member_key || '';
+        return (rEmail && aliases.includes(rEmail)) || (rKey && aliases.includes(rKey)) || aliases.includes(r.id);
+      });
+    }
+
+    // 4. Normalized Full Name Matching (e.g. Google full name matching registration Thai name)
+    if (!matched && targetNameNorm && targetNameNorm.length >= 4) {
+      matched = regList.find(r => {
+        const rFullName = `${r.first_name || ''}${r.last_name || ''}` || r.full_name || '';
+        const rNameNorm = normalizePersonName(rFullName);
+        return rNameNorm && (rNameNorm === targetNameNorm || rNameNorm.includes(targetNameNorm) || targetNameNorm.includes(rNameNorm));
+      });
+    }
+
+    // 5. Phone number matching (if available)
+    if (!matched && targetPhone && targetPhone.length >= 9) {
+      matched = regList.find(r => {
+        const rPhone = (r.phone || '').replace(/[^0-9]/g, '');
+        return rPhone && rPhone === targetPhone;
+      });
+    }
+
+    // Auto-sync email into registration in background if registration was missing email
+    if (matched && targetEmail && (!matched.user_email || matched.user_email.toLowerCase().trim() !== targetEmail)) {
+      if (!matched.user_email || matched.user_email === '') {
+        matched.user_email = targetEmail;
+        DataService.updateRegistrationDetails(matched.id, { user_email: targetEmail }).catch(() => {});
+      }
+    }
+
+    return matched || null;
   };
 
   // Load Initial Data & Sessions
@@ -879,6 +933,9 @@ export default function App() {
     setUser(userObj);
     const isDev = isGoogleDevIdentity(userObj);
     if (isDev) {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('jre2027_admin_logged_out');
+      }
       setDevGoogleSignedIn(true);
       setIsAdmin(true);
       const [adminRegistrations, adminAccounts] = await Promise.all([
@@ -892,7 +949,12 @@ export default function App() {
         const { data: verifiedIdentity } = await supabase.auth.getUser();
         const verifiedDev = isGoogleDevIdentity(verifiedIdentity?.user);
         setDevGoogleSignedIn(verifiedDev);
-        if (verifiedDev) setIsAdmin(true);
+        if (verifiedDev) {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem('jre2027_admin_logged_out');
+          }
+          setIsAdmin(true);
+        }
       } catch {
         setDevGoogleSignedIn(false);
       }
