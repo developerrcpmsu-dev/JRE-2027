@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import CurriculumSection from '../components/CurriculumSection';
 import AccommodationSection from '../components/AccommodationSection';
+import UniversalImageModal from '../components/UniversalImageModal';
 import RegistrationCountdown from '../components/RegistrationCountdown';
 import AttendanceConfirmationCard from '../components/AttendanceConfirmationCard';
 import ModalPortal from '../components/ModalPortal';
@@ -48,6 +49,7 @@ export default function HomeView({
 }) {
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
   const [selectedPersonModal, setSelectedPersonModal] = React.useState(null);
+  const [previewImageModal, setPreviewImageModal] = React.useState(null);
   // Dynamic university resolution helper
   const getMemberUniversity = (m) => {
     if (m.university && m.university.trim()) return m.university.trim();
@@ -891,21 +893,23 @@ export default function HomeView({
                       <img
                         src={selectedPersonModal.data.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`}
                         alt={selectedPersonModal.data.name}
-                        className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl object-cover border-2 border-amber-400/70 shadow-2xl bg-slate-950"
+                        onClick={() => selectedPersonModal.data.photo && setPreviewImageModal({ src: selectedPersonModal.data.photo, title: selectedPersonModal.data.name })}
+                        className={`w-36 h-36 sm:w-44 sm:h-44 rounded-3xl object-cover border-2 border-amber-400/70 shadow-2xl bg-slate-950 transition-transform ${
+                          selectedPersonModal.data.photo ? 'cursor-zoom-in hover:scale-105' : ''
+                        }`}
                         onError={(e) => {
                           e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`;
                         }}
                       />
                       {selectedPersonModal.data.photo && (
-                        <a
-                          href={selectedPersonModal.data.photo}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-bold text-rescue-400 hover:text-rescue-300 inline-flex items-center gap-1 mt-1"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImageModal({ src: selectedPersonModal.data.photo, title: selectedPersonModal.data.name })}
+                          className="text-[11px] font-bold text-rescue-400 hover:text-rescue-300 inline-flex items-center gap-1 mt-1 cursor-pointer"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>เปิดดูรูปขนาดเต็ม</span>
-                        </a>
+                          <Eye className="w-3 h-3" />
+                          <span>ดูรูปขนาดใหญ่ (Popup)</span>
+                        </button>
                       )}
                     </div>
 
@@ -967,21 +971,23 @@ export default function HomeView({
                       <img
                         src={selectedPersonModal.data.photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`}
                         alt={selectedPersonModal.data.name}
-                        className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl object-cover border-2 border-amber-400/70 shadow-2xl bg-slate-950"
+                        onClick={() => selectedPersonModal.data.photo && setPreviewImageModal({ src: selectedPersonModal.data.photo, title: selectedPersonModal.data.name })}
+                        className={`w-36 h-36 sm:w-44 sm:h-44 rounded-3xl object-cover border-2 border-amber-400/70 shadow-2xl bg-slate-950 transition-transform ${
+                          selectedPersonModal.data.photo ? 'cursor-zoom-in hover:scale-105' : ''
+                        }`}
                         onError={(e) => {
                           e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(selectedPersonModal.data.name)}`;
                         }}
                       />
                       {selectedPersonModal.data.photo && (
-                        <a
-                          href={selectedPersonModal.data.photo}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-bold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 mt-1"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImageModal({ src: selectedPersonModal.data.photo, title: selectedPersonModal.data.name })}
+                          className="text-[11px] font-bold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 mt-1 cursor-pointer"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>เปิดดูรูปขนาดเต็ม</span>
-                        </a>
+                          <Eye className="w-3 h-3" />
+                          <span>ดูรูปขนาดใหญ่ (Popup)</span>
+                        </button>
                       )}
                     </div>
 
@@ -1037,6 +1043,16 @@ export default function HomeView({
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* Universal In-App Image Popup */}
+      {previewImageModal && (
+        <UniversalImageModal
+          isOpen={Boolean(previewImageModal)}
+          onClose={() => setPreviewImageModal(null)}
+          imageSrc={previewImageModal.src}
+          title={previewImageModal.title}
+        />
       )}
 
     </div>

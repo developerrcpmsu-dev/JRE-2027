@@ -800,12 +800,11 @@ export default function AnnouncementsView({
                 <div className="flex items-center gap-2">
                   <a
                     href={lightboxImages[lightboxIndex]}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white transition-colors"
-                    title="เปิดรูปภาพแท็บใหม่"
+                    download={`announcement_image_${lightboxIndex + 1}.png`}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-emerald-400 transition-colors"
+                    title="ดาวน์โหลดรูปภาพ"
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    <Download className="w-4 h-4" />
                   </a>
                   <button
                     type="button"
@@ -1436,12 +1435,11 @@ export default function AnnouncementsView({
               <div className="flex items-center gap-2">
                 <a
                   href={lightboxImages[lightboxIndex]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white transition-colors"
-                  title="เปิดรูปภาพแท็บใหม่"
+                  download={`announcement_image_${lightboxIndex + 1}.png`}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-emerald-400 transition-colors"
+                  title="ดาวน์โหลดรูปภาพ"
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  <Download className="w-4 h-4" />
                 </a>
                 <button
                   type="button"

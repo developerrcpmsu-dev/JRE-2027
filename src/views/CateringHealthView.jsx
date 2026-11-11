@@ -24,6 +24,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import UniversalImageModal from '../components/UniversalImageModal';
 import {
   getApplicantMedical,
   getApplicantAllergy,
@@ -49,6 +50,7 @@ export default function CateringHealthView({
   const [categoryFilter, setCategoryFilter] = useState('all'); // 'all', 'seafood', 'vegetarian', 'halal', 'nutsOrDairy', 'drug'
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   // University options (dynamic counts)
   const uniOptions = useMemo(() => {
@@ -724,7 +726,9 @@ export default function CateringHealthView({
                         <img
                           src={reg.id_card_photo}
                           alt="ID"
-                          className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0 shadow"
+                          onClick={() => setPreviewImage({ src: reg.id_card_photo, title: `รูปถ่ายประจำตัว: ${reg.first_name || ''} ${reg.last_name || ''}`.trim() })}
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0 shadow cursor-zoom-in hover:scale-105 transition-transform"
+                          title="คลิกเพื่อดูรูปภาพขยาย (Popup)"
                         />
                       ) : (
                         <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 font-bold shrink-0">
@@ -843,6 +847,16 @@ export default function CateringHealthView({
           </div>
         )}
       </div>
+
+      {/* Universal Image Lightbox Popup */}
+      {previewImage && (
+        <UniversalImageModal
+          isOpen={Boolean(previewImage)}
+          onClose={() => setPreviewImage(null)}
+          imageSrc={previewImage.src}
+          title={previewImage.title}
+        />
+      )}
 
     </div>
   );

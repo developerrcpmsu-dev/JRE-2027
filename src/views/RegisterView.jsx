@@ -677,6 +677,7 @@ export default function RegisterView({
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [previewSlipModal, setPreviewSlipModal] = useState(null);
   const [copiedSlipUrl, setCopiedSlipUrl] = useState(false);
+  const [slipZoom, setSlipZoom] = useState(1);
 
   // 2-Round Installments & Full Payment State
   const [paymentPlan, setPaymentPlan] = useState('installment'); // 'installment' (4 steps) | 'full' (3 steps)
@@ -5716,17 +5717,14 @@ export default function RegisterView({
                       <span>{copiedSlipUrl ? 'คัดลอกแล้ว!' : 'ก๊อปลิ้งค์'}</span>
                     </button>
 
-                    {previewSlipModal.startsWith('http') && (
-                      <a
-                        href={previewSlipModal}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
-                        title="เปิดดูรูปเต็มในแท็บใหม่"
-                      >
-                        <ExternalLink className="w-4 h-4 text-cyan-400" />
-                      </a>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSlipZoom(prev => (prev === 1 ? 1.8 : 1))}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+                      title={slipZoom === 1 ? 'ซูมขยายรูปภาพ' : 'ย่อขนาดปกติ'}
+                    >
+                      <ZoomIn className={`w-4 h-4 ${slipZoom > 1 ? 'text-amber-400' : 'text-cyan-400'}`} />
+                    </button>
 
                     <button
                       type="button"

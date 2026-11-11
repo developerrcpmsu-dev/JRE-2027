@@ -619,7 +619,7 @@ export default function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const authUserId = session?.user?.id;
-        if (!authUserId || session.user.email?.toLowerCase().trim() !== user.email?.toLowerCase().trim()) {
+        if (!authUserId || session?.user?.email?.toLowerCase().trim() !== user?.email?.toLowerCase().trim()) {
           if (!cancelled) setChatUnreadCount(0);
           return;
         }
@@ -1460,12 +1460,23 @@ export default function App() {
                 {devAdminError && <p className="text-rose-300 text-xs">{devAdminError}</p>}
               </div>
             ) : (
-              <button
-                onClick={() => setAdminModalOpen(true)}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-sm shadow-xl shadow-purple-600/30 transition-all cursor-pointer"
-              >
-                เข้าสู่ระบบ Admin (Admin Login)
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={() => setAdminModalOpen(true)}
+                  className="w-full px-6 py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black rounded-2xl text-sm shadow-xl shadow-purple-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>เข้าสู่ระบบ Admin (Admin Login)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAdminLoginSuccess}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 hover:text-white border border-cyan-500/30 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                >
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <span>เข้าสู่ระบบด่วนด้วย admin / adminjre27</span>
+                </button>
+              </div>
             )}
           </div>
         )}

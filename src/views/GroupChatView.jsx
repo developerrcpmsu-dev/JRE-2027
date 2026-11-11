@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, Bell, CheckCheck, ExternalLink, ImagePlus, LoaderCircle, MessageCircle, Pencil, Reply, Send, Shield, Trash2, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../supabase';
 import { OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
+import UniversalImageModal from '../components/UniversalImageModal';
 
 const CHAT_BUCKET = 'jre-group-chat';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -16,6 +17,7 @@ const formatMessageTime = (value) => new Date(value).toLocaleString('th-TH', {
 });
 
 export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin }) {
+  const [previewImage, setPreviewImage] = useState(null);
   const [messages, setMessages] = useState([]);
   const [receipts, setReceipts] = useState([]);
   const [signedImages, setSignedImages] = useState({});
@@ -45,11 +47,16 @@ export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin 
 
   useEffect(() => {
     let cancelled = false;
-    const expectedEmail = user?.email?.toLowerCase().trim();
-    const bridgeKey = expectedEmail ? `jre_chat_auth_bridge:${expectedEmail}` : null;
+    if (!user?.email) {
+      setAuthUser(null);
+      setLoading(false);
+      return;
+    }
+    const expectedEmail = user.email.toLowerCase().trim();
+    const bridgeKey = `jre_chat_auth_bridge:${expectedEmail}`;
     const { data: { subscription } } = supabase?.auth?.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user?.email?.toLowerCase().trim() === expectedEmail) {
-        if (bridgeKey) sessionStorage.removeItem(bridgeKey);
+        sessionStorage.removeItem(bridgeKey);
         setAuthUser(session.user);
         setConnectingAuth(false);
         setError('');
@@ -462,7 +469,21 @@ export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin 
                   {quoted && <button onClick={() => document.getElementById(`chat-msg-${quoted.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="block w-full mb-2 text-left rounded-lg border-l-2 border-indigo-300/70 bg-black/15 px-2.5 py-1.5 text-[10px] opacity-80 hover:opacity-100"><span className="font-bold">{quoted.author_name}</span><span className="block truncate">{quoted.deleted_at ? 'ข้อความถูกยกเลิก' : quoted.message_text || '🖼️ รูปภาพ'}</span></button>}
                   {deleted ? <p className="italic text-sm opacity-60">ยกเลิกข้อความแล้ว</p> : editing ? <div className="space-y-2"><textarea autoFocus value={editDraft} onChange={e => setEditDraft(e.target.value)} maxLength={4000} rows={3} className="w-full min-w-56 rounded-lg bg-slate-950/40 p-2 text-sm text-white outline-none" /><div className="flex justify-end gap-2"><button onClick={() => setEditingId(null)} className="text-xs opacity-70">ยกเลิก</button><button onClick={() => handleEdit(message)} className="text-xs font-bold">บันทึก</button></div></div> : <>
                     {message.message_text && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.message_text}</p>}
-                    {message.image_path && signedImages[message.image_path] && <a href={signedImages[message.image_path]} target="_blank" rel="noreferrer"><img src={signedImages[message.image_path]} alt="รูปภาพในแชท" className="mt-2 max-h-80 max-w-full rounded-xl object-contain" loading="lazy" /></a>}
+                    {message.image_path && signedImages[message.image_path] && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage({ src: signedImages[message.image_path], title: `รูปภาพจาก ${message.author_name}` })}
+                        className="mt-2 block cursor-zoom-in text-left group overflow-hidden rounded-xl border border-white/10 hover:border-indigo-400 transition-all"
+                        title="คลิกเพื่อดูรูปภาพขนาดใหญ่แบบ Popup"
+                      >
+                        <img
+                          src={signedImages[message.image_path]}
+                          alt="รูปภาพในแชท"
+                          className="max-h-80 max-w-full rounded-xl object-contain group-hover:scale-[1.01] transition-transform"
+                          loading="lazy"
+                        />
+                      </button>
+                    )}
                   </>}
                 </div>
                 {!deleted && <div className={`flex items-center gap-2 mt-1 px-1 ${mine ? 'flex-row-reverse' : ''}`}>
@@ -495,6 +516,16 @@ export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin 
         <p className="mt-2 text-center text-[9px] text-slate-600">แชทนี้สำหรับสมาชิกที่ลงทะเบียน • หลีกเลี่ยงการโพสต์ข้อมูลส่วนตัวหรือข้อมูลสุขภาพ</p>
       </form>
       </section>
+
+      {/* In-App Image Lightbox Popup */}
+      {previewImage && (
+        <UniversalImageModal
+          isOpen={Boolean(previewImage)}
+          onClose={() => setPreviewImage(null)}
+          imageSrc={previewImage.src}
+          title={previewImage.title}
+        />
+      )}
     </div>
   );
 }

@@ -169,19 +169,16 @@ export default function DocumentPreviewModal({ isOpen, onClose, doc }) {
               <span className="hidden sm:inline">{copied ? 'คัดลอกแล้ว!' : 'ก๊อปลิ้งค์รูป'}</span>
             </button>
 
-            {/* Open Raw in New Tab */}
-            {shareableUrl && (
-              <a
-                href={shareableUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl border border-slate-700 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
-                title="เปิดดูรูปเต็มในแท็บใหม่"
-              >
-                <ExternalLink className="w-4 h-4 text-cyan-400" />
-                <span className="hidden sm:inline">เปิดดู</span>
-              </a>
-            )}
+            {/* In-app Zoom Control */}
+            <button
+              type="button"
+              onClick={() => setZoomLevel((prev) => (prev >= 2 ? 1 : prev + 0.5))}
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl border border-slate-700 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
+              title="ซูมขยาย / ย่อรูปภาพในหน้าต่างนี้"
+            >
+              <ZoomIn className="w-4 h-4 text-cyan-400" />
+              <span className="hidden sm:inline">{zoomLevel > 1 ? `${Math.round(zoomLevel * 100)}%` : 'ซูม'}</span>
+            </button>
 
             {/* Direct Download Button */}
             <button

@@ -13,9 +13,11 @@ import {
   RotateCcw,
   ExternalLink,
   Paperclip,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import UniversalImageModal from './UniversalImageModal';
 import { ADMIN_MESSAGE_SENDERS, resolveMessageSenderInfo, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
 
 /**
@@ -33,6 +35,7 @@ export default function UserNotificationsModal({
   const [senderFilter, setSenderFilter] = useState('all'); // 'all' or sender key
   const [deletingId, setDeletingId] = useState(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
 
   if (!isOpen) return null;
 
@@ -427,15 +430,14 @@ export default function UserNotificationsModal({
                             เอกสาร/ไฟล์แนบ: {msg.attachment_name || 'เปิดดูไฟล์แนบจากผู้ดูแลระบบ'}
                           </span>
                         </div>
-                        <a
-                          href={msg.attachment_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1 bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachment({ url: msg.attachment_url, name: msg.attachment_name || 'ไฟล์แนบ' })}
+                          className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>เปิดดูไฟล์</span>
-                        </a>
+                          <Eye className="w-3 h-3 text-cyan-400" />
+                          <span>ดูรูป/ไฟล์ (Popup)</span>
+                        </button>
                       </div>
                     )}
 
@@ -541,6 +543,15 @@ export default function UserNotificationsModal({
           </div>
         </div>
       </div>
+
+      {previewAttachment && (
+        <UniversalImageModal
+          isOpen={Boolean(previewAttachment)}
+          onClose={() => setPreviewAttachment(null)}
+          imageSrc={previewAttachment.url}
+          title={previewAttachment.name}
+        />
+      )}
     </ModalPortal>
   );
 }

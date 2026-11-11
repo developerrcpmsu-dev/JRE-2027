@@ -40,9 +40,13 @@ function SlipMedia({ url, alt, className, onClick }) {
         <ImageIcon className="w-8 h-8 text-slate-600" />
         <span>ไม่สามารถแสดงรูปสลิปนี้ได้</span>
         {isHttpUrl(url) && (
-          <a href={url} target="_blank" rel="noreferrer" className="text-purple-300 underline font-bold">
-            เปิดไฟล์ในแท็บใหม่
-          </a>
+          <button
+            type="button"
+            onClick={() => setFailed(false)}
+            className="text-purple-300 underline font-bold cursor-pointer hover:text-white"
+          >
+            ลองโหลดใหม่อีกครั้ง
+          </button>
         )}
       </div>
     );
@@ -168,36 +172,33 @@ export default function SlipGalleryModal({ gallery, onClose }) {
                   </div>
 
                   <div className="p-2 flex items-center justify-end gap-1.5 border-t border-slate-800">
-                    {!isPdfUrl(slip.url) && (
+                    {!isPdfUrl(slip.url) ? (
+                      <button
+                        type="button"
+                        onClick={() => setZoomIndex(idx)}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Maximize2 className="w-3 h-3" />
+                        <span>ดูรูปขยาย (Popup)</span>
+                      </button>
+                    ) : (
                       <button
                         type="button"
                         onClick={() => setZoomIndex(idx)}
                         className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <Maximize2 className="w-3 h-3" />
-                        ขยาย
+                        <FileText className="w-3 h-3" />
+                        <span>เปิดดูเอกสาร</span>
                       </button>
                     )}
-                    {isHttpUrl(slip.url) ? (
-                      <a
-                        href={slip.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 text-[11px] font-bold flex items-center gap-1"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        เปิดแท็บใหม่
-                      </a>
-                    ) : (
-                      <a
-                        href={slip.url}
-                        download={`slip-${idx + 1}-${slip.key}${isPdfUrl(slip.url) ? '.pdf' : '.jpg'}`}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 text-[11px] font-bold flex items-center gap-1"
-                      >
-                        {isPdfUrl(slip.url) ? <FileText className="w-3 h-3" /> : <Download className="w-3 h-3" />}
-                        ดาวน์โหลด
-                      </a>
-                    )}
+                    <a
+                      href={slip.url}
+                      download={`slip-${idx + 1}-${slip.key}${isPdfUrl(slip.url) ? '.pdf' : '.jpg'}`}
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>ดาวน์โหลด</span>
+                    </a>
                   </div>
                 </div>
               ))}

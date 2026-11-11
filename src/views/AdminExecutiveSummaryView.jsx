@@ -63,6 +63,7 @@ import {
   getRosterSortTier,
   isHealthSharedWithRoommate
 } from '../data/defaultData';
+import UniversalImageModal from '../components/UniversalImageModal';
 
 const DELETED_COMMITTEE_STORAGE_KEY = 'jre2027_deleted_committee_keys';
 
@@ -204,6 +205,7 @@ export default function AdminExecutiveSummaryView({
   const [showShirtSpecModal, setShowShirtSpecModal] = useState(false);
   // Protection switch: Admin must unlock Edit Mode before changing data, to prevent accidental clicks
   const [isEditMode, setIsEditMode] = useState(false);
+  const [previewImageModal, setPreviewImageModal] = useState(null);
 
   // Staged / Draft changes in Edit Mode before explicit Save
   // rowDrafts[itemId] = { status, needAccommodation, uni, role, dutyNote }
@@ -1548,7 +1550,9 @@ export default function AdminExecutiveSummaryView({
                           <img
                             src={candidatePhoto}
                             alt={spec.display_name}
-                            className="w-12 h-12 rounded-full object-cover border-2 border-amber-400 shadow shrink-0 bg-slate-800"
+                            title="คลิกดูภาพขยาย (Popup)"
+                            onClick={() => setPreviewImageModal({ src: candidatePhoto, alt: spec.display_name, title: `${spec.display_name} (${spec.callsign || spec.duty || 'คณะกรรมการ'})` })}
+                            className="w-12 h-12 rounded-full object-cover border-2 border-amber-400 shadow shrink-0 bg-slate-800 cursor-pointer hover:scale-105 hover:ring-2 hover:ring-amber-400 transition-all"
                             onError={(e) => {
                               e.currentTarget.onerror = null;
                               e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(spec.display_name)}&backgroundColor=0284c7,d97706,4f46e5,059669`;
@@ -3584,6 +3588,14 @@ export default function AdminExecutiveSummaryView({
           </div>
         </div>
       )}
+      {/* Universal In-App Image Preview Modal (Popup) */}
+      <UniversalImageModal
+        isOpen={Boolean(previewImageModal)}
+        onClose={() => setPreviewImageModal(null)}
+        src={previewImageModal?.src}
+        alt={previewImageModal?.alt}
+        title={previewImageModal?.title}
+      />
     </div>
   );
 }

@@ -384,11 +384,11 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
   return (
     <ModalPortal isOpen={isOpen} onClose={onClose}>
       <div 
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
         onClick={onClose}
       >
         <div 
-          className="bg-slate-900 border border-slate-700/80 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl shadow-orange-500/10 relative overflow-hidden max-h-[92vh] overflow-y-auto"
+          className="bg-slate-900 border border-slate-700/80 w-full max-w-[calc(100vw-1.5rem)] sm:max-w-md md:max-w-lg rounded-3xl p-5 sm:p-7 shadow-2xl shadow-orange-500/10 relative overflow-hidden max-h-[92vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
         
@@ -396,10 +396,11 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Close Button */}
+        {/* Close Button with high z-index and guaranteed pointer events */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-slate-800 transition-colors z-10 cursor-pointer"
+          className="absolute top-3.5 right-3.5 sm:top-5 sm:right-5 text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors z-30 cursor-pointer pointer-events-auto shadow-sm"
           title="ปิดหน้าต่าง"
         >
           <X className="w-5 h-5" />
