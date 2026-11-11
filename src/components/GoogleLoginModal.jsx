@@ -279,8 +279,44 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
     setSuccessMsg(null);
     setIsLoading(true);
 
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    // Special handler: Direct Admin login (admin@admin.com / adminjre27 or admin / adminjre27)
+    if (
+      (cleanEmail === 'admin@admin.com' || cleanEmail === 'admin') &&
+      cleanPass === 'adminjre27'
+    ) {
+      try {
+        sessionStorage.removeItem('jre2027_admin_logged_out');
+        sessionStorage.setItem('jre2027_admin_active', 'true');
+        sessionStorage.setItem('jre2027_admin_token', `admin_pass_${Date.now()}`);
+        sessionStorage.setItem('jre2027_admin_expires', String(Date.now() + 24 * 3600 * 1000));
+        localStorage.setItem('jre2027_is_admin', 'true');
+
+        const adminUser = {
+          id: 'admin_sys_master',
+          name: 'ผู้ดูแลระบบส่วนกลาง (Admin JRE 2027)',
+          email: 'admin@admin.com',
+          avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin_jre2027',
+          role: 'admin',
+          is_admin: true
+        };
+        localStorage.setItem('jre2027_auth_user', JSON.stringify(adminUser));
+        if (onLoginSuccess) {
+          await onLoginSuccess(adminUser);
+        }
+        onClose();
+        return;
+      } catch (err) {
+        console.error('Admin quick login error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
     try {
-      const user = await DataService.signInUser({ email, password });
+      const user = await DataService.signInUser({ email: cleanEmail, password: cleanPass });
       localStorage.setItem('jre2027_auth_user', JSON.stringify(user));
       if (onLoginSuccess) onLoginSuccess(user);
       onClose();
@@ -601,11 +637,12 @@ export default function GoogleLoginModal({ isOpen, onClose, onLoginSuccess }) {
                   อีเมล (Email)
                 </label>
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="name@example.com"
+                  placeholder="admin@admin.com หรือ อีเมลของคุณ"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-rescue-500 font-medium"
                 />
               </div>

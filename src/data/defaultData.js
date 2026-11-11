@@ -3071,6 +3071,15 @@ export const resolveMessageSenderInfo = (msg = {}) => {
  */
 export const INITIAL_STAFF_ADMIN_ACCOUNTS = [
   {
+    email: 'admin@admin.com',
+    name: 'ผู้ดูแลระบบส่วนกลาง (Admin JRE 2027)',
+    role: 'admin',
+    role_label: '🛡️ ผู้ดูแลระบบส่วนกลาง (Administrator)',
+    institution: 'มมส',
+    active: true,
+    created_at: '2026-10-01T00:00:00Z'
+  },
+  {
     email: 'developer.rcpmsu@gmail.com',
     name: 'DEV ชมรมกู้ภัยราชพฤกษ์ มมส',
     role: 'dev',
