@@ -1474,14 +1474,6 @@ export default function App() {
                   <Lock className="w-4 h-4" />
                   <span>เข้าสู่ระบบ Admin (Admin Login)</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={handleAdminLoginSuccess}
-                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 hover:text-white border border-cyan-500/30 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
-                >
-                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                  <span>เข้าสู่ระบบด่วนด้วย admin / adminjre27</span>
-                </button>
               </div>
             )}
           </div>
