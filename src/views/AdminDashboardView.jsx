@@ -18206,7 +18206,7 @@ export default function AdminDashboardView({
       {activeTab === 'medical' && (
         <AdminMedicalView
           registrations={registrations}
-          currentUser={currentUser || user}
+          currentUser={user}
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
           onUpdateAllocation={onUpdateAllocation}
           triggerToast={triggerToast}
