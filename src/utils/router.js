@@ -353,7 +353,6 @@ export function parseCurrentRoute() {
       'shirt-roster': 'shirt-roster',
       'shirt-print': 'shirt-roster',
       'print-shirts': 'shirt-roster',
-      'roster': 'shirt-roster',
 
       'payment': 'payment',
       'payments': 'payment',

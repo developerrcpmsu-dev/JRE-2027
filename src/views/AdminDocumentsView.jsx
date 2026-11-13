@@ -1088,7 +1088,7 @@ export default function AdminDocumentsView({
         emergencyContact: item.emergencyContact,
         bloodGroup: item.bloodGroup,
         medicalSummary: item.medicalSummary,
-        medEquipment,
+        medEquipment: medEquip,
         specialItems,
         isSpecialCare,
         hasCare,
