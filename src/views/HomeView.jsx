@@ -33,7 +33,19 @@ import RegistrationCountdown from '../components/RegistrationCountdown';
 import AttendanceConfirmationCard from '../components/AttendanceConfirmationCard';
 import ModalPortal from '../components/ModalPortal';
 import { getRegistrationScheduleStatus } from '../utils/registrationSchedule';
-import { DEFAULT_SPEAKERS, getSpeakerCategory, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
+import { DEFAULT_SPEAKERS, getSpeakerCategory, OFFICIAL_GROUP_CHAT_URL, isStaffRegistration, getStaffPaymentSummary } from '../data/defaultData';
+
+const hasOutstandingBalance = (reg) => {
+  if (!reg) return false;
+  if (isStaffRegistration(reg)) {
+    const s = getStaffPaymentSummary(reg);
+    return !s.isMsu && s.accommodationRemaining > 0;
+  }
+  const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+  if (isInstallment && reg.installment_2_status !== 'paid') return true;
+  if (reg.payment_status === 'unpaid') return true;
+  return false;
+};
 
 export default function HomeView({ 
   teamMembers, 
@@ -43,6 +55,7 @@ export default function HomeView({
   onNavigateMerchandise,
   onOpenScanner,
   myRegistration,
+  registrations = [],
   onUpdateRegistration,
   onOpenGoogleLogin,
   paymentConfig
@@ -98,38 +111,38 @@ export default function HomeView({
   }, [speakers]);
 
   return (
-    <div className="space-y-16 animate-in fade-in duration-300">
+    <div className="space-y-8 sm:space-y-12 lg:space-y-14 animate-in fade-in duration-300">
       
       {/* Hero Banner Section */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 shadow-2xl p-6 sm:p-10 md:p-16">
+      <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 shadow-2xl p-4 sm:p-6 lg:p-7 xl:p-8">
         {/* Glow ambient effects */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-rescue-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emergency-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute top-0 right-0 w-72 h-72 lg:w-96 lg:h-96 bg-rescue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 lg:w-80 lg:h-80 bg-emergency-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 lg:gap-8 mb-4 sm:mb-6">
             <div className="max-w-3xl">
-              <div className="flex flex-wrap items-center gap-2 mb-6">
-                <span className="px-3 py-1 bg-emergency-500/20 text-emergency-400 border border-emergency-500/30 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-emergency-500/20 text-emergency-400 border border-emergency-500/30 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                   <Activity className="w-3.5 h-3.5" />
                   การฝึกซ้อมร่วมประจำปี 2570
                 </span>
-                <span className="px-3 py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+                <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-[11px] sm:text-xs font-bold flex items-center gap-1">
                   <Building2 className="w-3.5 h-3.5" />
                   มหาวิทยาลัยมหาสารคาม (มมส)
                 </span>
-                <span className="px-3 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-full text-xs font-medium flex items-center gap-1.5">
+                <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-full text-[11px] sm:text-xs font-medium flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-rescue-400" />
                   14 - 15 พฤศจิกายน 2569 (2 วัน 1 คืน)
                 </span>
               </div>
 
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight mb-6">
+              <h1 className="text-2xl sm:text-3xl lg:text-3.5xl xl:text-4xl 2xl:text-5xl font-black text-white tracking-tight leading-snug sm:leading-tight mb-2.5 sm:mb-3">
                 มมส จัด <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-rescue-500 to-amber-300">JRE 2027</span><br />
                 ติวเข้มเครือข่ายกู้ภัยนักศึกษาทั่วประเทศ
               </h1>
 
-              <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-3xl">
+              <p className="text-xs sm:text-sm lg:text-[15px] text-slate-300 leading-relaxed max-w-3xl">
                 ยกระดับทักษะรับมือเหตุฉุกเฉินระดับประเทศ สานต่อความสำเร็จจากการฝึกซ้อม JRE 2026 โดย 
                 <span className="font-semibold text-white"> ชมรมกู้ภัยราชพฤกษ์ สังกัดองค์การนิสิต มหาวิทยาลัยมหาสารคาม </span>
                 ร่วมกับมหาวิทยาลัยและเครือข่ายกู้ภัยนักศึกษาทั่วประเทศทุกภูมิภาค (ภาคอีสาน, ภาคกลาง, ภาคเหนือ, ภาคใต้, ภาคตะวันออก)
@@ -138,50 +151,50 @@ export default function HomeView({
             </div>
 
             {/* Official Emblem Spotlight */}
-            <div className="hidden lg:flex flex-col items-center justify-center p-6 bg-slate-900/60 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-sm shrink-0 self-center group">
+            <div className="hidden lg:flex flex-col items-center justify-center p-3 xl:p-4 bg-slate-900/60 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-sm shrink-0 self-center group">
               <img 
                 src="/images/logo/jre_logo.png" 
                 alt="ตราสัญลักษณ์ JRE 2027 (USVN)" 
-                className="w-44 h-56 object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-300"
+                className="w-24 h-32 xl:w-28 xl:h-36 object-contain drop-shadow-xl group-hover:scale-105 transition-transform duration-300"
               />
-              <span className="text-[11px] font-bold text-orange-400/90 mt-3 tracking-wider text-center">
+              <span className="text-[10px] xl:text-[11px] font-bold text-orange-400/90 mt-2 tracking-wider text-center">
                 ตราสัญลักษณ์ประจำโครงการ
               </span>
-              <span className="text-[9px] text-slate-400 font-medium text-center">
+              <span className="text-[8px] xl:text-[9px] text-slate-400 font-medium text-center">
                 USVN • ภาคีเครือข่ายนักศึกษาอาสาสมัคร
               </span>
             </div>
           </div>
 
-          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
-                <HeartHandshake className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 bg-slate-900/90 border border-slate-800 rounded-xl mb-4 sm:mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+                <HeartHandshake className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <div className="text-xs">
+              <div className="text-[11px] sm:text-xs">
                 <p className="font-bold text-slate-200">การรวมพลังเครือข่ายกู้ชีพกู้ภัยระดับอุดมศึกษาทั่วประเทศ (ทุกภูมิภาค)</p>
                 <p className="text-slate-400">
                   ชมรมกู้ภัยราชพฤกษ์ มมส • อาสาสมัครกู้ภัย มข. • ชุดเคลื่อนที่เร็ว มก. • และสถาบันอุดมศึกษาทั่วประเทศ
                 </p>
               </div>
             </div>
-            <div className="text-xs bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 shrink-0">
+            <div className="text-[11px] sm:text-xs bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700 text-slate-300 shrink-0">
               📍 มหาวิทยาลัยมหาสารคาม
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {!myRegistration && (
               <div className="flex items-center gap-2">
                 <RegistrationCountdown paymentConfig={paymentConfig} variant="badge" />
               </div>
             )}
-            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-2.5">
               {myRegistration ? (
                 <button
                   onClick={onNavigateRegister}
-                  className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-95 cursor-pointer"
+                  className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all transform active:scale-95 cursor-pointer"
                 >
                   <FileCheck2 className="w-4 h-4" />
                   <span>ดูสถานะห้องนอน & กลุ่มฝึกของฉัน</span>
@@ -189,7 +202,7 @@ export default function HomeView({
               ) : getRegistrationScheduleStatus(paymentConfig).isUpcoming ? (
                 <button
                   onClick={onNavigateRegister}
-                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 hover:from-amber-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-amber-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                  className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 hover:from-amber-500 hover:to-orange-400 text-white font-extrabold rounded-xl shadow-lg shadow-amber-600/25 hover:shadow-orange-500/30 hover:-translate-y-0.5 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 active:scale-95 group cursor-pointer"
                 >
                   <span>⏳ รอนับเวลาเปิดรับสมัคร JRE 2027 (ดูรายละเอียด)</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -197,7 +210,7 @@ export default function HomeView({
               ) : getRegistrationScheduleStatus(paymentConfig).isClosed ? (
                 <button
                   onClick={onNavigateRegister}
-                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rose-900 via-slate-900 to-slate-900 hover:from-rose-800 hover:to-slate-800 text-white font-extrabold rounded-2xl shadow-xl border border-rose-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                  className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-rose-900 via-slate-900 to-slate-900 hover:from-rose-800 hover:to-slate-800 text-white font-extrabold rounded-xl shadow-lg border border-rose-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 active:scale-95 group cursor-pointer"
                 >
                   <span>🔒 ปิดรับสมัครแล้ว (เข้าสู่ระบบเพื่อดูสิทธิ์ / จ่ายงวด 2)</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -205,7 +218,7 @@ export default function HomeView({
               ) : (
                 <button
                   onClick={onNavigateRegister}
-                  className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-2xl shadow-xl shadow-rescue-600/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 flex items-center justify-center gap-2.5 text-base transition-all duration-200 active:scale-95 group cursor-pointer"
+                  className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white font-extrabold rounded-xl shadow-lg shadow-rescue-600/25 hover:shadow-orange-500/30 hover:-translate-y-0.5 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 active:scale-95 group cursor-pointer"
                 >
                   <span>สมัครเข้าร่วมโครงการ JRE 2027</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -216,27 +229,27 @@ export default function HomeView({
               <button
                 type="button"
                 onClick={onOpenScanner}
-                className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:via-teal-400 hover:to-emerald-400 text-slate-950 font-black rounded-2xl border border-cyan-300/60 flex items-center justify-center gap-2.5 text-sm transition-all duration-200 shadow-xl shadow-cyan-500/25 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+                className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:via-teal-400 hover:to-emerald-400 text-slate-950 font-black rounded-xl border border-cyan-300/60 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-cyan-500/20 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
                 title="สแกน QR Code ที่บัตรประจำตัวเพื่อตรวจสอบข้อมูลผู้เข้าอบรม สถานะการรับรอง การมาเข้าร่วมฝึก และการรับบัตร"
               >
-                <QrCode className="w-5 h-5 text-slate-950 shrink-0" />
+                <QrCode className="w-4 h-4 text-slate-950 shrink-0" />
                 <span>📷 สแกน QR ตรวจสอบบัตรผู้เข้าร่วมโครงการ</span>
               </button>
             )}
 
             <button
               onClick={onNavigateSchedule}
-              className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-2xl border border-slate-700/80 hover:border-slate-600 flex items-center justify-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-bold rounded-xl border border-slate-700/80 hover:border-slate-600 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
-              <Calendar className="w-4 h-4 text-rescue-400" />
+              <Calendar className="w-3.5 h-3.5 text-rescue-400" />
               <span>ดูกำหนดการ 2 วัน 1 คืน</span>
             </button>
 
             <button
               onClick={onNavigateMerchandise}
-              className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-2xl border border-orange-500/40 hover:border-orange-500/60 flex items-center justify-center gap-2 text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-orange-600/20 via-slate-900 to-amber-600/20 hover:from-orange-600/30 hover:to-amber-600/30 text-orange-300 hover:text-white font-bold rounded-xl border border-orange-500/40 hover:border-orange-500/60 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 shadow-md hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
-              <Shirt className="w-4 h-4 text-orange-400" />
+              <Shirt className="w-3.5 h-3.5 text-orange-400" />
               <span>สั่งซื้อเสื้อ & กางเกงกู้ภัย</span>
             </button>
 
@@ -244,11 +257,11 @@ export default function HomeView({
               href={OFFICIAL_GROUP_CHAT_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold rounded-2xl border border-blue-400/50 flex items-center justify-center gap-2 text-sm transition-all duration-200 shadow-xl shadow-blue-600/30 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold rounded-xl border border-blue-400/50 flex items-center justify-center gap-2 text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-blue-600/25 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
             >
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-3.5 h-3.5" />
               <span>💬 เข้าแชทกลุ่มผู้เข้าร่วม JRE 2027</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ExternalLink className="w-3 h-3" />
             </a>
             </div>
           </div>
@@ -265,7 +278,15 @@ export default function HomeView({
       />
 
       {/* Urgent Round 2 & Accommodation Final Deadline Banner */}
-      <section className="rounded-3xl border-2 border-rose-500/70 bg-gradient-to-r from-rose-950/90 via-red-950/85 to-amber-950/80 p-5 sm:p-6 shadow-2xl shadow-rose-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {(() => {
+        const hasLoadedRegistrations = Array.isArray(registrations) && registrations.length > 0;
+        const anyOutstandingGlobal = hasLoadedRegistrations ? registrations.some(hasOutstandingBalance) : true;
+        const showUrgentBanner = myRegistration
+          ? (hasOutstandingBalance(myRegistration) && anyOutstandingGlobal)
+          : anyOutstandingGlobal;
+        if (!showUrgentBanner) return null;
+        return (
+          <section className="rounded-3xl border-2 border-rose-500/70 bg-gradient-to-r from-rose-950/90 via-red-950/85 to-amber-950/80 p-5 sm:p-6 shadow-2xl shadow-rose-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-600 to-red-600 flex items-center justify-center text-white shadow-lg shrink-0 animate-bounce">
             <AlertCircle className="w-6 h-6 text-amber-200" />
@@ -296,6 +317,8 @@ export default function HomeView({
           <ArrowRight className="w-4 h-4" />
         </button>
       </section>
+        );
+      })()}
 
       {/* Mandatory Participant Group Chat Announcement Banner */}
       <section className="rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/90 via-indigo-950/90 to-purple-950/85 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

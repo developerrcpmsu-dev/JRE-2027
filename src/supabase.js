@@ -275,9 +275,21 @@ const unpackRegistration = (row) => {
   const healthConsentBy = extra.health_consent_by || row.health_consent_by || (extra.share_health_with_roommate !== undefined ? 'user' : 'admin');
   const healthConsentAt = extra.health_consent_at || row.health_consent_at || '';
 
+  // Determine authoritative first/last names: If extra JSON contains valid Thai names,
+  // ensure they take precedence over English or Google account nicknames
+  const THAI_CHAR_RE = /[\u0E00-\u0E7F]/;
+  const resolvedFirstNameTh = extra.first_name_th || (THAI_CHAR_RE.test(row.first_name || '') ? row.first_name : '') || '';
+  const resolvedLastNameTh = extra.last_name_th || (THAI_CHAR_RE.test(row.last_name || '') ? row.last_name : '') || '';
+  const resolvedFirstName = (resolvedFirstNameTh && THAI_CHAR_RE.test(resolvedFirstNameTh)) ? resolvedFirstNameTh : (row.first_name || extra.first_name || '');
+  const resolvedLastName = (resolvedLastNameTh && THAI_CHAR_RE.test(resolvedLastNameTh)) ? resolvedLastNameTh : (row.last_name || extra.last_name || '');
+
   const unpacked = {
     ...extra,
     ...row,
+    first_name: resolvedFirstName,
+    last_name: resolvedLastName,
+    first_name_th: resolvedFirstNameTh || resolvedFirstName,
+    last_name_th: resolvedLastNameTh || resolvedLastName,
     shirt_size: extra.shirt_size !== undefined ? extra.shirt_size : row.shirt_size,
     staff_id_card_only: extra.staff_id_card_only !== undefined ? extra.staff_id_card_only : row.staff_id_card_only,
     share_health_with_roommate: shareConsent,
@@ -359,7 +371,14 @@ const unpackRegistration = (row) => {
         unpacked.installment_1_status = 'paid';
       }
 
-      if (staffSum.isAccommodationPaid) {
+      if (unpacked.round2_cancelled_absent) {
+        unpacked.payment_plan = 'installment';
+        unpacked.installment_2_status = 'cancelled';
+        unpacked.installment_2_amount = 0;
+        unpacked.staff_accommodation_paid = false;
+        unpacked.payment_amount = 0;
+        unpacked.payment_status = unpacked.installment_1_status === 'paid' ? 'paid' : (unpacked.payment_status || 'unpaid');
+      } else if (staffSum.isAccommodationPaid) {
         unpacked.payment_plan = 'full';
         unpacked.installment_2_status = 'paid';
         unpacked.payment_status = 'paid';
@@ -406,8 +425,8 @@ const unpackRegistration = (row) => {
       .replace(/\(KKU\)/gi, '(MSU)');
   }
 
-  // Guard against phantom approval for round 2 if no slip has been uploaded (unless manually overridden by Admin)
-  if (!unpacked.is_staff && unpacked.payment_plan === 'installment' && !unpacked.admin_manual_override) {
+  // Guard against phantom approval for round 2 if no slip has been uploaded (unless manually overridden by Admin or Round 2 cancelled)
+  if (!unpacked.is_staff && unpacked.payment_plan === 'installment' && !unpacked.admin_manual_override && !unpacked.round2_cancelled_absent && !unpacked.payment_deferred_post_project) {
     if (!unpacked.installment_2_slip_url && unpacked.installment_2_status === 'paid') {
       unpacked.installment_2_status = 'unpaid';
     }
@@ -521,7 +540,15 @@ const packRegistrationForSupabase = (fullData) => {
     installment_2_notes: fullData.installment_2_notes || '',
     slip_ocr_round1: fullData.slip_ocr_round1 || null,
     slip_ocr_round2: fullData.slip_ocr_round2 || null,
-    slip_ocr_full: fullData.slip_ocr_full || null
+    slip_ocr_full: fullData.slip_ocr_full || null,
+    round2_cancelled_absent: Boolean(fullData.round2_cancelled_absent),
+    round2_cancelled_at: fullData.round2_cancelled_at || '',
+    round2_cancelled_by: fullData.round2_cancelled_by || '',
+    round2_cancelled_note: fullData.round2_cancelled_note || '',
+    payment_deferred_post_project: Boolean(fullData.payment_deferred_post_project),
+    payment_deferred_at: fullData.payment_deferred_at || '',
+    payment_deferred_by: fullData.payment_deferred_by || '',
+    payment_deferred_note: fullData.payment_deferred_note || ''
   };
 
   const payload = {};
@@ -530,6 +557,16 @@ const packRegistrationForSupabase = (fullData) => {
       payload[key] = fullData[key];
     }
   }
+
+  // Ensure Thai name is preserved into first_name and last_name columns in DB
+  const THAI_CHAR_RE = /[\u0E00-\u0E7F]/;
+  if (fullData.first_name_th && THAI_CHAR_RE.test(fullData.first_name_th)) {
+    payload.first_name = fullData.first_name_th;
+  }
+  if (fullData.last_name_th && THAI_CHAR_RE.test(fullData.last_name_th)) {
+    payload.last_name = fullData.last_name_th;
+  }
+
   payload.special_notes = JSON.stringify(extra);
   return payload;
 };
@@ -749,6 +786,23 @@ export const DataService = {
           const unpacked = data.map(unpackRegistration);
           if (admin) {
             safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(unpacked));
+          } else if (unpacked.length > 0) {
+            try {
+              const currentCached = readCachedRegistrations();
+              const map = new Map();
+              currentCached.forEach(item => {
+                const key = item.id || item.user_id || item.user_email;
+                if (key) map.set(key, item);
+              });
+              unpacked.forEach(freshItem => {
+                const key = freshItem.id || freshItem.user_id || freshItem.user_email;
+                if (key) map.set(key, freshItem);
+                if (freshItem.id) map.set(freshItem.id, freshItem);
+                if (freshItem.user_id) map.set(freshItem.user_id, freshItem);
+                if (freshItem.user_email) map.set(freshItem.user_email.toLowerCase(), freshItem);
+              });
+              safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(Array.from(map.values())));
+            } catch (e) {}
           }
           return unpacked;
         }
@@ -782,7 +836,22 @@ export const DataService = {
         }
         const { data, error } = await query.order('created_at', { ascending: false });
         if (!error && data && data.length > 0) {
-          return unpackRegistration(data[0]);
+          const fresh = unpackRegistration(data[0]);
+          try {
+            const currentCached = readCachedRegistrations();
+            const map = new Map();
+            currentCached.forEach(item => {
+              const key = item.id || item.user_id || item.user_email;
+              if (key) map.set(key, item);
+            });
+            const key = fresh.id || fresh.user_id || fresh.user_email;
+            if (key) map.set(key, fresh);
+            if (fresh.id) map.set(fresh.id, fresh);
+            if (fresh.user_id) map.set(fresh.user_id, fresh);
+            if (fresh.user_email) map.set(fresh.user_email.toLowerCase(), fresh);
+            safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(Array.from(map.values())));
+          } catch (e) {}
+          return fresh;
         }
       } catch (e) {
         console.warn('getRegistrationByUserId Supabase query failed:', e);
@@ -879,20 +948,24 @@ export const DataService = {
   async updateRegistrationDetails(userId, fields) {
     if (!userId) return false;
 
-    // 1. Read from local cache for instant zero-latency lookup
+    // 1. Prioritize reading fresh record from Supabase first so stale local cache
+    // never overwrites newer database values (e.g. edited Thai names)
     const regs = readCachedRegistrations();
+    let target = null;
 
-    let target = regs.find(r => 
-      r.user_id === userId || 
-      r.id === userId || 
-      (r.user_email && r.user_email.toLowerCase() === String(userId).toLowerCase())
-    );
-
-    if (!target && isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase) {
       try {
         const fetched = await this.getRegistrationByUserId(userId, fields?.user_email || null);
         if (fetched) target = fetched;
       } catch (e) {}
+    }
+
+    if (!target) {
+      target = regs.find(r => 
+        r.user_id === userId || 
+        r.id === userId || 
+        (r.user_email && r.user_email.toLowerCase() === String(userId).toLowerCase())
+      );
     }
 
     const targetUserId = target?.user_id || userId;
@@ -900,52 +973,47 @@ export const DataService = {
     const targetEmail = (target?.user_email || fields?.user_email || '').trim().toLowerCase();
     const isAdminContext = hasClientAdminPrivilege();
 
-    let matchedInCache = false;
-    const updated = regs.map(r => {
-      if (
-        r.user_id === targetUserId || 
-        (targetId && r.id === targetId) || 
-        r.user_id === userId || 
-        r.id === userId ||
-        (target?.user_email && r.user_email && r.user_email.toLowerCase() === target.user_email.toLowerCase())
-      ) {
-        matchedInCache = true;
-        return { ...r, ...fields, updated_at: new Date().toISOString() };
-      }
-      return r;
-    });
+    const merged = { ...(target || {}), ...fields, updated_at: new Date().toISOString() };
 
-    if (!matchedInCache && target) {
-      updated.unshift({ ...target, ...fields, updated_at: new Date().toISOString() });
-    }
-
-    // 2. Persist to Supabase first. The database/RLS/trigger is authoritative;
-    // do not make the UI look successful when a tampered or unauthorized write
-    // was rejected or matched zero rows.
+    // 2. Persist to Supabase first. Primary key 'id' is authoritative.
     if (isSupabaseConfigured && supabase) {
-      const merged = { ...(target || {}), ...fields };
       const payload = packRegistrationForSupabase(merged);
       const { id: _ignoreId, created_at: _ignoreCreatedAt, ...updateColumns } = payload;
 
       let resultData = null;
       let resultError = null;
 
-      if (targetUserId) {
-        const res = await supabase.from('registrations').update(updateColumns).eq('user_id', targetUserId).select('id');
-        resultData = res.data;
-        resultError = res.error;
-      }
-
-      if ((!resultData || resultData.length === 0) && !resultError && targetId) {
+      // Try update by primary key 'id' first
+      if (targetId) {
         const res = await supabase.from('registrations').update(updateColumns).eq('id', targetId).select('id');
-        resultData = res.data;
-        resultError = res.error;
+        if (!res.error && res.data && res.data.length > 0) {
+          resultData = res.data;
+          resultError = null;
+        } else if (res.error) {
+          resultError = res.error;
+        }
       }
 
-      if ((!resultData || resultData.length === 0) && !resultError && targetEmail) {
+      // Fallback: update by 'user_id'
+      if ((!resultData || resultData.length === 0) && targetUserId) {
+        const res = await supabase.from('registrations').update(updateColumns).eq('user_id', targetUserId).select('id');
+        if (!res.error && res.data && res.data.length > 0) {
+          resultData = res.data;
+          resultError = null;
+        } else if (res.error && !resultError) {
+          resultError = res.error;
+        }
+      }
+
+      // Fallback: update by 'user_email'
+      if ((!resultData || resultData.length === 0) && targetEmail) {
         const res = await supabase.from('registrations').update(updateColumns).eq('user_email', targetEmail).select('id');
-        resultData = res.data;
-        resultError = res.error;
+        if (!res.error && res.data && res.data.length > 0) {
+          resultData = res.data;
+          resultError = null;
+        } else if (res.error && !resultError) {
+          resultError = res.error;
+        }
       }
 
       if ((!resultData || resultData.length === 0) && isAdminContext && payload.user_id) {
@@ -968,8 +1036,26 @@ export const DataService = {
       }
     }
 
-    // 3. Keep the local cache consistent only after the server accepted the write.
-    // When Supabase is not configured, localStorage remains the intentional fallback.
+    // 3. Keep local cache updated with the newly merged record
+    let matchedInCache = false;
+    const updated = regs.map(r => {
+      if (
+        r.user_id === targetUserId || 
+        (targetId && r.id === targetId) || 
+        r.user_id === userId || 
+        r.id === userId ||
+        (targetEmail && r.user_email && r.user_email.toLowerCase() === targetEmail)
+      ) {
+        matchedInCache = true;
+        return merged;
+      }
+      return r;
+    });
+
+    if (!matchedInCache) {
+      updated.unshift(merged);
+    }
+
     safeSetLocalStorage(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     broadcastRealtimeChange('registrations', { action: 'update', userId: targetUserId || userId });
     return true;

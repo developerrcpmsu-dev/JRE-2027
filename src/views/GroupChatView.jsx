@@ -438,7 +438,7 @@ export default function GroupChatView({ user, myRegistration, onOpenGoogleLogin 
         </a>
       </div>
 
-      <section className="h-[calc(100dvh-260px)] min-h-[500px] max-h-[850px] flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl">
+      <section className="h-[calc(100dvh-220px)] min-h-[380px] sm:min-h-[440px] max-h-[850px] flex flex-col overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl">
       <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-800 bg-slate-950/70">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg"><MessageCircle className="w-5 h-5 text-white" /></div>

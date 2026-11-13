@@ -46,6 +46,7 @@ import {
   isStaffRegistration,
   isMsuInstitution,
   getStaffPaymentSummary,
+  getRegistrationPaymentResolution,
   STAFF_SHIRT_FEE,
   OFFICIAL_NETWORK_INSTITUTIONS,
   OFFICIAL_8_COMMITTEE_ROSTER,
@@ -120,57 +121,22 @@ function classifyFoodPreference(rawAllergy, rawNotes) {
 }
 
 function computeApplicantFinance(reg, paymentConfig) {
-  const isStaff = isStaffRegistration(reg);
-  const isMsu = isMsuInstitution(reg.institution || reg.affiliation || reg);
-  const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
-
-  const totalFee = isStaff
-    ? staffSum.totalStaffFee
-    : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
-  const round1Fee = isMsu ? (paymentConfig?.installment_round1_amount_msu || 400) : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
-  const round2Fee = isMsu ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-
-  let collected = 0;
-  let isFullyPaid = false;
-
-  if (isStaff) {
-    if (staffSum.totalStaffFee === 0) {
-      collected = 0;
-      isFullyPaid = true;
-    } else if (staffSum.isMsu) {
-      const paid = reg.payment_status === 'paid' || reg.installment_1_status === 'paid' || staffSum.r1SlipAmount >= STAFF_SHIRT_FEE;
-      collected = paid ? STAFF_SHIRT_FEE : 0;
-      isFullyPaid = paid;
-    } else {
-      const shirtPaid = (reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || staffSum.r1SlipAmount >= STAFF_SHIRT_FEE) ? STAFF_SHIRT_FEE : 0;
-      collected = Math.min(totalFee, shirtPaid + staffSum.accommodationPaidTotal);
-      isFullyPaid = shirtPaid >= STAFF_SHIRT_FEE && staffSum.isAccommodationPaid;
-    }
-  } else {
-    const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
-    const r1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
-    const r2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url || reg.admin_manual_override);
-    if (!isInstallment && (reg.payment_status === 'paid' || reg.payment_status === 'verified')) {
-      collected = totalFee;
-      isFullyPaid = true;
-    } else if (isInstallment) {
-      if (r1Paid) collected += round1Fee;
-      if (r2Paid) collected += round2Fee;
-      if (r1Paid && r2Paid) {
-        collected = totalFee;
-        isFullyPaid = true;
-      }
-    }
-  }
-
-  const outstanding = Math.max(0, totalFee - collected);
-  const overpaidRefund = isStaff ? (staffSum?.overpaidAmount || 0) : 0;
+  const res = getRegistrationPaymentResolution(reg, paymentConfig);
+  const overpaidRefund = res.isStaff ? (res.staffSummary?.overpaidAmount || 0) : 0;
 
   return {
-    totalFee,
-    collected,
-    outstanding,
-    isFullyPaid,
+    totalFee: res.effectiveTotalFee,
+    baseTotalFee: res.baseTotalFee,
+    collected: res.collectedAmount,
+    outstanding: res.activeOutstandingAmount,
+    deferredAmount: res.deferredPostProjectAmount,
+    waivedAmount: res.waivedRound2Amount,
+    isFullyPaid: res.isFullyPaid,
+    isSettledOrClosed: res.isSettledOrClosed,
+    isRound2CancelledAbsent: res.isRound2CancelledAbsent,
+    isDeferredPostProject: res.isDeferredPostProject,
+    deferredNote: res.deferredNote,
+    cancelledNote: res.cancelledNote,
     overpaidRefund
   };
 }
@@ -667,6 +633,11 @@ export default function AdminExecutiveSummaryView({
       expectedFeeTotal: 0,
       collectedFeeTotal: 0,
       outstandingFeeTotal: 0,
+      deferredFeeTotal: 0,
+      deferredPeople: [],
+      deferredSettledPeople: [],
+      waivedFeeTotal: 0,
+      waivedPeople: [],
       fullyPaidCount: 0,
       overpaidRefundTotal: 0,
       // Shirts
@@ -700,6 +671,34 @@ export default function AdminExecutiveSummaryView({
       stats.outstandingFeeTotal += finInfo.outstanding;
       if (finInfo.isFullyPaid) stats.fullyPaidCount++;
       stats.overpaidRefundTotal += finInfo.overpaidRefund;
+      if (finInfo.isRound2CancelledAbsent) {
+        stats.waivedFeeTotal += finInfo.waivedAmount;
+        stats.waivedPeople.push({
+          fullName: item.fullName,
+          shortTag: uniInfo.shortTag,
+          amount: finInfo.waivedAmount,
+          collected: finInfo.collected,
+          note: finInfo.cancelledNote
+        });
+      } else if (finInfo.isDeferredPostProject) {
+        if (finInfo.deferredAmount > 0) {
+          stats.deferredFeeTotal += finInfo.deferredAmount;
+          stats.deferredPeople.push({
+            fullName: item.fullName,
+            shortTag: uniInfo.shortTag,
+            amount: finInfo.deferredAmount,
+            collected: finInfo.collected,
+            note: finInfo.deferredNote
+          });
+        } else {
+          stats.deferredSettledPeople.push({
+            fullName: item.fullName,
+            shortTag: uniInfo.shortTag,
+            collected: finInfo.collected,
+            note: finInfo.deferredNote
+          });
+        }
+      }
 
       // Shirts
       if (reg.shirt_size && reg.shirt_size !== '-') {
@@ -1372,7 +1371,31 @@ export default function AdminExecutiveSummaryView({
       `────────────────────`,
       `💰 6. สรุปยอดการเงิน:`,
       `• รับเงินจริงแล้ว: ฿${s.collectedFeeTotal.toLocaleString()} / ฿${s.expectedFeeTotal.toLocaleString()}`,
-      `• ยอดค้างชำระ: ฿${s.outstandingFeeTotal.toLocaleString()}`,
+      `• ยอดค้างชำระ (รอทวงก่อนงาน): ฿${s.outstandingFeeTotal.toLocaleString()}`,
+      ...(s.deferredPeople.length > 0
+        ? [
+            `• 🕒 ไม่เข้าร่วมอบรม แต่ยืนยันจ่ายย้อนหลังหลังจบโครงการ (${s.deferredPeople.length} คน • รอรับ ฿${s.deferredFeeTotal.toLocaleString()}):`,
+            ...s.deferredPeople.map(
+              (p) => `  - ${p.fullName} (${p.shortTag}): จ่ายแล้ว ฿${p.collected} / รอจ่ายหลังจบโครงการ ฿${p.amount} [หมายเหตุ: ${p.note}]`
+            )
+          ]
+        : []),
+      ...(s.deferredSettledPeople.length > 0
+        ? [
+            `• ✅ ชำระย้อนหลังหลังจบโครงการครบแล้ว (${s.deferredSettledPeople.length} คน):`,
+            ...s.deferredSettledPeople.map(
+              (p) => `  - ${p.fullName} (${p.shortTag}): ครบ ฿${p.collected} [หมายเหตุ: ${p.note}]`
+            )
+          ]
+        : []),
+      ...(s.waivedPeople.length > 0
+        ? [
+            `• 🚫 ไม่เข้าร่วมอบรม • ยกเลิกการจ่ายรอบ 2 แล้ว (${s.waivedPeople.length} คน • ตัดจบยอด ฿${s.waivedFeeTotal.toLocaleString()}):`,
+            ...s.waivedPeople.map(
+              (p) => `  - ${p.fullName} (${p.shortTag}): ชำระแล้ว ฿${p.collected} • ยกเลิกรอบ 2 (฿${p.amount}) [หมายเหตุ: ${p.note}]`
+            )
+          ]
+        : []),
       `────────────────────`,
       `🏛️ แยกตามมหาวิทยาลัย:`
     ];
@@ -1396,8 +1419,8 @@ export default function AdminExecutiveSummaryView({
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* HERO HEADER */}
       <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-emerald-950/70 via-slate-900 to-indigo-950/70 border-2 border-emerald-500/50 shadow-2xl space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div className="flex-1 min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 rounded-full bg-emerald-500 text-slate-950 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow">
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1408,14 +1431,14 @@ export default function AdminExecutiveSummaryView({
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white">
-              📊 สรุปยอดทั้งหมดของโครงการ & ระบบยืนยันการเข้าร่วมกิจกรรมจริง
+              📊 สรุปยอดทั้งหมดของโครงการ &amp; ระบบยืนยันการเข้าร่วมกิจกรรมจริง
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-4xl">
               ศูนย์รวมข้อมูลสรุปยอดผู้สมัครทุกมหาวิทยาลัย • สำรวจยืนยันผู้เดินทางมาเข้าร่วมจริง (มาชัวร์ / รอยืนยัน / สละสิทธิ์) • เพื่อคำนวณ <strong>จำนวนอาหารแต่ละมื้อ (แยกปกติ/ฮาลาล/แพ้อาหาร)</strong> และ <strong>จำนวนห้องพักหอพัก (แยกชาย-หญิง)</strong> ให้พอดีกับจำนวนคนจริง
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Add Person Modal Button (Dev / Admin) */}
             <button
               type="button"
@@ -2101,7 +2124,9 @@ export default function AdminExecutiveSummaryView({
 
           <div className="space-y-2 pt-2 border-t border-slate-800">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-emerald-400 font-bold">จัดเลขห้องแล้ว: {activeStats.roomAssignedCount}/{activeStats.expectedNeedAccom} คน (ครบ 100%)</span>
+              <span className={`font-bold ${activeStats.roomAssignedCount >= activeStats.expectedNeedAccom ? 'text-emerald-400' : 'text-amber-300'}`}>
+                จัดเลขห้องแล้ว: {activeStats.roomAssignedCount}/{activeStats.expectedNeedAccom} คน ({activeStats.expectedNeedAccom > 0 ? Math.min(100, Math.round((activeStats.roomAssignedCount / activeStats.expectedNeedAccom) * 100)) : 100}%)
+              </span>
               <span className="text-slate-400 font-bold">🏠 มมส {activeStats.noAccomCount} คน ไม่พักหอ</span>
             </div>
 
@@ -2129,15 +2154,55 @@ export default function AdminExecutiveSummaryView({
               <CreditCard className="w-5 h-5 text-purple-400" />
             </div>
 
-            <div className="pt-1">
+            <div className="pt-1 space-y-1.5">
               <p className="text-xs text-slate-400 font-bold">ยอดเงินรับจริงแล้ว (ผู้สมัคร + Staff)</p>
               <p className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
                 ฿{activeStats.collectedFeeTotal.toLocaleString()}
               </p>
               <p className="text-[11px] text-slate-400">
-                จากยอดเต็ม ฿{activeStats.expectedFeeTotal.toLocaleString()} • ค้างรับ{' '}
+                จากยอดสุทธิที่ต้องรับ ฿{activeStats.expectedFeeTotal.toLocaleString()} • ค้างรับ (ก่อนงาน){' '}
                 <strong className="text-rose-400">฿{activeStats.outstandingFeeTotal.toLocaleString()}</strong>
               </p>
+
+              {(activeStats.deferredPeople.length > 0 || activeStats.waivedPeople.length > 0 || activeStats.deferredSettledPeople.length > 0) && (
+                <div className="mt-2 p-2.5 rounded-xl bg-slate-950/90 border border-indigo-500/30 space-y-1.5 text-[11px]">
+                  {activeStats.deferredPeople.length > 0 && (
+                    <div>
+                      <div className="font-bold text-sky-300 flex items-center justify-between">
+                        <span>🕒 ยืนยันจ่ายย้อนหลังหลังจบโครงการ ({activeStats.deferredPeople.length} คน):</span>
+                        <span className="font-mono text-sky-200">฿{activeStats.deferredFeeTotal.toLocaleString()}</span>
+                      </div>
+                      <ul className="mt-1 space-y-0.5 text-[10px] text-slate-300">
+                        {activeStats.deferredPeople.map((p, idx) => (
+                          <li key={idx} className="leading-snug">
+                            • <strong className="text-white">{p.fullName}</strong> ({p.shortTag}) ค้างหลังงาน <span className="text-sky-300 font-bold">฿{p.amount}</span> — <span className="text-amber-300">หมายเหตุ: {p.note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {activeStats.deferredSettledPeople.length > 0 && (
+                    <div className="text-[10px] text-emerald-300">
+                      ✅ จ่ายย้อนหลังหลังจบโครงการครบแล้ว {activeStats.deferredSettledPeople.length} คน: {activeStats.deferredSettledPeople.map(p => p.fullName).join(', ')}
+                    </div>
+                  )}
+                  {activeStats.waivedPeople.length > 0 && (
+                    <div className="pt-1 border-t border-slate-800/80">
+                      <div className="font-bold text-slate-300 flex items-center justify-between">
+                        <span>🚫 ไม่เข้าอบรม • ยกเลิกรอบ 2 ({activeStats.waivedPeople.length} คน):</span>
+                        <span className="font-mono text-slate-400">ตัดจบ ฿{activeStats.waivedFeeTotal.toLocaleString()}</span>
+                      </div>
+                      <ul className="mt-1 space-y-0.5 text-[10px] text-slate-400">
+                        {activeStats.waivedPeople.map((p, idx) => (
+                          <li key={idx} className="leading-snug">
+                            • {p.fullName} ({p.shortTag}) จ่ายแล้ว ฿{p.collected} • {p.note}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-3 rounded-2xl bg-slate-950/90 border border-amber-500/30 space-y-2">
@@ -3014,9 +3079,34 @@ export default function AdminExecutiveSummaryView({
                       {/* Finance */}
                       <td className="py-3 px-2 text-center font-mono whitespace-nowrap">
                         {finInfo.isFullyPaid ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                            ✓ ครบ ฿{finInfo.collected}
-                          </span>
+                          <div>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                              ✓ ครบ ฿{finInfo.collected}
+                            </span>
+                            {finInfo.isDeferredPostProject && (
+                              <span className="block text-[9px] text-sky-300 mt-0.5" title={finInfo.deferredNote}>
+                                (จ่ายหลังจบโครงการ)
+                              </span>
+                            )}
+                          </div>
+                        ) : finInfo.isRound2CancelledAbsent ? (
+                          <div title={finInfo.cancelledNote}>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-600 text-[10px] font-bold">
+                              🚫 ยกเลิกรอบ 2
+                            </span>
+                            <span className="block text-[9px] text-emerald-300 mt-0.5">
+                              รับ ฿{finInfo.collected} (ตัดจบ ฿0)
+                            </span>
+                          </div>
+                        ) : finInfo.isDeferredPostProject ? (
+                          <div title={finInfo.deferredNote}>
+                            <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold">
+                              🕒 จ่ายหลังจบงาน
+                            </span>
+                            <span className="block text-[9px] text-amber-300 mt-0.5">
+                              รับ ฿{finInfo.collected} • รอ ฿{finInfo.deferredAmount}
+                            </span>
+                          </div>
                         ) : (
                           <div>
                             <span className="text-amber-300 font-bold text-[11px]">รับ ฿{finInfo.collected}</span>

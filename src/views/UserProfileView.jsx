@@ -28,10 +28,20 @@ import {
   PackageCheck,
   Eye,
   GraduationCap,
+  Upload,
+  Loader2,
   X
 } from 'lucide-react';
 import { DataService, subscribeToRealtimeChanges } from '../supabase';
 import { resolveUserExtraDetails } from '../utils/userUtils';
+import { scanSlipImage } from '../utils/slipOcr';
+import {
+  getStaffPaymentSummary,
+  isStaffRegistration,
+  isMsuInstitution,
+  STAFF_SHIRT_FEE,
+  STAFF_ACCOMMODATION_FEE
+} from '../data/defaultData';
 
 export default function UserProfileView({
   userUid,
@@ -43,12 +53,15 @@ export default function UserProfileView({
   onOpenAdminLogin,
   onNavigateHome,
   onNavigateAdmin,
-  onNavigateRegister
+  onNavigateRegister,
+  onUpdateRegistration,
+  triggerToast
 }) {
   const [userAccount, setUserAccount] = useState(null);
   const [userReg, setUserReg] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -187,6 +200,109 @@ export default function UserProfileView({
     setCopiedUid(true);
     showToast(`คัดลอก UID สำเร็จ: ${userAccount.id}`);
     setTimeout(() => setCopiedUid(false), 2500);
+  };
+
+  const handleUploadRemainingSlip = async (e, regTarget, expectedAmount, isInstallmentRound2 = true) => {
+    const file = e.target.files?.[0];
+    if (!file || !regTarget) return;
+    setIsUploadingSlip(true);
+    try {
+      const uploadResult = await DataService.uploadFile(file, 'slips');
+      if (!uploadResult?.url) throw new Error('อัปโหลดสลิปไม่สำเร็จ');
+
+      const staffSum = getStaffPaymentSummary(regTarget);
+      const rawOcr = await scanSlipImage(file, expectedAmount).catch(() => null);
+      const evaluated = rawOcr ? { ...rawOcr } : null;
+      if (evaluated) {
+        const numExpected = Number(expectedAmount);
+        evaluated.expectedAmount = numExpected;
+        if (evaluated.amount && numExpected) {
+          evaluated.matchExpected = Math.abs(Number(evaluated.amount) - numExpected) < 1;
+        }
+        const otherRef = isInstallmentRound2
+          ? (regTarget.slip_ocr_round1?.transRef || regTarget.slip_ocr_full?.transRef || null)
+          : null;
+        if (evaluated.transRef && otherRef && evaluated.transRef.toLowerCase() === otherRef.toLowerCase()) {
+          evaluated.isDuplicate = true;
+          evaluated.duplicateMessage = 'รหัสอ้างอิงตรงกับสลิปรอบก่อนหน้า (ไม่สามารถใช้สลิปซ้ำได้)';
+          evaluated.status = 'duplicate';
+        } else if (evaluated.transRef) {
+          const dupCheck = await DataService.checkSlipDuplicate(evaluated.transRef, regTarget.user_id);
+          if (dupCheck.isDuplicate) {
+            evaluated.isDuplicate = true;
+            evaluated.duplicateMessage = dupCheck.message;
+            evaluated.status = 'duplicate';
+          }
+        }
+        evaluated.isFullyVerified = Boolean(evaluated.isDetected && evaluated.matchExpected === true && !evaluated.isDuplicate);
+      }
+
+      const verified = Boolean(evaluated?.isFullyVerified);
+      const newStatus = verified ? 'paid' : 'pending_review';
+      const updatePayload = isInstallmentRound2
+        ? {
+            payment_plan: (staffSum.isStaff && verified) ? 'full' : 'installment',
+            installment_2_slip_url: uploadResult.url,
+            installment_2_slip_date: new Date().toISOString(),
+            installment_2_status: newStatus,
+            installment_2_amount: expectedAmount,
+            slip_ocr_round2: evaluated,
+            ...(verified ? {
+              payment_status: 'paid',
+              payment_amount: 0,
+              ...(staffSum.isStaff ? { staff_accommodation_paid: true } : {}),
+              ...(Array.isArray(regTarget.admin_messages) ? {
+                admin_messages: regTarget.admin_messages.map(m =>
+                  (m?.request_payment || ['staff_accommodation', 'round_2_payment', 'urgent_round2_deadline'].includes(m?.msg_type))
+                    ? { ...m, payment_status: 'paid', read: true }
+                    : m
+                )
+              } : {})
+            } : { payment_status: 'pending_review' })
+          }
+        : {
+            payment_plan: 'full',
+            payment_slip_url: uploadResult.url,
+            payment_slip_date: new Date().toISOString(),
+            payment_status: newStatus,
+            payment_amount: verified ? 0 : expectedAmount,
+            slip_ocr_full: evaluated
+          };
+
+      if (onUpdateRegistration) {
+        await onUpdateRegistration(regTarget.user_id, updatePayload);
+      } else {
+        await DataService.updateRegistrationDetails(regTarget.user_id, updatePayload);
+      }
+      setUserReg(prev => prev ? { ...prev, ...updatePayload } : prev);
+
+      if (evaluated?.transRef) {
+        DataService.recordSubmittedSlip({
+          transRef: evaluated.transRef,
+          userId: regTarget.user_id,
+          userName: regTarget.full_name_affiliation || `${regTarget.first_name} ${regTarget.last_name}`,
+          amount: evaluated.amount,
+          bank: evaluated.bankDetected,
+          date: evaluated.transferDate,
+          time: evaluated.transferTime
+        });
+      }
+
+      const notify = triggerToast || showToast;
+      if (verified) {
+        notify(`✓ สลิปยอด ${expectedAmount} บาท ถูกต้องสมบูรณ์ ระบบอัปเดตสถานะชำระครบถ้วนอัตโนมัติเรียบร้อย!`, 'success');
+      } else if (evaluated?.isDuplicate) {
+        notify(`🚨 ${evaluated.duplicateMessage} (รอเจ้าหน้าที่ตรวจสอบ)`, 'error');
+      } else {
+        notify(`อัปโหลดสลิป ${expectedAmount} บาท เรียบร้อย (รอเจ้าหน้าที่ตรวจสอบยืนยัน)`, 'warning');
+      }
+    } catch (err) {
+      console.error(err);
+      (triggerToast || showToast)('เกิดข้อผิดพลาดในการอัปโหลดสลิป', 'error');
+    } finally {
+      setIsUploadingSlip(false);
+      e.target.value = '';
+    }
   };
 
   if (loading) {
@@ -594,7 +710,12 @@ export default function UserProfileView({
                     </span>
                   </div>
                   <div className="text-sm font-mono font-bold text-white">
-                    ยอดเงิน: {regInfo.installment_2_amount || 250} บาท
+                    ยอดเงิน: {(() => {
+                      const s = isStaffRegistration(regInfo) ? getStaffPaymentSummary(regInfo) : null;
+                      return s && !s.isMsu
+                        ? (s.accommodationRemaining > 0 ? s.accommodationRemaining : (s.accommodationNetRequiredAfterOffset || regInfo.installment_2_amount || STAFF_ACCOMMODATION_FEE))
+                        : (regInfo.installment_2_amount || (isMsuInstitution(regInfo.institution) ? 250 : 450));
+                    })()} บาท
                   </div>
                   {regInfo.installment_2_slip_url ? (
                     <button
@@ -608,26 +729,79 @@ export default function UserProfileView({
                   ) : (
                     <div className="text-[11px] text-slate-500 italic">กำหนดชำระช่วงวันที่ 1-5 พฤศจิกายน 2569</div>
                   )}
+                  {(() => {
+                    const isOwner = Boolean(
+                      currentUser &&
+                      (currentUser.id === regInfo.user_id ||
+                        currentUser.id === regInfo.id ||
+                        (currentUser.email && regInfo.user_email && currentUser.email.toLowerCase() === regInfo.user_email.toLowerCase()))
+                    );
+                    const s = isStaffRegistration(regInfo) ? getStaffPaymentSummary(regInfo) : null;
+                    const owedAmt = s && !s.isMsu
+                      ? (s.accommodationRemaining > 0 ? s.accommodationRemaining : 0)
+                      : (regInfo.installment_2_status !== 'paid' ? (Number(regInfo.installment_2_amount) || (isMsuInstitution(regInfo.institution) ? 250 : 450)) : 0);
+                    if (!owedAmt || (!isOwner && !isAdmin)) return null;
+                    return (
+                      <label className={`mt-2 w-full px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        <span>📤 ส่งสลิปยอดค้าง {owedAmt} บาท (ตรวจอัตโนมัติ)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadRemainingSlip(e, regInfo, owedAmt, true)}
+                          className="hidden"
+                        />
+                      </label>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (
-              <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-xs text-slate-400">ยอดชำระเต็มจำนวน</div>
                   <div className="text-sm font-mono font-bold text-white mt-0.5">
                     {regInfo.payment_amount !== undefined ? regInfo.payment_amount : 650} บาท
                   </div>
                 </div>
-                {regInfo.payment_slip_url && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewImage(regInfo.payment_slip_url)}
-                    className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>ดูรูปสลิปโอนเงิน</span>
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {regInfo.payment_slip_url && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage(regInfo.payment_slip_url)}
+                      className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>ดูรูปสลิปโอนเงิน</span>
+                    </button>
+                  )}
+                  {(() => {
+                    const isOwner = Boolean(
+                      currentUser &&
+                      (currentUser.id === regInfo.user_id ||
+                        currentUser.id === regInfo.id ||
+                        (currentUser.email && regInfo.user_email && currentUser.email.toLowerCase() === regInfo.user_email.toLowerCase()))
+                    );
+                    if (regInfo.payment_status === 'paid' || (!isOwner && !isAdmin)) return null;
+                    const expectedAmt = Number(regInfo.payment_amount) > 0
+                      ? Number(regInfo.payment_amount)
+                      : (isStaffRegistration(regInfo)
+                          ? (getStaffPaymentSummary(regInfo).accommodationRemaining || STAFF_SHIRT_FEE)
+                          : (isMsuInstitution(regInfo.institution) ? 650 : 850));
+                    return (
+                      <label className={`px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-lg text-xs shadow cursor-pointer flex items-center gap-1.5 transition-all ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        <span>📤 ส่งสลิปยอดค้าง {expectedAmt} บ.</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadRemainingSlip(e, regInfo, expectedAmt, false)}
+                          className="hidden"
+                        />
+                      </label>
+                    );
+                  })()}
+                </div>
               </div>
             )}
           </div>

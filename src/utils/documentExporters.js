@@ -60,11 +60,11 @@ export async function exportElementToPng(elementOrId, filename = 'document.png')
 /**
  * Helper to style an ExcelJS worksheet with standard formal header and borders
  */
-function setupWorksheetHeader(sheet, mainTitle, subTitle, dateVenue) {
+function setupWorksheetHeader(sheet, mainTitle, subTitle, dateVenue, lastColLetter = 'I') {
   sheet.views = [{ showGridLines: true }];
 
   // Row 1: Main Title
-  sheet.mergeCells('A1:I1');
+  sheet.mergeCells(`A1:${lastColLetter}1`);
   const r1 = sheet.getCell('A1');
   r1.value = mainTitle;
   r1.font = { name: 'TH Sarabun New', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -73,7 +73,7 @@ function setupWorksheetHeader(sheet, mainTitle, subTitle, dateVenue) {
   sheet.getRow(1).height = 32;
 
   // Row 2: Subtitle
-  sheet.mergeCells('A2:I2');
+  sheet.mergeCells(`A2:${lastColLetter}2`);
   const r2 = sheet.getCell('A2');
   r2.value = subTitle;
   r2.font = { name: 'TH Sarabun New', size: 13, bold: true, color: { argb: 'FF0F172A' } };
@@ -82,7 +82,7 @@ function setupWorksheetHeader(sheet, mainTitle, subTitle, dateVenue) {
   sheet.getRow(2).height = 24;
 
   // Row 3: Date & Venue
-  sheet.mergeCells('A3:I3');
+  sheet.mergeCells(`A3:${lastColLetter}3`);
   const r3 = sheet.getCell('A3');
   r3.value = dateVenue;
   r3.font = { name: 'TH Sarabun New', size: 11, italic: true, color: { argb: 'FF475569' } };
@@ -258,35 +258,50 @@ export async function exportShirtRosterToExcel(records, filename = '2_ใบร�
 }
 
 /**
- * 3. Export Dormitory Rooms Roster to Excel (Kut Rang Floor 1, Rooms 101-110)
+ * Format person health summary text for Staff-only sheets.
  */
-export async function exportDormitoryRosterToExcel(roomList, msuList = [], filename = '3_ใบรายชื่อเข้าห้องพัก_หอพักกุดรัง_JRE2027.xlsx') {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'JRE 2027 Admin Suite';
-  wb.created = new Date();
+function formatPersonMedicalSummary(p) {
+  if (!p) return '-';
+  const parts = [];
+  const hasMed = Boolean(p.hasMedicalHistory || p.hasMed);
+  const hasAlg = Boolean(p.hasFoodAllergy || p.hasAlg);
+  const medText = p.medicalHistory || p.medical;
+  const algText = p.foodAllergy || p.allergy;
 
-  const ws = wb.addWorksheet('ห้องพักกุดรัง 101-110', {
-    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
-  });
+  if (hasMed && medText && medText !== 'ไม่มี') {
+    parts.push(`โรค: ${medText}`);
+  }
+  if (hasAlg && algText && algText !== 'ไม่มี') {
+    parts.push(`แพ้: ${algText}`);
+  }
+  if (p.bloodGroup && p.bloodGroup !== '-') {
+    parts.push(`หมู่เลือด: ${p.bloodGroup}`);
+  }
+  return parts.length > 0 ? parts.join(' | ') : 'ปกติ (ไม่มีโรคประจำตัว / ไม่แพ้)';
+}
 
+/**
+ * Populate Worksheet: 3. Dormitory Sign-In Sheet (PDPA-Safe: NO health/medical data)
+ */
+function populateDormitorySignInSheet(ws, roomList, msuList = []) {
   setupWorksheetHeader(
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
-    'บัญชีลงทะเบียนเข้าห้องพักและรับกุญแจ หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (ชั้น 1 ห้อง 101 - 110)',
-    'ห้องพักชาย (101 - 107 • 14 คน) / ห้องพักหญิง (108 - 110 • 6 คน) • รวม 10 ห้อง 20 คน (ห้องละ 2 คน)'
+    'บัญชีลงลายมือชื่อเข้าห้องพักและรับกุญแจ หอพักกุดรัง มมส (ฉบับปิดข้อมูลสุขภาพ PDPA)',
+    'ชั้น 1 ห้อง 101 - 110 • ห้องพักชาย (101 - 107 • 14 คน) / ห้องพักหญิง (108 - 110 • 6 คน) • เอกสารสำหรับจุดลงทะเบียนรับกุญแจ',
+    'I'
   );
 
   const headers = [
-    { header: 'เลขห้อง', key: 'room', width: 14, align: 'center' },
-    { header: 'โซน/เพศ', key: 'gender', width: 12, align: 'center' },
-    { header: 'เตียง', key: 'bed', width: 8, align: 'center' },
-    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', key: 'name', width: 24, align: 'left' },
-    { header: 'ชื่อเล่น', key: 'nickname', width: 12, align: 'center' },
-    { header: 'นามเรียกขาน', key: 'callsign', width: 16, align: 'center' },
-    { header: 'เบอร์โทร', key: 'phone', width: 15, align: 'center' },
-    { header: 'ข้อมูลสุขภาพ / โรคประจำตัว / แพ้อาหาร', key: 'health', width: 32, align: 'left' },
-    { header: 'ลายมือชื่อรับกุญแจ (Check-in)', key: 'checkin', width: 22, align: 'center' },
-    { header: 'ลายมือชื่อคืนกุญแจ (Check-out)', key: 'checkout', width: 22, align: 'center' }
+    { header: 'เลขห้อง', width: 13, align: 'center' },
+    { header: 'โซน/เพศ', width: 12, align: 'center' },
+    { header: 'ลำดับ / เตียง', width: 12, align: 'center' },
+    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', width: 26, align: 'left' },
+    { header: 'ชื่อเล่น', width: 13, align: 'center' },
+    { header: 'นามเรียกขาน', width: 16, align: 'center' },
+    { header: 'เบอร์โทร', width: 15, align: 'center' },
+    { header: 'ลายมือชื่อรับกุญแจ (Check-in)', width: 24, align: 'center' },
+    { header: 'ลายมือชื่อคืนกุญแจ (Check-out)', width: 24, align: 'center' }
   ];
 
   const headerRow = ws.getRow(5);
@@ -314,31 +329,13 @@ export async function exportDormitoryRosterToExcel(roomList, msuList = [], filen
 
       row.getCell(1).value = `ห้อง ${rm.room}`;
       row.getCell(2).value = isMale ? 'ชาย 👨' : 'หญิง 👩';
-      row.getCell(3).value = `เตียง ${b + 1}`;
+      row.getCell(3).value = `คนที่ ${b + 1} (เตียง ${b + 1})`;
       row.getCell(4).value = p ? p.name : '(ว่าง)';
       row.getCell(5).value = p ? p.nickname : '-';
       row.getCell(6).value = p ? p.callsign : '-';
       row.getCell(7).value = p ? p.phone : '-';
-
-      let healthNote = 'ปกติ';
-      if (p) {
-        const parts = [];
-        const med = p.medical || p.medicalHistory;
-        const alg = p.allergy || p.foodAllergy;
-        if (med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim())) {
-          parts.push(`โรค: ${med}`);
-        }
-        if (alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim())) {
-          parts.push(`แพ้: ${alg}`);
-        }
-        if (p.bloodGroup && p.bloodGroup !== '-') {
-          parts.push(`(เลือด: ${p.bloodGroup})`);
-        }
-        if (parts.length > 0) healthNote = parts.join(' | ');
-      }
-      row.getCell(8).value = healthNote;
+      row.getCell(8).value = '';
       row.getCell(9).value = '';
-      row.getCell(10).value = '';
 
       headers.forEach((h, i) => {
         const cell = row.getCell(i + 1);
@@ -353,15 +350,146 @@ export async function exportDormitoryRosterToExcel(roomList, msuList = [], filen
     }
   });
 
-  // Appendix: MSU Going Home list
   if (msuList.length > 0) {
     currentRow++;
     ws.mergeCells(`A${currentRow}:I${currentRow}`);
     const noteCell = ws.getCell(`A${currentRow}`);
-    noteCell.value = `🏠 รายชื่อนิสิต / คณะกรรมการ มมส (16 คน) — เดินทางไป-กลับเอง ไม่พักหอพัก: ${msuList.map(m => m.name).join(', ')}`;
+    noteCell.value = `🏠 รายชื่อนิสิต / คณะกรรมการ มมส (${msuList.length} คน) — เดินทางไป-กลับเอง ไม่พักหอพัก: ${msuList.map(m => m.name).join(', ')}`;
     noteCell.font = { name: 'TH Sarabun New', size: 11, italic: true, color: { argb: 'FF64748B' } };
-    noteCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    noteCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   }
+}
+
+/**
+ * Populate Worksheet: 4. Staff Room Health, Medicine & Equipment Checklist (NO signature column)
+ */
+function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
+  setupWorksheetHeader(
+    ws,
+    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) — เอกสารเฉพาะ Staff',
+    'ใบตรวจสอบห้องพัก โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับฝ่ายพยาบาล/สวัสดิการเตรียมความพร้อม)',
+    'เรียงลำดับห้องที่มีผู้เฝ้าระวังสุขภาพไว้ห้องต้นๆ • ลำดับในห้อง: คนที่ 1 มีโรค/แพ้, คนที่ 2 ปกติช่วยดูแล • (ไม่ต้องลงลายมือชื่อ)',
+    'H'
+  );
+
+  const headers = [
+    { header: 'เลขห้อง', width: 12, align: 'center' },
+    { header: 'โซน/เพศ', width: 11, align: 'center' },
+    { header: 'ลำดับ', width: 10, align: 'center' },
+    { header: 'ชื่อ - นามสกุล (ชื่อเล่น / นามเรียกขาน / โทร)', width: 32, align: 'left' },
+    { header: 'โรคประจำตัว / อาการแพ้ / หมู่เลือด', width: 28, align: 'left' },
+    { header: 'ยาที่ต้องการ / เวชภัณฑ์', width: 26, align: 'left' },
+    { header: 'ของที่ต้องใช้ / การดูแลพิเศษ', width: 26, align: 'left' },
+    { header: 'เช็คเตรียมของ (Staff)', width: 22, align: 'center' }
+  ];
+
+  const headerRow = ws.getRow(5);
+  headers.forEach((h, i) => {
+    const colNumber = i + 1;
+    const cell = headerRow.getCell(colNumber);
+    cell.value = h.header;
+    cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBE123C' } }; // Rose 700
+    cell.border = thinBorder;
+    ws.getColumn(colNumber).width = h.width;
+  });
+  headerRow.height = 30;
+
+  let currentRow = 6;
+  roomList.forEach((rm) => {
+    const isMale = rm.gender === 'ชาย';
+    const occupants = rm.occupants || [];
+
+    for (let b = 0; b < 2; b++) {
+      const p = occupants[b];
+      const row = ws.getRow(currentRow);
+      const hasCare = Boolean(p && (p.needsBuddyCare || p.hasMedicalHistory || p.hasFoodAllergy || p.hasMed || p.hasAlg || p.medicalEquipmentNeeded || p.specialItemsNeeded));
+      const bg = hasCare ? 'FFFFF1F2' : (isMale ? 'FFF8FAFC' : 'FFFDF2F8');
+
+      row.getCell(1).value = `ห้อง ${rm.room}`;
+      row.getCell(2).value = isMale ? 'ชาย' : 'หญิง';
+      row.getCell(3).value = b === 0 ? '1 (เตียง 1)' : '2 (เตียง 2)';
+      row.getCell(4).value = p
+        ? `${p.name}${p.nickname && p.nickname !== '-' ? ` (${p.nickname})` : ''}\n${p.callsign} • โทร: ${p.phone}`
+        : '(ว่าง)';
+      row.getCell(5).value = p ? formatPersonMedicalSummary(p) : '-';
+      row.getCell(6).value = p?.medicalEquipmentNeeded || '-';
+      row.getCell(7).value = p?.specialItemsNeeded || (p?.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
+      row.getCell(8).value = p
+        ? (hasCare ? `☐ เตรียมแล้ว (${p.isHealthShared ? 'เมทเห็น' : 'เฉพาะ Staff'})` : '✓ ปกติ (ผู้ช่วยดูแล)')
+        : '-';
+
+      headers.forEach((h, i) => {
+        const cell = row.getCell(i + 1);
+        cell.font = {
+          name: 'TH Sarabun New',
+          size: 11,
+          bold: i === 0 || (hasCare && (i === 4 || i === 5 || i === 6)),
+          color: { argb: hasCare && i === 4 ? 'FF9F1239' : 'FF0F172A' }
+        };
+        cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.border = thinBorder;
+      });
+
+      row.height = 32;
+      currentRow++;
+    }
+  });
+
+  // Appendix: MSU participants who have health/medicine/item requirements
+  const msuNeedsCare = (msuList || []).filter(
+    p => p.hasMedicalHistory || p.hasFoodAllergy || p.hasMed || p.hasAlg || p.medicalEquipmentNeeded || p.specialItemsNeeded || p.isSpecialCare
+  );
+  if (msuNeedsCare.length > 0) {
+    currentRow++;
+    ws.mergeCells(`A${currentRow}:H${currentRow}`);
+    const titleCell = ws.getCell(`A${currentRow}`);
+    titleCell.value = `🏠 ข้อมูลโรคประจำตัว / ยา / ของที่ต้องใช้ ของผู้เข้าร่วม มมส (ไป-กลับ ไม่พักหอพัก — ${msuNeedsCare.length} ท่าน)`;
+    titleCell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FF92400E' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+    titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(currentRow).height = 24;
+    currentRow++;
+
+    msuNeedsCare.forEach((p, idx) => {
+      const row = ws.getRow(currentRow);
+      row.getCell(1).value = 'ไป-กลับ (มมส)';
+      row.getCell(2).value = p.gender || '-';
+      row.getCell(3).value = `มมส #${idx + 1}`;
+      row.getCell(4).value = `${p.name}${p.nickname && p.nickname !== '-' ? ` (${p.nickname})` : ''}\n${p.callsign} • โทร: ${p.phone}`;
+      row.getCell(5).value = formatPersonMedicalSummary(p);
+      row.getCell(6).value = p.medicalEquipmentNeeded || '-';
+      row.getCell(7).value = p.specialItemsNeeded || (p.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
+      row.getCell(8).value = '☐ เตรียมแล้ว (นอกหอ)';
+
+      headers.forEach((h, i) => {
+        const cell = row.getCell(i + 1);
+        cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 0 };
+        cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+        cell.border = thinBorder;
+      });
+      row.height = 32;
+      currentRow++;
+    });
+  }
+}
+
+/**
+ * 3. Export Dormitory Sign-in Roster to Excel (PDPA-safe: NO health info)
+ */
+export async function exportDormitoryRosterToExcel(roomList, msuList = [], filename = '3_ใบเซ็นชื่อเข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Admin Suite';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('เซ็นชื่อเข้าห้องพัก_ปิดสุขภาพ', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+
+  populateDormitorySignInSheet(ws, roomList, msuList);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -369,14 +497,33 @@ export async function exportDormitoryRosterToExcel(roomList, msuList = [], filen
 }
 
 /**
- * 4. Master 3-in-1 Excel Workbook (Contains all 3 official rosters in 1 file!)
+ * 4. Export Staff Room Medical & Supplies Checklist to Excel (NO signature column)
+ */
+export async function exportDormitoryStaffMedicalExcel(roomList, msuList = [], filename = '4_ใบเตรียมยา_ของใช้_โรคประจำตัวตามห้อง_Staff_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Admin Suite';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('ใบตรวจโรค_ยา_ของใช้_Staff', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+
+  populateDormitoryStaffMedicalSheet(ws, roomList, msuList);
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, filename);
+}
+
+/**
+ * 5. Master 4-in-1 Excel Workbook (Attendance, Shirts, Dorm Sign-in [PDPA-safe], Dorm Staff Health & Supplies)
  */
 export async function exportAllRostersToMasterExcel({
   attendanceRecords = [],
   shirtRecords = [],
   roomList = [],
   msuList = []
-}, filename = 'JRE2027_เอกสารใบเซ็นชื่อครบชุด_3in1_Master.xlsx') {
+}, filename = 'JRE2027_เอกสารใบรายชื่อครบชุด_4in1_Master.xlsx') {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'JRE 2027 Admin Suite';
   wb.created = new Date();
@@ -436,7 +583,8 @@ export async function exportAllRostersToMasterExcel({
     ws2,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงลายมือชื่อรับมอบเสื้อฝึกปฏิบัติการ JRE 2027 (ยอดผลิตรวม 32 ตัว)',
-    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว)'
+    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว)',
+    'J'
   );
   const h2 = [
     { header: 'ลำดับ', width: 8, align: 'center' },
@@ -481,80 +629,17 @@ export async function exportAllRostersToMasterExcel({
     row.height = 24;
   });
 
-  // Sheet 3: Dormitory
-  const ws3 = wb.addWorksheet('3_เข้าห้องพักกุดรัง_10ห้อง');
-  setupWorksheetHeader(
-    ws3,
-    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
-    'บัญชีลงทะเบียนเข้าห้องพักและรับกุญแจ หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (ชั้น 1 ห้อง 101 - 110)',
-    'ห้องพักชาย (101 - 107 • 14 คน) / ห้องพักหญิง (108 - 110 • 6 คน) • รวม 10 ห้อง 20 คน (ห้องละ 2 คน)'
-  );
-  const h3 = [
-    { header: 'เลขห้อง', width: 14, align: 'center' },
-    { header: 'โซน/เพศ', width: 12, align: 'center' },
-    { header: 'เตียง', width: 8, align: 'center' },
-    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', width: 24, align: 'left' },
-    { header: 'ชื่อเล่น', width: 12, align: 'center' },
-    { header: 'นามเรียกขาน', width: 16, align: 'center' },
-    { header: 'เบอร์โทร', width: 15, align: 'center' },
-    { header: 'ข้อมูลสุขภาพ / โรคประจำตัว / แพ้อาหาร', width: 32, align: 'left' },
-    { header: 'ลายมือชื่อรับกุญแจ', width: 22, align: 'center' },
-    { header: 'ลายมือชื่อคืนกุญแจ', width: 22, align: 'center' }
-  ];
-  const r3Head = ws3.getRow(5);
-  h3.forEach((h, i) => {
-    const cell = r3Head.getCell(i + 1);
-    cell.value = h.header;
-    cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
-    cell.border = thinBorder;
-    ws3.getColumn(i + 1).width = h.width;
+  // Sheet 3: Dormitory Sign-in (PDPA-Safe: NO health info)
+  const ws3 = wb.addWorksheet('3_เซ็นชื่อเข้าห้องพัก_ปิดสุขภาพ', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
-  let row3Index = 6;
-  roomList.forEach(rm => {
-    const isMale = rm.gender === 'ชาย';
-    const occ = rm.occupants || [];
-    for (let b = 0; b < 2; b++) {
-      const p = occ[b];
-      const row = ws3.getRow(row3Index);
-      row.getCell(1).value = `ห้อง ${rm.room}`;
-      row.getCell(2).value = isMale ? 'ชาย 👨' : 'หญิง 👩';
-      row.getCell(3).value = `เตียง ${b + 1}`;
-      row.getCell(4).value = p ? p.name : '(ว่าง)';
-      row.getCell(5).value = p ? p.nickname : '-';
-      row.getCell(6).value = p ? p.callsign : '-';
-      row.getCell(7).value = p ? p.phone : '-';
+  populateDormitorySignInSheet(ws3, roomList, msuList);
 
-      let healthNote = 'ปกติ';
-      if (p) {
-        const parts = [];
-        const med = p.medical || p.medicalHistory;
-        const alg = p.allergy || p.foodAllergy;
-        if (med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim())) {
-          parts.push(`โรค: ${med}`);
-        }
-        if (alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim())) {
-          parts.push(`แพ้: ${alg}`);
-        }
-        if (p.bloodGroup && p.bloodGroup !== '-') {
-          parts.push(`(เลือด: ${p.bloodGroup})`);
-        }
-        if (parts.length > 0) healthNote = parts.join(' | ');
-      }
-      row.getCell(8).value = healthNote;
-      row.getCell(9).value = '';
-      row.getCell(10).value = '';
-      h3.forEach((h, i) => {
-        const c = row.getCell(i + 1);
-        c.font = { name: 'TH Sarabun New', size: 11, bold: i === 0 };
-        c.alignment = { horizontal: h.align, vertical: 'middle' };
-        c.border = thinBorder;
-      });
-      row.height = 24;
-      row3Index++;
-    }
+  // Sheet 4: Staff Room Health, Medicine & Equipment Checklist (NO signature column)
+  const ws4 = wb.addWorksheet('4_ตรวจห้อง_โรค_ยา_ของใช้_Staff', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
+  populateDormitoryStaffMedicalSheet(ws4, roomList, msuList);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

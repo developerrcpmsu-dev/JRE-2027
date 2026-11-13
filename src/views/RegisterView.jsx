@@ -87,6 +87,7 @@ import {
   resolvePersonFullNameWithTitle,
   normalizeCallsignSpacing,
   isHealthSharedWithRoommate,
+  hasHealthCondition,
   getCleanSpecialNotes,
   getMedicalEquipmentNeeded,
   getParticipantPhoto,
@@ -1082,11 +1083,12 @@ export default function RegisterView({
     if (!ocrResult) return null;
     const evaluated = { ...ocrResult };
 
-    // 1. Amount match check (including automatic 280 THB Staff shirt fee detection)
+    // 1. Amount match check (including automatic 280 THB Staff shirt fee detection only when appropriate)
     const numExpected = Number(expectedAmount);
+    const allowStaffAutoDetect = !numExpected || Math.abs(numExpected - STAFF_SHIRT_FEE) < 1 || [400, 650, 850].includes(numExpected);
     const isStaffSlipAmount = Boolean(
-      evaluated.isStaffAmountDetected ||
-      (evaluated.amount && Math.abs(Number(evaluated.amount) - STAFF_SHIRT_FEE) < 1)
+      allowStaffAutoDetect &&
+      (evaluated.isStaffAmountDetected || (evaluated.amount && Math.abs(Number(evaluated.amount) - STAFF_SHIRT_FEE) < 1))
     );
 
     if (isStaffSlipAmount) {
@@ -2137,18 +2139,26 @@ export default function RegisterView({
         const newPaymentStatus = ocrInfo?.isFullyVerified ? 'paid' : 'pending_review';
         const autoStaff = Boolean(ocrInfo?.isStaffAmountDetected || regFee.isStaff);
 
-        await DataService.submitPaymentSlip(myRegistration.user_id, uploadResult.url, newPaymentStatus);
+        const updatePayload = {
+          payment_plan: 'full',
+          is_staff: autoStaff,
+          registration_type: autoStaff ? 'staff' : (myRegistration.registration_type || 'participant'),
+          payment_amount: newPaymentStatus === 'paid' ? 0 : (autoStaff ? STAFF_SHIRT_FEE : regFee.totalFee),
+          payment_slip_url: uploadResult.url,
+          payment_slip_date: new Date().toISOString(),
+          payment_status: newPaymentStatus,
+          slip_ocr_full: ocrInfo
+        };
+        if (newPaymentStatus === 'paid' && Array.isArray(myRegistration.admin_messages)) {
+          updatePayload.admin_messages = myRegistration.admin_messages.map(m =>
+            m?.request_payment ? { ...m, payment_status: 'paid', read: true } : m
+          );
+        }
+
         if (onUpdateRegistration) {
-          await onUpdateRegistration(myRegistration.user_id, {
-            payment_plan: 'full',
-            is_staff: autoStaff,
-            registration_type: autoStaff ? 'staff' : (myRegistration.registration_type || 'participant'),
-            payment_amount: autoStaff ? STAFF_SHIRT_FEE : regFee.totalFee,
-            payment_slip_url: uploadResult.url,
-            payment_slip_date: new Date().toISOString(),
-            payment_status: newPaymentStatus,
-            slip_ocr_full: ocrInfo
-          });
+          await onUpdateRegistration(myRegistration.user_id, updatePayload);
+        } else {
+          await DataService.updateRegistrationDetails(myRegistration.user_id, updatePayload);
         }
 
         if (ocrInfo?.transRef) {
@@ -2198,39 +2208,58 @@ export default function RegisterView({
         const regFee = getRegistrationFeeDetails(myRegistration, staffSum.isStaff);
         const expectedAmount = round === 1
           ? (staffSum.isStaff ? STAFF_SHIRT_FEE : 400)
-          : (staffSum.isStaff ? (staffSum.accommodationNetRequiredAfterOffset || STAFF_ACCOMMODATION_FEE) : regFee.round2Amount);
+          : (staffSum.isStaff
+              ? (staffSum.accommodationRemaining > 0
+                  ? staffSum.accommodationRemaining
+                  : (staffSum.accommodationNetRequiredAfterOffset || STAFF_ACCOMMODATION_FEE))
+              : (Number(myRegistration.installment_2_amount) > 0 ? Number(myRegistration.installment_2_amount) : regFee.round2Amount));
+        const otherTransRef = round === 2
+          ? (myRegistration.slip_ocr_round1?.transRef || myRegistration.slip_ocr_full?.transRef || null)
+          : (myRegistration.slip_ocr_round2?.transRef || null);
         try {
           const rawOcr = await scanSlipImage(file, expectedAmount);
-          ocrInfo = await evaluateSlipWithRegistry(rawOcr, expectedAmount);
+          ocrInfo = await evaluateSlipWithRegistry(rawOcr, expectedAmount, otherTransRef);
         } catch (ocrErr) {}
 
         const roundStatus = ocrInfo?.isFullyVerified ? 'paid' : 'pending_review';
-        await DataService.submitInstallmentSlip(myRegistration.user_id, round, uploadResult.url, roundStatus);
+        const update = {
+          payment_plan: (staffSum.isStaff && round === 2 && roundStatus === 'paid') ? 'full' : 'installment',
+          [`installment_${round}_slip_url`]: uploadResult.url,
+          [`installment_${round}_slip_date`]: new Date().toISOString(),
+          [`installment_${round}_status`]: roundStatus,
+          [`slip_ocr_round${round}`]: ocrInfo
+        };
+
+        if (round === 2) {
+          update.installment_2_amount = expectedAmount;
+        }
+
+        if (round === 2 && roundStatus === 'paid' && (myRegistration.installment_1_status === 'paid' || staffSum.isStaff)) {
+          update.payment_status = 'paid';
+          update.payment_amount = 0;
+          if (staffSum.isStaff) {
+            update.staff_accommodation_paid = true;
+          }
+          if (Array.isArray(myRegistration.admin_messages)) {
+            update.admin_messages = myRegistration.admin_messages.map(m =>
+              (m?.request_payment || ['staff_accommodation', 'round_2_payment', 'urgent_round2_deadline'].includes(m?.msg_type))
+                ? { ...m, payment_status: 'paid', read: true }
+                : m
+            );
+          }
+        } else if (round === 1 && roundStatus === 'paid' && myRegistration.installment_2_status === 'paid') {
+          update.payment_status = 'paid';
+          update.payment_amount = 0;
+        } else if (round === 1 && roundStatus === 'paid') {
+          update.payment_status = 'partial_paid';
+        } else if (round === 2 && roundStatus === 'pending_review') {
+          update.payment_status = 'pending_review';
+        }
 
         if (onUpdateRegistration) {
-          const update = {
-            payment_plan: (staffSum.isStaff && round === 2 && roundStatus === 'paid') ? 'full' : 'installment',
-            [`installment_${round}_slip_url`]: uploadResult.url,
-            [`installment_${round}_slip_date`]: new Date().toISOString(),
-            [`installment_${round}_status`]: roundStatus,
-            [`slip_ocr_round${round}`]: ocrInfo
-          };
-
-          if (round === 2 && roundStatus === 'paid' && (myRegistration.installment_1_status === 'paid' || staffSum.isStaff)) {
-            update.payment_status = 'paid';
-            update.payment_amount = 0;
-            if (staffSum.isStaff) {
-              update.staff_accommodation_paid = true;
-            }
-          } else if (round === 1 && roundStatus === 'paid' && myRegistration.installment_2_status === 'paid') {
-            update.payment_status = 'paid';
-          } else if (round === 1 && roundStatus === 'paid') {
-            update.payment_status = 'partial_paid';
-          } else if (round === 2 && roundStatus === 'pending_review') {
-            update.payment_status = 'pending_review';
-          }
-
           await onUpdateRegistration(myRegistration.user_id, update);
+        } else {
+          await DataService.updateRegistrationDetails(myRegistration.user_id, update);
         }
 
         if (ocrInfo?.transRef) {
@@ -2703,6 +2732,11 @@ export default function RegisterView({
           let owesMoney = false;
           let remAmount = 0;
           let label = '';
+          const isCancelledAbsent = Boolean(myRegistration.round2_cancelled_absent);
+          const isDeferredPost = Boolean(myRegistration.payment_deferred_post_project);
+          if (isCancelledAbsent || isDeferredPost) {
+            return null;
+          }
           if (isStaff) {
             const s = getStaffPaymentSummary(myRegistration);
             if (!s.isMsu && s.accommodationRemaining > 0) {
@@ -2746,10 +2780,20 @@ export default function RegisterView({
                     กำหนดชำระ{label} วันนี้วันสุดท้าย (5 พ.ย.)
                   </h3>
                   <p className="text-xs text-rose-100/90 mt-0.5">
-                    โปรดโอนชำระเข้าบัญชี SCB 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก) และแนบสลิปด้านล่างเพื่อรักษาสิทธิ์ของท่าน
+                    โปรดโอนชำระเข้าบัญชี SCB 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก) และแนบสลิปได้ทันที — ระบบสแกนตรวจสอบยอด {remAmount} บาท และอัปเดตสถานะเป็นชำระครบอัตโนมัติ
                   </p>
                 </div>
               </div>
+              <label className={`px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-center transition-all active:scale-95 ${(isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
+                {(isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span>📤 ส่งสลิปชำระยอดค้าง ({remAmount} บาท)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => (isStaff || myRegistration.payment_plan === 'installment' || Boolean(myRegistration.installment_1_slip_url)) ? handleUploadInstallmentSlip(e, 2) : handleUploadPaymentSlip(e)}
+                  className="hidden"
+                />
+              </label>
             </div>
           );
         })()}
@@ -2853,9 +2897,17 @@ export default function RegisterView({
 
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-black text-white">
-                    {myRegistration.first_name} {myRegistration.last_name}
-                  </h1>
+                  {(() => {
+                    const resolvedName = resolvePersonFullNameWithTitle(myRegistration);
+                    const displayName = (resolvedName.firstName || resolvedName.lastName)
+                      ? `${resolvedName.firstName} ${resolvedName.lastName}`.trim()
+                      : `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim();
+                    return (
+                      <h1 className="text-xl sm:text-2xl font-black text-white">
+                        {displayName || myRegistration.first_name || 'ผู้สมัคร JRE 2027'}
+                      </h1>
+                    );
+                  })()}
                   {myRegistration.nickname && (
                     <span className="text-amber-300 font-bold text-xs bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
                       ({myRegistration.nickname})
@@ -2929,8 +2981,14 @@ export default function RegisterView({
                     }
                   }
 
-                  if (!thFullName) {
-                    thFullName = `${myRegistration.title || ''}${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim();
+                  const THAI_CHAR_RE = /[\u0E00-\u0E7F]/;
+                  if (!thFullName || !THAI_CHAR_RE.test(thFullName)) {
+                    const resolved = resolvePersonFullNameWithTitle(myRegistration);
+                    if (resolved.fullName && resolved.fullName !== '-' && THAI_CHAR_RE.test(resolved.fullName)) {
+                      thFullName = resolved.fullName;
+                    } else if (!thFullName) {
+                      thFullName = `${myRegistration.title || ''}${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`.trim();
+                    }
                   }
                   if (!enFullName && (myRegistration.first_name_en || myRegistration.last_name_en)) {
                     enFullName = `${myRegistration.title_en ? myRegistration.title_en + ' ' : ''}${myRegistration.first_name_en || ''} ${myRegistration.last_name_en || ''}`.trim();
@@ -2945,7 +3003,7 @@ export default function RegisterView({
                           <span>ชื่อ-สกุล (ไทย):</span>
                         </span>
                         <span className="text-slate-100 font-bold text-sm">
-                          {thFullName || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`}
+                          {thFullName || resolvePersonFullNameWithTitle(myRegistration).fullName || `${myRegistration.first_name || ''} ${myRegistration.last_name || ''}`}
                         </span>
                       </div>
 
@@ -3236,7 +3294,11 @@ export default function RegisterView({
                           : (isInstallmentPlan ? 'สถานะการเงิน: แผนแบ่งจ่าย 2 งวด' : 'สถานะการเงิน: แผนชำระเต็มจำนวน')}
                       </span>
                       <h2 className="text-base sm:text-lg font-black text-white">
-                        {isStaffReg && !isMsu ? (
+                        {myRegistration.round2_cancelled_absent ? (
+                          '🚫 ยกเลิกการชำระเงินรอบที่ 2 แล้ว (ไม่ได้เข้าร่วมอบรม • ตัดจบยอดค้าง 0 บ.)'
+                        ) : myRegistration.payment_deferred_post_project ? (
+                          '🕒 บันทึกสิทธิ์จ่ายย้อนหลังหลังจบโครงการ (ไม่ได้เข้าร่วมอบรม • งดทวงระหว่างงาน)'
+                        ) : isStaffReg && !isMsu ? (
                           staffSummary.isAccommodationPendingReview
                             ? `✅ ชำระค่าเสื้อ Staff แล้ว | ⏳ ส่งสลิปค่าที่พักแล้ว (${round2Amount} บ.) • รอผู้ดูแลระบบตรวจสอบ`
                             : staffSummary.isOffsetApplied
@@ -3257,7 +3319,11 @@ export default function RegisterView({
                         )}
                       </h2>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {isStaffReg && !isMsu
+                        {myRegistration.round2_cancelled_absent
+                          ? (myRegistration.round2_cancelled_note || 'ฝ่ายผู้ดูแลระบบบันทึกการยกเลิกการจ่ายรอบที่ 2 แล้ว ไม่มียอดค้างชำระและงดส่งแจ้งเตือนทวง')
+                          : myRegistration.payment_deferred_post_project && !isFullyPaid
+                          ? (myRegistration.payment_deferred_note || 'ฝ่ายผู้ดูแลระบบบันทึกการจ่ายย้อนหลังหลังจบโครงการแล้ว (งดส่งแจ้งเตือนทวงระหว่างงาน)')
+                          : isStaffReg && !isMsu
                           ? staffSummary.summaryNote
                           : 'ระบบส่งข้อมูลใบสมัครและรายการสั่งเสื้อไปยังผู้ดูแลระบบ (Admin) แล้ว ท่านสามารถแนบสลิปด้านล่างเพื่อยืนยันยอดเงิน'}
                       </p>
@@ -3852,7 +3918,11 @@ export default function RegisterView({
 
                   {/* Step 4 Card: งวดที่ 2 (450 หรือ 250 บาท หรือ ค่าที่พัก Staff 200/80 บาท) */}
                   <div className={`bg-slate-900 border rounded-3xl p-5 flex flex-col justify-between space-y-3 shadow-xl relative overflow-hidden ${
-                    (isFullyPaid || isRound2Paid)
+                    myRegistration.round2_cancelled_absent
+                      ? 'border-slate-600/60 bg-slate-900/70'
+                      : myRegistration.payment_deferred_post_project && !isFullyPaid && !isRound2Paid
+                      ? 'border-sky-500/40 bg-sky-950/15'
+                      : (isFullyPaid || isRound2Paid)
                       ? 'border-emerald-500/40 bg-emerald-950/10'
                       : myRegistration.installment_2_status === 'pending_review'
                       ? 'border-amber-500/40 bg-amber-950/10'
@@ -3863,7 +3933,15 @@ export default function RegisterView({
                         <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
                           <CreditCard className="w-3.5 h-3.5 text-sky-400" /> {isStaffReg ? 'ขั้นตอนที่ 4 (ค่าที่พัก)' : 'ขั้นตอนที่ 4 (งวด 2)'}
                         </span>
-                        {(isFullyPaid || isRound2Paid) ? (
+                        {myRegistration.round2_cancelled_absent ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-600">
+                            🚫 ยกเลิกรอบ 2
+                          </span>
+                        ) : myRegistration.payment_deferred_post_project && !isFullyPaid && !isRound2Paid ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                            🕒 จ่ายหลังจบงาน
+                          </span>
+                        ) : (isFullyPaid || isRound2Paid) ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                             ✓ ชำระแล้ว
                           </span>
@@ -3917,6 +3995,10 @@ export default function RegisterView({
                               </label>
                             )}
                           </div>
+                        </div>
+                      ) : myRegistration.round2_cancelled_absent ? (
+                        <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] text-slate-300 text-center">
+                          🚫 ยกเลิกการจ่ายรอบที่ 2 แล้ว (ไม่เข้าร่วมอบรม)
                         </div>
                       ) : (
                         <label className={`w-full cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 text-white font-bold rounded-xl text-xs shadow transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -4174,8 +4256,8 @@ export default function RegisterView({
 
                   const med = match.medical_history || extra.medical_history || '-';
                   const alg = match.food_allergy || extra.food_allergy || '-';
-                  const hasMed = med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim());
-                  const hasAlg = alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim());
+                  const hasMed = hasHealthCondition(med);
+                  const hasAlg = hasHealthCondition(alg);
 
                   return {
                     raw: match,
@@ -4976,7 +5058,15 @@ export default function RegisterView({
                     </p>
                   </div>
 
-                  {myRegistration.installment_2_status === 'paid' ? (
+                  {myRegistration.round2_cancelled_absent ? (
+                    <span className="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-600 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      🚫 ยกเลิกรอบ 2 (ไม่เข้าร่วมอบรม • ตัดจบ 0 บ.)
+                    </span>
+                  ) : myRegistration.payment_deferred_post_project && myRegistration.installment_2_status !== 'paid' ? (
+                    <span className="px-2.5 py-1 bg-sky-500/20 text-sky-300 border border-sky-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
+                      🕒 จ่ายย้อนหลังหลังจบโครงการ
+                    </span>
+                  ) : myRegistration.installment_2_status === 'paid' ? (
                     <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
                       <CheckCircle className="w-3.5 h-3.5" /> ชำระแล้ว
                     </span>
@@ -5035,6 +5125,10 @@ export default function RegisterView({
                         {myRegistration.installment_2_status === 'paid' ? (
                           <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
                             <CheckCircle className="w-3.5 h-3.5" /> อนุมัติแล้ว (ล็อคสลิป)
+                          </span>
+                        ) : myRegistration.round2_cancelled_absent ? (
+                          <span className="text-[10px] text-slate-400 font-bold block mt-1.5">
+                            🚫 ยกเลิกการจ่ายรอบที่ 2 แล้ว
                           </span>
                         ) : (
                           <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">

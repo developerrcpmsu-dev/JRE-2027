@@ -60,7 +60,7 @@ export default function Navbar({
   return (
     <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full">
       <div className="w-full max-w-[1850px] 2xl:max-w-[99%] mx-auto px-3 sm:px-4 lg:px-5 xl:px-6">
-        <div className="flex items-center justify-between h-16 sm:h-18 lg:h-20 gap-1.5 lg:gap-2">
+        <div className="flex items-center justify-between h-14 sm:h-16 lg:h-16 gap-1.5 xl:gap-2">
           
           {/* Logo & Brand */}
           <div 
@@ -71,11 +71,11 @@ export default function Navbar({
               <img 
                 src="/images/logo/jre_logo.png" 
                 alt="ตราสัญลักษณ์ JRE 2027" 
-                className="w-8 h-9 sm:w-9 sm:h-10 object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                className="w-7 h-8 sm:w-8 sm:h-9 object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
               />
             </div>
             <div className="shrink-0 flex items-center gap-1.5">
-              <span className="text-lg sm:text-xl xl:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
+              <span className="text-base sm:text-lg xl:text-xl 2xl:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
                 JRE <span className="text-rescue-500">2027</span>
               </span>
               <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
@@ -85,28 +85,28 @@ export default function Navbar({
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
+          <nav className="hidden xl:flex items-center gap-1 2xl:gap-1.5 shrink-0">
             <button
               onClick={() => handleNav('home')}
-              className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 currentTab === 'home'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
             >
-              <Home className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+              <Home className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
               <span>หน้าแรก</span>
             </button>
 
             <button
               onClick={() => handleNav('schedule')}
-              className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 currentTab === 'schedule'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+              <Calendar className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
               <span>กำหนดการ</span>
             </button>
 
@@ -114,29 +114,29 @@ export default function Navbar({
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('pr')}
-                className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   currentTab === 'pr' || (currentTab === 'announcements' && currentSubRoute === 'public')
                     ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="ประชาสัมพันธ์ข้อมูลและเงื่อนไขการรับสมัคร"
               >
-                <Megaphone className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-orange-400 shrink-0" />
+                <Megaphone className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
                 <span>ข่าวสาร<span className="hidden 2xl:inline">ประชาสัมพันธ์</span></span>
               </button>
             ) : (
               /* คำสั่งและประกาศสำหรับสมาชิก (แสดงเมื่อสมัครแล้ว) */
               <button
                 onClick={() => handleNav('orders')}
-                className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
+                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
                   currentTab === 'orders' || (currentTab === 'announcements' && currentSubRoute === 'members')
                     ? 'bg-indigo-600/30 text-indigo-300 shadow-sm border border-indigo-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="คำสั่งและประกาศสำหรับสมาชิกผู้เข้าร่วม"
               >
-                <Bell className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-400 shrink-0" />
-                <span>คำสั่งสมาชิก</span>
+                <Bell className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-indigo-400 shrink-0" />
+                <span>คำสั่ง<span className="hidden 2xl:inline">สมาชิก</span></span>
                 <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
               </button>
             )}
@@ -144,12 +144,12 @@ export default function Navbar({
             {canSeeGroupChat && (
               <button
                 onClick={() => handleNav('chat')}
-                className={`relative px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`relative px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   currentTab === 'chat' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title={`แชทกลุ่มผู้เข้าร่วม${chatUnreadCount ? ` (${chatUnreadCount} ข้อความยังไม่อ่าน)` : ''}`}
               >
-                <MessageCircle className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-300 shrink-0" />
+                <MessageCircle className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-indigo-300 shrink-0" />
                 <span>แชทกลุ่ม</span>
                 {chatUnreadCount > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-black text-white flex items-center justify-center">{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
               </button>
@@ -157,14 +157,14 @@ export default function Navbar({
 
             <button
               onClick={() => handleNav('merchandise')}
-              className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 currentTab === 'merchandise' || currentTab === 'shop'
                   ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
               title="สั่งซื้อเสื้อ & กางเกงกู้ภัยโครงการ JRE 2027"
             >
-              <Shirt className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-orange-400 shrink-0" />
+              <Shirt className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
               <span>สั่งเสื้อ<span className="hidden 2xl:inline">/กางเกง</span></span>
             </button>
 
@@ -172,25 +172,25 @@ export default function Navbar({
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('register')}
-                className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap cursor-pointer ${
+                className={`px-2.5 2xl:px-3 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap cursor-pointer ${
                   currentTab === 'register'
                     ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-lg ring-2 ring-orange-400/80'
                     : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white hover:shadow-orange-500/30'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+                <FileText className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
                 <span>สมัคร<span className="hidden 2xl:inline">เข้าร่วม</span>โครงการ</span>
               </button>
             ) : (
               <button
                 onClick={() => handleNav('dashboard')}
-                className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap cursor-pointer ${
+                className={`px-2.5 2xl:px-3 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap cursor-pointer ${
                   currentTab === 'dashboard' || currentTab === 'register'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
                     : 'bg-slate-900 text-emerald-400 border border-emerald-500/40 hover:bg-slate-850 hover:border-emerald-300'
                 }`}
               >
-                <UserCheck className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+                <UserCheck className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
                 <span>แดชบอร์ด<span className="hidden 2xl:inline">ของฉัน</span></span>
               </button>
             )}
@@ -198,14 +198,14 @@ export default function Navbar({
             {myRegistration && (
               <button
                 onClick={() => handleNav('id-card')}
-                className={`px-2 xl:px-2.5 py-1.5 rounded-xl text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   currentTab === 'id-card'
                     ? 'bg-orange-500/20 text-orange-300 shadow-sm border border-orange-400/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="เปิดบัตรประจำตัวดิจิทัล JRE 2027"
               >
-                <QrCode className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-orange-400 shrink-0" />
+                <QrCode className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
                 <span>บัตร ID</span>
               </button>
             )}
@@ -215,7 +215,7 @@ export default function Navbar({
               <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-2 rounded-xl shrink-0 shadow-sm">
                 <button
                   onClick={() => handleNav('admin')}
-                  className={`px-2 py-1 rounded-lg text-xs xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     currentTab === 'admin'
                       ? 'bg-purple-600 text-white shadow-md'
                       : 'text-purple-300 hover:text-white hover:bg-purple-900/60'
@@ -223,7 +223,7 @@ export default function Navbar({
                   title="เปิดระบบจัดการ Admin"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                  <Award className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0 text-amber-300" />
+                  <Award className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0 text-amber-300" />
                   <span>Admin</span>
                 </button>
                 <div className="w-[1px] h-4 bg-purple-800/80 mx-0.5 shrink-0" />
@@ -239,30 +239,30 @@ export default function Navbar({
             ) : hasStaffPrivilege ? (
               <button
                 onClick={onOpenAdminLogin}
-                className="px-2.5 py-1 rounded-lg text-xs xl:text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-sm"
+                className="px-2.5 py-1 rounded-lg text-xs 2xl:text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-sm"
                 title="ท่านมีสิทธิ์ Staff/Admin: คลิกเพื่อเข้าสู่ระบบ Admin Console"
               >
-                <ShieldCheck className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-amber-400 shrink-0" />
+                <ShieldCheck className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-amber-400 shrink-0" />
                 <span>เข้า Admin</span>
               </button>
             ) : null}
           </nav>
 
           {/* Desktop Right Action Area: Auth & Status */}
-          <div className="hidden lg:flex items-center gap-1.5 xl:gap-2 shrink-0">
+          <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0">
             {/* Participant Notification Bell */}
             {myRegistration && (
               <button
                 type="button"
                 onClick={onOpenNotifications}
                 title={`กล่องข้อความและการแจ้งเตือน (${unreadNotificationsCount} ยังไม่อ่าน)`}
-                className={`relative p-2 xl:p-2.5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
+                className={`relative p-1.5 2xl:p-2 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
                   unreadNotificationsCount > 0
                     ? 'bg-amber-500/15 border-amber-500/60 text-amber-300 hover:bg-amber-500/25 ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/20'
                     : 'bg-slate-900/90 border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800'
                 }`}
               >
-                <Bell className={`w-4 h-4 xl:w-4.5 xl:h-4.5 ${unreadNotificationsCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                <Bell className={`w-3.5 h-3.5 2xl:w-4 2xl:h-4 ${unreadNotificationsCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
                 {unreadNotificationsCount > 0 ? (
                   <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md shadow-red-500/50 animate-pulse">
                     {unreadNotificationsCount}
@@ -276,25 +276,25 @@ export default function Navbar({
             )}
 
             {user ? (
-              <div className="flex items-center gap-1.5 xl:gap-2 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1 xl:p-1.5 pl-2 rounded-2xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
+              <div className="flex items-center gap-1 2xl:gap-1.5 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1 2xl:p-1.5 pl-1.5 2xl:pl-2 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
                 <button
                   type="button"
                   onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
                   title="ดูประวัติบัญชี / ผลการจัดสรรกลุ่มและห้องนอน"
-                  className="flex items-center gap-1.5 xl:gap-2 hover:opacity-90 transition-opacity text-left cursor-pointer shrink-0"
+                  className="flex items-center gap-1.5 2xl:gap-2 hover:opacity-90 transition-opacity text-left cursor-pointer shrink-0"
                 >
                   <div className="relative shrink-0">
                     <img 
                       src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'} 
                       alt={user.name || 'User'} 
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-orange-500/60 object-cover ring-2 ring-emerald-500/30 shadow-sm shrink-0"
+                      className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-orange-500/60 object-cover ring-2 ring-emerald-500/30 shadow-sm shrink-0"
                     />
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2 sm:w-2.5 h-2 sm:h-2.5 bg-emerald-500 border-2 border-slate-900 rounded-full" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border-2 border-slate-900 rounded-full" />
                   </div>
                   <div className="text-left text-xs leading-tight shrink-0">
-                    <p className="font-bold text-white truncate max-w-[65px] xl:max-w-[105px] whitespace-nowrap">{user.name || user.email?.split('@')[0]}</p>
+                    <p className="font-bold text-white truncate max-w-[65px] 2xl:max-w-[105px] whitespace-nowrap">{user.name || user.email?.split('@')[0]}</p>
                     <p className="text-slate-400 text-[10px] flex items-center gap-1 font-medium mt-0.5 whitespace-nowrap">
-                      <span className="text-emerald-400 font-semibold truncate max-w-[60px] xl:max-w-none">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
+                      <span className="text-emerald-400 font-semibold truncate max-w-[60px] 2xl:max-w-none">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
                     </p>
                   </div>
                 </button>
@@ -302,26 +302,26 @@ export default function Navbar({
                   <button
                     onClick={onOpenAdminLogin}
                     title="เข้าสู่ระบบผู้ดูแลระบบ (Admin) ต้องกรอกรหัสผ่าน"
-                    className="p-1.5 text-slate-400 hover:text-purple-300 hover:bg-purple-950/40 rounded-xl transition-colors cursor-pointer shrink-0"
+                    className="p-1.5 text-slate-400 hover:text-purple-300 hover:bg-purple-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
                   >
-                    <Lock className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-purple-400" />
+                    <Lock className="w-3.5 h-3.5 text-purple-400" />
                   </button>
                 )}
-                <div className="w-[1px] h-6 bg-slate-800 mx-0.5 shrink-0" />
+                <div className="w-[1px] h-5 bg-slate-800 mx-0.5 shrink-0" />
                 <button
                   onClick={onLogout}
                   title="ออกจากระบบ"
-                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer shrink-0"
+                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
                 >
-                  <LogOut className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : isAdmin ? (
-              <div className="flex items-center gap-2 bg-slate-900/95 hover:bg-slate-850/90 border border-purple-800/80 p-1.5 pl-2.5 rounded-2xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
+              <div className="flex items-center gap-2 bg-slate-900/95 hover:bg-slate-850/90 border border-purple-800/80 p-1.5 pl-2.5 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="relative shrink-0 flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-purple-950 border border-purple-500/50 text-purple-300">
-                    <ShieldCheck className="w-4 h-4 text-purple-300" />
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2 sm:w-2.5 h-2 sm:h-2.5 bg-emerald-500 border-2 border-slate-900 rounded-full" />
+                  <div className="relative shrink-0 flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-purple-950 border border-purple-500/50 text-purple-300">
+                    <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border-2 border-slate-900 rounded-full" />
                   </div>
                   <div className="text-left text-xs leading-tight">
                     <p className="font-bold text-white whitespace-nowrap">ผู้ดูแลระบบ</p>
@@ -330,22 +330,22 @@ export default function Navbar({
                     </p>
                   </div>
                 </div>
-                <div className="w-[1px] h-6 bg-slate-800 mx-0.5 shrink-0" />
+                <div className="w-[1px] h-5 bg-slate-800 mx-0.5 shrink-0" />
                 <button
                   onClick={onAdminLogout || onLogout}
                   title="ออกจากระบบ Admin"
-                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer shrink-0"
+                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
                 >
-                  <LogOut className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={onOpenGoogleLogin}
-                  className="group flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 font-extrabold px-3 xl:px-4 py-2 rounded-2xl text-xs xl:text-sm transition-all duration-200 shadow-md hover:shadow-xl hover:shadow-white/10 active:scale-95 border border-slate-200 whitespace-nowrap shrink-0 cursor-pointer"
+                  className="group flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-900 font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all duration-200 shadow-md hover:shadow-xl hover:shadow-white/10 active:scale-95 border border-slate-200 whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                  <svg className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -356,17 +356,17 @@ export default function Navbar({
 
                 <button
                   onClick={onOpenAdminLogin}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800 rounded-2xl text-xs flex items-center justify-center transition-all hover:border-slate-700 active:scale-95 shrink-0 cursor-pointer"
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800 rounded-xl text-xs flex items-center justify-center transition-all hover:border-slate-700 active:scale-95 shrink-0 cursor-pointer"
                   title="เข้าสู่ระบบผู้ดูแลระบบ (Admin)"
                 >
-                  <Lock className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
+                  <Lock className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
           </div>
 
           {/* Mobile Menu Button & Mobile Bell */}
-          <div className="flex lg:hidden items-center gap-2">
+          <div className="flex xl:hidden items-center gap-2">
             {/* Mobile Notification Bell */}
             {myRegistration && (
               <button
@@ -418,7 +418,7 @@ export default function Navbar({
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-slate-900 border-b border-slate-800 px-4 pt-3 pb-6 space-y-3">
+        <div className="xl:hidden bg-slate-900 border-b border-slate-800 px-4 pt-3 pb-6 space-y-3 max-h-[calc(100vh-4rem)] overflow-y-auto">
           {user && (
             <div className="flex items-center gap-3 p-3 bg-slate-800/80 rounded-xl mb-2">
               <button

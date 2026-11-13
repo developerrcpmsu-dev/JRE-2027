@@ -6,6 +6,7 @@ import {
   STAFF_ACCOMMODATION_FEE,
   STAFF_EXTERNAL_TOTAL_FEE,
   getStaffPaymentSummary,
+  getRegistrationPaymentResolution,
   computeStaffAndRefundMetrics,
   resolveGender,
   resolveUniversityInfo,
@@ -348,37 +349,30 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     const { title, firstName, lastName } = resolveFirstAndLastName(r);
     const isStaff = isStaffRegistration(r);
     const staffSum = isStaff ? getStaffPaymentSummary(r) : null;
+    const payRes = getRegistrationPaymentResolution(r, paymentConfig);
     const gender = resolveGender(r);
     const uniInfo = resolveUniversityInfo(r);
     const isMsu = isMsuInstitution(r.institution);
-    const totalFee = isStaff ? staffSum.totalStaffFee : (isMsu ? 650 : 850);
-    const round1Amount = isStaff ? STAFF_SHIRT_FEE : 400;
-    const round2Amount = isStaff ? staffSum.accommodationFee : (isMsu ? 250 : 450);
+    const totalFee = payRes.effectiveTotalFee;
+    const round1Amount = payRes.round1Fee;
+    const round2Amount = payRes.round2Fee;
 
-    let paidAmount = 0;
-    const isR1Paid = r.installment_1_status === 'paid' || r.payment_status === 'paid';
-    const isR2Paid = r.installment_2_status === 'paid' && Boolean(r.installment_2_slip_url);
-    if (isStaff) {
-      if (staffSum.isMsu) {
-        paidAmount = isR1Paid ? STAFF_SHIRT_FEE : 0;
-      } else {
-        paidAmount = (isR1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal;
-      }
-    } else if (r.payment_plan === 'installment') {
-      if (r.installment_1_status === 'paid') paidAmount += round1Amount;
-      if (isR2Paid) paidAmount += round2Amount;
-    } else {
-      if (r.payment_status === 'paid') paidAmount = totalFee;
-    }
-    const remainingAmount = Math.max(0, totalFee - paidAmount);
+    const isR1Paid = payRes.isR1Paid;
+    const isR2Paid = payRes.isR2Paid;
+    const paidAmount = payRes.collectedAmount;
+    const remainingAmount = payRes.remainingAmount;
 
     let paymentStatusDesc = '';
-    if (isStaff) {
+    if (payRes.isRound2CancelledAbsent) {
+      paymentStatusDesc = `ไม่เข้าร่วมอบรม • ยกเลิกรอบ 2 (${payRes.cancelledNote})`;
+    } else if (payRes.isDeferredPostProject && !payRes.isFullyPaid) {
+      paymentStatusDesc = `ไม่เข้าร่วมอบรม • จ่ายย้อนหลังหลังจบโครงการ ฿${payRes.deferredPostProjectAmount} (${payRes.deferredNote})`;
+    } else if (isStaff) {
       paymentStatusDesc = staffSum.summaryNote;
     } else if (r.payment_plan === 'installment') {
-      if (r.installment_1_status === 'paid' && isR2Paid) {
+      if (isR1Paid && isR2Paid) {
         paymentStatusDesc = 'ผ่อนชำระ (จ่ายครบแล้ว)';
-      } else if (r.installment_1_status === 'paid') {
+      } else if (isR1Paid) {
         paymentStatusDesc = 'ผ่อนชำระ (ชำระงวดที่ 1 แล้ว)';
       } else if (r.installment_1_status === 'pending_review' || r.installment_2_status === 'pending_review') {
         paymentStatusDesc = 'ผ่อนชำระ (รอตรวจสอบสลิป)';
@@ -444,7 +438,11 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound2Date = '-';
-    if (isStaff) {
+    if (payRes.isRound2CancelledAbsent) {
+      paidRound2Date = 'ยกเลิกรอบ 2 (ไม่เข้าร่วมอบรม)';
+    } else if (payRes.isDeferredPostProject && !payRes.isFullyPaid) {
+      paidRound2Date = 'จ่ายย้อนหลังหลังจบโครงการ (ไม่เข้าร่วม)';
+    } else if (isStaff) {
       if (staffSum.isMsu) paidRound2Date = 'ไม่มีค่าที่พัก (มมส)';
       else if (r.installment_2_slip_date) paidRound2Date = new Date(r.installment_2_slip_date).toLocaleString('th-TH');
       else if (staffSum.isAccommodationPaid) paidRound2Date = 'ชำระค่าที่พักครบแล้ว';
@@ -460,7 +458,11 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
     }
 
     let paidRound2Amount = '-';
-    if (isStaff) {
+    if (payRes.isRound2CancelledAbsent) {
+      paidRound2Amount = `0 บาท (ยกเลิกรอบ 2 • ตัดจบ ${payRes.waivedRound2Amount} บ.)`;
+    } else if (payRes.isDeferredPostProject && !payRes.isFullyPaid) {
+      paidRound2Amount = `${payRes.deferredPostProjectAmount} บาท (จ่ายย้อนหลังหลังจบโครงการ)`;
+    } else if (isStaff) {
       if (staffSum.isMsu) paidRound2Amount = '0 บาท (Staff มมส)';
       else if (staffSum.isAccommodationPaid) paidRound2Amount = '200 บาท (ชำระครบแล้ว)';
       else if (staffSum.isOffsetApplied) paidRound2Amount = `ที่พัก 200 บ. (หักลบส่วนเกิน -${staffSum.offsetToAccommodation} บ. เหลือค้าง ${staffSum.accommodationRemaining} บ.)`;
@@ -475,7 +477,11 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       }
     }
 
-    const remainingBalanceStatus = remainingAmount === 0 
+    const remainingBalanceStatus = payRes.isRound2CancelledAbsent
+      ? `ตัดจบยอดค้าง 0 บ. (${payRes.cancelledNote})`
+      : (payRes.isDeferredPostProject && !payRes.isFullyPaid)
+      ? `รอจ่ายย้อนหลังหลังจบโครงการ ${payRes.deferredPostProjectAmount} บ. (${payRes.deferredNote})`
+      : remainingAmount === 0 
       ? (isStaff && staffSum.overpaidAmount > 0 ? `ชำระครบแล้ว (ทางเราต้องโอนคืนส่วนเกิน +${staffSum.overpaidAmount} บาท)` : 'ไม่มี (ชำระครบถ้วนแล้ว)') 
       : `มียอดค้างชำระ ${remainingAmount} บาท${isStaff && !staffSum.isMsu ? ' (ค่าที่พัก Staff ต่างมหาลัย)' : ''}`;
 
@@ -485,6 +491,8 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
 
     const combinedSpecialNotes = [
       r.special_notes || '',
+      payRes.isRound2CancelledAbsent ? `[ยกเลิกรอบ 2] ${payRes.cancelledNote}` : '',
+      payRes.isDeferredPostProject ? `[จ่ายหลังจบโครงการ] ${payRes.deferredNote}` : '',
       isStaff ? staffSum.summaryNote : (r.payment_notes || '')
     ].filter(Boolean).join(' | ');
 
@@ -529,9 +537,13 @@ export async function exportRegistrationsToExcel(registrations, paymentConfig, o
       round1_status: isStaff ? (isR1Paid ? 'ชำระค่าเสื้อแล้ว (280 บ.)' : 'ค้างชำระ') : (r.installment_1_status === 'paid' ? 'ชำระแล้ว' : r.installment_1_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
       round1_slip: '',
       round1_notes: r.installment_1_notes || '',
-      round2_status: isStaff ? (staffSum.isMsu ? 'ไม่มีค่าที่พัก (มมส)' : (staffSum.isAccommodationPaid ? 'ชำระค่าที่พักครบแล้ว' : `ค้างค่าที่พัก ${staffSum.accommodationRemaining} บ.`)) : (r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
+      round2_status: payRes.isRound2CancelledAbsent
+        ? 'ยกเลิกรอบ 2 (ไม่เข้าร่วมอบรม)'
+        : (payRes.isDeferredPostProject && !payRes.isFullyPaid)
+        ? `จ่ายย้อนหลังหลังจบโครงการ (${payRes.deferredPostProjectAmount} บ.)`
+        : isStaff ? (staffSum.isMsu ? 'ไม่มีค่าที่พัก (มมส)' : (staffSum.isAccommodationPaid ? 'ชำระค่าที่พักครบแล้ว' : `ค้างค่าที่พัก ${staffSum.accommodationRemaining} บ.`)) : (r.installment_2_status === 'paid' ? 'ชำระแล้ว' : r.installment_2_status === 'pending_review' ? 'รอตรวจสอบสลิป' : 'ค้างชำระ'),
       round2_slip: '',
-      round2_notes: r.installment_2_notes || '',
+      round2_notes: payRes.isRound2CancelledAbsent ? payRes.cancelledNote : (payRes.isDeferredPostProject ? payRes.deferredNote : (r.installment_2_notes || '')),
       full_slip_date: r.payment_slip_date ? new Date(r.payment_slip_date).toLocaleString('th-TH') : '-',
       full_slip: '',
       submitted_docs: docsSummary,

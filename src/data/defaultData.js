@@ -1491,13 +1491,24 @@ export const getStaffPaymentSummary = (rawReg) => {
   const accommodationPaidTotal = (isStaff && !isMsu)
     ? Math.min(accommodationFee, offsetToAccommodation + accommodationPaidFromR2)
     : 0;
-  const accommodationRemaining = (isStaff && !isMsu)
+  const isRound2CancelledAbsent = Boolean(reg.round2_cancelled_absent);
+  const isDeferredPostProject = !isRound2CancelledAbsent && Boolean(reg.payment_deferred_post_project);
+  const rawAccommodationRemaining = (isStaff && !isMsu)
     ? Math.max(0, accommodationFee - accommodationPaidTotal)
     : 0;
-  const isAccommodationPaid = isStaff ? (isMsu ? true : accommodationRemaining <= 0) : false;
+  const waivedAccommodationAmount = (isStaff && !isMsu && isRound2CancelledAbsent) ? rawAccommodationRemaining : 0;
+  const deferredAccommodationAmount = (isStaff && !isMsu && isDeferredPostProject) ? rawAccommodationRemaining : 0;
+  const accommodationRemaining = (isStaff && !isMsu)
+    ? (isRound2CancelledAbsent ? 0 : rawAccommodationRemaining)
+    : 0;
+  const effectiveTotalStaffFee = (isStaff && !isMsu && isRound2CancelledAbsent)
+    ? Math.max(shirtFee, shirtFee + accommodationPaidTotal)
+    : totalStaffFee;
+  const isAccommodationPaid = isStaff ? (isMsu ? true : rawAccommodationRemaining <= 0) : false;
   const isAccommodationPendingReview = Boolean(
     isStaff &&
     !isMsu &&
+    !isRound2CancelledAbsent &&
     accommodationRemaining > 0 &&
     (reg.installment_2_status === 'pending_review' ||
       (Boolean(reg.installment_2_slip_url) && reg.installment_2_status !== 'rejected' && reg.installment_2_status !== 'paid'))
@@ -1569,7 +1580,13 @@ export const getStaffPaymentSummary = (rawReg) => {
       }
     } else {
       // Staff ต่างมหาวิทยาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.)
-      if (isOverpaid) {
+      if (isRound2CancelledAbsent) {
+        const waivedNote = String(reg.round2_cancelled_note || '').trim() || 'ไม่ได้เข้าร่วมอบรม — ยกเลิกค่าที่พักรอบ 2 แล้ว (ตัดจบยอดค้าง 0 บ.)';
+        summaryNote = `🚫 ${waivedNote} (ชำระค่าเสื้อ ${shirtFee} บ.${accommodationPaidTotal > 0 ? ` + หักลบส่วนเกิน ${accommodationPaidTotal} บ.` : ''} • ยกเลิกยอดค้าง ${waivedAccommodationAmount} บ.)`;
+      } else if (isDeferredPostProject && rawAccommodationRemaining > 0) {
+        const defNote = String(reg.payment_deferred_note || '').trim() || 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ';
+        summaryNote = `🕒 ${defNote} (ชำระแล้ว ${shirtFee + accommodationPaidTotal} บ. • รอจ่ายหลังจบโครงการ ${rawAccommodationRemaining} บ.)`;
+      } else if (isOverpaid) {
         if (isNoRefund) {
           summaryNote = `Staff ต่างมหาลัย (ค่าเสื้อ ${shirtFee} + ค่าที่พัก ${accommodationFee} = ${totalStaffFee} บ.) โอนมา ${actualSlipAmount} บ. • [Dev: ไม่ต้องโอนคืน] สรุปยอดเงินรายรับโครงการทั้งหมด: ${actualSlipAmount} บาท (สมทบเข้าโครงการ ไม่ต้องโอนคืน)`;
         } else {
@@ -1602,8 +1619,9 @@ export const getStaffPaymentSummary = (rawReg) => {
     isIdCardOnlyStaff,
     shirtFee,
     accommodationFee,
-    staffFee: totalStaffFee,
-    totalStaffFee,
+    staffFee: effectiveTotalStaffFee,
+    totalStaffFee: effectiveTotalStaffFee,
+    baseTotalStaffFee: totalStaffFee,
     r1SlipAmount,
     r2SlipAmount,
     actualSlipAmount,
@@ -1613,7 +1631,12 @@ export const getStaffPaymentSummary = (rawReg) => {
     accommodationNetRequiredAfterOffset,
     accommodationPaidFromR2,
     accommodationPaidTotal,
+    rawAccommodationRemaining,
     accommodationRemaining,
+    waivedAccommodationAmount,
+    deferredAccommodationAmount,
+    isRound2CancelledAbsent,
+    isDeferredPostProject,
     isAccommodationPaid,
     isAccommodationPendingReview,
     overpaidAmount,
@@ -1645,6 +1668,8 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
   const externalStaffUnpaidAccomList = [];
   const externalStaffPaidAccomList = [];
   const externalStaffPendingReviewAccomList = [];
+  const externalStaffDeferredAccomList = [];
+  const externalStaffCancelledAccomList = [];
   const refundList = [];
   const refundedList = [];
   const pendingRefundList = [];
@@ -1674,7 +1699,11 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
       if (summary.isOffsetApplied) {
         externalStaffOffsetList.push(item);
       }
-      if (summary.accommodationRemaining > 0) {
+      if (summary.isRound2CancelledAbsent) {
+        externalStaffCancelledAccomList.push(item);
+      } else if (summary.isDeferredPostProject && summary.rawAccommodationRemaining > 0) {
+        externalStaffDeferredAccomList.push(item);
+      } else if (summary.accommodationRemaining > 0) {
         externalStaffUnpaidAccomList.push(item);
         if (summary.isAccommodationPendingReview) {
           externalStaffPendingReviewAccomList.push(item);
@@ -1734,6 +1763,8 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
     externalStaffUnpaidAccomList,
     externalStaffUnpaidAccomAmount,
     externalStaffPendingReviewAccomList,
+    externalStaffDeferredAccomList,
+    externalStaffCancelledAccomList,
     refundList,
     totalRefundPeopleCount,
     totalRefundAmount,
@@ -1751,6 +1782,212 @@ export const computeStaffAndRefundMetrics = (registrations = []) => {
     totalStaffGrossRevenue,
     totalStaffRefundExpense,
     totalStaffNetRevenue
+  };
+};
+
+/**
+ * Unifies financial calculation + non-attending Round 2 cancellation & post-project deferred payment status
+ * across regular participants (full / 2 installments) and Staff (MSU 280 / Non-MSU 480 / ID-only 0).
+ */
+export const getRegistrationPaymentResolution = (rawReg, paymentConfig = null) => {
+  if (!rawReg) {
+    return {
+      isStaff: false,
+      isMsu: false,
+      isInstallment: false,
+      baseTotalFee: 0,
+      effectiveTotalFee: 0,
+      round1Fee: 0,
+      round2Fee: 0,
+      collectedAmount: 0,
+      activeOutstandingAmount: 0,
+      deferredPostProjectAmount: 0,
+      waivedRound2Amount: 0,
+      remainingAmount: 0,
+      isR1Paid: false,
+      isR2Paid: false,
+      hasPendingReview: false,
+      isRound2CancelledAbsent: false,
+      isDeferredPostProject: false,
+      deferredNote: '',
+      cancelledNote: '',
+      isFullyPaid: false,
+      isSettledOrClosed: false,
+      shouldChaseRound2: false,
+      shouldChaseAnyPayment: false,
+      statusBucket: 'unpaid',
+      statusLabel: 'ยังไม่ชำระ',
+      staffSummary: null
+    };
+  }
+
+  let extra = {};
+  if (rawReg.special_notes && typeof rawReg.special_notes === 'string') {
+    const t = rawReg.special_notes.trim();
+    if (t.startsWith('{') && t.endsWith('}')) {
+      try { extra = JSON.parse(t); } catch (e) {}
+    }
+  }
+  const reg = { ...extra, ...rawReg };
+
+  const isStaff = isStaffRegistration(reg);
+  const staffSummary = isStaff ? getStaffPaymentSummary(reg) : null;
+  const isMsu = isStaff ? staffSummary.isMsu : isMsuInstitution(reg.institution || reg.affiliation || reg);
+
+  const isRound2CancelledAbsent = Boolean(reg.round2_cancelled_absent);
+  const isDeferredPostProject = !isRound2CancelledAbsent && Boolean(reg.payment_deferred_post_project);
+
+  const defaultCancelledNote = 'ไม่ได้เข้าร่วมอบรม — ยกเลิกการจ่ายรอบที่ 2 (ตัดจบยอดค้างรับ & งดทวง)';
+  const defaultDeferredNote = 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ (งดทวงก่อนงาน)';
+  const cancelledNote = isRound2CancelledAbsent
+    ? (String(reg.round2_cancelled_note || '').trim() || defaultCancelledNote)
+    : '';
+  const deferredNote = isDeferredPostProject
+    ? (String(reg.payment_deferred_note || '').trim() || defaultDeferredNote)
+    : '';
+
+  const feeTotalMsu = Number(paymentConfig?.fee_total_msu) || 650;
+  const feeTotalExt = Number(paymentConfig?.fee_total_external || paymentConfig?.fee_total) || 850;
+  const r1Msu = Number(paymentConfig?.installment_round1_amount_msu) || 400;
+  const r1Ext = Number(paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount) || 400;
+  const r2Msu = Number(paymentConfig?.installment_round2_amount_msu) || 250;
+  const r2Ext = Number(paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount) || 450;
+
+  let isInstallment = false;
+  let baseTotalFee = 0;
+  let round1Fee = 0;
+  let round2Fee = 0;
+  let collectedAmount = 0;
+  let isR1Paid = false;
+  let isR2Paid = false;
+  let hasPendingReview = false;
+  let rawRemainingAmount = 0;
+
+  if (isStaff) {
+    baseTotalFee = staffSummary.baseTotalStaffFee;
+    round1Fee = staffSummary.shirtFee;
+    round2Fee = staffSummary.isMsu ? 0 : staffSummary.accommodationFee;
+    isR1Paid = staffSummary.baseTotalStaffFee === 0 || reg.installment_1_status === 'paid' || reg.payment_status === 'paid' || staffSummary.r1SlipAmount >= staffSummary.shirtFee;
+    const isR1Pending = !isR1Paid && (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review');
+    if (staffSummary.isMsu) {
+      isInstallment = false;
+      collectedAmount = staffSummary.baseTotalStaffFee === 0 ? 0 : (isR1Paid ? staffSummary.shirtFee : 0);
+      isR2Paid = true;
+      hasPendingReview = isR1Pending;
+      rawRemainingAmount = Math.max(0, baseTotalFee - collectedAmount);
+    } else {
+      const shirtCol = isR1Paid ? STAFF_SHIRT_FEE : 0;
+      const accomCol = staffSummary.accommodationPaidTotal;
+      collectedAmount = Math.min(baseTotalFee, shirtCol + accomCol);
+      isR2Paid = staffSummary.isAccommodationPaid;
+      isInstallment = !isR2Paid || Boolean(reg.installment_2_slip_url) || isRound2CancelledAbsent || isDeferredPostProject;
+      hasPendingReview = isR1Pending || staffSummary.isAccommodationPendingReview;
+      rawRemainingAmount = Math.max(0, baseTotalFee - collectedAmount);
+    }
+  } else {
+    baseTotalFee = isMsu ? feeTotalMsu : feeTotalExt;
+    round1Fee = isMsu ? r1Msu : r1Ext;
+    round2Fee = isMsu ? r2Msu : r2Ext;
+    isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
+
+    if (isInstallment) {
+      isR1Paid = reg.installment_1_status === 'paid';
+      isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url || reg.admin_manual_override);
+      hasPendingReview = reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review';
+      if (isR1Paid) collectedAmount += round1Fee;
+      if (isR2Paid) collectedAmount += round2Fee;
+      collectedAmount = Math.min(baseTotalFee, collectedAmount);
+      rawRemainingAmount = Math.max(0, baseTotalFee - collectedAmount);
+    } else {
+      isR1Paid = reg.payment_status === 'paid' || reg.payment_status === 'verified';
+      isR2Paid = isR1Paid;
+      hasPendingReview = reg.payment_status === 'pending_review';
+      if (isR1Paid) {
+        const paidAmt = (reg.payment_amount !== undefined && reg.payment_amount !== null && Number(reg.payment_amount) > 0)
+          ? Number(reg.payment_amount)
+          : baseTotalFee;
+        collectedAmount = paidAmt;
+        rawRemainingAmount = 0;
+      } else {
+        collectedAmount = 0;
+        rawRemainingAmount = baseTotalFee;
+      }
+    }
+  }
+
+  const isActuallyFullyPaid = rawRemainingAmount <= 0;
+  const waivedRound2Amount = (isRound2CancelledAbsent && !isActuallyFullyPaid) ? rawRemainingAmount : 0;
+  const effectiveTotalFee = isRound2CancelledAbsent ? Math.min(baseTotalFee, collectedAmount) : baseTotalFee;
+  const remainingAmount = isRound2CancelledAbsent ? 0 : rawRemainingAmount;
+
+  const deferredPostProjectAmount = (isDeferredPostProject && !isActuallyFullyPaid) ? remainingAmount : 0;
+  const activeOutstandingAmount = (isRound2CancelledAbsent || isDeferredPostProject) ? 0 : remainingAmount;
+
+  let statusBucket = 'unpaid';
+  let statusLabel = '🔴 ค้างชำระ';
+  if (isActuallyFullyPaid) {
+    statusBucket = 'paid';
+    statusLabel = isDeferredPostProject
+      ? '✓ ชำระครบแล้ว (จ่ายย้อนหลังหลังจบโครงการ)'
+      : '✓ ชำระครบถ้วนแล้ว';
+  } else if (isRound2CancelledAbsent) {
+    statusBucket = 'round2_cancelled_absent';
+    statusLabel = '🚫 ไม่เข้าร่วมอบรม • ยกเลิกรอบ 2 (ตัดจบยอดค้าง)';
+  } else if (isDeferredPostProject) {
+    statusBucket = 'deferred_post_project';
+    statusLabel = `🕒 จ่ายย้อนหลังหลังจบโครงการ (รอรับ ฿${deferredPostProjectAmount})`;
+  } else if (hasPendingReview) {
+    statusBucket = 'pending_review';
+    statusLabel = '⏳ รอตรวจสลิป';
+  } else if (isInstallment && isR1Paid && !isR2Paid) {
+    statusBucket = 'partial_paid';
+    statusLabel = isStaff
+      ? `⏳ ชำระค่าเสื้อแล้ว • ค้างค่าที่พัก ฿${remainingAmount}`
+      : `⏳ ชำระงวด 1 แล้ว • ค้างงวด 2 (฿${remainingAmount})`;
+  }
+
+  const shouldChaseRound2 = Boolean(
+    !isActuallyFullyPaid &&
+    !isRound2CancelledAbsent &&
+    !isDeferredPostProject &&
+    ((isStaff && !isMsu && staffSummary.accommodationRemaining > 0) ||
+      (isInstallment && isR1Paid && reg.installment_2_status !== 'paid'))
+  );
+
+  const shouldChaseAnyPayment = Boolean(
+    !isActuallyFullyPaid &&
+    !isRound2CancelledAbsent &&
+    !isDeferredPostProject &&
+    (shouldChaseRound2 || activeOutstandingAmount > 0)
+  );
+
+  return {
+    isStaff,
+    isMsu,
+    isInstallment,
+    baseTotalFee,
+    effectiveTotalFee,
+    round1Fee,
+    round2Fee,
+    collectedAmount,
+    activeOutstandingAmount,
+    deferredPostProjectAmount,
+    waivedRound2Amount,
+    remainingAmount,
+    isR1Paid,
+    isR2Paid: isActuallyFullyPaid || isR2Paid,
+    hasPendingReview,
+    isRound2CancelledAbsent,
+    isDeferredPostProject,
+    deferredNote,
+    cancelledNote,
+    isFullyPaid: isActuallyFullyPaid,
+    isSettledOrClosed: isActuallyFullyPaid || isRound2CancelledAbsent,
+    shouldChaseRound2,
+    shouldChaseAnyPayment,
+    statusBucket,
+    statusLabel,
+    staffSummary
   };
 };
 
@@ -1870,16 +2107,22 @@ export function resolvePersonFullNameWithTitle(person) {
     ''
   ).trim();
 
-  // If first and last name are both empty, try customer_name or full_name_affiliation
-  if (!rawFirstName && !rawLastName) {
-    const rawAlt = (
-      person.customer_name ||
-      person.full_name_affiliation ||
-      person.rawRegistration?.full_name_affiliation ||
-      ''
-    ).trim();
-    if (rawAlt) {
-      const cleanAlt = rawAlt.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+  const THAI_CHAR_RE = /[\u0E00-\u0E7F]/;
+  const isEnglishOnly = (s) => Boolean(s) && /^[A-Za-z\s.]+$/.test(s);
+
+  // If first name has no Thai characters, check if full_name_affiliation contains Thai name before '/'
+  const rawAff = (
+    person.full_name_affiliation ||
+    person.rawRegistration?.full_name_affiliation ||
+    person.customer_name ||
+    ''
+  ).trim();
+
+  if ((!rawFirstName || isEnglishOnly(rawFirstName)) && rawAff && THAI_CHAR_RE.test(rawAff)) {
+    const slashIdx = rawAff.indexOf('/');
+    const thPart = (slashIdx >= 0 ? rawAff.slice(0, slashIdx) : rawAff).trim();
+    if (thPart && THAI_CHAR_RE.test(thPart)) {
+      const cleanAlt = thPart.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
       const parts = cleanAlt.split(/\s+/).filter(Boolean);
       if (parts.length >= 2) {
         rawFirstName = parts[0];
@@ -1887,6 +2130,15 @@ export function resolvePersonFullNameWithTitle(person) {
       } else if (parts.length === 1) {
         rawFirstName = parts[0];
       }
+    }
+  } else if (!rawFirstName && !rawLastName && rawAff) {
+    const cleanAlt = rawAff.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+    const parts = cleanAlt.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      rawFirstName = parts[0];
+      rawLastName = parts.slice(1).join(' ');
+    } else if (parts.length === 1) {
+      rawFirstName = parts[0];
     }
   }
 

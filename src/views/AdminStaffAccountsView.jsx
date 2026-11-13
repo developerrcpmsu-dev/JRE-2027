@@ -209,7 +209,7 @@ export default function AdminStaffAccountsView({
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
+          <div className="flex-1 min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-500/20 text-purple-300 border border-purple-400/30 flex items-center gap-1.5 shadow-sm">
                 <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />

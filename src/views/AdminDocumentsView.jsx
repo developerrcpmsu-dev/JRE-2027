@@ -1,22 +1,14 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FileText, 
   Download, 
   Printer, 
   Image as ImageIcon, 
   FileSpreadsheet, 
-  Check, 
   Shirt, 
-  Building, 
   Users, 
-  Layers, 
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-  Calendar,
-  MapPin,
-  ExternalLink
+  Stethoscope,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   resolveUniversityInfo, 
@@ -25,21 +17,223 @@ import {
   normalizeCallsignSpacing,
   normalizeShirtSize
 } from '../data/defaultData';
+import { buildDormitoryRoomData } from '../utils/roomUtils';
 import { 
   exportAttendanceRosterToExcel,
   exportShirtRosterToExcel,
   exportDormitoryRosterToExcel,
+  exportDormitoryStaffMedicalExcel,
   exportAllRostersToMasterExcel,
   downloadCsv,
   exportElementToPng
 } from '../utils/documentExporters';
+
+const VALID_DOC_TABS = new Set(['attendance', 'shirts', 'rooms', 'rooms-staff']);
+
+function getInitialDocTab() {
+  if (typeof window === 'undefined') return 'attendance';
+  const param = new URLSearchParams(window.location.search).get('tab')?.toLowerCase();
+  if (param && VALID_DOC_TABS.has(param)) return param;
+  return 'attendance';
+}
+
+function DormSignInZoneTable({ title, subtitle, rooms, altBgClass, zoneLabel }) {
+  return (
+    <div>
+      <h3 className="text-sm font-black text-slate-950 mb-2 flex items-center justify-between">
+        <span>{title}</span>
+        <span className="text-xs font-normal text-slate-600">{subtitle}</span>
+      </h3>
+
+      <table className="w-full text-left text-xs border-collapse border border-slate-900">
+        <thead>
+          <tr className="bg-slate-200 text-slate-950 font-bold border-b border-slate-900 text-center">
+            <th className="py-2.5 px-2 border-r border-slate-900 w-20">ห้อง</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-16">เตียง</th>
+            <th className="py-2.5 px-3 border-r border-slate-900 text-left">ชื่อ - นามสกุล ผู้เข้าพัก</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-20">ชื่อเล่น</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-24">เบอร์โทร</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-16">กุญแจ #</th>
+            <th className="py-2.5 px-4 border-r border-slate-900 w-32">ลายมือชื่อรับกุญแจ</th>
+            <th className="py-2.5 px-4 w-32">ลายมือชื่อคืนกุญแจ</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-400">
+          {rooms.map((rm) => (
+            <React.Fragment key={rm.room}>
+              {[0, 1].map((b) => {
+                const p = rm.occupants[b];
+                return (
+                  <tr key={`${rm.room}-${b}`} className={b === 1 ? `border-b-2 border-slate-900 ${altBgClass}` : 'bg-white'}>
+                    {b === 0 && (
+                      <td rowSpan={2} className="py-2 px-2 border-r border-slate-900 text-center font-mono font-black text-sm bg-slate-100 align-middle">
+                        {rm.roomLabel}
+                        <span className="block text-[10px] font-normal text-slate-500">{zoneLabel}</span>
+                      </td>
+                    )}
+                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
+                    <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
+                      {p ? p.name : '(ว่าง)'}
+                    </td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[10px] text-slate-500">K-{rm.room}</td>
+                    <td className="py-2 px-4 border-r border-slate-400 text-center">
+                      <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                    </td>
+                    <td className="py-2 px-4 text-center">
+                      <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
+  if (rooms.length === 0) return null;
+  return (
+    <div>
+      <h3 className="text-sm font-black text-slate-950 mb-2 flex items-center justify-between">
+        <span>{title}</span>
+        <span className="text-[11px] font-semibold text-slate-600">ลำดับในห้อง: คนที่ 1 มีโรคประจำตัว/แพ้ • คนที่ 2 ปกติ (ช่วยดูแล)</span>
+      </h3>
+
+      <table className="w-full text-left text-xs border-collapse border border-slate-900">
+        <thead>
+          <tr className="bg-rose-950 text-white font-bold border-b border-slate-900 text-center">
+            <th className="py-2 px-2 border-r border-slate-700 w-20">ห้อง</th>
+            <th className="py-2 px-1.5 border-r border-slate-700 w-14">ลำดับ</th>
+            <th className="py-2 px-2.5 border-r border-slate-700 text-left w-48">ชื่อ - นามสกุล / ติดต่อ</th>
+            <th className="py-2 px-2.5 border-r border-slate-700 text-left">โรคประจำตัว / อาการแพ้ / หมู่เลือด</th>
+            <th className="py-2 px-2.5 border-r border-slate-700 text-left">ยาที่ต้องการ / เวชภัณฑ์</th>
+            <th className="py-2 px-2.5 border-r border-slate-700 text-left">ของที่ต้องใช้ / ดูแลพิเศษ</th>
+            <th className="py-2 px-2 w-28">เช็คเตรียม (Staff)</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-400">
+          {rooms.map((rm) => {
+            const roomHasAlert = rm.occupants.some(o => o.needsBuddyCare || o.medicalEquipmentNeeded || o.specialItemsNeeded);
+            return (
+              <React.Fragment key={rm.room}>
+                {[0, 1].map((b) => {
+                  const p = rm.occupants[b];
+                  const hasCare = Boolean(p && (p.needsBuddyCare || p.medicalEquipmentNeeded || p.specialItemsNeeded || p.isSpecialCare));
+                  return (
+                    <tr
+                      key={`${rm.room}-${b}`}
+                      className={`${b === 1 ? 'border-b-2 border-slate-900 ' : ''}${hasCare ? 'bg-rose-50/70' : 'bg-white'}`}
+                    >
+                      {b === 0 && (
+                        <td
+                          rowSpan={2}
+                          className={`py-2 px-2 border-r border-slate-900 text-center font-mono font-black text-sm align-middle ${
+                            roomHasAlert ? 'bg-rose-100 text-rose-950' : 'bg-slate-100 text-slate-900'
+                          }`}
+                        >
+                          {rm.roomLabel}
+                          <span className="block text-[10px] font-normal text-slate-600">{zoneLabel}</span>
+                          {roomHasAlert && (
+                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-sans font-bold">
+                              เฝ้าระวัง
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      <td className="py-2 px-1.5 border-r border-slate-400 text-center font-mono text-[11px] font-bold">
+                        {b + 1}
+                        <span className="block text-[9px] font-normal text-slate-500">เตียง {b + 1}</span>
+                      </td>
+                      <td className="py-2 px-2.5 border-r border-slate-400">
+                        {p ? (
+                          <div>
+                            <div className="font-bold text-slate-950">
+                              {p.name}{' '}
+                              {p.nickname !== '-' && <span className="font-normal text-slate-600">({p.nickname})</span>}
+                            </div>
+                            <div className="text-[10px] text-slate-600 font-mono">
+                              {p.callsign} • โทร: {p.phone}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">(ว่าง)</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2.5 border-r border-slate-400">
+                        {p ? (
+                          p.hasMedicalHistory || p.hasFoodAllergy ? (
+                            <div className="space-y-0.5 text-[11px]">
+                              {p.hasMedicalHistory && (
+                                <div className="font-bold text-rose-800">🩺 โรค: {p.medicalHistory}</div>
+                              )}
+                              {p.hasFoodAllergy && (
+                                <div className="font-bold text-amber-800">⚠️ แพ้: {p.foodAllergy}</div>
+                              )}
+                              <div className="text-[10px] font-mono text-slate-700">
+                                🩸 หมู่เลือด: {p.bloodGroup} • {p.isHealthShared ? 'เมทเห็น' : 'ปิดจากเมท'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-emerald-700 font-semibold">
+                              ✓ ปกติ (ไม่มีโรค/ไม่แพ้){p.bloodGroup && p.bloodGroup !== '-' ? ` • เลือด ${p.bloodGroup}` : ''}
+                            </span>
+                          )
+                        ) : '-'}
+                      </td>
+                      <td className="py-2 px-2.5 border-r border-slate-400 text-[11px]">
+                        {p?.medicalEquipmentNeeded ? (
+                          <span className="font-bold text-emerald-900">{p.medicalEquipmentNeeded}</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2.5 border-r border-slate-400 text-[11px]">
+                        {p?.specialItemsNeeded ? (
+                          <span className="font-semibold text-indigo-900">{p.specialItemsNeeded}</span>
+                        ) : p?.isSpecialCare ? (
+                          <span className="font-semibold text-indigo-900">ต้องดูแลเป็นพิเศษ</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-center text-[11px]">
+                        {p ? (
+                          hasCare ? (
+                            <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                              <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-sm"></span>
+                              <span>เตรียมแล้ว</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500">ผู้ช่วยดูแล</span>
+                          )
+                        ) : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function AdminDocumentsView({
   registrations = [],
   merchandiseOrders = [],
   triggerToast
 }) {
-  const [activeDoc, setActiveDoc] = useState('attendance'); // 'attendance' | 'shirts' | 'rooms'
+  const [activeDoc, setActiveDoc] = useState(getInitialDocTab); // 'attendance' | 'shirts' | 'rooms' | 'rooms-staff'
+  const [staffOnlyAlerts, setStaffOnlyAlerts] = useState(false);
   const [isExportingPng, setIsExportingPng] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
 
@@ -70,7 +264,8 @@ export default function AdminDocumentsView({
       else if (isStaff) role = 'Staff คณะทำงาน';
 
       const isMsu = Boolean(uniInfo?.isMsu);
-      const notes = isMsu ? 'มมส (ไป-กลับเอง)' : (reg.room_assigned ? `พักหอกุดรัง (${reg.room_assigned.match(/\d{3}/)?.[1] || '-'})` : 'พักหอกุดรัง');
+      const matchedRoom = reg.room_assigned ? String(reg.room_assigned).match(/(\d{3})/)?.[1] : null;
+      const notes = isMsu ? 'มมส (ไป-กลับเอง)' : (matchedRoom ? `พักหอกุดรัง (${matchedRoom})` : 'พักหอกุดรัง');
 
       return {
         id: reg.id || reg.user_id,
@@ -150,7 +345,6 @@ export default function AdminDocumentsView({
     // Also include Newton (นายจินณวัตร ทิพย์รักษ์ RCP 16-02) and store extra orders
     (merchandiseOrders || []).forEach(ord => {
       const isNewton = ord.order_number === 'JRE27-NEWTON-SHIRT-32' || (ord.customer_name || '').includes('จินณวัตร');
-      const isSpare = ord.order_number === 'JRE27-SPARE-SHIRT-CENTRAL';
 
       (ord.items || []).forEach((it, idx) => {
         const chest = ord.institution?.includes('ขอนแก่น') ? 'TSIKKU' : 'RCPMSU';
@@ -176,75 +370,28 @@ export default function AdminDocumentsView({
     });
   }, [registrations, merchandiseOrders]);
 
-  // 3. Prepare Dormitory Rooms Data (Rooms 101 - 110)
+  // 3. Prepare Dormitory Rooms Data (Rooms 101 - 110, sorted #1 care, #2 healthy)
   const roomData = useMemo(() => {
-    const ROOM_CONFIGS = [
-      { room: '101', roomLabel: 'ห้อง 101', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '102', roomLabel: 'ห้อง 102', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '103', roomLabel: 'ห้อง 103', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '104', roomLabel: 'ห้อง 104', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '105', roomLabel: 'ห้อง 105', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '106', roomLabel: 'ห้อง 106', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '107', roomLabel: 'ห้อง 107', gender: 'ชาย', floor: 1, capacity: 2 },
-      { room: '108', roomLabel: 'ห้อง 108', gender: 'หญิง', floor: 1, capacity: 2 },
-      { room: '109', roomLabel: 'ห้อง 109', gender: 'หญิง', floor: 1, capacity: 2 },
-      { room: '110', roomLabel: 'ห้อง 110', gender: 'หญิง', floor: 1, capacity: 2 }
-    ];
-
-    const map = {};
-    ROOM_CONFIGS.forEach(c => {
-      map[c.room] = { ...c, occupants: [] };
-    });
-
-    const msuList = [];
-
-    (registrations || []).forEach(reg => {
-      const uniInfo = resolveUniversityInfo(reg);
-      const isMsu = Boolean(uniInfo?.isMsu);
-      const nameData = resolvePersonFullNameWithTitle(reg);
-      const rawRoom = String(reg.room_assigned || '').trim();
-
-      let extra = {};
-      try { if (reg.special_notes && reg.special_notes.startsWith('{')) extra = JSON.parse(reg.special_notes); } catch (e) {}
-
-      const med = reg.medical_history || extra.medical_history || '-';
-      const alg = reg.food_allergy || extra.food_allergy || '-';
-      const bloodGroup = reg.blood_group || extra.blood_group || '-';
-      const hasMed = med && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(med.toLowerCase().trim());
-      const hasAlg = alg && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(alg.toLowerCase().trim());
-
-      const person = {
-        name: nameData.fullName,
-        nickname: extra.nickname || reg.nickname || '-',
-        callsign: normalizeCallsignSpacing(extra.callsign || reg.callsign || '-'),
-        phone: reg.phone || extra.phone || '-',
-        uni: uniInfo.shortTag,
-        bloodGroup,
-        medical: med,
-        allergy: alg,
-        hasMed,
-        hasAlg
-      };
-
-      if (isMsu) {
-        msuList.push(person);
-        return;
-      }
-
-      const match = rawRoom.match(/(\d{3})/);
-      if (match && map[match[1]]) {
-        map[match[1]].occupants.push(person);
-      }
-    });
-
-    const rooms = Object.values(map);
+    const parsed = buildDormitoryRoomData(registrations);
+    const msuNeedsCare = parsed.localMsu.filter(
+      p => p.hasMedicalHistory || p.hasFoodAllergy || p.medicalEquipmentNeeded || p.specialItemsNeeded || p.isSpecialCare
+    );
     return {
-      rooms,
-      maleRooms: rooms.filter(r => r.gender === 'ชาย'),
-      femaleRooms: rooms.filter(r => r.gender === 'หญิง'),
-      msuList
+      ...parsed,
+      msuList: parsed.localMsu,
+      msuNeedsCare
     };
   }, [registrations]);
+
+  const displayedStaffMaleRooms = useMemo(() => {
+    if (!staffOnlyAlerts) return roomData.maleRooms;
+    return roomData.maleRooms.filter(r => r.occupants.some(o => o.needsBuddyCare || o.medicalEquipmentNeeded || o.specialItemsNeeded));
+  }, [roomData.maleRooms, staffOnlyAlerts]);
+
+  const displayedStaffFemaleRooms = useMemo(() => {
+    if (!staffOnlyAlerts) return roomData.femaleRooms;
+    return roomData.femaleRooms.filter(r => r.occupants.some(o => o.needsBuddyCare || o.medicalEquipmentNeeded || o.specialItemsNeeded));
+  }, [roomData.femaleRooms, staffOnlyAlerts]);
 
   // Handler: Print Current Document Cleanly
   const handlePrintDocument = () => {
@@ -254,7 +401,6 @@ export default function AdminDocumentsView({
       window.removeEventListener('afterprint', cleanup);
     };
     window.addEventListener('afterprint', cleanup);
-    // Safe fallback timeout (45s) in case afterprint does not fire
     setTimeout(cleanup, 45000);
     setTimeout(() => {
       window.print();
@@ -265,7 +411,13 @@ export default function AdminDocumentsView({
   const handleExportPng = async () => {
     setIsExportingPng(true);
     try {
-      const filename = `ใบเซ็นชื่อ_${activeDoc === 'attendance' ? 'การเข้าร่วมอบรม' : activeDoc === 'shirts' ? 'รับมอบเสื้อ32ตัว' : 'เข้าห้องพักกุดรัง'}_JRE2027.png`;
+      const nameMap = {
+        attendance: '1_ใบเซ็นชื่อ_การเข้าร่วมอบรม',
+        shirts: '2_ใบเซ็นชื่อ_รับมอบเสื้อ32ตัว',
+        rooms: '3_ใบเซ็นชื่อ_เข้าห้องพักกุดรัง_ปิดข้อมูลสุขภาพ',
+        'rooms-staff': '4_ใบตรวจห้อง_โรคประจำตัว_ยา_ของใช้_Staff'
+      };
+      const filename = `${nameMap[activeDoc] || 'document'}_JRE2027.png`;
       await exportElementToPng('printable-document-sheet', filename);
       if (triggerToast) triggerToast('🖼️ บันทึกเป็นรูปภาพ PNG ความละเอียดสูงเรียบร้อยแล้ว');
     } catch (err) {
@@ -284,8 +436,10 @@ export default function AdminDocumentsView({
         await exportAttendanceRosterToExcel(attendanceData);
       } else if (activeDoc === 'shirts') {
         await exportShirtRosterToExcel(shirtData);
-      } else {
+      } else if (activeDoc === 'rooms') {
         await exportDormitoryRosterToExcel(roomData.rooms, roomData.msuList);
+      } else {
+        await exportDormitoryStaffMedicalExcel(roomData.rooms, roomData.msuList);
       }
       if (triggerToast) triggerToast('📊 บันทึกไฟล์ Excel (.xlsx) เรียบร้อยแล้ว');
     } catch (err) {
@@ -296,7 +450,7 @@ export default function AdminDocumentsView({
     }
   };
 
-  // Handler: Export Master 3-in-1 Excel
+  // Handler: Export Master 4-in-1 Excel
   const handleExportMasterExcel = async () => {
     setIsExportingExcel(true);
     try {
@@ -306,7 +460,7 @@ export default function AdminDocumentsView({
         roomList: roomData.rooms,
         msuList: roomData.msuList
       });
-      if (triggerToast) triggerToast('⚡ ดาวน์โหลดชุดเอกสารครบทั้ง 3 ใบ (Master 3-in-1 Excel) สำเร็จ');
+      if (triggerToast) triggerToast('⚡ ดาวน์โหลดชุดเอกสารครบทั้ง 4 ใบ (Master 4-in-1 Excel) สำเร็จ');
     } catch (err) {
       console.error(err);
       alert('เกิดข้อผิดพลาด: ' + err.message);
@@ -332,7 +486,7 @@ export default function AdminDocumentsView({
         csv += `"${idx + 1}","${r.name}","${r.callsign}","${r.uni}","${r.chest}","${r.size}","1","${r.payment}","","13 ก.พ. 70"\n`;
       });
       filename = '2_ใบรายชื่อรับมอบเสื้อฝึก_JRE2027.csv';
-    } else {
+    } else if (activeDoc === 'rooms') {
       csv = 'เลขห้อง,โซน/เพศ,เตียง,ชื่อ - นามสกุล ผู้เข้าพัก,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,ลายมือชื่อรับกุญแจ,ลายมือชื่อคืนกุญแจ\n';
       roomData.rooms.forEach(rm => {
         const isMale = rm.gender === 'ชาย';
@@ -341,12 +495,29 @@ export default function AdminDocumentsView({
           csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","",""\n`;
         }
       });
-      filename = '3_ใบรายชื่อเข้าห้องพัก_หอพักกุดรัง_JRE2027.csv';
+      filename = '3_ใบเซ็นชื่อเข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.csv';
+    } else {
+      csv = 'เลขห้อง,โซน/เพศ,ลำดับ/เตียง,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,โรคประจำตัว,แพ้อาหาร/ยา,หมู่เลือด,ยาที่ต้องการ/เวชภัณฑ์,ของที่ต้องใช้/ดูแลพิเศษ,เปิดเผยเมท\n';
+      roomData.rooms.forEach(rm => {
+        const isMale = rm.gender === 'ชาย';
+        for (let b = 0; b < 2; b++) {
+          const p = rm.occupants[b];
+          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.medicalHistory : '-'}","${p ? p.foodAllergy : '-'}","${p ? p.bloodGroup : '-'}","${p?.medicalEquipmentNeeded || '-'}","${p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-')}","${p ? (p.isHealthShared ? 'เมทเห็น' : 'เฉพาะ Staff') : '-'}"\n`;
+        }
+      });
+      filename = '4_ใบเตรียมยา_ของใช้_โรคประจำตัวตามห้อง_Staff_JRE2027.csv';
     }
 
     downloadCsv(csv, filename);
     if (triggerToast) triggerToast('📁 ดาวน์โหลดไฟล์ CSV (UTF-8 BOM) เรียบร้อยแล้ว');
   };
+
+  const docBadgeLabel = {
+    attendance: '1. ใบเซ็นชื่อเข้าร่วมอบรม',
+    shirts: '2. ใบเซ็นชื่อรับเสื้อ 32 ตัว',
+    rooms: '3. ใบเซ็นชื่อเข้าห้องพัก (ปิดข้อมูลสุขภาพ)',
+    'rooms-staff': '4. ใบตรวจห้อง & โรค/ยา/ของใช้ (Staff ไม่ต้องเซ็น)'
+  }[activeDoc];
 
   return (
     <div className="space-y-6">
@@ -355,7 +526,7 @@ export default function AdminDocumentsView({
         <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
+          <div className="flex-1 min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 rounded-full text-xs font-black bg-teal-500/20 text-teal-300 border border-teal-400/30 flex items-center gap-1.5 shadow-sm">
                 <FileText className="w-3.5 h-3.5 text-teal-400" />
@@ -367,14 +538,14 @@ export default function AdminDocumentsView({
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
-              <span>📄 ศูนย์จัดทำเอกสารทางการ JRE 2027 (ใบเซ็นชื่อรวม 3 ใบ)</span>
+              <span>📄 ศูนย์จัดทำเอกสาร JRE 2027 (แยกใบเซ็นชื่อ PDPA + ใบเตรียมยา/ของใช้ Staff)</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              จัดทำแบบฟอร์มเอกสารลงลายมือชื่อทางการสำหรับจุดลงทะเบียนหน้างาน รองรับการส่งออก <strong>Excel (.xlsx)</strong>, <strong>CSV</strong>, <strong>พิมพ์/PDF (ไร้ปัญหาหน้าขาว)</strong> และ <strong>รูปภาพ PNG คมชัดสูง</strong> ครบถ้วนในที่เดียว
+              แยก <strong>ใบเซ็นชื่อเข้าห้องพัก (ปิดข้อมูลสุขภาพ)</strong> ออกจาก <strong>ใบตรวจสอบห้องพัก โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับ Staff)</strong> อย่างชัดเจน รองรับ Excel (.xlsx), CSV, พิมพ์/PDF และ PNG
             </p>
           </div>
 
-          {/* Master 3-in-1 Quick Export Action */}
+          {/* Master 4-in-1 Quick Export Action */}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               type="button"
@@ -383,13 +554,13 @@ export default function AdminDocumentsView({
               className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>⚡ ดาวน์โหลดครบชุด (Master 3-in-1 Excel)</span>
+              <span>⚡ ดาวน์โหลดครบชุด (Master 4-in-1 Excel)</span>
             </button>
           </div>
         </div>
 
-        {/* 3 DOCUMENT SELECTOR TABS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-6 mt-6 border-t border-slate-800/80 text-xs">
+        {/* 4 DOCUMENT SELECTOR TABS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-6 mt-6 border-t border-slate-800/80 text-xs">
           <button
             type="button"
             onClick={() => setActiveDoc('attendance')}
@@ -400,11 +571,11 @@ export default function AdminDocumentsView({
             }`}
           >
             <div className="flex items-center justify-between font-bold mb-1">
-              <span>1. ใบรายชื่อการเข้าร่วม</span>
+              <span>1. ใบเซ็นชื่อเข้าร่วม</span>
               <Users className="w-4 h-4 text-teal-400" />
             </div>
-            <div className="text-sm font-black text-white">ลงทะเบียนอบรม (36 คน)</div>
-            <span className="text-[10px] text-teal-300">มมส 16 ท่าน • มข 20 ท่าน</span>
+            <div className="text-sm font-black text-white">ลงทะเบียนอบรม ({attendanceData.length} คน)</div>
+            <span className="text-[10px] text-teal-300">มีช่องลงลายมือชื่อเข้าร่วม</span>
           </button>
 
           <button
@@ -417,11 +588,11 @@ export default function AdminDocumentsView({
             }`}
           >
             <div className="flex items-center justify-between font-bold mb-1">
-              <span>2. ใบรายชื่อรับเสื้อ</span>
+              <span>2. ใบเซ็นชื่อรับเสื้อ</span>
               <Shirt className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-sm font-black text-white">รับมอบเสื้อฝึก (32 ตัว)</div>
-            <span className="text-[10px] text-purple-300">TSIKKU: 19 • RCPMSU: 13</span>
+            <div className="text-sm font-black text-white">รับมอบเสื้อฝึก ({shirtData.length} ตัว)</div>
+            <span className="text-[10px] text-purple-300">TSIKKU / RCPMSU + ช่องเซ็น</span>
           </button>
 
           <button
@@ -434,28 +605,57 @@ export default function AdminDocumentsView({
             }`}
           >
             <div className="flex items-center justify-between font-bold mb-1">
-              <span>3. ใบรายชื่อเข้าห้องพัก</span>
-              <Building className="w-4 h-4 text-sky-400" />
+              <span>3. ใบเซ็นชื่อเข้าห้องพัก</span>
+              <ShieldCheck className="w-4 h-4 text-sky-400" />
             </div>
-            <div className="text-sm font-black text-white">หอพักกุดรัง (10 ห้อง / 20 คน)</div>
-            <span className="text-[10px] text-sky-300">ชาย 101-107 • หญิง 108-110</span>
+            <div className="text-sm font-black text-white">ปิดข้อมูลสุขภาพ (PDPA)</div>
+            <span className="text-[10px] text-sky-300">เซ็นรับ/คืนกุญแจ • ไม่โชว์โรค</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveDoc('rooms-staff')}
+            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+              activeDoc === 'rooms-staff'
+                ? 'bg-rose-950/80 border-rose-400 text-white ring-2 ring-rose-400/30 shadow-lg'
+                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <div className="flex items-center justify-between font-bold mb-1">
+              <span>4. ใบตรวจห้อง & ยา/ของใช้</span>
+              <Stethoscope className="w-4 h-4 text-rose-400" />
+            </div>
+            <div className="text-sm font-black text-white">สำหรับ Staff (ไม่ต้องเซ็น)</div>
+            <span className="text-[10px] text-rose-300">บอกห้อง • โรคประจำตัว • ยา/ของใช้</span>
           </button>
         </div>
       </div>
 
       {/* EXPORT CONTROL TOOLBAR */}
       <div className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-lg no-print">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-300">
             ส่งออกเอกสารที่เลือก:
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-teal-300 font-mono text-xs font-bold border border-slate-700">
-            {activeDoc === 'attendance' ? '1. ใบรายชื่อการเข้าร่วม' : activeDoc === 'shirts' ? '2. ใบรับมอบเสื้อ 32 ตัว' : '3. ใบเข้าห้องพัก 101-110'}
+            {docBadgeLabel}
           </span>
+          {activeDoc === 'rooms-staff' && (
+            <button
+              type="button"
+              onClick={() => setStaffOnlyAlerts(v => !v)}
+              className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                staffOnlyAlerts
+                  ? 'bg-rose-600 text-white border-rose-400'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
+              }`}
+            >
+              {staffOnlyAlerts ? '✓ แสดงเฉพาะห้องที่ต้องเตรียมยา/เฝ้าระวัง' : 'แสดงทุกห้อง (10 ห้อง)'}
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Excel Export */}
           <button
             type="button"
             onClick={handleExportSingleExcel}
@@ -466,7 +666,6 @@ export default function AdminDocumentsView({
             <span>Excel (.xlsx)</span>
           </button>
 
-          {/* CSV Export */}
           <button
             type="button"
             onClick={handleExportCsv}
@@ -476,7 +675,6 @@ export default function AdminDocumentsView({
             <span>CSV (UTF-8 BOM)</span>
           </button>
 
-          {/* PDF / Print */}
           <button
             type="button"
             onClick={handlePrintDocument}
@@ -486,7 +684,6 @@ export default function AdminDocumentsView({
             <span>พิมพ์ / PDF (หน้ากระดาษ A4)</span>
           </button>
 
-          {/* PNG Image */}
           <button
             type="button"
             onClick={handleExportPng}
@@ -503,18 +700,21 @@ export default function AdminDocumentsView({
       <div className="overflow-x-auto pb-4">
         <div 
           id="printable-document-sheet"
-          className="mx-auto bg-white text-slate-900 p-8 sm:p-12 rounded-2xl shadow-2xl border border-slate-300 min-w-[850px] max-w-[1000px] text-xs font-sans print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none"
+          className="mx-auto bg-white text-slate-900 p-8 sm:p-12 rounded-2xl shadow-2xl border border-slate-300 min-w-[850px] max-w-[1040px] text-xs font-sans print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none"
         >
           {/* OFFICIAL HEADER SECTION */}
           <div className="text-center pb-5 border-b-2 border-slate-900 mb-6 space-y-1">
             <div className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] mb-1 uppercase tracking-wider border border-slate-300">
-              Joint Response Exercise (JRE 2027) • Official Document
+              {activeDoc === 'rooms-staff'
+                ? 'Joint Response Exercise (JRE 2027) • Staff Internal Medical & Logistics Checklist'
+                : 'Joint Response Exercise (JRE 2027) • Official Signing Document'}
             </div>
 
             <h2 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
               {activeDoc === 'attendance' && 'บัญชีลงเวลาและลงลายมือชื่อเข้าร่วมการฝึกอบรม'}
               {activeDoc === 'shirts' && 'บัญชีลงลายมือชื่อรับมอบเสื้อฝึกปฏิบัติการ JRE 2027'}
-              {activeDoc === 'rooms' && 'บัญชีลงทะเบียนเข้าห้องพักและรับกุญแจ หอพักกุดรัง'}
+              {activeDoc === 'rooms' && 'บัญชีลงลายมือชื่อเข้าห้องพักและรับกุญแจ หอพักกุดรัง (ฉบับปิดข้อมูลสุขภาพ)'}
+              {activeDoc === 'rooms-staff' && 'ใบตรวจสอบห้องพัก โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับ Staff)'}
             </h2>
 
             <p className="text-sm font-bold text-slate-700">
@@ -527,9 +727,10 @@ export default function AdminDocumentsView({
               <span>📍 ณ ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม</span>
               <span>•</span>
               <span className="font-bold text-slate-800">
-                {activeDoc === 'attendance' && 'ยอดรวม 36 คน'}
-                {activeDoc === 'shirts' && 'ยอดผลิตรวม 32 ตัว (TSIKKU: 19 / RCPMSU: 13)'}
-                {activeDoc === 'rooms' && 'ชั้น 1 ห้อง 101 - 110 (10 ห้อง / 20 คน)'}
+                {activeDoc === 'attendance' && `ยอดรวม ${attendanceData.length} คน`}
+                {activeDoc === 'shirts' && `ยอดผลิตรวม ${shirtData.length} ตัว`}
+                {activeDoc === 'rooms' && 'ชั้น 1 ห้อง 101 - 110 • คุ้มครองข้อมูลสุขภาพ (PDPA)'}
+                {activeDoc === 'rooms-staff' && 'ไม่ต้องลงลายมือชื่อ • สำหรับฝ่ายพยาบาล/สวัสดิการเตรียมความพร้อม'}
               </span>
             </div>
           </div>
@@ -578,7 +779,7 @@ export default function AdminDocumentsView({
               <div className="flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 p-2.5 rounded-lg border border-slate-300">
                 <span>🏛️ มข (อกขวา TSIKKU): 19 ตัว (S:3, M:4, L:4, XL:2, 2XL:2, 4XL:3, 5XL:1)</span>
                 <span>🏛️ มมส (อกขวา RCPMSU): 13 ตัว (S:2, M:1, L:1, XL:6, 2XL:1, 4XL:1, 6XL:1)</span>
-                <span className="font-black text-slate-950">รวมผลิต: 32 ตัว</span>
+                <span className="font-black text-slate-950">รวมผลิต: {shirtData.length} ตัว</span>
               </div>
 
               <table className="w-full text-left text-xs border-collapse border border-slate-900">
@@ -617,164 +818,135 @@ export default function AdminDocumentsView({
               </table>
 
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-300 text-[11px] text-slate-600">
-                * บุคลากร/Staff มมส ที่ถือบัตร Staff อย่างเดียว (0 บาท ไม่รับเสื้อ เช่น นายณัฐพล เชื้อคนแข็ง) จะไม่ปรากฏในยอดผลิต 32 ตัวข้างต้น
+                * บุคลากร/Staff มมส ที่ถือบัตร Staff อย่างเดียว (0 บาท ไม่รับเสื้อ เช่น นายณัฐพล เชื้อคนแข็ง) จะไม่ปรากฏในยอดผลิตข้างต้น
               </div>
             </div>
           )}
 
-          {/* TABLE CONTENT 3: DORMITORY ROOMS ROSTER (ROOMS 101-110) */}
+          {/* TABLE CONTENT 3: DORMITORY SIGN-IN ROSTER (PDPA-SAFE: NO HEALTH INFO) */}
           {activeDoc === 'rooms' && (
             <div className="space-y-6">
-              {/* Male Section */}
-              <div>
-                <h3 className="text-sm font-black text-slate-950 mb-2 flex items-center justify-between">
-                  <span>🚪 1. ห้องพักชาย (7 ห้อง / 14 คน — หอพักกุดรัง ชั้น 1 ห้อง 101 ถึง 107)</span>
-                  <span className="text-xs font-normal text-slate-600">ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น</span>
-                </h3>
-
-                <table className="w-full text-left text-xs border-collapse border border-slate-900">
-                  <thead>
-                    <tr className="bg-slate-200 text-slate-950 font-bold border-b border-slate-900 text-center">
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-20">ห้อง</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-14">เตียง</th>
-                      <th className="py-2.5 px-3 border-r border-slate-900 text-left">ชื่อ - นามสกุล ผู้เข้าพัก</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-20">ชื่อเล่น</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-24">เบอร์โทร</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-20">กุญแจ #</th>
-                      <th className="py-2.5 px-4 border-r border-slate-900 w-36">ลายมือชื่อรับกุญแจ</th>
-                      <th className="py-2.5 px-4 w-36">ลายมือชื่อคืนกุญแจ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-400">
-                    {roomData.maleRooms.map((rm) => (
-                      <React.Fragment key={rm.room}>
-                        {[0, 1].map((b) => {
-                          const p = rm.occupants[b];
-                          return (
-                            <tr key={`${rm.room}-${b}`} className={b === 1 ? 'border-b-2 border-slate-900 bg-blue-50/40' : 'bg-white'}>
-                              {b === 0 && (
-                                <td rowSpan={2} className="py-2 px-2 border-r border-slate-900 text-center font-mono font-black text-sm bg-slate-100 align-middle">
-                                  {rm.roomLabel}
-                                  <span className="block text-[10px] font-normal text-slate-500">ชั้น 1 (ชาย)</span>
-                                </td>
-                              )}
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
-                              <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
-                                <div>{p ? p.name : '(ว่าง)'}</div>
-                                {p && (p.hasMed || p.hasAlg) && (
-                                  <div className="text-[10px] text-rose-700 font-semibold mt-0.5">
-                                    {p.hasMed && <span>🩺 โรค: {p.medical} </span>}
-                                    {p.hasAlg && <span>⚠️ แพ้: {p.allergy} </span>}
-                                    <span className="font-mono">(เลือด: {p.bloodGroup})</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[10px] text-slate-500">K-{rm.room}</td>
-                              <td className="py-2 px-4 border-r border-slate-400 text-center">
-                                <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
-                              </td>
-                              <td className="py-2 px-4 text-center">
-                                <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-[11px] text-sky-900 font-semibold flex items-center justify-between">
+                <span>🔒 ใบเซ็นชื่อเข้าห้องพักฉบับนี้ปิดข้อมูลสุขภาพ/โรคประจำตัวทั้งหมด เพื่อคุ้มครองข้อมูลส่วนบุคคล (PDPA) ณ จุดลงทะเบียน</span>
+                <span className="font-mono font-bold">เรียงลำดับตามห้อง 101 - 110</span>
               </div>
 
-              {/* Female Section */}
+              <DormSignInZoneTable
+                title="🚪 1. ห้องพักชาย (7 ห้อง / 14 คน — หอพักกุดรัง ชั้น 1 ห้อง 101 ถึง 107)"
+                subtitle="ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
+                rooms={roomData.maleRooms}
+                altBgClass="bg-blue-50/40"
+                zoneLabel="ชั้น 1 (ชาย)"
+              />
+
               <div className="pt-2">
-                <h3 className="text-sm font-black text-slate-950 mb-2 flex items-center justify-between">
-                  <span>🚪 2. ห้องพักหญิง (3 ห้อง / 6 คน — หอพักกุดรัง ชั้น 1 ห้อง 108 ถึง 110)</span>
-                  <span className="text-xs font-normal text-slate-600">ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น</span>
-                </h3>
-
-                <table className="w-full text-left text-xs border-collapse border border-slate-900">
-                  <thead>
-                    <tr className="bg-slate-200 text-slate-950 font-bold border-b border-slate-900 text-center">
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-20">ห้อง</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-14">เตียง</th>
-                      <th className="py-2.5 px-3 border-r border-slate-900 text-left">ชื่อ - นามสกุล ผู้เข้าพัก</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-20">ชื่อเล่น</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-24">เบอร์โทร</th>
-                      <th className="py-2.5 px-2 border-r border-slate-900 w-20">กุญแจ #</th>
-                      <th className="py-2.5 px-4 border-r border-slate-900 w-36">ลายมือชื่อรับกุญแจ</th>
-                      <th className="py-2.5 px-4 w-36">ลายมือชื่อคืนกุญแจ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-400">
-                    {roomData.femaleRooms.map((rm) => (
-                      <React.Fragment key={rm.room}>
-                        {[0, 1].map((b) => {
-                          const p = rm.occupants[b];
-                          return (
-                            <tr key={`${rm.room}-${b}`} className={b === 1 ? 'border-b-2 border-slate-900 bg-pink-50/40' : 'bg-white'}>
-                              {b === 0 && (
-                                <td rowSpan={2} className="py-2 px-2 border-r border-slate-900 text-center font-mono font-black text-sm bg-slate-100 align-middle">
-                                  {rm.roomLabel}
-                                  <span className="block text-[10px] font-normal text-slate-500">ชั้น 1 (หญิง)</span>
-                                </td>
-                              )}
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
-                              <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
-                                <div>{p ? p.name : '(ว่าง)'}</div>
-                                {p && (p.hasMed || p.hasAlg) && (
-                                  <div className="text-[10px] text-rose-700 font-semibold mt-0.5">
-                                    {p.hasMed && <span>🩺 โรค: {p.medical} </span>}
-                                    {p.hasAlg && <span>⚠️ แพ้: {p.allergy} </span>}
-                                    <span className="font-mono">(เลือด: {p.bloodGroup})</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>
-                              <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[10px] text-slate-500">K-{rm.room}</td>
-                              <td className="py-2 px-4 border-r border-slate-400 text-center">
-                                <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
-                              </td>
-                              <td className="py-2 px-4 text-center">
-                                <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                <DormSignInZoneTable
+                  title="🚪 2. ห้องพักหญิง (3 ห้อง / 6 คน — หอพักกุดรัง ชั้น 1 ห้อง 108 ถึง 110)"
+                  subtitle="ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
+                  rooms={roomData.femaleRooms}
+                  altBgClass="bg-pink-50/40"
+                  zoneLabel="ชั้น 1 (หญิง)"
+                />
               </div>
 
-              {/* Appendix: MSU Local List */}
               <div className="p-3 bg-slate-100 rounded-lg border border-slate-300 text-[11px] text-slate-700">
-                <span className="font-bold">🏠 นิสิต / คณะกรรมการ มมส (16 ท่าน) — ไม่พักหอพัก (ไป-กลับเอง):</span>{' '}
+                <span className="font-bold">🏠 นิสิต / คณะกรรมการ มมส ({roomData.msuList.length} ท่าน) — ไม่พักหอพัก (ไป-กลับเอง):</span>{' '}
                 {roomData.msuList.map(m => m.name).join(', ')}
               </div>
             </div>
           )}
 
-          {/* OFFICIAL SIGNATURE FOOTER */}
-          <div className="pt-10 mt-8 border-t border-slate-400 grid grid-cols-2 gap-8 text-center text-xs">
-            <div className="space-y-1">
-              <p className="text-slate-600 mb-8">ลงชื่อ ..................................................................... ผู้ตรวจสอบ / เจ้าหน้าที่ทะเบียน</p>
-              <p className="font-bold text-slate-900">( ..................................................................... )</p>
-              <p className="text-[11px] text-slate-500">ตำแหน่ง เจ้าหน้าที่ฝ่ายทะเบียนและประเมินผล JRE 2027</p>
-            </div>
+          {/* TABLE CONTENT 4: STAFF MEDICAL & SUPPLIES ROOM CHECKLIST (NO SIGNATURE COLUMN) */}
+          {activeDoc === 'rooms-staff' && (
+            <div className="space-y-6">
+              <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-[11px] text-rose-950 font-semibold flex items-center justify-between">
+                <span>🩺 เอกสารสำหรับ Staff ฝ่ายพยาบาล/สวัสดิการเท่านั้น (ไม่ต้องให้ผู้เข้าร่วมเซ็น) — ใช้ตรวจสอบว่าใครอยู่ห้องไหน มีโรค/แพ้/ยา/ของใช้อะไรบ้าง</span>
+                <span className="font-mono font-bold">เฉพาะ Staff</span>
+              </div>
 
-            <div className="space-y-1">
-              <p className="text-slate-600 mb-8">ลงชื่อ ..................................................................... ประธาน / ผู้รับผิดชอบโครงการ</p>
-              <p className="font-bold text-slate-900">( ..................................................................... )</p>
-              <p className="text-[11px] text-slate-500">ประธานคณะกรรมการดำเนินงาน JRE 2027</p>
+              <StaffMedicalZoneTable
+                title="🚪 1. โซนห้องพักชาย (ห้อง 101 - 107)"
+                rooms={displayedStaffMaleRooms}
+                zoneLabel="ชั้น 1 (ชาย)"
+              />
+
+              <StaffMedicalZoneTable
+                title="🚪 2. โซนห้องพักหญิง (ห้อง 108 - 110)"
+                rooms={displayedStaffFemaleRooms}
+                zoneLabel="ชั้น 1 (หญิง)"
+              />
+
+              {roomData.msuNeedsCare.length > 0 && (
+                <div className="pt-2">
+                  <h3 className="text-sm font-black text-slate-950 mb-2">
+                    🏠 3. ข้อมูลโรคประจำตัว / ยา / ของที่ต้องใช้ ของผู้เข้าร่วม มมส (ไป-กลับ ไม่พักหอ — {roomData.msuNeedsCare.length} ท่าน)
+                  </h3>
+                  <table className="w-full text-left text-xs border-collapse border border-slate-900">
+                    <thead>
+                      <tr className="bg-amber-900 text-white font-bold border-b border-slate-900 text-center">
+                        <th className="py-2 px-2 border-r border-amber-700 w-24">ประเภท</th>
+                        <th className="py-2 px-2.5 border-r border-amber-700 text-left w-48">ชื่อ - นามสกุล / ติดต่อ</th>
+                        <th className="py-2 px-2.5 border-r border-amber-700 text-left">โรคประจำตัว / อาการแพ้ / หมู่เลือด</th>
+                        <th className="py-2 px-2.5 border-r border-amber-700 text-left">ยาที่ต้องการ / เวชภัณฑ์</th>
+                        <th className="py-2 px-2.5 border-r border-amber-700 text-left">ของที่ต้องใช้ / ดูแลพิเศษ</th>
+                        <th className="py-2 px-2 w-28">เช็คเตรียม (Staff)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-400">
+                      {roomData.msuNeedsCare.map((p, idx) => (
+                        <tr key={p.id || idx} className="bg-amber-50/50">
+                          <td className="py-2 px-2 border-r border-slate-400 text-center font-bold text-amber-900">ไป-กลับ มมส</td>
+                          <td className="py-2 px-2.5 border-r border-slate-400">
+                            <div className="font-bold text-slate-950">{p.name}</div>
+                            <div className="text-[10px] text-slate-600 font-mono">{p.callsign} • โทร: {p.phone}</div>
+                          </td>
+                          <td className="py-2 px-2.5 border-r border-slate-400 text-[11px]">
+                            {p.hasMedicalHistory && <div className="font-bold text-rose-800">🩺 โรค: {p.medicalHistory}</div>}
+                            {p.hasFoodAllergy && <div className="font-bold text-amber-800">⚠️ แพ้: {p.foodAllergy}</div>}
+                            {!p.hasMedicalHistory && !p.hasFoodAllergy && <span className="text-emerald-700">✓ ปกติ</span>}
+                          </td>
+                          <td className="py-2 px-2.5 border-r border-slate-400 text-[11px] font-semibold text-emerald-900">
+                            {p.medicalEquipmentNeeded || '-'}
+                          </td>
+                          <td className="py-2 px-2.5 border-r border-slate-400 text-[11px] font-semibold text-indigo-900">
+                            {p.specialItemsNeeded || (p.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-')}
+                          </td>
+                          <td className="py-2 px-2 text-center text-[11px]">
+                            <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                              <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-sm"></span>
+                              <span>เตรียมแล้ว</span>
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* OFFICIAL SIGNATURE FOOTER (For signing documents only; Staff checklist shows prep note) */}
+          {activeDoc === 'rooms-staff' ? (
+            <div className="pt-6 mt-6 border-t border-slate-400 flex items-center justify-between text-[11px] text-slate-600">
+              <span>* เอกสารนี้ไม่ต้องลงลายมือชื่อผู้เข้าพัก • ใช้สำหรับฝ่ายพยาบาล สวัสดิการ และผู้ดูแลหอพักตรวจสอบความพร้อมเท่านั้น</span>
+              <span className="font-mono font-bold text-slate-800">ผู้ตรวจสอบ (Staff): ................................................</span>
+            </div>
+          ) : (
+            <div className="pt-10 mt-8 border-t border-slate-400 grid grid-cols-2 gap-8 text-center text-xs">
+              <div className="space-y-1">
+                <p className="text-slate-600 mb-8">ลงชื่อ ..................................................................... ผู้ตรวจสอบ / เจ้าหน้าที่ทะเบียน</p>
+                <p className="font-bold text-slate-900">( ..................................................................... )</p>
+                <p className="text-[11px] text-slate-500">ตำแหน่ง เจ้าหน้าที่ฝ่ายทะเบียนและประเมินผล JRE 2027</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-slate-600 mb-8">ลงชื่อ ..................................................................... ประธาน / ผู้รับผิดชอบโครงการ</p>
+                <p className="font-bold text-slate-900">( ..................................................................... )</p>
+                <p className="text-[11px] text-slate-500">ประธานคณะกรรมการดำเนินงาน JRE 2027</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

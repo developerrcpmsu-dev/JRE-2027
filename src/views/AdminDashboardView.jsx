@@ -90,6 +90,7 @@ import {
   isStaffRegistration,
   formatStaffCallsign,
   getStaffPaymentSummary,
+  getRegistrationPaymentResolution,
   computeStaffAndRefundMetrics,
   STAFF_ROLE_OPTIONS,
   resolveStaffRoleType,
@@ -966,92 +967,23 @@ export default function AdminDashboardView({
 
       // Financial calculation per person (MSU Staff = 280 THB shirt only, Non-MSU Staff = 480 THB [280 shirt + 200 accommodation])
       const isMsu = uniInfo.isMsu;
-      const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
-      const totalFee = isStaff
-        ? staffSum.totalStaffFee
-        : (isMsu
-            ? (paymentConfig?.fee_total_msu || 650)
-            : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
-      const round1Fee = isMsu
-        ? (paymentConfig?.installment_round1_amount_msu || 400)
-        : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
-      const round2Fee = isMsu
-        ? (paymentConfig?.installment_round2_amount_msu || 250)
-        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+      const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
+      bucket.expectedAmount += payRes.effectiveTotalFee;
+      bucket.collectedAmount += payRes.collectedAmount;
+      bucket.outstandingAmount += payRes.activeOutstandingAmount;
 
-      const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
-      bucket.expectedAmount += totalFee;
+      if (isStaff && payRes.isR1Paid) {
+        bucket.staffPaidCount += 1;
+      }
 
-      if (isStaff) {
-        const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
-        const isR1Pending = !isR1Paid && (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review');
-        if (staffSum.isMsu) {
-          if (isR1Paid) {
-            bucket.fullyPaidCount += 1;
-            bucket.staffPaidCount += 1;
-            bucket.collectedAmount += STAFF_SHIRT_FEE;
-          } else if (isR1Pending) {
-            bucket.pendingReviewCount += 1;
-            bucket.outstandingAmount += STAFF_SHIRT_FEE;
-          } else {
-            bucket.unpaidCount += 1;
-            bucket.outstandingAmount += STAFF_SHIRT_FEE;
-          }
-        } else {
-          const shirtCol = isR1Paid ? STAFF_SHIRT_FEE : 0;
-          const accomCol = staffSum.accommodationPaidTotal;
-          const staffCol = shirtCol + accomCol;
-          const staffOut = Math.max(0, totalFee - staffCol);
-          bucket.collectedAmount += staffCol;
-          bucket.outstandingAmount += staffOut;
-          if (isR1Paid) bucket.staffPaidCount += 1;
-
-          if (isR1Paid && staffSum.isAccommodationPaid) {
-            bucket.fullyPaidCount += 1;
-          } else if (isR1Pending || staffSum.isAccommodationPendingReview) {
-            bucket.pendingReviewCount += 1;
-          } else if (isR1Paid && staffSum.accommodationRemaining > 0) {
-            bucket.partialPaidCount += 1;
-          } else {
-            bucket.unpaidCount += 1;
-          }
-        }
-      } else if (isInstallment) {
-        const isR1Paid = reg.installment_1_status === 'paid';
-        const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
-        const hasPending = reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review';
-        if (isR1Paid && isR2Paid) {
-          bucket.fullyPaidCount += 1;
-          bucket.collectedAmount += totalFee;
-        } else if (hasPending) {
-          bucket.pendingReviewCount += 1;
-          if (isR1Paid) {
-            bucket.collectedAmount += round1Fee;
-            bucket.outstandingAmount += round2Fee;
-          } else {
-            bucket.outstandingAmount += totalFee;
-          }
-        } else if (isR1Paid) {
-          bucket.partialPaidCount += 1;
-          bucket.collectedAmount += round1Fee;
-          bucket.outstandingAmount += round2Fee;
-        } else {
-          bucket.unpaidCount += 1;
-          bucket.outstandingAmount += totalFee;
-        }
-      } else {
-        const isPaid = reg.payment_status === 'paid';
-        const isPending = reg.payment_status === 'pending_review';
-        if (isPaid) {
-          bucket.fullyPaidCount += 1;
-          bucket.collectedAmount += totalFee;
-        } else if (isPending) {
-          bucket.pendingReviewCount += 1;
-          bucket.outstandingAmount += totalFee;
-        } else {
-          bucket.unpaidCount += 1;
-          bucket.outstandingAmount += totalFee;
-        }
+      if (payRes.statusBucket === 'paid') {
+        bucket.fullyPaidCount += 1;
+      } else if (payRes.statusBucket === 'pending_review') {
+        bucket.pendingReviewCount += 1;
+      } else if (payRes.statusBucket === 'partial_paid') {
+        bucket.partialPaidCount += 1;
+      } else if (payRes.statusBucket === 'unpaid') {
+        bucket.unpaidCount += 1;
       }
 
       bucket.people.push(reg);
@@ -1379,6 +1311,10 @@ export default function AdminDashboardView({
   const [modalInstallment2Amount, setModalInstallment2Amount] = useState(0);
   const [modalInstallment2Notes, setModalInstallment2Notes] = useState('');
   const [modalInstallment2SlipUrl, setModalInstallment2SlipUrl] = useState('');
+  const [modalRound2CancelledAbsent, setModalRound2CancelledAbsent] = useState(false);
+  const [modalRound2CancelledNote, setModalRound2CancelledNote] = useState('');
+  const [modalPaymentDeferredPostProject, setModalPaymentDeferredPostProject] = useState(false);
+  const [modalPaymentDeferredNote, setModalPaymentDeferredNote] = useState('');
   const [isUploadingModalSlip, setIsUploadingModalSlip] = useState(false);
 
   // Admin Direct Message State
@@ -2475,8 +2411,18 @@ export default function AdminDashboardView({
   const populateProfileModalFields = (reg) => {
     const parsedName = parseFullNameAffiliationString(reg.full_name_affiliation || '');
     const resolvedTitleTh = reg.title_th || parsedName.title_th || '';
-    const resolvedFirstTh = reg.first_name || reg.first_name_th || parsedName.first_name || '';
-    const resolvedLastTh = reg.last_name || reg.last_name_th || parsedName.last_name || '';
+    const THAI_CHAR_RE = /[\u0E00-\u0E7F]/;
+    const resolvedFirstTh = (reg.first_name_th && THAI_CHAR_RE.test(reg.first_name_th))
+      ? reg.first_name_th
+      : (parsedName.first_name && THAI_CHAR_RE.test(parsedName.first_name))
+      ? parsedName.first_name
+      : (reg.first_name || reg.first_name_th || parsedName.first_name || '');
+
+    const resolvedLastTh = (reg.last_name_th && THAI_CHAR_RE.test(reg.last_name_th))
+      ? reg.last_name_th
+      : (parsedName.last_name && THAI_CHAR_RE.test(parsedName.last_name))
+      ? parsedName.last_name
+      : (reg.last_name || reg.last_name_th || parsedName.last_name || '');
     const instMeta = INSTITUTION_ABBR_MAP[reg.institution] || null;
     const resolvedAbbrTh = reg.institution_abbr_th || parsedName.institution_abbr_th || instMeta?.abbr_th || '';
     const resolvedTitleEn = reg.title_en || parsedName.title_en || TITLE_TH_TO_EN_MAP[resolvedTitleTh] || '';
@@ -2609,6 +2555,10 @@ export default function AdminDashboardView({
     setModalInstallment2Amount(isStaff ? (staffSum.isMsu ? 0 : staffSum.accommodationNetRequiredAfterOffset) : (reg.installment_2_amount !== undefined ? reg.installment_2_amount : round2Fee));
     setModalInstallment2Notes(reg.installment_2_notes || '');
     setModalInstallment2SlipUrl(reg.installment_2_slip_url || '');
+    setModalRound2CancelledAbsent(Boolean(reg.round2_cancelled_absent));
+    setModalRound2CancelledNote(reg.round2_cancelled_note || '');
+    setModalPaymentDeferredPostProject(Boolean(reg.payment_deferred_post_project));
+    setModalPaymentDeferredNote(reg.payment_deferred_note || '');
   };
 
   // Open Full Profile & Remarks Modal (Locked / View-only by default, or unlocked if startInEdit = true)
@@ -2815,6 +2765,10 @@ export default function AdminDashboardView({
         installment_2_notes: (modalIsStaff && isModalMsu) ? '' : (modalInstallment2Notes || '').trim(),
         installment_2_slip_url: (modalIsStaff && isModalMsu) ? null : (modalInstallment2SlipUrl || profileModalReg.installment_2_slip_url || null),
         staff_accommodation_paid: Boolean(modalIsStaff && !isModalMsu && (modalInstallment2Status === 'paid' || modalPaymentStatus === 'paid')),
+        round2_cancelled_absent: Boolean(modalRound2CancelledAbsent),
+        round2_cancelled_note: modalRound2CancelledAbsent ? (modalRound2CancelledNote || 'ไม่ได้เข้าร่วมอบรม — ยกเลิกการจ่ายรอบที่ 2').trim() : '',
+        payment_deferred_post_project: Boolean(!modalRound2CancelledAbsent && modalPaymentDeferredPostProject),
+        payment_deferred_note: (!modalRound2CancelledAbsent && modalPaymentDeferredPostProject) ? (modalPaymentDeferredNote || 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ').trim() : '',
         admin_manual_override: true
       };
 
@@ -3156,6 +3110,17 @@ export default function AdminDashboardView({
   // Notify Non-MSU Staff about 200 THB Accommodation Fee (or 80 THB remaining after 120 THB overpayment offset)
   const handleNotifyStaffAccommodation = async (reg, silent = false) => {
     if (!reg) return;
+    const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
+    if (payRes.isRound2CancelledAbsent || payRes.isDeferredPostProject) {
+      if (!silent) {
+        triggerToast(
+          payRes.isRound2CancelledAbsent
+            ? '🚫 รายการนี้ยกเลิกการจ่ายรอบที่ 2 แล้ว (งดส่งแจ้งเตือนทวง)'
+            : '🕒 รายการนี้บันทึกจ่ายย้อนหลังหลังจบโครงการแล้ว (งดส่งแจ้งเตือนทวง)'
+        );
+      }
+      return;
+    }
     const paySummary = getStaffPaymentSummary(reg);
     if (!paySummary.isStaff || paySummary.isMsu || paySummary.accommodationRemaining <= 0) {
       if (!silent) triggerToast('รายการนี้ไม่มีค่าที่พักค้างชำระ');
@@ -3255,6 +3220,17 @@ export default function AdminDashboardView({
 
   const handleNotifyRound2 = async (reg, silent = false) => {
     if (!reg) return;
+    const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
+    if (payRes.isRound2CancelledAbsent || payRes.isDeferredPostProject) {
+      if (!silent) {
+        triggerToast(
+          payRes.isRound2CancelledAbsent
+            ? '🚫 รายการนี้ยกเลิกการจ่ายรอบที่ 2 แล้ว (งดส่งแจ้งเตือนทวง)'
+            : '🕒 รายการนี้บันทึกจ่ายย้อนหลังหลังจบโครงการแล้ว (งดส่งแจ้งเตือนทวง)'
+        );
+      }
+      return;
+    }
     const isStaff = isStaffRegistration(reg);
     if (isStaff) {
       await handleNotifyStaffAccommodation(reg, silent);
@@ -3301,23 +3277,24 @@ export default function AdminDashboardView({
   };
 
   const handleBulkNotifyRound2 = async (list) => {
-    if (!list || list.length === 0) {
-      triggerToast('ไม่พบรายชื่อที่ต้องแจ้งเตือนงวดที่ 2');
+    const eligibleList = (list || []).filter(r => getRegistrationPaymentResolution(r, paymentConfig).shouldChaseAnyPayment);
+    if (eligibleList.length === 0) {
+      triggerToast('ไม่พบรายชื่อที่ต้องส่งแจ้งเตือนทวง (รายการที่ยกเลิกรอบ 2 หรือจ่ายหลังจบโครงการจะถูกข้ามอัตโนมัติ)');
       return;
     }
     const ok = await askConfirm({
-      title: `🔔 ยืนยันส่งข้อความแจ้งเตือนงวดที่ 2 (${list.length} คน)`,
-      message: `ระบบจะส่งข้อความแจ้งเตือนพร้อมยอดเงินและเลขบัญชีให้ผู้สมัครที่รอชำระงวดที่ 2 / ค่าที่พัก ทั้งหมด ${list.length} คน คุณต้องการยืนยันหรือไม่?`,
+      title: `🔔 ยืนยันส่งข้อความแจ้งเตือนงวดที่ 2 (${eligibleList.length} คน)`,
+      message: `ระบบจะส่งข้อความแจ้งเตือนพร้อมยอดเงินและเลขบัญชีให้ผู้สมัครที่รอชำระงวดที่ 2 / ค่าที่พัก ทั้งหมด ${eligibleList.length} คน (งดส่งอัตโนมัติสำหรับผู้ที่ยกเลิกรอบ 2 หรือจ่ายหลังจบโครงการ) คุณต้องการยืนยันหรือไม่?`,
       confirmText: 'ส่งข้อความแจ้งเตือนทุกคน',
       cancelText: 'ยกเลิก',
       variant: 'primary'
     });
     if (!ok) return;
 
-    for (const reg of list) {
+    for (const reg of eligibleList) {
       await handleNotifyRound2(reg, true);
     }
-    triggerToast(`🔔 ส่งข้อความแจ้งเตือนงวดที่ 2 ครบทั้ง ${list.length} คน เรียบร้อยแล้ว!`);
+    triggerToast(`🔔 ส่งข้อความแจ้งเตือนงวดที่ 2 ครบทั้ง ${eligibleList.length} คน เรียบร้อยแล้ว!`);
   };
 
   // Admin & Staff Health Privacy Consent Toggle (Adjustable for EVERY applicant with Advanced Mode)
@@ -3408,21 +3385,196 @@ export default function AdminDashboardView({
     }
   };
 
+  // Admin Action: ยกเลิกการจ่ายรอบที่ 2 (ผู้เข้าร่วมไม่ได้เข้าร่วมอบรม -> ตัดจบยอดค้างรับ & ยกเลิกการทวง)
+  const handleCancelRound2Absent = async (reg, customNote = null, skipConfirm = false) => {
+    if (!reg) return;
+    const pName = resolvePersonFullNameWithTitle(reg).fullName;
+    const payRes = getRegistrationPaymentResolution({ ...reg, round2_cancelled_absent: false, payment_deferred_post_project: false }, paymentConfig);
+    const waivedAmt = payRes.remainingAmount;
+
+    if (!skipConfirm) {
+      const ok = await askConfirm({
+        title: `🚫 ยกเลิกการจ่ายรอบที่ 2 (ไม่ได้เข้าร่วมอบรม)`,
+        message: `ยืนยันยกเลิกการจ่ายรอบที่ 2 ของ "${pName}" (ยอดค้าง ฿${waivedAmt}) หรือไม่?\n\nระบบจะ:\n• ตัดจบยอดค้างรับเหลือ ฿0\n• นำรายชื่อออกจากรายการค้างชำระ / ค้างงวด 2 และงดส่งแจ้งเตือนทวงทุกกรณี\n• บันทึกหมายเหตุในสรุปยอดทั้งหมดว่าไม่ได้เข้าร่วมอบรม`,
+        confirmText: 'ยืนยันยกเลิกรอบที่ 2 & ตัดจบยอดค้าง',
+        cancelText: 'ยกเลิก',
+        variant: 'danger'
+      });
+      if (!ok) return;
+    }
+
+    const noteText = String(customNote || '').trim() || `ไม่ได้เข้าร่วมอบรม — ยกเลิกการจ่ายรอบที่ 2 แล้ว (ตัดจบยอดค้าง ฿${waivedAmt} & งดทวง)`;
+    const existingNotes = String(reg.payment_notes || '').trim();
+    const cleanedOldNote = existingNotes
+      .split(/\s*\|\s*/)
+      .filter(p => p && !p.includes('ยกเลิกการจ่ายรอบที่ 2') && !p.includes('จ่ายย้อนหลังหลังจบโครงการ'))
+      .join(' | ');
+    const nextPaymentNotes = [cleanedOldNote, noteText].filter(Boolean).join(' | ');
+
+    const updates = {
+      round2_cancelled_absent: true,
+      round2_cancelled_at: new Date().toISOString(),
+      round2_cancelled_note: noteText,
+      payment_deferred_post_project: false,
+      payment_deferred_at: '',
+      payment_deferred_note: '',
+      installment_2_status: 'cancelled',
+      installment_2_amount: 0,
+      installment_2_notes: noteText,
+      staff_accommodation_paid: false,
+      payment_status: payRes.isR1Paid ? 'paid' : (reg.payment_status || 'unpaid'),
+      payment_amount: 0,
+      payment_notes: nextPaymentNotes,
+      admin_manual_override: true
+    };
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, updates);
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setModalRound2CancelledAbsent(true);
+      setModalRound2CancelledNote(noteText);
+      setModalPaymentDeferredPostProject(false);
+      setModalPaymentDeferredNote('');
+      setModalInstallment2Status('cancelled');
+      setModalInstallment2Amount(0);
+      setModalInstallment2Notes(noteText);
+      setModalPaymentStatus(updates.payment_status);
+      setModalPaymentAmount(0);
+      setModalPaymentNotes(nextPaymentNotes);
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    triggerToast(`🚫 ยกเลิกการจ่ายรอบที่ 2 ของ "${pName}" แล้ว (ตัดจบยอดค้าง ฿${waivedAmt} & ยกเลิกการทวง)`);
+  };
+
+  // Admin Action: คืนค่าสถานะการจ่ายรอบที่ 2 จากที่เคยยกเลิกไว้
+  const handleRestoreRound2FromCancelled = async (reg) => {
+    if (!reg) return;
+    const pName = resolvePersonFullNameWithTitle(reg).fullName;
+    const baseRes = getRegistrationPaymentResolution({
+      ...reg,
+      round2_cancelled_absent: false,
+      payment_deferred_post_project: false,
+      installment_2_status: reg.installment_2_slip_url ? 'pending_review' : 'unpaid'
+    }, paymentConfig);
+
+    const restoredR2Status = reg.installment_2_slip_url ? 'pending_review' : 'unpaid';
+    const restoredR2Amount = baseRes.isStaff
+      ? (baseRes.staffSummary?.accommodationNetRequiredAfterOffset || 200)
+      : baseRes.round2Fee;
+    const restoredPayAmt = baseRes.isR1Paid ? restoredR2Amount : baseRes.baseTotalFee;
+    const nextNotes = String(reg.payment_notes || '')
+      .split(/\s*\|\s*/)
+      .filter(p => p && !p.includes('ยกเลิกการจ่ายรอบที่ 2'))
+      .join(' | ');
+
+    const updates = {
+      round2_cancelled_absent: false,
+      round2_cancelled_at: '',
+      round2_cancelled_note: '',
+      installment_2_status: restoredR2Status,
+      installment_2_amount: restoredR2Amount,
+      installment_2_notes: '',
+      payment_status: restoredR2Status === 'pending_review' ? 'pending_review' : 'unpaid',
+      payment_amount: restoredPayAmt,
+      payment_notes: nextNotes,
+      admin_manual_override: true
+    };
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, updates);
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setModalRound2CancelledAbsent(false);
+      setModalRound2CancelledNote('');
+      setModalInstallment2Status(restoredR2Status);
+      setModalInstallment2Amount(restoredR2Amount);
+      setModalInstallment2Notes('');
+      setModalPaymentStatus(updates.payment_status);
+      setModalPaymentAmount(restoredPayAmt);
+      setModalPaymentNotes(nextNotes);
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    triggerToast(`↩️ คืนค่าสถานะรอบที่ 2 ของ "${pName}" เรียบร้อยแล้ว`);
+  };
+
+  // Admin Checkbox Toggle: จ่ายย้อนหลังหลังจบโครงการ (ผู้เข้าอบรมไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจบโครงการ + หมายเหตุไว้)
+  const handleToggleDeferredPostProject = async (reg, forcedChecked = null, customNote = null) => {
+    if (!reg) return;
+    const pName = resolvePersonFullNameWithTitle(reg).fullName;
+    const currentChecked = Boolean(reg.payment_deferred_post_project);
+    const nextChecked = typeof forcedChecked === 'boolean' ? forcedChecked : !currentChecked;
+
+    const baseRes = getRegistrationPaymentResolution({ ...reg, round2_cancelled_absent: false, payment_deferred_post_project: false }, paymentConfig);
+    const remAmt = baseRes.remainingAmount;
+    const defaultNote = 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ';
+    const noteText = nextChecked
+      ? (String(customNote !== null ? customNote : (reg.payment_deferred_note || '')).trim() || defaultNote)
+      : '';
+
+    const cleanedOldNotes = String(reg.payment_notes || '')
+      .split(/\s*\|\s*/)
+      .filter(p => p && !p.includes('จ่ายย้อนหลังหลังจบโครงการ') && !p.includes('ไม่ได้เข้าร่วมอบรม'))
+      .join(' | ');
+    const nextPaymentNotes = nextChecked
+      ? [cleanedOldNotes, `${noteText}${remAmt > 0 ? ` (ยอดรอชำระหลังจบโครงการ ฿${remAmt})` : ''}`].filter(Boolean).join(' | ')
+      : cleanedOldNotes;
+
+    const updates = {
+      payment_deferred_post_project: nextChecked,
+      payment_deferred_at: nextChecked ? new Date().toISOString() : '',
+      payment_deferred_note: noteText,
+      round2_cancelled_absent: false,
+      round2_cancelled_at: '',
+      round2_cancelled_note: '',
+      installment_2_status: reg.installment_2_status === 'cancelled'
+        ? (reg.installment_2_slip_url ? 'pending_review' : 'unpaid')
+        : (reg.installment_2_status || 'unpaid'),
+      installment_2_amount: reg.installment_2_status === 'cancelled'
+        ? (baseRes.isStaff ? (baseRes.staffSummary?.accommodationNetRequiredAfterOffset || 200) : baseRes.round2Fee)
+        : (reg.installment_2_amount !== undefined ? reg.installment_2_amount : baseRes.round2Fee),
+      installment_2_notes: nextChecked ? noteText : (String(reg.installment_2_notes || '').includes('จ่ายย้อนหลัง') ? '' : (reg.installment_2_notes || '')),
+      payment_notes: nextPaymentNotes,
+      admin_manual_override: true
+    };
+
+    const targetKey = reg.user_id || reg.id || reg.user_email;
+    await onUpdateAllocation(targetKey, updates);
+
+    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+      setModalPaymentDeferredPostProject(nextChecked);
+      setModalPaymentDeferredNote(noteText);
+      setModalRound2CancelledAbsent(false);
+      setModalRound2CancelledNote('');
+      setModalInstallment2Status(updates.installment_2_status);
+      setModalInstallment2Amount(updates.installment_2_amount);
+      setModalInstallment2Notes(updates.installment_2_notes);
+      setModalPaymentNotes(nextPaymentNotes);
+      setProfileModalReg(prev => ({ ...prev, ...updates }));
+    }
+
+    if (nextChecked) {
+      triggerToast(`🕒 ติ๊กจ่ายย้อนหลังหลังจบโครงการให้ "${pName}" แล้ว (งดส่งทวง • บันทึกหมายเหตุในสรุปยอดเรียบร้อย)`);
+    } else {
+      triggerToast(`↩️ ยกเลิกสถานะจ่ายย้อนหลังของ "${pName}" เรียบร้อยแล้ว`);
+    }
+  };
+
+  const isUrgentRound2Target = React.useCallback((reg) => {
+    if (!reg) return false;
+    return getRegistrationPaymentResolution(reg, paymentConfig).shouldChaseAnyPayment;
+  }, [paymentConfig]);
+
+  const urgentRound2Targets = React.useMemo(
+    () => (registrations || []).filter(isUrgentRound2Target),
+    [registrations, isUrgentRound2Target]
+  );
+
   // 1-Click Broadcast: Urgent Round 2 Final Deadline (Today is last day, tomorrow at absolute latest)
   const handleBroadcastRound2UrgentDeadline = async () => {
-    const targetRegs = (registrations || []).filter(reg => {
-      if (!reg) return false;
-      const isStaff = isStaffRegistration(reg);
-      if (isStaff) {
-        const s = getStaffPaymentSummary(reg);
-        return !s.isMsu && s.accommodationRemaining > 0;
-      } else {
-        const isInstallment = reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url);
-        if (isInstallment && reg.installment_2_status !== 'paid') return true;
-        if (reg.payment_status === 'unpaid') return true;
-        return false;
-      }
-    });
+    const targetRegs = urgentRound2Targets;
 
     if (targetRegs.length === 0) {
       triggerToast('ยอดเยี่ยม! ผู้เข้าร่วมและ Staff ทุกคนชำระเงินครบถ้วนเรียบร้อยแล้ว ไม่มีรายการค้างชำระ');
@@ -3947,6 +4099,10 @@ export default function AdminDashboardView({
     let totalCollectedAmount = 0;
     let totalOutstandingBalance = 0;
     let expectedTotalAmount = 0;
+    let round2CancelledCount = 0;
+    let round2CancelledAmount = 0;
+    let deferredPostProjectCount = 0;
+    let deferredPostProjectAmount = 0;
 
     let staffCount = 0;
     let staffPaidCount = 0;
@@ -4015,115 +4171,47 @@ export default function AdminDashboardView({
         else externalParticipantCount++;
       }
 
-      const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
-      const totalFee = isStaff
-        ? staffSum.totalStaffFee
-        : (isMsu
-            ? (paymentConfig?.fee_total_msu || 650)
-            : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
-      const round1Fee = isMsu
-        ? (paymentConfig?.installment_round1_amount_msu || 400)
-        : (paymentConfig?.installment_round1_amount_external || paymentConfig?.installment_round1_amount || 400);
-      const round2Fee = isMsu
-        ? (paymentConfig?.installment_round2_amount_msu || 250)
-        : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+      const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
+      const staffSum = payRes.staffSummary;
 
-      expectedTotalAmount += totalFee;
-
-      const isInstallment = !isStaff && (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
-
+      expectedTotalAmount += payRes.effectiveTotalFee;
+      totalCollectedAmount += payRes.collectedAmount;
+      totalOutstandingBalance += payRes.activeOutstandingAmount;
       if (isStaff) {
-        const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
-        const isR1Pending = !isR1Paid && (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review');
-        if (staffSum.isMsu) {
-          fullPlanCount++;
-          if (isR1Paid) {
-            fullPlanPaidCount++;
-            fullyPaidCount++;
-            staffPaidCount++;
-            totalCollectedAmount += STAFF_SHIRT_FEE;
-            staffCollectedAmount += STAFF_SHIRT_FEE;
-          } else if (isR1Pending) {
-            pendingReviewCount++;
-            staffPendingCount++;
-            totalOutstandingBalance += STAFF_SHIRT_FEE;
-          } else {
-            unpaidTotalCount++;
-            staffUnpaidCount++;
-            totalOutstandingBalance += STAFF_SHIRT_FEE;
-          }
-        } else {
-          // Non-MSU Staff: 480 THB total (280 shirt + 200 accommodation)
-          const shirtCol = isR1Paid ? STAFF_SHIRT_FEE : 0;
-          const accomCol = staffSum.accommodationPaidTotal;
-          const staffCol = shirtCol + accomCol;
-          const staffOut = Math.max(0, totalFee - staffCol);
-          totalCollectedAmount += staffCol;
-          staffCollectedAmount += staffCol;
-          totalOutstandingBalance += staffOut;
-          if (isR1Paid) staffPaidCount++;
+        staffCollectedAmount += payRes.collectedAmount;
+        if (payRes.isR1Paid) staffPaidCount++;
+      }
 
-          if (isR1Paid && staffSum.isAccommodationPaid) {
-            fullPlanCount++;
-            fullPlanPaidCount++;
-            fullyPaidCount++;
-          } else if (isR1Pending || staffSum.isAccommodationPendingReview) {
-            installmentPlanCount++;
-            pendingReviewCount++;
-            staffPendingCount++;
-          } else if (isR1Paid && staffSum.accommodationRemaining > 0) {
-            installmentPlanCount++;
-            partialPaidCount++;
-          } else {
-            installmentPlanCount++;
-            unpaidTotalCount++;
-            staffUnpaidCount++;
-          }
-        }
-      } else if (isInstallment) {
+      if (payRes.isRound2CancelledAbsent) {
+        round2CancelledCount++;
+        round2CancelledAmount += payRes.waivedRound2Amount;
+      } else if (payRes.isDeferredPostProject && !payRes.isFullyPaid) {
+        deferredPostProjectCount++;
+        deferredPostProjectAmount += payRes.deferredPostProjectAmount;
+      }
+
+      if (payRes.isInstallment) {
         installmentPlanCount++;
-        const isR1Paid = reg.installment_1_status === 'paid';
-        const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
-        const hasPending = reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review';
-
-        if (isR1Paid && isR2Paid) {
+        if (payRes.isFullyPaid && !isStaff) {
           installmentBothPaidCount++;
-          fullyPaidCount++;
-          totalCollectedAmount += totalFee;
-        } else if (hasPending) {
-          pendingReviewCount++;
-          if (isR1Paid) {
-            totalCollectedAmount += round1Fee;
-            totalOutstandingBalance += round2Fee;
-          } else {
-            totalOutstandingBalance += totalFee;
-          }
-        } else if (isR1Paid) {
-          // Paid round 1, round 2 unpaid
-          partialPaidCount++;
-          totalCollectedAmount += round1Fee;
-          totalOutstandingBalance += round2Fee;
-        } else {
-          // Neither round paid
-          unpaidTotalCount++;
-          totalOutstandingBalance += totalFee;
         }
       } else {
         fullPlanCount++;
-        const isPaid = reg.payment_status === 'paid';
-        const isPending = reg.payment_status === 'pending_review';
-        if (isPaid) {
+        if (payRes.isFullyPaid) {
           fullPlanPaidCount++;
-          fullyPaidCount++;
-          const paidAmt = (reg.payment_amount !== undefined && reg.payment_amount !== null && Number(reg.payment_amount) > 0) ? Number(reg.payment_amount) : totalFee;
-          totalCollectedAmount += paidAmt;
-        } else if (isPending) {
-          pendingReviewCount++;
-          totalOutstandingBalance += totalFee;
-        } else {
-          unpaidTotalCount++;
-          totalOutstandingBalance += totalFee;
         }
+      }
+
+      if (payRes.statusBucket === 'paid') {
+        fullyPaidCount++;
+      } else if (payRes.statusBucket === 'pending_review') {
+        pendingReviewCount++;
+        if (isStaff) staffPendingCount++;
+      } else if (payRes.statusBucket === 'partial_paid') {
+        partialPaidCount++;
+      } else if (payRes.statusBucket === 'unpaid') {
+        unpaidTotalCount++;
+        if (isStaff) staffUnpaidCount++;
       }
     });
 
@@ -4158,6 +4246,10 @@ export default function AdminDashboardView({
       expectedTotalAmount,
       totalCollectedAmount,
       totalOutstandingBalance,
+      round2CancelledCount,
+      round2CancelledAmount,
+      deferredPostProjectCount,
+      deferredPostProjectAmount,
       allergyCount,
       medicalCount,
       specialCareCount,
@@ -4179,31 +4271,16 @@ export default function AdminDashboardView({
   // Helper to evaluate filterType condition on a single registration
   const matchesFilterTypeCondition = React.useCallback((reg, targetFilterType) => {
     if (!targetFilterType || targetFilterType === 'all') return true;
-    const isStaff = isStaffRegistration(reg);
-    const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
+    const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
+    const isStaff = payRes.isStaff;
+    const staffSum = payRes.staffSummary;
     const attInfo = getAttendanceConfirmationInfo(reg);
 
-    const isInstallment = isStaff
-      ? (!staffSum.isMsu && (staffSum.accommodationRemaining > 0 || Boolean(reg.installment_2_slip_url)))
-      : (reg.payment_plan === 'installment' || Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url));
-    const isR1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
-    const isR2Paid = isStaff
-      ? staffSum.isAccommodationPaid
-      : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url));
-    const isBothPaid = isStaff
-      ? (staffSum.isMsu ? isR1Paid : (isR1Paid && staffSum.isAccommodationPaid))
-      : (isInstallment ? (isR1Paid && isR2Paid) : (reg.payment_status === 'paid'));
-    const isPartialPaid = isStaff
-      ? (!staffSum.isMsu && isR1Paid && staffSum.accommodationRemaining > 0 && !staffSum.isAccommodationPendingReview)
-      : (isInstallment && isR1Paid && !isR2Paid);
-    const hasPendingReview = isStaff
-      ? (reg.installment_1_status === 'pending_review' || reg.payment_status === 'pending_review' || staffSum.isAccommodationPendingReview)
-      : (isInstallment
-          ? (reg.installment_1_status === 'pending_review' || reg.installment_2_status === 'pending_review')
-          : (reg.payment_status === 'pending_review'));
-    const isUnpaid = isInstallment
-      ? (!isR1Paid && !isR2Paid && !hasPendingReview)
-      : (!isBothPaid && !hasPendingReview);
+    const isInstallment = payRes.isInstallment;
+    const isBothPaid = payRes.isFullyPaid;
+    const isPartialPaid = payRes.statusBucket === 'partial_paid';
+    const hasPendingReview = payRes.statusBucket === 'pending_review';
+    const isUnpaid = payRes.statusBucket === 'unpaid';
     const hasOutstanding = isPartialPaid || isUnpaid;
 
     if (targetFilterType === 'confirmed_attending') return attInfo.isConfirmed;
@@ -4212,7 +4289,7 @@ export default function AdminDashboardView({
     if (targetFilterType === 'need_accommodation') return !attInfo.isDeclined && attInfo.needAccommodation;
     if (targetFilterType === 'special_care') return Boolean(reg.is_special_care);
     if (targetFilterType === 'staff') return isStaff;
-    if (targetFilterType === 'staff_accom_unpaid') return Boolean(isStaff && !staffSum.isMsu && staffSum.accommodationRemaining > 0);
+    if (targetFilterType === 'staff_accom_unpaid') return Boolean(isStaff && !staffSum.isMsu && !payRes.isRound2CancelledAbsent && !payRes.isDeferredPostProject && staffSum.accommodationRemaining > 0);
     if (targetFilterType === 'staff_offset') return Boolean(isStaff && !staffSum.isMsu && staffSum.isOffsetApplied);
     if (targetFilterType === 'refund_needed') return Boolean(isStaff && staffSum.isOverpaid);
     if (targetFilterType === 'refund_pending') return Boolean(isStaff && staffSum.isOverpaid && !staffSum.isRefunded);
@@ -4227,12 +4304,15 @@ export default function AdminDashboardView({
     if (targetFilterType === 'pending_review') return hasPendingReview;
     if (targetFilterType === 'unpaid') return hasOutstanding;
     if (targetFilterType === 'unpaid_pure') return isUnpaid;
+    if (targetFilterType === 'round2_cancelled') return payRes.isRound2CancelledAbsent;
+    if (targetFilterType === 'deferred_post_project') return payRes.isDeferredPostProject;
+    if (targetFilterType === 'non_attending_resolved') return payRes.isRound2CancelledAbsent || payRes.isDeferredPostProject;
     if (targetFilterType === 'no_group') return !reg.group_assigned;
     if (targetFilterType === 'has_group') return Boolean(reg.group_assigned);
     if (targetFilterType === 'no_room') return !reg.room_assigned;
     if (targetFilterType === 'has_room') return Boolean(reg.room_assigned);
     return true;
-  }, []);
+  }, [paymentConfig]);
 
   // Helper to evaluate searchTerm on a single registration
   const matchesSearchTermCondition = React.useCallback((reg, qStr) => {
@@ -4431,7 +4511,9 @@ export default function AdminDashboardView({
       esc('Staff คณะทำงาน (มมส 280 บ. / ต่างมหาลัย 480 บ.)'), esc(`${regMetrics.staffCount} คน (มมส ${staffAndRefundMetrics.msuStaff.length} / ต่างมหาลัย ${staffAndRefundMetrics.externalStaff.length})`),
       esc('แยกเพศรวม'), esc(`ชาย ${regMetrics.maleCount} คน / หญิง ${regMetrics.femaleCount} คน${regMetrics.unknownGenderCount > 0 ? ` / ไม่ระบุ ${regMetrics.unknownGenderCount} คน` : ''}`),
       esc('ยอดรับเงินจริงรวม'), esc(`${regMetrics.totalCollectedAmount.toLocaleString()} บาท`),
-      esc('ยอดค้างชำระรวม'), esc(`${regMetrics.totalOutstandingBalance.toLocaleString()} บาท`)
+      esc('ยอดค้างชำระรวม'), esc(`${regMetrics.totalOutstandingBalance.toLocaleString()} บาท`),
+      esc('ยืนยันจ่ายหลังจบโครงการ (ไม่เข้าอบรม)'), esc(`${regMetrics.deferredPostProjectCount} คน (${regMetrics.deferredPostProjectAmount.toLocaleString()} บาท)`),
+      esc('ยกเลิกรอบ 2 (ไม่เข้าอบรม)'), esc(`${regMetrics.round2CancelledCount} คน (ตัดจบ ${regMetrics.round2CancelledAmount.toLocaleString()} บาท)`)
     ].join(','));
     summaryLines.push([
       esc('สรุปค่าที่พัก Staff ต่างมหาลัย (200 บ./คน)'),
@@ -5454,15 +5536,17 @@ export default function AdminDashboardView({
               <span>📊 สรุปยอดทั้งหมด & ยืนยันเข้าร่วมจริง ({regMetrics.confirmedAttendingCount}/{regMetrics.total} คน)</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleBroadcastRound2UrgentDeadline}
-              className="px-4 py-2.5 bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-rose-950/40 border border-rose-400/40 transition-all active:scale-95 cursor-pointer animate-pulse"
-              title="ส่งข้อความแจ้งเตือนด่วน 'ชำระเงินรอบที่ 2 วันนี้วันสุดท้าย ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี' ถึงทุกคนที่มียอดค้าง"
-            >
-              <Bell className="w-4 h-4 text-amber-200" />
-              <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
-            </button>
+            {urgentRound2Targets.length > 0 && (
+              <button
+                type="button"
+                onClick={handleBroadcastRound2UrgentDeadline}
+                className="px-4 py-2.5 bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-rose-950/40 border border-rose-400/40 transition-all active:scale-95 cursor-pointer animate-pulse"
+                title="ส่งข้อความแจ้งเตือนด่วน 'ชำระเงินรอบที่ 2 วันนี้วันสุดท้าย ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี' ถึงทุกคนที่มียอดค้าง"
+              >
+                <Bell className="w-4 h-4 text-amber-200" />
+                <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -5571,6 +5655,16 @@ export default function AdminDashboardView({
               <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 font-bold">
                 ยอดค้างรับ: ฿{regMetrics.totalOutstandingBalance.toLocaleString()}
               </span>
+              {regMetrics.deferredPostProjectCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 font-bold" title="ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ (งดทวงก่อนงาน)">
+                  🕒 จ่ายหลังจบโครงการ: {regMetrics.deferredPostProjectCount} คน (฿{regMetrics.deferredPostProjectAmount.toLocaleString()})
+                </span>
+              )}
+              {regMetrics.round2CancelledCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-bold" title="ไม่ได้เข้าร่วมอบรม — ยกเลิกการจ่ายรอบที่ 2 แล้ว (ตัดจบยอดค้าง)">
+                  🚫 ยกเลิกรอบ 2: {regMetrics.round2CancelledCount} คน (ตัดจบ ฿{regMetrics.round2CancelledAmount.toLocaleString()})
+                </span>
+              )}
               {staffAndRefundMetrics.totalRefundPeopleCount > 0 && (
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">
                   💸 ต้องโอนคืน: {staffAndRefundMetrics.pendingRefundPeopleCount}/{staffAndRefundMetrics.totalRefundPeopleCount} คน (฿{staffAndRefundMetrics.pendingRefundAmount.toLocaleString()})
@@ -5650,7 +5744,11 @@ export default function AdminDashboardView({
                 <PackageCheck className="w-3.5 h-3.5 text-indigo-400" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">{regMetrics.installmentPlanCount} <span className="text-xs font-normal text-indigo-300">คน</span></p>
-              <div className="text-[10px] text-slate-400 mt-0.5">งวด 1 แล้ว {regMetrics.partialPaidCount} · ครบ {regMetrics.installmentBothPaidCount}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                งวด 1 แล้ว {regMetrics.partialPaidCount} · ครบ {regMetrics.installmentBothPaidCount}
+                {regMetrics.deferredPostProjectCount > 0 ? ` · หลังงาน ${regMetrics.deferredPostProjectCount}` : ''}
+                {regMetrics.round2CancelledCount > 0 ? ` · ยกเลิก ${regMetrics.round2CancelledCount}` : ''}
+              </div>
             </button>
 
             {/* 4. ชำระเงินครบแล้ว (100%) */}
@@ -6005,7 +6103,7 @@ export default function AdminDashboardView({
               <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
               <option value="medical">🩺 หน่วยพยาบาลสนาม & เบิกจ่ายยา/เวชระเบียน</option>
               <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 1 (ห้อง 101 - 110)</option>
-              <option value="documents">📑 ศูนย์รวมใบเซ็นชื่อทางการ 3-in-1</option>
+              <option value="documents">📑 ศูนย์รวมเอกสาร & ใบตรวจยา Staff (4 ใบ)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
@@ -6150,7 +6248,7 @@ export default function AdminDashboardView({
             }`}
           >
             <FileText className="w-4 h-4 text-teal-400 shrink-0" />
-            <span>📄 รวมใบเซ็นชื่อ (3 ใบ)</span>
+            <span>📄 เอกสาร & ใบเช็คยา Staff (4 ใบ)</span>
           </button>
 
           <button
@@ -6534,12 +6632,12 @@ export default function AdminDashboardView({
                   <div className="space-y-5">
                     {/* Header Banner */}
                     <div className="p-5 sm:p-6 bg-gradient-to-br from-purple-950/60 via-slate-950 to-indigo-950/40 border-2 border-purple-500/50 rounded-3xl shadow-xl space-y-3">
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                        <div className="flex items-start gap-3">
+                      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0 flex items-start gap-3">
                           <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0 shadow-lg">
                             <Building className="w-6 h-6" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h2 className="text-lg sm:text-xl font-black text-white">
                                 🏨 สรุปค่าที่พัก Staff ต่างมหาวิทยาลัย • หักลบเงินโอนเกิน • และยอดที่ทางเราต้องโอนคืน
@@ -6554,7 +6652,7 @@ export default function AdminDashboardView({
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start lg:self-auto">
+                        <div className="flex flex-wrap items-center gap-2 self-start xl:self-auto">
                           {staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
                             <button
                               type="button"
@@ -6567,15 +6665,17 @@ export default function AdminDashboardView({
                             </button>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={handleBroadcastRound2UrgentDeadline}
-                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg transition-all cursor-pointer flex items-center gap-2 animate-pulse"
-                            title="ส่งแจ้งเตือนด่วน: วันนี้วันสุดท้ายสำหรับการชำระเงินรอบ 2 / ค่าที่พัก ช้าสุดไม่เกินพรุ่งนี้ทุกกรณี"
-                          >
-                            <AlertCircle className="w-4 h-4 text-amber-200" />
-                            <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
-                          </button>
+                          {urgentRound2Targets.length > 0 && staffAndRefundMetrics.externalStaffUnpaidAccomList.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleBroadcastRound2UrgentDeadline}
+                              className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg transition-all cursor-pointer flex items-center gap-2 animate-pulse"
+                              title="ส่งแจ้งเตือนด่วน: วันนี้วันสุดท้ายสำหรับการชำระเงินรอบ 2 / ค่าที่พัก ช้าสุดไม่เกินพรุ่งนี้ทุกกรณี"
+                            >
+                              <AlertCircle className="w-4 h-4 text-amber-200" />
+                              <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -7211,8 +7311,8 @@ export default function AdminDashboardView({
                         ? 'bg-gradient-to-br from-rose-950/50 via-slate-950 to-red-950/40 border-rose-500/50'
                         : 'bg-gradient-to-br from-emerald-950/50 via-slate-950 to-teal-950/40 border-emerald-500/50'
                     }`}>
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div>
+                      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
                           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black mb-1.5 border bg-slate-950/70">
                             {dedicatedSubpage === 'full-payment' && <CreditCard className="w-3.5 h-3.5 text-blue-400" />}
                             {dedicatedSubpage === 'round1-paid' && <Clock className="w-3.5 h-3.5 text-amber-400" />}
@@ -7244,16 +7344,18 @@ export default function AdminDashboardView({
                         </div>
 
                         {/* Bulk Action Buttons */}
-                        <div className="flex flex-wrap items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={handleBroadcastRound2UrgentDeadline}
-                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg cursor-pointer flex items-center gap-2 animate-pulse"
-                            title="ส่งแจ้งเตือนด่วน: วันนี้วันสุดท้ายสำหรับการชำระเงินรอบ 2 / ค่าที่พัก ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี"
-                          >
-                            <AlertCircle className="w-4 h-4 text-amber-200" />
-                            <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
-                          </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {urgentRound2Targets.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleBroadcastRound2UrgentDeadline}
+                              className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg cursor-pointer flex items-center gap-2 animate-pulse"
+                              title="ส่งแจ้งเตือนด่วน: วันนี้วันสุดท้ายสำหรับการชำระเงินรอบ 2 / ค่าที่พัก ช้าสุดไม่เกินวันพรุ่งนี้ทุกกรณี"
+                            >
+                              <AlertCircle className="w-4 h-4 text-amber-200" />
+                              <span>🚨 แจ้งเตือนชำระรอบ 2 วันสุดท้าย (ช้าสุดพรุ่งนี้ทุกกรณี)</span>
+                            </button>
+                          )}
 
                           {dedicatedSubpage === 'round1-paid' && (
                             <button
@@ -7307,6 +7409,63 @@ export default function AdminDashboardView({
                       </div>
                     </div>
 
+                    {/* Non-attending resolved strip (Deferred Post-Project / Cancelled Round 2) */}
+                    {(dedicatedSubpage === 'round1-paid' || dedicatedSubpage === 'unpaid') && (() => {
+                      const nonAttendingList = (registrations || [])
+                        .map(r => ({ reg: r, res: getRegistrationPaymentResolution(r, paymentConfig) }))
+                        .filter(x => x.res.isRound2CancelledAbsent || (x.res.isDeferredPostProject && !x.res.isFullyPaid));
+                      if (nonAttendingList.length === 0) return null;
+                      return (
+                        <div className="p-4 rounded-2xl bg-slate-950/90 border border-sky-500/40 space-y-2.5 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-bold text-sky-300 flex items-center gap-1.5">
+                              <span>📋 รายการที่งดทวงแล้ว (ผู้สมัครไม่ได้เข้าร่วมอบรม): {nonAttendingList.length} คน</span>
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              ระบบงดส่งแจ้งเตือนทวงและอัปเดตสรุปยอดทั้งหมดเรียบร้อยแล้ว • กดเพื่อดูรายละเอียดหรือคืนค่าได้
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {nonAttendingList.map(({ reg: r, res }, i) => {
+                              const pName = resolvePersonFullNameWithTitle(r).fullName;
+                              return (
+                                <div
+                                  key={r.id || r.user_id || i}
+                                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
+                                    res.isRound2CancelledAbsent
+                                      ? 'bg-slate-900 border-slate-700 text-slate-200'
+                                      : 'bg-sky-950/50 border-sky-500/40 text-sky-100'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenProfileModal(r, 'payment')}
+                                    className="text-left cursor-pointer hover:underline"
+                                    title={res.isRound2CancelledAbsent ? res.cancelledNote : res.deferredNote}
+                                  >
+                                    <span className="font-bold">{pName}</span>{' '}
+                                    <span className="text-[10px] opacity-85">
+                                      {res.isRound2CancelledAbsent
+                                        ? `(🚫 ยกเลิกรอบ 2 • ตัดจบ ฿${res.waivedRound2Amount})`
+                                        : `(🕒 จ่ายหลังจบโครงการ ฿${res.deferredPostProjectAmount})`}
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => res.isRound2CancelledAbsent ? handleRestoreRound2FromCancelled(r) : handleToggleDeferredPostProject(r, false)}
+                                    className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold cursor-pointer"
+                                    title="คืนค่ารายการนี้กลับเข้าคิวค้างชำระปกติ"
+                                  >
+                                    ↩️ คืนค่า
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Desktop Table View */}
                     {(dedicatedViewMode === 'table' || dedicatedViewMode === 'auto') && (
                       <div className={`overflow-x-auto rounded-2xl border border-slate-800 shadow-2xl bg-slate-950/90 ${
@@ -7337,24 +7496,14 @@ export default function AdminDashboardView({
                             ) : (
                               dedicatedList.map((reg, idx) => {
                                 const isStaff = isStaffRegistration(reg);
-                                const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
+                                const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
                                 const pName = resolvePersonFullNameWithTitle(reg).fullName;
                                 const uniInfo = resolveUniversityInfo(reg);
                                 const isMsu = uniInfo.isMsu;
-                                const totalFee = isStaff
-                                  ? staffSum.totalStaffFee
-                                  : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || 850));
-                                
-                                const r1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
-                                const r2Paid = isStaff
-                                  ? staffSum.isAccommodationPaid
-                                  : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url));
-                                
-                                const paidAmt = isStaff
-                                  ? ((r1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal)
-                                  : (r1Paid && r2Paid ? totalFee : r1Paid ? 400 : 0);
-                                
-                                const outAmt = Math.max(0, totalFee - paidAmt);
+                                const totalFee = payRes.effectiveTotalFee;
+                                const r1Paid = payRes.isR1Paid;
+                                const paidAmt = payRes.collectedAmount;
+                                const outAmt = payRes.remainingAmount;
                                 const rowSlips = collectRegistrationSlips(reg);
 
                                 return (
@@ -7455,19 +7604,53 @@ export default function AdminDashboardView({
                                     </td>
 
                                     <td className="py-3 px-3 text-right whitespace-nowrap">
-                                      <div className="inline-flex items-center gap-1.5">
-                                        {outAmt > 0 && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleNotifyRound2(reg);
-                                            }}
-                                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                                          >
-                                            <Bell className="w-3 h-3" />
-                                            <span>แจ้งเตือน</span>
-                                          </button>
+                                      <div className="inline-flex items-center gap-1.5 flex-wrap justify-end">
+                                        {payRes.shouldChaseAnyPayment && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleNotifyRound2(reg);
+                                              }}
+                                              className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                            >
+                                              <Bell className="w-3 h-3" />
+                                              <span>แจ้งเตือน</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                const note = await askPrompt({
+                                                  title: `🕒 จ่ายย้อนหลังหลังจบโครงการ (ไม่ได้เข้าร่วมอบรม)`,
+                                                  message: `บันทึกว่า "${pName}" ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายยอดคงเหลือ ฿${outAmt} หลังจากจบโครงการ (ระบบจะงดส่งทวงก่อนงานและบันทึกหมายเหตุในสรุปยอดทั้งหมด):`,
+                                                  defaultValue: 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ',
+                                                  placeholder: 'ระบุหมายเหตุเพิ่มเติม...',
+                                                  confirmText: '☑️ ยืนยันติ๊กจ่ายย้อนหลัง',
+                                                  cancelText: 'ยกเลิก'
+                                                });
+                                                if (note !== null) {
+                                                  await handleToggleDeferredPostProject(reg, true, note);
+                                                }
+                                              }}
+                                              className="px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 text-sky-200 border border-sky-500/40 text-[11px] font-bold cursor-pointer"
+                                              title="ติ๊กจ่ายย้อนหลัง (ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจบโครงการ)"
+                                            >
+                                              ☑️ จ่ายหลังจบงาน
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleCancelRound2Absent(reg);
+                                              }}
+                                              className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-200 border border-rose-500/40 text-[11px] font-bold cursor-pointer"
+                                              title="ยกเลิกการจ่ายรอบที่ 2 (ผู้เข้าร่วมไม่ได้เข้าร่วมอบรม — ตัดจบยอดค้าง & ยกเลิกการทวง)"
+                                            >
+                                              🚫 ยกเลิกรอบ 2
+                                            </button>
+                                          </>
                                         )}
                                         <span className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[11px] font-bold">
                                           เปิดจัดการ
@@ -7489,21 +7672,13 @@ export default function AdminDashboardView({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                           {dedicatedList.map((reg, idx) => {
                             const isStaff = isStaffRegistration(reg);
-                            const staffSum = isStaff ? getStaffPaymentSummary(reg) : null;
+                            const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
                             const pName = resolvePersonFullNameWithTitle(reg).fullName;
                             const uniInfo = resolveUniversityInfo(reg);
                             const isMsu = uniInfo.isMsu;
-                            const totalFee = isStaff
-                              ? staffSum.totalStaffFee
-                              : (isMsu ? 650 : 850);
-                            const r1Paid = reg.installment_1_status === 'paid' || reg.payment_status === 'paid';
-                            const r2Paid = isStaff
-                              ? staffSum.isAccommodationPaid
-                              : (reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url));
-                            const paidAmt = isStaff
-                              ? ((r1Paid ? STAFF_SHIRT_FEE : 0) + staffSum.accommodationPaidTotal)
-                              : (r1Paid && r2Paid ? totalFee : r1Paid ? 400 : 0);
-                            const outAmt = Math.max(0, totalFee - paidAmt);
+                            const totalFee = payRes.effectiveTotalFee;
+                            const paidAmt = payRes.collectedAmount;
+                            const outAmt = payRes.remainingAmount;
                             const cardSlips = collectRegistrationSlips(reg);
 
                             return (
@@ -7559,7 +7734,7 @@ export default function AdminDashboardView({
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex flex-wrap items-center gap-1.5">
                                     {cardSlips.length > 0 && (
                                       <button
                                         type="button"
@@ -7572,18 +7747,48 @@ export default function AdminDashboardView({
                                         สลิป{cardSlips.length > 1 ? ` (${cardSlips.length} รูป)` : ''}
                                       </button>
                                     )}
-                                    {outAmt > 0 && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleNotifyRound2(reg);
-                                        }}
-                                        className="px-2.5 py-1 rounded-xl bg-amber-500 text-slate-950 text-xs font-black flex items-center gap-1 cursor-pointer"
-                                      >
-                                        <Bell className="w-3 h-3" />
-                                        <span>แจ้งเตือน</span>
-                                      </button>
+                                    {payRes.shouldChaseAnyPayment && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleNotifyRound2(reg);
+                                          }}
+                                          className="px-2.5 py-1 rounded-xl bg-amber-500 text-slate-950 text-xs font-black flex items-center gap-1 cursor-pointer"
+                                        >
+                                          <Bell className="w-3 h-3" />
+                                          <span>แจ้งเตือน</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const note = await askPrompt({
+                                              title: `🕒 จ่ายย้อนหลังหลังจบโครงการ`,
+                                              message: `บันทึกว่า "${pName}" ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่าย ฿${outAmt} หลังจบโครงการ:`,
+                                              defaultValue: 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ',
+                                              placeholder: 'ระบุหมายเหตุ...',
+                                              confirmText: '☑️ บันทึก',
+                                              cancelText: 'ยกเลิก'
+                                            });
+                                            if (note !== null) await handleToggleDeferredPostProject(reg, true, note);
+                                          }}
+                                          className="px-2.5 py-1 rounded-xl bg-sky-500/20 text-sky-200 border border-sky-500/40 text-xs font-bold cursor-pointer"
+                                        >
+                                          ☑️ หลังจบงาน
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCancelRound2Absent(reg);
+                                          }}
+                                          className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-200 border border-rose-500/40 text-xs font-bold cursor-pointer"
+                                        >
+                                          🚫 ยกเลิกรอบ 2
+                                        </button>
+                                      </>
                                     )}
                                     <span className="px-3 py-1 rounded-xl bg-purple-600/30 text-purple-200 border border-purple-500/40 text-xs font-bold">
                                       จัดการ
@@ -8171,6 +8376,8 @@ export default function AdminDashboardView({
                 <option value="partial_paid">🟡 ชำระงวด 1 (ค้างงวด 2) ({filterTypeFacetMetrics.partialPaidCount} คน)</option>
                 <option value="unpaid">🔴 ค้างชำระ ({filterTypeFacetMetrics.totalOutstandingCount} คน)</option>
                 <option value="pending_review">⏳ รอตรวจสลิป ({filterTypeFacetMetrics.pendingReviewCount} คน)</option>
+                <option value="deferred_post_project">🕒 จ่ายย้อนหลังหลังจบโครงการ ({filterTypeFacetMetrics.deferredPostProjectCount} คน)</option>
+                <option value="round2_cancelled">🚫 ไม่เข้าร่วม • ยกเลิกรอบ 2 ({filterTypeFacetMetrics.round2CancelledCount} คน)</option>
                 <option value="has_allergy">🍽️ แพ้อาหาร / ยา ({filterTypeFacetMetrics.allergyCount} คน)</option>
                 <option value="has_medical">🩺 มีโรคประจำตัว ({filterTypeFacetMetrics.medicalCount} คน)</option>
                 <option value="special_care">⭐ ดูแลเป็นพิเศษ ({filterTypeFacetMetrics.specialCareCount} คน)</option>
@@ -8635,11 +8842,12 @@ export default function AdminDashboardView({
                         <td className="py-4 px-3 whitespace-nowrap">
                           {isStaff ? (() => {
                             const staffPayInfo = getStaffPaymentSummary(reg);
+                            const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
                             const isShirtPaid = paymentStatus === 'paid' || reg.installment_1_status === 'paid';
                             const isStaffFullyPaid = staffPayInfo.isMsu
                               ? isShirtPaid
                               : (isShirtPaid && staffPayInfo.isAccommodationPaid);
-                            const isStaffPending = paymentStatus === 'pending_review' || reg.installment_1_status === 'pending_review' || staffPayInfo.isAccommodationPendingReview;
+                            const isStaffPending = !payRes.isRound2CancelledAbsent && (paymentStatus === 'pending_review' || reg.installment_1_status === 'pending_review' || staffPayInfo.isAccommodationPendingReview);
                             return (
                               <button
                                 type="button"
@@ -8650,7 +8858,11 @@ export default function AdminDashboardView({
                                   <span className="px-1.5 py-0.5 bg-purple-500/25 text-purple-200 border border-purple-400/40 rounded text-[9px] font-black">
                                     🛠️ {staffPayInfo.staffRoleLabel}
                                   </span>
-                                  {staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0 ? (
+                                  {payRes.isRound2CancelledAbsent ? (
+                                    <span className="text-[10px] text-slate-300 font-bold">🚫 ยกเลิกรอบ 2 (ไม่เข้าอบรม)</span>
+                                  ) : payRes.isDeferredPostProject && !payRes.isFullyPaid ? (
+                                    <span className="text-[10px] text-sky-300 font-bold">🕒 จ่ายหลังจบโครงการ (฿{payRes.deferredPostProjectAmount})</span>
+                                  ) : staffPayInfo.isIdCardOnlyStaff || staffPayInfo.totalStaffFee === 0 ? (
                                     <span className="text-[10px] text-sky-300 font-bold">✓ บัตรอย่างเดียว (0 บ.)</span>
                                   ) : isStaffFullyPaid ? (
                                     <span className="text-[10px] text-emerald-400 font-bold">✓ ชำระครบแล้ว</span>
@@ -8697,12 +8909,13 @@ export default function AdminDashboardView({
                             );
                           })() : (reg.payment_plan ? reg.payment_plan === 'installment' : Boolean(reg.installment_1_slip_url || reg.installment_2_slip_url)) ? (() => {
                             const isMsu = isMsuInstitution(reg.institution);
+                            const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
                             const round2Amount = isMsu 
                               ? (paymentConfig?.installment_round2_amount_msu || 250) 
                               : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                            const isR1Paid = reg.installment_1_status === 'paid';
-                            const isR2Paid = reg.installment_2_status === 'paid' && Boolean(reg.installment_2_slip_url);
-                            const isBothPaid = isR1Paid && isR2Paid;
+                            const isR1Paid = payRes.isR1Paid;
+                            const isR2Paid = payRes.isR2Paid;
+                            const isBothPaid = payRes.isFullyPaid;
 
                             return (
                               <button
@@ -8714,7 +8927,11 @@ export default function AdminDashboardView({
                                   <span className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[9px] font-bold">
                                     แบ่งจ่าย 2 งวด
                                   </span>
-                                  {isBothPaid ? (
+                                  {payRes.isRound2CancelledAbsent ? (
+                                    <span className="text-[10px] text-slate-300 font-bold">🚫 ยกเลิกรอบ 2 (ไม่เข้าอบรม)</span>
+                                  ) : payRes.isDeferredPostProject && !payRes.isFullyPaid ? (
+                                    <span className="text-[10px] text-sky-300 font-bold">🕒 จ่ายหลังจบโครงการ (฿{payRes.deferredPostProjectAmount})</span>
+                                  ) : isBothPaid ? (
                                     <span className="text-[10px] text-emerald-400 font-bold">✓ ครบ 2 งวด</span>
                                   ) : isR1Paid ? (
                                     <span className="text-[10px] text-amber-300 font-bold">ชำระงวด 1 แล้ว (ค้าง {round2Amount} บ.)</span>
@@ -8729,8 +8946,8 @@ export default function AdminDashboardView({
                                     งวด 1: {isR1Paid ? '✓ ชำระแล้ว' : reg.installment_1_status === 'pending_review' ? '🟡 รอตรวจ' : '🔴 ค้าง'}
                                   </span>
                                   <span className="text-slate-600">|</span>
-                                  <span className={isR2Paid ? 'text-emerald-400 font-bold' : reg.installment_2_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
-                                    งวด 2: {isR2Paid ? '✓ ชำระแล้ว' : reg.installment_2_status === 'pending_review' ? '🟡 รอตรวจ' : !reg.installment_2_slip_url ? '⚪ ยังไม่ส่งสลิป' : '🔴 ค้าง'}
+                                  <span className={payRes.isRound2CancelledAbsent ? 'text-slate-300 font-bold' : payRes.isDeferredPostProject && !isR2Paid ? 'text-sky-300 font-bold' : isR2Paid ? 'text-emerald-400 font-bold' : reg.installment_2_status === 'pending_review' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
+                                    งวด 2: {payRes.isRound2CancelledAbsent ? '🚫 ยกเลิก' : payRes.isDeferredPostProject && !isR2Paid ? '🕒 จ่ายหลังจบงาน' : isR2Paid ? '✓ ชำระแล้ว' : reg.installment_2_status === 'pending_review' ? '🟡 รอตรวจ' : !reg.installment_2_slip_url ? '⚪ ยังไม่ส่งสลิป' : '🔴 ค้าง'}
                                   </span>
                                 </div>
                               </button>
@@ -9299,7 +9516,19 @@ export default function AdminDashboardView({
                       : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
 
                     let statusBadge = null;
-                    if (isInstallment) {
+                    if (profileModalReg.round2_cancelled_absent) {
+                      statusBadge = (
+                        <span className="px-2.5 py-0.5 bg-slate-800 text-slate-200 border border-slate-600 rounded-full text-xs font-bold">
+                          🚫 ไม่เข้าร่วมอบรม • ยกเลิกรอบ 2 (ตัดจบ 0 บ.)
+                        </span>
+                      );
+                    } else if (profileModalReg.payment_deferred_post_project && !(isBothPaid || modalPaymentStatus === 'paid')) {
+                      statusBadge = (
+                        <span className="px-2.5 py-0.5 bg-sky-500/20 text-sky-200 border border-sky-500/40 rounded-full text-xs font-bold">
+                          🕒 จ่ายย้อนหลังหลังจบโครงการ (งดทวงก่อนงาน)
+                        </span>
+                      );
+                    } else if (isInstallment) {
                       if (isBothPaid || modalPaymentStatus === 'paid') {
                         statusBadge = (
                           <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold">
@@ -10795,6 +11024,108 @@ export default function AdminDashboardView({
                     })()}
                   </div>
 
+                  {/* NON-ATTENDING RESOLUTION PANEL: Post-project Deferred Payment Checkbox & Cancel Round 2 Button */}
+                  {(() => {
+                    const modalPayRes = getRegistrationPaymentResolution(profileModalReg, paymentConfig);
+                    const pName = resolvePersonFullNameWithTitle(profileModalReg).fullName;
+                    const isDef = Boolean(profileModalReg.payment_deferred_post_project);
+                    const isCan = Boolean(profileModalReg.round2_cancelled_absent);
+                    return (
+                      <div className={`p-4 rounded-2xl border-2 space-y-3 ${
+                        isCan
+                          ? 'bg-slate-900/90 border-slate-600'
+                          : isDef
+                          ? 'bg-sky-950/30 border-sky-500/60'
+                          : 'bg-slate-900/60 border-amber-500/35'
+                      }`}>
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs sm:text-sm font-black text-white">
+                                🛡️ จัดการกรณีผู้สมัครไม่ได้เข้าร่วมอบรม (ยกเลิกรอบที่ 2 / จ่ายย้อนหลังหลังจบโครงการ)
+                              </span>
+                              {isCan && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-slate-700 text-white text-[10px] font-black">
+                                  🚫 ยกเลิกการจ่ายรอบที่ 2 แล้ว (ตัดจบยอดค้าง ฿0)
+                                </span>
+                              )}
+                              {isDef && !modalPayRes.isFullyPaid && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-slate-950 text-[10px] font-black">
+                                  🕒 จ่ายหลังจบโครงการ (รอรับ ฿{modalPayRes.deferredPostProjectAmount} • งดทวงแล้ว)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                              เลือกติ๊ก <strong className="text-sky-300">จ่ายย้อนหลัง</strong> เมื่อผู้สมัครไม่ได้เข้าร่วมอบรมแต่ยืนยันจะจ่ายหลังจบโครงการ (ระบบจะงดทวงและบันทึกหมายเหตุในสรุปยอด) หรือกด <strong className="text-rose-300">ยกเลิกการจ่ายรอบที่ 2</strong> เพื่อตัดจบยอดค้างและยกเลิกการทวงถาวร
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            {!isCan ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelRound2Absent(profileModalReg, modalRound2CancelledNote)}
+                                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow transition-all cursor-pointer flex items-center gap-1.5"
+                                title="ตัดจบยอดค้างรอบที่ 2 เหลือ 0 บาท และยกเลิกการส่งแจ้งเตือนทวงทุกช่องทาง"
+                              >
+                                <span>🚫 ยกเลิกการจ่ายรอบที่ 2 (ไม่ได้เข้าร่วมอบรม)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreRound2FromCancelled(profileModalReg)}
+                                className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-400/50 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>↩️ คืนค่าสถานะการจ่ายรอบที่ 2</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Admin Checkbox: จ่ายย้อนหลัง (ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจากจบโครงการ) */}
+                        <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2.5">
+                          <label className="flex items-start sm:items-center gap-2.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isDef}
+                              onChange={async (e) => {
+                                const checked = e.target.checked;
+                                const noteToUse = modalPaymentDeferredNote || 'ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายย้อนหลังหลังจบโครงการ';
+                                await handleToggleDeferredPostProject(profileModalReg, checked, noteToUse);
+                              }}
+                              className="mt-0.5 sm:mt-0 w-4 h-4 rounded border-sky-400 text-sky-500 focus:ring-sky-500 bg-slate-900 cursor-pointer accent-sky-500"
+                            />
+                            <span className="text-xs font-bold text-sky-200">
+                              ☑️ จ่ายย้อนหลัง (ผู้เข้าอบรมไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจากจบโครงการ) — งดส่งทวง & หมายเหตุไว้ในสรุปยอดทั้งหมด
+                            </span>
+                          </label>
+
+                          {(isDef || modalPaymentDeferredPostProject) && (
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pl-6">
+                              <input
+                                type="text"
+                                value={modalPaymentDeferredNote}
+                                onChange={(e) => setModalPaymentDeferredNote(e.target.value)}
+                                placeholder="หมายเหตุ เช่น ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจบโครงการ..."
+                                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-900 border border-sky-500/40 text-xs text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-sky-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await handleToggleDeferredPostProject(profileModalReg, true, modalPaymentDeferredNote);
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-black cursor-pointer shrink-0"
+                              >
+                                💾 บันทึกหมายเหตุจ่ายย้อนหลัง ({pName.split(' ')[0]})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* NON-MSU STAFF ACCOMMODATION (200 THB) & AUTOMATIC OFFSET MANAGEMENT PANEL */}
                   {(() => {
                     const staffPayInfo = getStaffPaymentSummary(profileModalReg);
@@ -10945,8 +11276,8 @@ export default function AdminDashboardView({
                           : 'bg-amber-950/25 border-amber-500/50'
                       }`}>
                         {/* Header & Dev Override Toggle */}
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-                          <div>
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                          <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-sm font-black text-white flex items-center gap-1.5">
                                 💸 ระบบจัดการโอนเงินคืนส่วนเกิน & ควบคุมยอดเงิน (STAFF)
@@ -10976,7 +11307,7 @@ export default function AdminDashboardView({
                           </div>
 
                           {/* Dev / Admin Toggle Control */}
-                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 shadow">
                               <button
                                 type="button"

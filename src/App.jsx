@@ -1316,7 +1316,7 @@ export default function App() {
       {user && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={user} />}
 
       {/* Main Content Pages - Full Screen Width on Admin Dashboard for Effortless Table Management */}
-      <main className={`flex-1 w-full mx-auto py-3 sm:py-5 lg:py-6 transition-all ${
+      <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-4 2xl:py-6 transition-all ${
         currentTab === 'admin'
           ? 'w-full max-w-none px-2 sm:px-4 lg:px-6 2xl:px-8'
           : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
@@ -1333,6 +1333,7 @@ export default function App() {
               setPublicScannerOpen(true);
             }}
             myRegistration={myRegistration}
+            registrations={registrations}
             onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             paymentConfig={paymentConfig}
@@ -1491,6 +1492,8 @@ export default function App() {
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin', 'users')}
             onNavigateRegister={() => setCurrentTab('register')}
+            onUpdateRegistration={handleUpdateRegistration}
+            triggerToast={triggerToast}
           />
         )}
 

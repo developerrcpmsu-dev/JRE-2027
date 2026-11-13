@@ -388,37 +388,18 @@ export function parseSlipText(text, expectedAmount = null) {
   let detectedAmount = null;
 
   if (isBankSlip) {
-    // A. Check if expectedAmount matches numbers in text first
-    if (expectedAmount) {
-      const numExpected = Number(expectedAmount);
-      const expectedRegex = new RegExp(`(?:^|\\D)${numExpected}(?:\\.00)?(?:$|\\D)`);
-      if (expectedRegex.test(cleaned)) {
-        detectedAmount = numExpected;
+    // A. Keyword-anchored amount with 2 decimals FIRST (prevents loose number collisions with dates/account digits):
+    // "จำนวนเงิน\n80.00", "จำนวน: 50.00 บาท", "ยอดเงิน 650.00"
+    const labelAmountMatch = cleaned.match(/(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|amount|transferred)[\s\S]{0,35}?([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})/i);
+    if (labelAmountMatch) {
+      const num = parseFloat(labelAmountMatch[1].replace(/,/g, ''));
+      if (!isNaN(num) && num > 0 && num <= 100000) {
+        detectedAmount = num;
       }
     }
 
-    // A2. Check if 280.00 (Staff shirt amount) or standard JRE fee with .00 is explicitly present
-    if (!detectedAmount) {
-      const jreStandardMatch = cleaned.match(/(?:^|\D)(280|400|650|850|450|250)\.00(?:$|\D)/);
-      if (jreStandardMatch) {
-        detectedAmount = parseFloat(jreStandardMatch[1]);
-      }
-    }
-
-    // B. Keyword-anchored amount with 2 decimals:
-    // "จำนวนเงิน\n10.00", "จำนวน: 50.00 บาท", "ยอดเงิน 650.00"
-    if (!detectedAmount) {
-      const labelAmountMatch = cleaned.match(/(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|โอนสำเร็จ|amount|transferred)[\s\S]{0,35}?([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})/i);
-      if (labelAmountMatch) {
-        const num = parseFloat(labelAmountMatch[1].replace(/,/g, ''));
-        if (!isNaN(num) && num > 0 && num <= 100000) {
-          detectedAmount = num;
-        }
-      }
-    }
-
-    // C. Explicit currency patterns (NO \b after Thai word 'บาท'):
-    // "50.00 บาท", "10.00 บาท", "650.00฿", "50.00 un"
+    // B. Explicit currency patterns with 2 decimals (NO \b after Thai word 'บาท'):
+    // "80.00 บาท", "200.00 บาท", "650.00฿", "50.00 un"
     if (!detectedAmount) {
       const currMatch = cleaned.match(/([1-9][0-9]{0,4}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:บาท|thb|baht|฿|un|uin|8)/i);
       if (currMatch) {
@@ -429,7 +410,24 @@ export function parseSlipText(text, expectedAmount = null) {
       }
     }
 
-    // D. Decimal currency amount fallback (skip fee lines)
+    // C. Strict decimal expectedAmount (e.g. "80.00", "200.00") anywhere outside date/fee lines
+    if (!detectedAmount && expectedAmount) {
+      const numExpected = Number(expectedAmount);
+      const decExpectedRegex = new RegExp(`(?:^|\\D)${numExpected}\\.00(?:$|\\D)`);
+      if (decExpectedRegex.test(cleaned)) {
+        detectedAmount = numExpected;
+      }
+    }
+
+    // D. Check if standard JRE fee with explicit .00 is present
+    if (!detectedAmount) {
+      const jreStandardMatch = cleaned.match(/(?:^|\D)(280|400|650|850|450|250|200|80)\.00(?:$|\D)/);
+      if (jreStandardMatch) {
+        detectedAmount = parseFloat(jreStandardMatch[1]);
+      }
+    }
+
+    // E. Decimal currency amount fallback (skip fee/date lines)
     if (!detectedAmount) {
       const lines = cleaned.split('\n');
       for (const line of lines) {
@@ -450,6 +448,15 @@ export function parseSlipText(text, expectedAmount = null) {
           }
         }
         if (detectedAmount) break;
+      }
+    }
+
+    // F. Final integer fallback ONLY if expectedAmount is paired with keyword/currency (no bare digit match)
+    if (!detectedAmount && expectedAmount) {
+      const numExpected = Number(expectedAmount);
+      const intAnchoredRegex = new RegExp(`(?:จำนวนเงิน|จำนวน|ยอดเงิน|ยอดโอน|amount)[\\s\\S]{0,25}?(?:^|\\D)${numExpected}(?:\\.\\d{2})?(?:$|\\D)|(?:^|\\D)${numExpected}(?:\\.\\d{2})?\\s*(?:บาท|thb|baht|฿)`, 'i');
+      if (intAnchoredRegex.test(cleaned)) {
+        detectedAmount = numExpected;
       }
     }
   }
@@ -747,13 +754,14 @@ export async function scanSlipImage(file, expectedAmount = null) {
     if (expectedAmount) {
       const numExpected = Number(expectedAmount);
       const isMatch = Math.abs(result.amount - numExpected) < 1;
+      const allowStaff280Override = !numExpected || Math.abs(numExpected - 280) < 1 || [400, 650, 850].includes(numExpected);
       result.matchExpected = isMatch;
       if (isMatch) {
         result.status = 'verified';
         result.message = result.isStaffAmountDetected
           ? `สแกนพบยอดเงิน ${result.amountFormatted} (ค่าเสื้อ Staff โครงการ 280 บาท) ตรงตามที่กำหนดเรียบร้อย`
           : `สแกนพบยอดเงิน ${result.amountFormatted} ตรงตามที่กำหนดเรียบร้อย`;
-      } else if (result.isStaffAmountDetected) {
+      } else if (result.isStaffAmountDetected && allowStaff280Override) {
         // โอนมา 280 บาท คือ Staff โครงการ (ค่าเสื้อ)
         result.status = 'verified';
         result.matchExpected = true;
