@@ -118,9 +118,10 @@ body.modal-scroll-locked {
     display: block !important;
     visibility: visible !important;
     width: 100% !important;
+    min-width: 0 !important;
     max-width: 100% !important;
     margin: 0 auto !important;
-    padding: 4mm 2mm !important;
+    padding: 3mm 2mm !important;
     background: #ffffff !important;
     color: #0f172a !important;
     box-sizing: border-box !important;
@@ -141,7 +142,7 @@ body.modal-scroll-locked {
   #printable-document-sheet table {
     width: 100% !important;
     border-collapse: collapse !important;
-    margin-bottom: 16px !important;
+    margin-bottom: 12px !important;
     background: #ffffff !important;
   }
 
@@ -150,18 +151,27 @@ body.modal-scroll-locked {
     background-color: #f1f5f9 !important;
     color: #0f172a !important;
     font-weight: 800 !important;
-    border: 1.5px solid #475569 !important;
-    padding: 6px 8px !important;
-    font-size: 11px !important;
+    border: 1.2px solid #475569 !important;
+    padding: 4px 5px !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
   }
 
   #printable-rooms-roster td,
   #printable-document-sheet td {
     border: 1px solid #94a3b8 !important;
-    padding: 6px 8px !important;
+    padding: 4px 5px !important;
     color: #0f172a !important;
     background: #ffffff !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+  }
+
+  #printable-document-sheet[data-landscape="true"] th,
+  #printable-document-sheet[data-landscape="true"] td {
+    padding: 3px 4px !important;
+    font-size: 9px !important;
+    line-height: 1.25 !important;
   }
 
   #printable-rooms-roster tr,

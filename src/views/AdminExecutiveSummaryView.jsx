@@ -63,7 +63,9 @@ import {
   normalizeCallsignSpacing,
   compareRosterItems,
   getRosterSortTier,
-  isHealthSharedWithRoommate
+  isHealthSharedWithRoommate,
+  getHealthConsentInfo,
+  isRealParticipantPhoto
 } from '../data/defaultData';
 import UniversalImageModal from '../components/UniversalImageModal';
 
@@ -217,17 +219,17 @@ export default function AdminExecutiveSummaryView({
       nickname: spec.nickname || '',
       gender: spec.gender || 'ชาย',
       callsign: spec.callsign || '(STAFF)',
-      phone: '0812345678',
-      dob: '2004-01-01',
-      age_years: 22,
-      age_months: 0,
-      age_days: 0,
-      blood_group: 'B',
-      emergency_name: 'ชมรมกู้ภัยราชพฤกษ์',
-      emergency_phone: '0812345678',
-      food_allergy: 'ไม่มี',
-      medical_history: 'ไม่มี',
-      previous_training: 'ผ่านการฝึกอบรมกู้ชีพกู้ภัย',
+      phone: spec.phone || '',
+      dob: spec.dob || '',
+      age_years: spec.age_years ?? null,
+      age_months: spec.age_months ?? null,
+      age_days: spec.age_days ?? null,
+      blood_group: spec.blood_group || '',
+      emergency_name: spec.emergency_name || '',
+      emergency_phone: spec.emergency_phone || '',
+      food_allergy: '',
+      medical_history: '',
+      previous_training: '',
       institution: spec.institution || uniObj.label,
       affiliation: spec.affiliation || uniObj.shortTag,
       institution_abbr_th: spec.university_short || uniObj.shortTag,
@@ -235,12 +237,15 @@ export default function AdminExecutiveSummaryView({
       full_name_affiliation: `${spec.title_th || ''}${spec.first_name}${spec.last_name ? ' ' + spec.last_name : ''} (${spec.university_short || 'มมส'})`.trim(),
       is_staff: true,
       admin_staff_override: true,
+      added_without_account: true,
+      added_by_admin: true,
+      health_consent_by: 'admin',
       staff_role_type: spec.staff_role_type || 'committee',
       registration_type: 'staff',
       staff_id_card_only: true,
       committee_duty_note: spec.committee_duty_note || 'คณะกรรมการดำเนินงาน',
       special_notes: spec.committee_duty_note || 'คณะกรรมการดำเนินงาน',
-      id_card_photo: spec.photo || '',
+      id_card_photo: isRealParticipantPhoto(spec.photo) ? spec.photo : '',
       shirt_size: '-',
       payment_plan: 'full',
       payment_status: 'paid',
@@ -1147,6 +1152,9 @@ export default function AdminExecutiveSummaryView({
         full_name_affiliation: `${cleanTitle}${cleanFirst}${cleanLast ? ' ' + cleanLast : ''} (${finalAbbrTh})`.trim(),
         is_staff: isStaffRole,
         admin_staff_override: isStaffRole,
+        added_without_account: duplicate ? Boolean(duplicate.added_without_account || !duplicate.user_email) : true,
+        added_by_admin: true,
+        health_consent_by: duplicate?.health_consent_by || 'admin',
         staff_role_type: newPersonRoleType,
         registration_type: newRegType,
         staff_id_card_only: isStaffRole ? !newPersonOrderShirt : false,
@@ -3062,8 +3070,9 @@ export default function AdminExecutiveSummaryView({
                             </div>
                           )}
                           {(() => {
-                            const isHealthShared = isHealthSharedWithRoommate(reg);
-                            const consentBy = reg.health_consent_by === 'user' ? '👤 เจ้าตัวกดยินยอมเอง' : '🛡️ แอดมินบันทึก';
+                            const consentInfo = getHealthConsentInfo(reg);
+                            const isHealthShared = consentInfo.isShared;
+                            const consentBy = consentInfo.fullLabel;
                             return (
                               <div className="flex flex-col items-start gap-0.5 mt-1">
                                 <button

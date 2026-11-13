@@ -95,7 +95,7 @@ export function getSpecialItemsNeeded(reg, extra = {}) {
     .filter(v => v && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(v.toLowerCase()));
 
   const parts = [];
-  if (cleanSpecial && (reg?.is_special_care === true || !isCommitteeDutyNote(cleanSpecial))) {
+  if (cleanSpecial && !isCommitteeDutyNote(cleanSpecial)) {
     parts.push(cleanSpecial);
   }
   directItems.forEach(item => {
@@ -189,7 +189,8 @@ export function normalizeDormPerson(reg) {
     gender,
     phone: reg.phone || extra.phone || '-',
     email: reg.user_email || '',
-    avatar: getParticipantPhoto(reg) || reg.user_avatar || '',
+    avatar: getParticipantPhoto(reg) || (String(reg.user_avatar || '').includes('dicebear.com') ? '' : (reg.user_avatar || '')),
+    isNoAccount: Boolean(healthConsent?.isNoAccount),
     medicalEquipmentNeeded,
     specialItemsNeeded,
     isSpecialCare,
@@ -210,7 +211,10 @@ export function normalizeDormPerson(reg) {
     needsBuddyCare: healthPriorityTier >= 2,
     hasAnyHealthAlert: healthPriorityTier >= 2,
     healthPriorityTier,
-    emergencyName: reg.emergency_name || extra.emergency_name || '-',
+    emergencyName: (() => {
+      const cleaned = String(reg.emergency_name || extra.emergency_name || '').replace(/^-\s*/, '').trim();
+      return cleaned && cleaned !== '-' ? cleaned : '-';
+    })(),
     emergencyPhone: reg.emergency_phone || extra.emergency_phone || '-',
     isMsu,
     isHealthShared: healthConsent.isShared,

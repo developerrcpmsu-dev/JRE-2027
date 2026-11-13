@@ -6635,7 +6635,7 @@ export default function AdminDashboardView({
               <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
               <option value="medical">🩺 หน่วยพยาบาลสนาม & เบิกจ่ายยา/เวชระเบียน</option>
               <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 1 (ห้อง 101 - 110)</option>
-              <option value="documents">📑 ศูนย์รวมเอกสาร & ใบตรวจยา Staff (4 ใบ)</option>
+              <option value="documents">📑 ศูนย์รวมเอกสาร & ใบตรวจยา Staff (6 ใบ)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
@@ -6780,7 +6780,7 @@ export default function AdminDashboardView({
             }`}
           >
             <FileText className="w-4 h-4 text-teal-400 shrink-0" />
-            <span>📄 เอกสาร & ใบเช็คยา Staff (4 ใบ)</span>
+            <span>📄 เอกสาร & ใบเช็คยา Staff (6 ใบ)</span>
           </button>
 
           <button
@@ -18948,6 +18948,7 @@ export default function AdminDashboardView({
           registrations={registrations}
           merchandiseOrders={merchandiseOrders}
           paymentConfig={paymentConfig}
+          userAccounts={userAccounts}
           triggerToast={triggerToast}
         />
       )}

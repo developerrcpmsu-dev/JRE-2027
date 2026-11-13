@@ -915,7 +915,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายทะเบียนและประสานงาน',
-    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Anusara_MSU&backgroundColor=b6e3f4',
+    photo: '',
     shirt_size: '-',
     staff_id_card_only: true,
     matchTokens: ['อนุสรา แสนขรยาง', 'อนุสรา']
@@ -936,7 +936,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
-    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Film_MC_JRE2027&backgroundColor=c0aede',
+    photo: '',
     shirt_size: '-',
     staff_id_card_only: true,
     matchTokens: ['น้องฟิล์ม']
@@ -957,7 +957,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • พิธีกรดำเนินรายการ (MC)',
-    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Namwan_MC_JRE2027&backgroundColor=ffd5dc',
+    photo: '',
     shirt_size: '-',
     staff_id_card_only: true,
     matchTokens: ['น้องน้ำหวาน']
@@ -998,7 +998,7 @@ export const OFFICIAL_8_COMMITTEE_ROSTER = [
     unit: 'ชมรมกู้ภัยราชพฤกษ์',
     affiliation: 'มมส',
     committee_duty_note: 'คณะกรรมการดำเนินงาน • ฝ่ายพยาบาลและสวัสดิการ',
-    photo: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Apatchanipha_MSU&backgroundColor=ffdfbf',
+    photo: '',
     shirt_size: '-',
     staff_id_card_only: true,
     matchTokens: ['อพัชนิภา ไวมาตร', 'อพัชนิภา']
@@ -2734,12 +2734,57 @@ export const getCleanSpecialNotes = (reg) => {
   return trimmed;
 };
 
+export const isRealParticipantPhoto = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (trimmed.includes('api.dicebear.com') || trimmed.includes('ui-avatars.com')) return false;
+  return true;
+};
+
+export const isRegistrationWithoutAccount = (reg, userAccounts = []) => {
+  if (!reg) return false;
+  let sn = {};
+  if (reg.special_notes && typeof reg.special_notes === 'string' && reg.special_notes.trim().startsWith('{')) {
+    try { sn = JSON.parse(reg.special_notes); } catch {}
+  } else if (reg.special_notes && typeof reg.special_notes === 'object') {
+    sn = reg.special_notes;
+  }
+  if (reg.added_without_account || sn.added_without_account) return true;
+
+  const uid = String(reg.user_id || reg.id || '').trim().toLowerCase();
+  const email = String(reg.user_email || '').trim().toLowerCase();
+  const isSyntheticAdminId =
+    uid.startsWith('staff_committee_') ||
+    uid.startsWith('manual_') ||
+    uid.startsWith('admin_');
+
+  if (isSyntheticAdminId && !email) return true;
+
+  if (!email) {
+    if (Array.isArray(userAccounts) && userAccounts.length > 0) {
+      const hasMatchedAcc = userAccounts.some(a => String(a?.id || '').trim().toLowerCase() === uid);
+      return !hasMatchedAcc;
+    }
+    return true;
+  }
+
+  if (Array.isArray(userAccounts) && userAccounts.length > 0 && isSyntheticAdminId) {
+    const hasEmailAcc = userAccounts.some(a => String(a?.email || '').trim().toLowerCase() === email);
+    if (!hasEmailAcc) return true;
+  }
+  return false;
+};
+
 export const isCommitteeDutyNote = (text) => {
   if (!text || typeof text !== 'string') return false;
   const trimmed = text.trim();
   if (!trimmed) return false;
+  // Strip committee/department words that happen to contain "ยา" (e.g. "ฝ่ายพยาบาล", "พยาธิ", "วิทยา")
+  // before testing for medical supply/allergy keywords.
+  const sanitizedForMedCheck = trimmed.replace(/ฝ่ายพยาบาลและสวัสดิการ|ฝ่ายพยาบาล|พยาบาล|วิทยา|พยาธิ/g, '');
   return /^(คณะกรรมการดำเนินงาน|คณะกรรมการดำเนินงานร่วม|หน้าที่รับผิดชอบ|ฝ่าย[ก-ฮ]|MC|Staff)/i.test(trimmed) &&
-    !/(แพ้|โรค|ยา|ฉุกเฉิน|ดูแลพิเศษ|อาหาร|พก|หอบ|หัวใจ|เบาหวาน|ความดัน|g6pd|mdd|adhd)/i.test(trimmed);
+    !/(แพ้|โรค|ยา|ฉุกเฉิน|ดูแลพิเศษ|อาหาร|พก|หอบ|หัวใจ|เบาหวาน|ความดัน|g6pd|mdd|adhd)/i.test(sanitizedForMedCheck);
 };
 
 export const hasSpecialCareCondition = (reg) => {
@@ -2776,7 +2821,7 @@ export const isHealthSharedWithRoommate = (reg) => {
 /**
  * สรุปสถานะการเปิดเผยข้อมูลสุขภาพและผู้กดบันทึกล่าสุด (เจ้าตัว vs Admin)
  */
-export const getHealthConsentInfo = (reg) => {
+export const getHealthConsentInfo = (reg, userAccounts = []) => {
   const isShared = isHealthSharedWithRoommate(reg);
   let extra = {};
   if (reg?.special_notes) {
@@ -2787,27 +2832,40 @@ export const getHealthConsentInfo = (reg) => {
     }
   }
 
+  const isNoAccount = isRegistrationWithoutAccount(reg, userAccounts);
   const hasExplicitConsent =
     reg?.share_health_with_roommate !== undefined ||
     extra.share_health_with_roommate !== undefined;
   const rawActor = reg?.health_consent_by || extra.health_consent_by || '';
-  const actor = (rawActor === 'user' || rawActor === 'admin')
-    ? rawActor
-    : (hasExplicitConsent ? 'user' : 'admin');
+  // Never claim "เจ้าตัวยินยอมเอง" if person was added by Admin without a system account,
+  // or if explicit actor is not 'user'.
+  const actor = (!isNoAccount && rawActor === 'user') ? 'user' : 'admin';
   const consentAt = reg?.health_consent_at || extra.health_consent_at || '';
 
   const statusLabel = isShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย';
   const shortStatusLabel = isShared ? 'ยินยอม' : 'ไม่ยินยอม';
-  const actorLabel = actor === 'admin' ? 'Admin กดให้' : 'เจ้าตัวกดเอง';
+  const actorLabel = isNoAccount
+    ? 'Admin เพิ่มข้อมูล (ไม่มีบัญชีในระบบ)'
+    : (actor === 'admin' ? 'Admin กดให้' : 'เจ้าตัวกดเอง');
 
   let fullLabel = '';
-  if (isShared && actor === 'user') fullLabel = '👤 เจ้าตัวยินยอมเอง';
-  else if (isShared && actor === 'admin') fullLabel = '🛡️ Admin กดยินยอมให้';
-  else if (!isShared && actor === 'user') fullLabel = '👤 เจ้าตัวกดไม่ยินยอมเอง';
-  else fullLabel = '🛡️ Admin กดไม่ยินยอมให้';
+  if (isNoAccount) {
+    fullLabel = isShared
+      ? '🛡️ Admin บันทึกให้ (ไม่มีบัญชีในระบบ)'
+      : '🛡️ Admin กดไม่ยินยอมให้ (ไม่มีบัญชีในระบบ)';
+  } else if (isShared && actor === 'user') {
+    fullLabel = '👤 เจ้าตัวยินยอมเอง';
+  } else if (isShared && actor === 'admin') {
+    fullLabel = '🛡️ Admin กดยินยอมให้';
+  } else if (!isShared && actor === 'user') {
+    fullLabel = '👤 เจ้าตัวกดไม่ยินยอมเอง';
+  } else {
+    fullLabel = '🛡️ Admin กดไม่ยินยอมให้';
+  }
 
   return {
     isShared,
+    isNoAccount,
     actor,
     hasExplicitConsent,
     consentAt,
@@ -2825,40 +2883,36 @@ export const getHealthConsentInfo = (reg) => {
 export const getParticipantPhoto = (reg, user = null) => {
   if (!reg && !user) return '';
 
-  // 1. ลำดับความสำคัญสูงสุด: รูปถ่ายสำหรับทำบัตรประจำตัว / ภาพถ่ายหน้าตรงที่อัปโหลดเอง
-  if (reg?.id_card_photo && typeof reg.id_card_photo === 'string' && reg.id_card_photo.trim()) {
+  // 1. ลำดับความสำคัญสูงสุด: รูปถ่ายสำหรับทำบัตรประจำตัว / ภาพถ่ายหน้าตรงที่อัปโหลดจริง (ไม่นับรูปอวาตาร์การ์ตูนจำลอง)
+  if (isRealParticipantPhoto(reg?.id_card_photo)) {
     return reg.id_card_photo.trim();
   }
-  if (reg?.id_card_url && typeof reg.id_card_url === 'string' && reg.id_card_url.trim()) {
+  if (isRealParticipantPhoto(reg?.id_card_url)) {
     return reg.id_card_url.trim();
   }
 
-  // 2. ลำดับรอง: รูปอวาตาร์ที่บันทึกในใบสมัครที่ไม่ใช่รูปโปรไฟล์อีเมล Google ทั่วไป
+  // 2. ลำดับรอง: รูปอวาตาร์ที่บันทึกในใบสมัครที่ไม่ใช่รูปโปรไฟล์อีเมล Google ทั่วไปหรือภาพการ์ตูนจำลอง
   if (
-    reg?.user_avatar &&
-    typeof reg.user_avatar === 'string' &&
-    reg.user_avatar.trim() &&
+    isRealParticipantPhoto(reg?.user_avatar) &&
     !reg.user_avatar.includes('googleusercontent.com')
   ) {
     return reg.user_avatar.trim();
   }
   if (
-    reg?.avatar &&
-    typeof reg.avatar === 'string' &&
-    reg.avatar.trim() &&
+    isRealParticipantPhoto(reg?.avatar) &&
     !reg.avatar.includes('googleusercontent.com')
   ) {
     return reg.avatar.trim();
   }
 
-  // 3. Fallback กรณีไม่มีรูปถ่ายอัปโหลดเลย ให้ใช้ user_avatar หรือรูปจาก session
-  if (reg?.user_avatar && typeof reg.user_avatar === 'string' && reg.user_avatar.trim()) {
+  // 3. Fallback กรณีไม่มีรูปถ่ายอัปโหลดเลย ให้ใช้ user_avatar ที่เป็นภาพจริงเท่านั้น (ไม่ใช้การ์ตูนจำลอง)
+  if (isRealParticipantPhoto(reg?.user_avatar)) {
     return reg.user_avatar.trim();
   }
-  if (user?.avatar && typeof user.avatar === 'string' && user.avatar.trim()) {
+  if (isRealParticipantPhoto(user?.avatar)) {
     return user.avatar.trim();
   }
-  if (user?.photoURL && typeof user.photoURL === 'string' && user.photoURL.trim()) {
+  if (isRealParticipantPhoto(user?.photoURL)) {
     return user.photoURL.trim();
   }
 

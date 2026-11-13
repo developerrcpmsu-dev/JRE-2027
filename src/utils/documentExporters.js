@@ -714,13 +714,23 @@ function populateAdminMasterSheet(ws, records = []) {
     const hasAlert = Boolean(r.hasHealthAlert);
     const bg = hasAlert ? 'FFFFF1F2' : (idx % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF');
 
+    const personalMeta = [
+      r.gender && r.gender !== '-' ? r.gender : null,
+      r.ageLabel && r.ageLabel !== '-' ? r.ageLabel : null,
+      r.bloodGroup && r.bloodGroup !== '-' ? `เลือด ${r.bloodGroup}` : null
+    ].filter(Boolean).join(' • ') || '-';
+    const contactLine = [
+      r.phone && r.phone !== '-' ? r.phone : 'ไม่มีเบอร์โทร',
+      r.email && r.email !== '-' ? r.email : (r.isNoAccount ? 'ไม่มีบัญชีในระบบ (Admin เพิ่ม)' : null)
+    ].filter(Boolean).join('\n');
+
     row.getCell(1).value = idx + 1;
     row.getCell(2).value = r.fullNameWithEn || r.name || '-';
     row.getCell(3).value = `${r.nickname || '-'} / ${r.callsign || '-'}`;
-    row.getCell(4).value = `${r.institution || '-'} (${r.memberTypeLabel || '-'})`;
+    row.getCell(4).value = `${r.institution || '-'} (${r.memberTypeLabel || '-'})${r.isNoAccount ? '\n[Admin เพิ่ม • ไม่มีบัญชี]' : ''}`;
     row.getCell(5).value = r.roleWithDuty || r.role || '-';
-    row.getCell(6).value = `${r.gender || '-'} • ${r.ageLabel || '-'} • เลือด ${r.bloodGroup || '-'}`;
-    row.getCell(7).value = `${r.phone || '-'}\n${r.email || '-'}`;
+    row.getCell(6).value = personalMeta;
+    row.getCell(7).value = contactLine;
     row.getCell(8).value = r.rsvpSummary || '-';
     row.getCell(9).value = r.groupAssigned || 'ยังไม่จัดกลุ่ม';
     row.getCell(10).value = r.dormAndKeySummary || '-';

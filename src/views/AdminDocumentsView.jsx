@@ -30,7 +30,10 @@ import {
   hasSpecialCareCondition,
   getMedicalEquipmentNeeded,
   getHealthConsentInfo,
-  isCommitteeDutyNote
+  isCommitteeDutyNote,
+  isRegistrationWithoutAccount,
+  isRealParticipantPhoto,
+  resolveCommitteeDutyNote
 } from '../data/defaultData';
 import { 
   buildDormitoryRoomData,
@@ -318,15 +321,22 @@ export default function AdminDocumentsView({
   registrations = [],
   merchandiseOrders = [],
   paymentConfig = null,
+  userAccounts = [],
   triggerToast
 }) {
   const [activeDoc, setActiveDoc] = useState(getInitialDocTab); // 'attendance' | 'id-cards' | 'shirts' | 'rooms' | 'rooms-staff' | 'admin-master'
   const [staffOnlyAlerts, setStaffOnlyAlerts] = useState(false);
   const [adminMasterSearch, setAdminMasterSearch] = useState('');
   const [adminMasterFilter, setAdminMasterFilter] = useState('all'); // 'all' | 'alerts' | 'unpaid' | 'msu' | 'kku'
+  const [printOrientation, setPrintOrientation] = useState('auto'); // 'auto' | 'portrait' | 'landscape'
   const [isExportingPng, setIsExportingPng] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [shirtQrMap, setShirtQrMap] = useState({});
+
+  const resolvedPrintOrientation = useMemo(() => {
+    if (printOrientation === 'portrait' || printOrientation === 'landscape') return printOrientation;
+    return ['shirts', 'rooms-staff', 'admin-master'].includes(activeDoc) ? 'landscape' : 'portrait';
+  }, [printOrientation, activeDoc]);
 
   // 1. Prepare Attendance Data (36 Persons)
   const attendanceData = useMemo(() => {
@@ -336,6 +346,7 @@ export default function AdminDocumentsView({
       const gender = resolveGender(reg);
       const extra = parseSpecialNotesExtra(reg);
       const attInfo = getAttendanceConfirmationInfo(reg);
+      const isNoAccount = isRegistrationWithoutAccount(reg, userAccounts);
 
       const nickname = extra.nickname || reg.nickname || '-';
       const rawCallsign = extra.callsign || reg.callsign || '-';
@@ -355,7 +366,8 @@ export default function AdminDocumentsView({
         ? 'แจ้งไม่พักหอ'
         : (isMsu ? 'มมส (ไป-กลับเอง)' : (matchedRoom ? `พักหอกุดรัง (${parsedRoom.floorLabel} ${parsedRoom.roomLabel})` : 'พักหอกุดรัง'));
       const rsvpShort = attInfo.isDeclined ? ' [ไม่เข้าร่วม]' : (attInfo.isConfirmed ? ' [ยืนยันมา]' : '');
-      const notes = `${roomNote}${rsvpShort}`;
+      const noAccShort = isNoAccount ? ' [Admin เพิ่ม • ไม่มีบัญชี]' : '';
+      const notes = `${roomNote}${rsvpShort}${noAccShort}`;
 
       return {
         id: reg.id || reg.user_id,
@@ -367,6 +379,7 @@ export default function AdminDocumentsView({
         isMsu,
         isCommittee,
         isStaff,
+        isNoAccount,
         role,
         gender,
         phone: reg.phone || extra.phone || '-',
@@ -384,7 +397,7 @@ export default function AdminDocumentsView({
       if (a.gender !== b.gender) return a.gender === 'ชาย' ? -1 : 1;
       return a.name.localeCompare(b.name, 'th');
     });
-  }, [registrations]);
+  }, [registrations, userAccounts]);
 
   // 2. Prepare ID Card Pickup Roster (36 Persons — PDPA-Safe)
   const idCardData = useMemo(() => {
@@ -393,11 +406,11 @@ export default function AdminDocumentsView({
       const reg = byId.get(item.id) || {};
       const extra = parseSpecialNotesExtra(reg);
       const isReceived = Boolean(reg.id_card_received || extra.id_card_received);
-      const hasPhoto = Boolean(reg.id_card_photo || extra.id_card_photo);
+      const hasPhoto = isRealParticipantPhoto(reg.id_card_photo || extra.id_card_photo || reg.id_card_url);
       let idCardStatus = 'รอรับบัตร ID';
       if (isReceived) idCardStatus = '✓ รับบัตรแล้ว';
       else if (hasPhoto) idCardStatus = 'พร้อมจ่าย (มีรูปบัตร)';
-      else idCardStatus = 'รอส่งรูป / รอรับบัตร';
+      else idCardStatus = item.isNoAccount ? 'ไม่มีรูปบัตร (Admin เพิ่ม • ไม่มีบัญชี)' : 'ไม่มีรูปบัตร (ยังไม่อัปโหลด)';
 
       return {
         ...item,
@@ -524,6 +537,43 @@ export default function AdminDocumentsView({
     };
   }, [shirtData]);
 
+  const shirtStatsSummary = useMemo(() => {
+    const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+    const formatMap = (countsMap) => {
+      const entries = Object.entries(countsMap);
+      entries.sort((a, b) => {
+        const idxA = sizeOrder.indexOf(a[0]);
+        const idxB = sizeOrder.indexOf(b[0]);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a[0].localeCompare(b[0]);
+      });
+      return entries.map(([sz, qty]) => `${sz}:${qty}`).join(', ');
+    };
+    const kkuCounts = {};
+    const msuCounts = {};
+    let kkuTotal = 0;
+    let msuTotal = 0;
+    shirtData.forEach(item => {
+      const sz = item.size || 'L';
+      const qty = Number(item.qty) || 1;
+      if (item.chest === 'TSIKKU') {
+        kkuCounts[sz] = (kkuCounts[sz] || 0) + qty;
+        kkuTotal += qty;
+      } else {
+        msuCounts[sz] = (msuCounts[sz] || 0) + qty;
+        msuTotal += qty;
+      }
+    });
+    return {
+      kkuTotal,
+      msuTotal,
+      kkuBreakdown: formatMap(kkuCounts) || '-',
+      msuBreakdown: formatMap(msuCounts) || '-'
+    };
+  }, [shirtData]);
+
   // 4. Prepare Dormitory Rooms Data (Rooms 101 - 110, sorted #1 care, #2 healthy)
   const roomData = useMemo(() => {
     const parsed = buildDormitoryRoomData(registrations);
@@ -553,7 +603,8 @@ export default function AdminDocumentsView({
       const memberTypeInfo = resolveApplicantMemberType(reg);
       const attInfo = getAttendanceConfirmationInfo(reg);
       const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
-      const consent = getHealthConsentInfo(reg);
+      const isNoAccount = isRegistrationWithoutAccount(reg, userAccounts);
+      const consent = getHealthConsentInfo(reg, userAccounts);
       const roomPerson = roomPersonById.get(id);
 
       const nickname = extra.nickname || reg.nickname || '-';
@@ -562,9 +613,12 @@ export default function AdminDocumentsView({
       const isStaff = Boolean(extra.is_staff || reg.is_staff || rawCallsign.includes('STAFF'));
       const isCommittee = Boolean(extra.staff_role_type === 'committee' || isStaff);
 
-      const dutyNote = typeof reg.special_notes === 'string' && isCommitteeDutyNote(reg.special_notes)
-        ? reg.special_notes.trim()
-        : (extra.committee_duty || '');
+      const resolvedDuty = resolveCommitteeDutyNote(reg);
+      const dutyNote = resolvedDuty || extra.committee_duty_note || extra.committee_duty || (
+        typeof reg.special_notes === 'string' && isCommitteeDutyNote(reg.special_notes)
+          ? reg.special_notes.trim()
+          : ''
+      );
       let role = 'ผู้เข้าร่วมอบรม (Trainee)';
       if (extra.staff_role_type === 'committee') role = 'คณะกรรมการดำเนินงาน';
       else if (isStaff) role = 'Staff คณะทำงาน';
@@ -589,12 +643,12 @@ export default function AdminDocumentsView({
         : `${shirtSize} • ${isShirtReceived ? '✓ รับแล้ว' : 'รอรับ'}`;
 
       const isIdCardReceived = Boolean(reg.id_card_received || extra.id_card_received);
-      const hasIdPhoto = Boolean(reg.id_card_photo || extra.id_card_photo);
+      const hasIdPhoto = isRealParticipantPhoto(reg.id_card_photo || extra.id_card_photo || reg.id_card_url);
       const idCardSummary = isIdCardReceived
         ? '✓ รับบัตรแล้ว'
         : hasIdPhoto
           ? 'มีรูปบัตร • รอรับ'
-          : 'รอส่งรูปบัตร';
+          : 'ไม่มีรูปบัตร';
 
       // Payment
       let paymentStatusLabel = 'รอชำระเงิน';
@@ -628,11 +682,18 @@ export default function AdminDocumentsView({
       const suppliesSummary = suppliesParts.length > 0 ? suppliesParts.join(' | ') : (hasSpecialCareCondition(reg) ? 'ต้องดูแลเป็นพิเศษ' : '-');
       const hasHealthAlert = Boolean(hasMed || hasAlg || medEquip || specialItems || hasSpecialCareCondition(reg));
 
-      const emergencyName = reg.emergency_name || extra.emergency_name || '-';
-      const emergencyPhone = reg.emergency_phone || extra.emergency_phone || '-';
-      const emergencyContact = emergencyName !== '-' ? `${emergencyName} (${emergencyPhone})` : '-';
+      const rawEName = String(reg.emergency_name || extra.emergency_name || '').replace(/^-\s*/, '').trim();
+      const rawERel = String(reg.emergency_relation || extra.emergency_relation || '').trim();
+      const rawEPhone = String(reg.emergency_phone || extra.emergency_phone || '').trim();
+      const validEName = rawEName && rawEName !== '-' ? rawEName : '';
+      const validERel = rawERel && rawERel !== '-' ? rawERel : '';
+      const validEPhone = rawEPhone && rawEPhone !== '-' ? rawEPhone : '';
+      const emergencyContact = validEName
+        ? `${validEName}${validERel && !validEName.includes(validERel) ? ` (${validERel})` : ''}${validEPhone ? ` (${validEPhone})` : ''}`
+        : (validEPhone ? `${validERel || 'ติดต่อฉุกเฉิน'} (${validEPhone})` : '-');
 
       const ageLabel = reg.age_years ? `${reg.age_years} ปี` : '-';
+      const rsvpStatus = attInfo.statusLabel || '⏳ รอยืนยันเข้าร่วม';
 
       return {
         id,
@@ -644,6 +705,7 @@ export default function AdminDocumentsView({
         isMsu: uniInfo.isMsu,
         isCommittee,
         isStaff,
+        isNoAccount,
         memberTypeLabel: memberTypeInfo?.shortLabel || (memberTypeInfo?.isClubMember ? 'สมาชิกชมรม' : 'อาสา'),
         role,
         roleWithDuty,
@@ -652,7 +714,7 @@ export default function AdminDocumentsView({
         bloodGroup: reg.blood_group || '-',
         phone: reg.phone || extra.phone || '-',
         email: reg.user_email || '-',
-        rsvpSummary: `${attInfo.statusLabel}${attInfo.reason ? ` (${attInfo.reason})` : ''}`,
+        rsvpSummary: `${rsvpStatus}${attInfo.reason ? ` (${attInfo.reason})` : ''}`,
         groupAssigned: reg.group_assigned || 'ยังไม่จัดกลุ่ม',
         dormAndKeySummary,
         shirtSummary,
@@ -677,7 +739,7 @@ export default function AdminDocumentsView({
       if (!a.isMsu && b.isMsu) return 1;
       return a.name.localeCompare(b.name, 'th');
     });
-  }, [registrations, paymentConfig, roomData]);
+  }, [registrations, paymentConfig, roomData, userAccounts]);
 
   const displayedAdminMasterData = useMemo(() => {
     const q = adminMasterSearch.trim().toLowerCase();
@@ -713,9 +775,19 @@ export default function AdminDocumentsView({
 
   // Handler: Print Current Document Cleanly
   const handlePrintDocument = () => {
+    const styleId = 'jre-dynamic-print-page';
+    const existingStyle = document.getElementById(styleId);
+    if (existingStyle) existingStyle.remove();
+    const pageStyle = document.createElement('style');
+    pageStyle.id = styleId;
+    pageStyle.textContent = `@media print { @page { size: A4 ${resolvedPrintOrientation}; margin: 6mm 5mm !important; } }`;
+    document.head.appendChild(pageStyle);
+
     document.body.classList.add('document-print-active');
     const cleanup = () => {
       document.body.classList.remove('document-print-active');
+      const el = document.getElementById(styleId);
+      if (el) el.remove();
       window.removeEventListener('afterprint', cleanup);
     };
     window.addEventListener('afterprint', cleanup);
@@ -837,7 +909,9 @@ export default function AdminDocumentsView({
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
           const consentLabel = p ? `${p.healthConsent?.statusLabel || (p.isHealthShared ? 'ยินยอม' : 'ไม่ยินยอม')} (${p.healthConsent?.actorLabel || '-'})` : '-';
-          const emer = p && p.emergencyName !== '-' ? `${p.emergencyName} (${p.emergencyPhone})` : '-';
+          const emer = p && p.emergencyName !== '-'
+            ? `${p.emergencyName}${p.emergencyPhone && p.emergencyPhone !== '-' ? ` (${p.emergencyPhone})` : ''}`
+            : (p && p.emergencyPhone && p.emergencyPhone !== '-' ? p.emergencyPhone : '-');
           csv += makeRow([rm.room, isMale ? 'ชาย' : 'หญิง', b + 1, p ? p.name : '(ว่าง)', p ? p.nickname : '-', p ? p.callsign : '-', p ? p.phone : '-', p ? p.stayStatusLabel : '-', p ? p.keyStatusLabel : '-', p ? p.medicalHistory : '-', p ? p.foodAllergy : '-', p ? p.bloodGroup : '-', p?.medicalEquipmentNeeded || '-', p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-'), consentLabel, emer]);
         }
       });
@@ -845,7 +919,7 @@ export default function AdminDocumentsView({
     } else {
       csv = makeRow(['ลำดับ', 'ชื่อ-สกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'ประเภทสมาชิก', 'บทบาท & ฝ่าย', 'เพศ', 'อายุ', 'หมู่เลือด', 'เบอร์โทร', 'อีเมล', 'RSVP', 'กลุ่มฝึก', 'ห้องพัก & กุญแจ', 'เสื้อ', 'บัตร ID', 'สถานะการเงิน', 'ยอดเงิน', 'หมายเหตุการเงิน', 'โรค/แพ้', 'ยา/ของใช้', 'เปิดเผยสุขภาพ (ผู้กด)', 'ติดต่อฉุกเฉิน']);
       displayedAdminMasterData.forEach((r, idx) => {
-        csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.memberTypeLabel, r.roleWithDuty, r.gender, r.ageLabel, r.bloodGroup, r.phone, r.email, r.rsvpSummary, r.groupAssigned, r.dormAndKeySummary, r.shirtSummary, r.idCardSummary, r.paymentStatusLabel, r.paymentAmountsLabel, r.paymentNotesLabel, r.medicalSummary, r.suppliesSummary, r.healthConsentSummary, r.emergencyContact]);
+        csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.memberTypeLabel, `${r.roleWithDuty}${r.isNoAccount ? ' [Admin เพิ่ม • ไม่มีบัญชี]' : ''}`, r.gender, r.ageLabel, r.bloodGroup, r.phone, r.email, r.rsvpSummary, r.groupAssigned, r.dormAndKeySummary, r.shirtSummary, r.idCardSummary, r.paymentStatusLabel, r.paymentAmountsLabel, r.paymentNotesLabel, r.medicalSummary, r.suppliesSummary, r.healthConsentSummary, r.emergencyContact]);
       });
       filename = '6_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin_JRE2027.csv';
     }
@@ -857,7 +931,7 @@ export default function AdminDocumentsView({
   const docBadgeLabel = {
     attendance: '1. ใบเซ็นชื่อเข้าร่วมอบรม',
     'id-cards': '2. ใบเซ็นชื่อรับบัตรประจำตัว ID Card',
-    shirts: '3. ใบเซ็นชื่อรับเสื้อ 32 ตัว',
+    shirts: `3. ใบเซ็นชื่อรับเสื้อ (${shirtData.length} ตัว)`,
     rooms: '4. ใบเซ็นชื่อเข้าห้องพัก & กุญแจ (ปิดข้อมูลสุขภาพ)',
     'rooms-staff': '5. ใบตรวจห้อง & โรค/ยา/ของใช้ (Staff ไม่ต้องเซ็น)',
     'admin-master': '6. ทะเบียนข้อมูลละเอียดครบทุกมิติ (Admin)'
@@ -1000,7 +1074,7 @@ export default function AdminDocumentsView({
                 <span>5. ใบตรวจห้อง & โรคประจำตัว / ยา / ของใช้</span>
                 <Stethoscope className="w-4 h-4 text-rose-400" />
               </div>
-              <div className="text-sm font-black text-white">สำหรับ Staff พยาบาล & หอพัก (ชั้น 1 ห้อง 101-110 + มมส)</div>
+              <div className="text-sm font-black text-white">สำหรับ Staff พยาบาล & หอพัก ({roomData.activeFloorSummary || 'ชั้น 1 ห้อง 101-110'} + มมส)</div>
               <span className="text-[10px] text-rose-300">ระบุห้องพัก/ไม่พัก, กุญแจ, โรค, แพ้, ยา, ของที่ต้องใช้, ผู้ติดต่อฉุกเฉิน, ความยินยอม</span>
             </button>
 
@@ -1043,7 +1117,7 @@ export default function AdminDocumentsView({
                   : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
               }`}
             >
-              {staffOnlyAlerts ? '✓ แสดงเฉพาะห้องที่ต้องเตรียมยา/เฝ้าระวัง' : 'แสดงทุกห้อง (10 ห้อง)'}
+              {staffOnlyAlerts ? '✓ แสดงเฉพาะห้องที่ต้องเตรียมยา/เฝ้าระวัง' : `แสดงทุกห้อง (${roomData.rooms.length} ห้อง)`}
             </button>
           )}
           {activeDoc === 'admin-master' && (
@@ -1093,13 +1167,24 @@ export default function AdminDocumentsView({
             <span>CSV (UTF-8 BOM)</span>
           </button>
 
+          <select
+            value={printOrientation}
+            onChange={e => setPrintOrientation(e.target.value)}
+            title="เลือกแนวกระดาษ A4 สำหรับพิมพ์/PDF"
+            className="px-2.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-amber-200 focus:outline-none focus:border-amber-400 cursor-pointer"
+          >
+            <option value="auto">กระดาษ A4: อัตโนมัติ ({resolvedPrintOrientation === 'landscape' ? 'แนวนอน' : 'แนวตั้ง'})</option>
+            <option value="landscape">กระดาษ A4: แนวนอน (ตารางกว้าง)</option>
+            <option value="portrait">กระดาษ A4: แนวตั้ง</option>
+          </select>
+
           <button
             type="button"
             onClick={handlePrintDocument}
             className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
           >
             <Printer className="w-3.5 h-3.5 text-slate-950" />
-            <span>พิมพ์ / PDF (หน้ากระดาษ A4)</span>
+            <span>พิมพ์ / PDF ({resolvedPrintOrientation === 'landscape' ? 'A4 แนวนอน' : 'A4 แนวตั้ง'})</span>
           </button>
 
           <button
@@ -1118,6 +1203,7 @@ export default function AdminDocumentsView({
       <div className="overflow-x-auto pb-4">
         <div 
           id="printable-document-sheet"
+          data-landscape={resolvedPrintOrientation === 'landscape' ? 'true' : 'false'}
           className={`mx-auto bg-white text-slate-900 p-8 sm:p-10 rounded-2xl shadow-2xl border border-slate-300 ${
             activeDoc === 'admin-master' ? 'min-w-[1240px] max-w-[1440px]' : 'min-w-[980px] max-w-[1180px]'
           } text-xs font-sans print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none`}
@@ -1152,7 +1238,7 @@ export default function AdminDocumentsView({
                 {activeDoc === 'attendance' && `ยอดรวม ${attendanceData.length} คน`}
                 {activeDoc === 'id-cards' && `บัตรทั้งหมด ${idCardData.length} ใบ (คุ้มครองข้อมูลสุขภาพ PDPA)`}
                 {activeDoc === 'shirts' && `ยอดผลิตรวม ${shirtData.length} ตัว`}
-                {activeDoc === 'rooms' && 'ชั้น 1 ห้อง 101 - 110 • คุ้มครองข้อมูลสุขภาพ (PDPA)'}
+                {activeDoc === 'rooms' && `${roomData.activeFloorSummary || 'ชั้น 1 ห้อง 101 - 110'} • คุ้มครองข้อมูลสุขภาพ (PDPA)`}
                 {activeDoc === 'rooms-staff' && 'ไม่ต้องลงลายมือชื่อ • สำหรับฝ่ายพยาบาล/สวัสดิการเตรียมความพร้อม'}
                 {activeDoc === 'admin-master' && `แสดงผล ${displayedAdminMasterData.length} / ${adminMasterData.length} ท่าน (ข้อมูลภายใน Admin)`}
               </span>
@@ -1184,8 +1270,17 @@ export default function AdminDocumentsView({
                       <td className="py-2 px-2 border-r border-slate-400 text-center whitespace-nowrap">{p.nickname}</td>
                       <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold whitespace-nowrap">{p.callsign}</td>
                       <td className="py-2 px-2 border-r border-slate-400 text-center font-bold whitespace-nowrap">{p.institution}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-[11px]">{p.role}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono whitespace-nowrap">{p.phone}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-[11px]">
+                        <div>{p.role}</div>
+                        {p.isNoAccount && (
+                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold">
+                            Admin เพิ่ม • ไม่มีบัญชี
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono whitespace-nowrap">
+                        {p.phone !== '-' ? p.phone : <span className="text-slate-400">ไม่มีข้อมูล</span>}
+                      </td>
                       <td className="py-2 px-4 border-r border-slate-400 text-center">
                         <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
                       </td>
@@ -1250,8 +1345,8 @@ export default function AdminDocumentsView({
           {activeDoc === 'shirts' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700 bg-slate-100 p-2.5 rounded-lg border border-slate-300">
-                <span>🏛️ มข (อกขวา TSIKKU): 19 ตัว (S:3, M:4, L:4, XL:2, 2XL:2, 4XL:3, 5XL:1)</span>
-                <span>🏛️ มมส (อกขวา RCPMSU): 13 ตัว (S:2, M:1, L:1, XL:6, 2XL:1, 4XL:1, 6XL:1)</span>
+                <span>🏛️ มข (อกขวา TSIKKU): {shirtStatsSummary.kkuTotal} ตัว ({shirtStatsSummary.kkuBreakdown})</span>
+                <span>🏛️ มมส (อกขวา RCPMSU): {shirtStatsSummary.msuTotal} ตัว ({shirtStatsSummary.msuBreakdown})</span>
                 <span className="font-black text-slate-950">
                   รวมผลิต: {shirtData.length} ตัว • รับแล้ว {shirtData.filter(s => s.isShirtReceived).length}/{shirtData.length}
                 </span>
@@ -1482,7 +1577,14 @@ export default function AdminDocumentsView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-400">
-                  {displayedAdminMasterData.map((r, idx) => (
+                  {displayedAdminMasterData.map((r, idx) => {
+                    const metaItems = [
+                      r.gender !== '-' ? r.gender : null,
+                      r.ageLabel !== '-' ? r.ageLabel : null,
+                      r.bloodGroup !== '-' ? `เลือด ${r.bloodGroup}` : null,
+                      r.phone !== '-' ? r.phone : 'ไม่มีเบอร์โทร'
+                    ].filter(Boolean).join(' • ');
+                    return (
                     <tr key={r.id} className={r.hasHealthAlert ? 'bg-rose-50/70' : (idx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}>
                       <td className="py-2 px-1.5 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
                       <td className="py-2 px-2 border-r border-slate-400">
@@ -1491,13 +1593,18 @@ export default function AdminDocumentsView({
                           ({r.nickname}) • {r.callsign}
                         </div>
                         <div className="text-[9.5px] text-slate-500 font-mono">
-                          {r.gender} • {r.ageLabel} • เลือด {r.bloodGroup} • {r.phone}
+                          {metaItems}
                         </div>
                       </td>
                       <td className="py-2 px-2 border-r border-slate-400 text-center">
                         <div className="font-bold text-slate-900">{r.institution}</div>
                         <div className="text-[9.5px] text-slate-600">{r.memberTypeLabel}</div>
                         <div className="text-[9.5px] text-indigo-800 font-semibold">{r.roleWithDuty}</div>
+                        {r.isNoAccount && (
+                          <div className="mt-1 inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[8.5px] font-bold">
+                            ⚠️ Admin เพิ่ม (ไม่มีบัญชีในระบบ)
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 px-2 border-r border-slate-400 text-center">
                         <div className="font-semibold text-slate-800 text-[10px]">{r.rsvpSummary}</div>
@@ -1534,7 +1641,8 @@ export default function AdminDocumentsView({
                         {r.emergencyContact}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {displayedAdminMasterData.length === 0 && (
                     <tr>
                       <td colSpan={10} className="py-8 text-center text-slate-500">

@@ -19,7 +19,9 @@ import {
   findMatchingCommitteeMemberSpec,
   INITIAL_STAFF_ADMIN_ACCOUNTS,
   isAuthorizedStaffOrAdminEmail,
-  resolveKnownThaiNameFallback
+  resolveKnownThaiNameFallback,
+  isRegistrationWithoutAccount,
+  isRealParticipantPhoto
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
 import { 
@@ -273,7 +275,10 @@ const unpackRegistration = (row) => {
     ? Boolean(extra.share_health_with_roommate)
     : (row.share_health_with_roommate !== undefined ? Boolean(row.share_health_with_roommate) : true);
 
-  const healthConsentBy = extra.health_consent_by || row.health_consent_by || (extra.share_health_with_roommate !== undefined ? 'user' : 'admin');
+  const rawUid = String(row.user_id || extra.user_id || row.id || '').trim().toLowerCase();
+  const isNoAccountRow = isRegistrationWithoutAccount({ ...extra, ...row });
+  const explicitConsentActor = extra.health_consent_by || row.health_consent_by || '';
+  const healthConsentBy = (!isNoAccountRow && explicitConsentActor === 'user') ? 'user' : 'admin';
   const healthConsentAt = extra.health_consent_at || row.health_consent_at || '';
 
   // Determine authoritative first/last names: If extra JSON contains valid Thai names,
@@ -488,6 +493,45 @@ const unpackRegistration = (row) => {
     unpacked.admin_messages = [];
   }
 
+  // Sanitize legacy fake placeholder values from Admin-seeded committee/manual rows
+  // so missing phone, DOB/age, blood group, emergency contact, or cartoon SVG avatars appear honestly as empty.
+  const isSeededOrNoAcc =
+    isNoAccountRow ||
+    rawUid.startsWith('staff_committee_') ||
+    rawUid.startsWith('manual_') ||
+    rawUid.startsWith('admin_');
+
+  if (isSeededOrNoAcc) {
+    if (String(unpacked.phone || '').trim() === '0812345678') {
+      unpacked.phone = '';
+    }
+    if (
+      String(unpacked.emergency_phone || '').trim() === '0812345678' &&
+      (!unpacked.emergency_name || String(unpacked.emergency_name).trim() === 'ชมรมกู้ภัยราชพฤกษ์')
+    ) {
+      unpacked.emergency_name = '';
+      unpacked.emergency_phone = '';
+    }
+    const hasSeededPlaceholderDob = String(unpacked.dob || '').trim() === '2004-01-01' && Number(unpacked.age_years) === 22;
+    if (hasSeededPlaceholderDob) {
+      unpacked.dob = '';
+      unpacked.age_years = null;
+      unpacked.age_months = null;
+      unpacked.age_days = null;
+      if (String(unpacked.blood_group || '').trim().toUpperCase() === 'B') {
+        unpacked.blood_group = '';
+      }
+    }
+    unpacked.added_without_account = true;
+  }
+
+  if (!isRealParticipantPhoto(unpacked.id_card_photo)) {
+    unpacked.id_card_photo = '';
+  }
+  if (!isRealParticipantPhoto(unpacked.id_card_url)) {
+    unpacked.id_card_url = '';
+  }
+
   return unpacked;
 };
 
@@ -524,6 +568,8 @@ const packRegistrationForSupabase = (fullData) => {
     admin_private_notes: fullData.admin_private_notes || '',
     admin_manual_override: Boolean(fullData.admin_manual_override),
     admin_staff_override: typeof fullData.admin_staff_override === 'boolean' ? fullData.admin_staff_override : undefined,
+    added_without_account: Boolean(fullData.added_without_account),
+    added_by_admin: Boolean(fullData.added_by_admin),
     shirt_size: fullData.shirt_size || '',
     custom_shirt_note: fullData.custom_shirt_note || '',
     shirt_pickup_status: fullData.shirt_pickup_status || '',
@@ -2601,6 +2647,7 @@ export function getAttendanceConfirmationInfo(reg) {
   if (!reg) {
     return {
       status: 'pending',
+      statusLabel: '⏳ รอยืนยันเข้าร่วม',
       isConfirmed: false,
       isDeclined: false,
       isPending: true,
@@ -2609,7 +2656,8 @@ export function getAttendanceConfirmationInfo(reg) {
       confirmedAt: '',
       confirmedBy: '',
       arrivalDate: '',
-      note: ''
+      note: '',
+      reason: ''
     };
   }
 
@@ -2638,8 +2686,15 @@ export function getAttendanceConfirmationInfo(reg) {
     ? false
     : (typeof reg.attendance_meal_confirmed === 'boolean' ? reg.attendance_meal_confirmed : true);
 
+  const statusLabel = status === 'confirmed'
+    ? '✅ ยืนยันมาเข้าร่วม'
+    : status === 'declined'
+      ? '❌ ไม่สะดวกเข้าร่วม'
+      : '⏳ รอยืนยันเข้าร่วม';
+
   return {
     status,
+    statusLabel,
     isConfirmed,
     isDeclined,
     isPending,
@@ -2648,7 +2703,8 @@ export function getAttendanceConfirmationInfo(reg) {
     confirmedAt: reg.attendance_confirmed_at || reg.attendance_checked_in_at || '',
     confirmedBy: reg.attendance_confirmed_by || (reg.attendance_checked_in ? 'qr' : ''),
     arrivalDate: reg.attendance_arrival_date || '',
-    note: reg.attendance_confirm_note || ''
+    note: reg.attendance_confirm_note || '',
+    reason: reg.attendance_confirm_note || ''
   };
 }
 
