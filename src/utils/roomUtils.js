@@ -12,7 +12,8 @@ import {
   getApplicantAllergy,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
-  hasSpecialCareCondition
+  hasSpecialCareCondition,
+  isCommitteeDutyNote
 } from '../data/defaultData.js';
 
 export const DORMITORY_ROOM_CONFIGS = [
@@ -61,7 +62,9 @@ export function getSpecialItemsNeeded(reg, extra = {}) {
     .filter(v => v && !['-', 'ไม่มี', 'ปกติ', 'none'].includes(v.toLowerCase()));
 
   const parts = [];
-  if (cleanSpecial) parts.push(cleanSpecial);
+  if (cleanSpecial && (reg?.is_special_care === true || !isCommitteeDutyNote(cleanSpecial))) {
+    parts.push(cleanSpecial);
+  }
   directItems.forEach(item => {
     if (!parts.includes(item)) parts.push(item);
   });

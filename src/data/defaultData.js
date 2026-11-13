@@ -2675,11 +2675,20 @@ export const getCleanSpecialNotes = (reg) => {
   return trimmed;
 };
 
+export const isCommitteeDutyNote = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return /^(คณะกรรมการดำเนินงาน|คณะกรรมการดำเนินงานร่วม|หน้าที่รับผิดชอบ|ฝ่าย[ก-ฮ]|MC|Staff)/i.test(trimmed) &&
+    !/(แพ้|โรค|ยา|ฉุกเฉิน|ดูแลพิเศษ|อาหาร|พก|หอบ|หัวใจ|เบาหวาน|ความดัน|g6pd|mdd|adhd)/i.test(trimmed);
+};
+
 export const hasSpecialCareCondition = (reg) => {
   if (!reg) return false;
   if (reg.is_special_care === true) return true;
   const notes = getCleanSpecialNotes(reg);
-  return Boolean(notes && notes.length > 0);
+  if (!notes || isCommitteeDutyNote(notes)) return false;
+  return notes.trim().length > 0;
 };
 
 /**

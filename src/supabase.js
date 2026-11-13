@@ -2597,9 +2597,10 @@ export function getAttendanceConfirmationInfo(reg) {
   const isPending = status === 'pending';
 
   const isMsu = isMsuInstitution(reg);
-  // Default accommodation need: external university participants/staff need dormitory accommodation unless declined or explicitly set to false
+  const isDormOptOut = Boolean(reg.dorm_opt_out);
+  // Default accommodation need: external university participants/staff need dormitory accommodation unless declined, opted out, or explicitly set to false
   const defaultNeedAccom = !isMsu || Boolean(reg.room_assigned);
-  const needAccommodation = isDeclined
+  const needAccommodation = (isDeclined || isDormOptOut)
     ? false
     : (typeof reg.attendance_need_accommodation === 'boolean' ? reg.attendance_need_accommodation : defaultNeedAccom);
 

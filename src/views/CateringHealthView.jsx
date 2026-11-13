@@ -86,9 +86,9 @@ export default function CateringHealthView({
     const all = scopedRegistrations || [];
     const withAllergy = all.filter(r => hasFoodOrDrugAllergy(r));
     const withMedical = all.filter(r => hasMedicalCondition(r));
-    const withSpecial = all.filter(r => Boolean(r.is_special_care || (r.special_notes && r.special_notes.trim() !== '')));
+    const withSpecial = all.filter(r => hasSpecialCareCondition(r));
     const withAnyRestriction = all.filter(r => 
-      hasFoodOrDrugAllergy(r) || hasMedicalCondition(r) || Boolean(r.is_special_care || (r.special_notes && r.special_notes.trim() !== ''))
+      hasFoodOrDrugAllergy(r) || hasMedicalCondition(r) || hasSpecialCareCondition(r)
     );
 
     // Dietary category breakdown

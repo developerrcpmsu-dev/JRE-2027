@@ -8,27 +8,47 @@ import {
   Shirt, 
   Users, 
   Stethoscope,
-  ShieldCheck
+  ShieldCheck,
+  CreditCard,
+  ClipboardList,
+  Search
 } from 'lucide-react';
 import { 
   resolveUniversityInfo, 
   resolveGender, 
   resolvePersonFullNameWithTitle,
+  resolveApplicantMemberType,
   normalizeCallsignSpacing,
-  normalizeShirtSize
+  normalizeShirtSize,
+  getRegistrationPaymentResolution,
+  getApplicantMedical,
+  getApplicantAllergy,
+  hasMedicalCondition,
+  hasFoodOrDrugAllergy,
+  hasSpecialCareCondition,
+  getMedicalEquipmentNeeded,
+  getHealthConsentInfo,
+  isCommitteeDutyNote
 } from '../data/defaultData';
-import { buildDormitoryRoomData } from '../utils/roomUtils';
+import { 
+  buildDormitoryRoomData,
+  parseSpecialNotesExtra,
+  getSpecialItemsNeeded
+} from '../utils/roomUtils';
+import { getAttendanceConfirmationInfo } from '../supabase';
 import { 
   exportAttendanceRosterToExcel,
+  exportIdCardRosterToExcel,
   exportShirtRosterToExcel,
   exportDormitoryRosterToExcel,
   exportDormitoryStaffMedicalExcel,
+  exportAdminMasterRosterExcel,
   exportAllRostersToMasterExcel,
   downloadCsv,
   exportElementToPng
 } from '../utils/documentExporters';
 
-const VALID_DOC_TABS = new Set(['attendance', 'shirts', 'rooms', 'rooms-staff']);
+const VALID_DOC_TABS = new Set(['attendance', 'id-cards', 'shirts', 'rooms', 'rooms-staff', 'admin-master']);
 
 function getInitialDocTab() {
   if (typeof window === 'undefined') return 'attendance';
@@ -290,10 +310,13 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
 export default function AdminDocumentsView({
   registrations = [],
   merchandiseOrders = [],
+  paymentConfig = null,
   triggerToast
 }) {
-  const [activeDoc, setActiveDoc] = useState(getInitialDocTab); // 'attendance' | 'shirts' | 'rooms' | 'rooms-staff'
+  const [activeDoc, setActiveDoc] = useState(getInitialDocTab); // 'attendance' | 'id-cards' | 'shirts' | 'rooms' | 'rooms-staff' | 'admin-master'
   const [staffOnlyAlerts, setStaffOnlyAlerts] = useState(false);
+  const [adminMasterSearch, setAdminMasterSearch] = useState('');
+  const [adminMasterFilter, setAdminMasterFilter] = useState('all'); // 'all' | 'alerts' | 'unpaid' | 'msu' | 'kku'
   const [isExportingPng, setIsExportingPng] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
 
@@ -303,15 +326,8 @@ export default function AdminDocumentsView({
       const nameData = resolvePersonFullNameWithTitle(reg);
       const uniInfo = resolveUniversityInfo(reg);
       const gender = resolveGender(reg);
-
-      let extra = {};
-      if (reg.special_notes) {
-        if (typeof reg.special_notes === 'string' && reg.special_notes.trim().startsWith('{')) {
-          try { extra = JSON.parse(reg.special_notes); } catch (e) {}
-        } else if (typeof reg.special_notes === 'object') {
-          extra = reg.special_notes;
-        }
-      }
+      const extra = parseSpecialNotesExtra(reg);
+      const attInfo = getAttendanceConfirmationInfo(reg);
 
       const nickname = extra.nickname || reg.nickname || '-';
       const rawCallsign = extra.callsign || reg.callsign || '-';
@@ -324,8 +340,13 @@ export default function AdminDocumentsView({
       else if (isStaff) role = 'Staff คณะทำงาน';
 
       const isMsu = Boolean(uniInfo?.isMsu);
+      const isDormOptOut = Boolean(extra.dorm_opt_out || reg.dorm_opt_out);
       const matchedRoom = reg.room_assigned ? String(reg.room_assigned).match(/(\d{3})/)?.[1] : null;
-      const notes = isMsu ? 'มมส (ไป-กลับเอง)' : (matchedRoom ? `พักหอกุดรัง (${matchedRoom})` : 'พักหอกุดรัง');
+      const roomNote = isDormOptOut
+        ? 'แจ้งไม่พักหอ'
+        : (isMsu ? 'มมส (ไป-กลับเอง)' : (matchedRoom ? `พักหอกุดรัง (${matchedRoom})` : 'พักหอกุดรัง'));
+      const rsvpShort = attInfo.isDeclined ? ' [ไม่เข้าร่วม]' : (attInfo.isConfirmed ? ' [ยืนยันมา]' : '');
+      const notes = `${roomNote}${rsvpShort}`;
 
       return {
         id: reg.id || reg.user_id,
@@ -340,6 +361,7 @@ export default function AdminDocumentsView({
         role,
         gender,
         phone: reg.phone || extra.phone || '-',
+        groupAssigned: reg.group_assigned || '',
         notes
       };
     });
@@ -355,23 +377,41 @@ export default function AdminDocumentsView({
     });
   }, [registrations]);
 
-  // 2. Prepare Production Shirts Data (32 Production Shirts)
+  // 2. Prepare ID Card Pickup Roster (36 Persons — PDPA-Safe)
+  const idCardData = useMemo(() => {
+    const byId = new Map((registrations || []).map(r => [r.id || r.user_id, r]));
+    return attendanceData.map(item => {
+      const reg = byId.get(item.id) || {};
+      const extra = parseSpecialNotesExtra(reg);
+      const isReceived = Boolean(reg.id_card_received || extra.id_card_received);
+      const hasPhoto = Boolean(reg.id_card_photo || extra.id_card_photo);
+      let idCardStatus = 'รอรับบัตร ID';
+      if (isReceived) idCardStatus = '✓ รับบัตรแล้ว';
+      else if (hasPhoto) idCardStatus = 'พร้อมจ่าย (มีรูปบัตร)';
+      else idCardStatus = 'รอส่งรูป / รอรับบัตร';
+
+      return {
+        ...item,
+        hasPhoto,
+        isReceived,
+        idCardStatus,
+        idCardReceivedAt: isReceived && (reg.id_card_received_date || extra.id_card_received_date)
+          ? String(reg.id_card_received_date || extra.id_card_received_date).slice(0, 10)
+          : '13 ก.พ. 70'
+      };
+    });
+  }, [attendanceData, registrations]);
+
+  // 3. Prepare Production Shirts Data (32 Production Shirts)
   const shirtData = useMemo(() => {
     const rows = [];
 
     // Process from registrations (Trainees and Staff with shirts)
     (registrations || []).forEach(reg => {
-      let extra = {};
-      if (reg.special_notes) {
-        if (typeof reg.special_notes === 'string' && reg.special_notes.trim().startsWith('{')) {
-          try { extra = JSON.parse(reg.special_notes); } catch (e) {}
-        } else if (typeof reg.special_notes === 'object') {
-          extra = reg.special_notes;
-        }
-      }
+      const extra = parseSpecialNotesExtra(reg);
 
       // Skip staff who only get ID card (0 THB, no shirt)
-      if (extra.staff_id_card_only) return;
+      if (extra.staff_id_card_only || reg.staff_id_card_only) return;
 
       const rawSize = extra.shirt_size || reg.shirt_size;
       if (!rawSize || rawSize === '-' || rawSize === 'none' || rawSize === 'ไม่มี') return;
@@ -387,6 +427,10 @@ export default function AdminDocumentsView({
       if (extra.is_staff || reg.is_staff) {
         payment = 'Staff (280 บ.) ชำระแล้ว';
       }
+      const isShirtReceived = Boolean(
+        reg.shirt_received || reg.shirt_pickup_status === 'received' ||
+        extra.shirt_received || extra.shirt_pickup_status === 'received'
+      );
 
       rows.push({
         id: reg.id || reg.user_id,
@@ -398,6 +442,8 @@ export default function AdminDocumentsView({
         size: normSize,
         qty: 1,
         payment,
+        isShirtReceived,
+        pickupStatusLabel: isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ',
         isKku
       });
     });
@@ -408,6 +454,7 @@ export default function AdminDocumentsView({
 
       (ord.items || []).forEach((it, idx) => {
         const chest = ord.institution?.includes('ขอนแก่น') ? 'TSIKKU' : 'RCPMSU';
+        const isShirtReceived = Boolean(ord.shirt_received || ord.shirt_pickup_status === 'received');
         rows.push({
           id: `${ord.order_number}-${idx}`,
           name: ord.customer_name || 'ลูกค้าสั่งเพิ่ม',
@@ -418,6 +465,8 @@ export default function AdminDocumentsView({
           size: normalizeShirtSize(it.size || 'XL'),
           qty: 1,
           payment: 'ชำระแล้ว (280 บ.)',
+          isShirtReceived,
+          pickupStatusLabel: isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ',
           isKku: chest === 'TSIKKU'
         });
       });
@@ -430,7 +479,7 @@ export default function AdminDocumentsView({
     });
   }, [registrations, merchandiseOrders]);
 
-  // 3. Prepare Dormitory Rooms Data (Rooms 101 - 110, sorted #1 care, #2 healthy)
+  // 4. Prepare Dormitory Rooms Data (Rooms 101 - 110, sorted #1 care, #2 healthy)
   const roomData = useMemo(() => {
     const parsed = buildDormitoryRoomData(registrations);
     const msuNeedsCare = parsed.localMsu.filter(
@@ -442,6 +491,169 @@ export default function AdminDocumentsView({
       msuNeedsCare
     };
   }, [registrations]);
+
+  // 5. Prepare Comprehensive Admin Master Data (All 36 Persons with complete fields)
+  const adminMasterData = useMemo(() => {
+    const roomPersonById = new Map();
+    [...(roomData.rooms || []).flatMap(rm => rm.occupants || []), ...(roomData.optedOutPeople || []), ...(roomData.msuList || [])].forEach(p => {
+      if (p?.id) roomPersonById.set(p.id, p);
+    });
+
+    const list = (registrations || []).map(reg => {
+      const id = reg.id || reg.user_id;
+      const nameData = resolvePersonFullNameWithTitle(reg);
+      const uniInfo = resolveUniversityInfo(reg);
+      const gender = resolveGender(reg);
+      const extra = parseSpecialNotesExtra(reg);
+      const memberTypeInfo = resolveApplicantMemberType(reg);
+      const attInfo = getAttendanceConfirmationInfo(reg);
+      const payRes = getRegistrationPaymentResolution(reg, paymentConfig);
+      const consent = getHealthConsentInfo(reg);
+      const roomPerson = roomPersonById.get(id);
+
+      const nickname = extra.nickname || reg.nickname || '-';
+      const rawCallsign = extra.callsign || reg.callsign || '-';
+      const callsign = normalizeCallsignSpacing(rawCallsign);
+      const isStaff = Boolean(extra.is_staff || reg.is_staff || rawCallsign.includes('STAFF'));
+      const isCommittee = Boolean(extra.staff_role_type === 'committee' || isStaff);
+
+      const dutyNote = typeof reg.special_notes === 'string' && isCommitteeDutyNote(reg.special_notes)
+        ? reg.special_notes.trim()
+        : (extra.committee_duty || '');
+      let role = 'ผู้เข้าร่วมอบรม (Trainee)';
+      if (extra.staff_role_type === 'committee') role = 'คณะกรรมการดำเนินงาน';
+      else if (isStaff) role = 'Staff คณะทำงาน';
+      const roleWithDuty = dutyNote ? `${role} • ${dutyNote}` : role;
+
+      // Dorm & key status
+      const matchedRoom = reg.room_assigned ? String(reg.room_assigned).match(/(\d{3})/)?.[1] : (roomPerson?.roomNumber || '');
+      const isDormOptOut = Boolean(extra.dorm_opt_out || reg.dorm_opt_out);
+      const dormAndKeySummary = isDormOptOut
+        ? 'แจ้งไม่พักหอพักมหาลัย'
+        : uniInfo.isMsu
+          ? 'มมส (ไป-กลับเอง)'
+          : `${matchedRoom ? `ห้อง ${matchedRoom}` : 'รอจัดห้อง'} • ${roomPerson?.keyStatusLabel || 'ยังไม่ได้จ่ายกุญแจ'}`;
+
+      // Shirt & ID Card
+      const isCardOnly = Boolean(extra.staff_id_card_only || reg.staff_id_card_only);
+      const shirtSize = normalizeShirtSize(extra.shirt_size || reg.shirt_size || '-');
+      const isShirtReceived = Boolean(reg.shirt_received || reg.shirt_pickup_status === 'received' || extra.shirt_received);
+      const shirtSummary = isCardOnly || shirtSize === '-' || shirtSize === 'ไม่มี'
+        ? 'ไม่รับเสื้อ (บัตร ID)'
+        : `${shirtSize} • ${isShirtReceived ? '✓ รับแล้ว' : 'รอรับ'}`;
+
+      const isIdCardReceived = Boolean(reg.id_card_received || extra.id_card_received);
+      const hasIdPhoto = Boolean(reg.id_card_photo || extra.id_card_photo);
+      const idCardSummary = isIdCardReceived
+        ? '✓ รับบัตรแล้ว'
+        : hasIdPhoto
+          ? 'มีรูปบัตร • รอรับ'
+          : 'รอส่งรูปบัตร';
+
+      // Payment
+      let paymentStatusLabel = 'รอชำระเงิน';
+      if (payRes.isRound2CancelledAbsent) paymentStatusLabel = 'ยกเลิกงวด 2 (ไม่มา)';
+      else if (payRes.isDeferredPostProject && !payRes.isFullyPaid) paymentStatusLabel = 'ค้างจ่ายหลังงาน';
+      else if (payRes.statusBucket === 'paid') paymentStatusLabel = 'ชำระครบแล้ว (100%)';
+      else if (payRes.statusBucket === 'pending_review') paymentStatusLabel = 'รอตรวจสลิป';
+      else if (payRes.statusBucket === 'partial_paid') paymentStatusLabel = 'ชำระงวด 1 (ค้างงวด 2)';
+      const planLabel = payRes.isInstallment ? '2 งวด' : (isStaff ? (isCardOnly ? 'Staff 0 บ.' : 'Staff 280 บ.') : '1 งวด');
+      const paymentAmountsLabel = `กำหนด ฿${payRes.effectiveTotalFee} | จ่าย ฿${payRes.collectedAmount} | ค้าง ฿${payRes.activeOutstandingAmount}`;
+      const paymentNotesParts = [];
+      if (payRes.isDeferredPostProject) paymentNotesParts.push(`จ่ายหลังจบโครงการ (฿${payRes.deferredPostProjectAmount})`);
+      if (payRes.isRound2CancelledAbsent) paymentNotesParts.push(`ตัดจบ/ยกเลิกงวด 2 (฿${payRes.waivedRound2Amount})`);
+      if (payRes.isVerifiedTransfer && payRes.isExternal) paymentNotesParts.push('มข จ่ายครบ 1 รอบ');
+      const paymentNotesLabel = paymentNotesParts.length > 0 ? paymentNotesParts.join(' • ') : '-';
+
+      // Health & Emergency
+      const med = getApplicantMedical(reg);
+      const alg = getApplicantAllergy(reg);
+      const hasMed = hasMedicalCondition(reg);
+      const hasAlg = hasFoodOrDrugAllergy(reg);
+      const medParts = [];
+      if (hasMed && med) medParts.push(`โรค: ${med}`);
+      if (hasAlg && alg) medParts.push(`แพ้: ${alg}`);
+      const medicalSummary = medParts.length > 0 ? medParts.join(' | ') : 'ปกติ';
+      const medEquip = getMedicalEquipmentNeeded(reg);
+      const specialItems = getSpecialItemsNeeded(reg, extra);
+      const suppliesParts = [];
+      if (medEquip) suppliesParts.push(`ยา: ${medEquip}`);
+      if (specialItems) suppliesParts.push(`ของใช้: ${specialItems}`);
+      const suppliesSummary = suppliesParts.length > 0 ? suppliesParts.join(' | ') : (hasSpecialCareCondition(reg) ? 'ต้องดูแลเป็นพิเศษ' : '-');
+      const hasHealthAlert = Boolean(hasMed || hasAlg || medEquip || specialItems || hasSpecialCareCondition(reg));
+
+      const emergencyName = reg.emergency_name || extra.emergency_name || '-';
+      const emergencyPhone = reg.emergency_phone || extra.emergency_phone || '-';
+      const emergencyContact = emergencyName !== '-' ? `${emergencyName} (${emergencyPhone})` : '-';
+
+      const ageLabel = reg.age_years ? `${reg.age_years} ปี` : '-';
+
+      return {
+        id,
+        name: nameData.fullName,
+        fullNameWithEn: nameData.englishFullName && nameData.englishFullName !== '-' ? `${nameData.fullName}\n(${nameData.englishFullName})` : nameData.fullName,
+        nickname,
+        callsign,
+        institution: uniInfo.shortTag,
+        isMsu: uniInfo.isMsu,
+        isCommittee,
+        isStaff,
+        memberTypeLabel: memberTypeInfo?.shortLabel || (memberTypeInfo?.isClubMember ? 'สมาชิกชมรม' : 'อาสา'),
+        role,
+        roleWithDuty,
+        gender,
+        ageLabel,
+        bloodGroup: reg.blood_group || '-',
+        phone: reg.phone || extra.phone || '-',
+        email: reg.user_email || '-',
+        rsvpSummary: `${attInfo.statusLabel}${attInfo.reason ? ` (${attInfo.reason})` : ''}`,
+        groupAssigned: reg.group_assigned || 'ยังไม่จัดกลุ่ม',
+        dormAndKeySummary,
+        shirtSummary,
+        idCardSummary,
+        paymentPlanLabel: `${planLabel} • ${paymentStatusLabel}`,
+        paymentStatusLabel: `${planLabel}: ${paymentStatusLabel}`,
+        paymentAmountsLabel,
+        paymentNotesLabel,
+        isUnpaidOrPartial: payRes.activeOutstandingAmount > 0 || payRes.statusBucket === 'pending_review',
+        medicalSummary,
+        suppliesSummary,
+        hasHealthAlert,
+        healthConsentSummary: consent.fullLabel,
+        emergencyContact
+      };
+    });
+
+    return list.sort((a, b) => {
+      if (a.isCommittee && !b.isCommittee) return -1;
+      if (!a.isCommittee && b.isCommittee) return 1;
+      if (a.isMsu && !b.isMsu) return -1;
+      if (!a.isMsu && b.isMsu) return 1;
+      return a.name.localeCompare(b.name, 'th');
+    });
+  }, [registrations, paymentConfig, roomData]);
+
+  const displayedAdminMasterData = useMemo(() => {
+    const q = adminMasterSearch.trim().toLowerCase();
+    return adminMasterData.filter(item => {
+      if (adminMasterFilter === 'alerts' && !item.hasHealthAlert) return false;
+      if (adminMasterFilter === 'unpaid' && !item.isUnpaidOrPartial) return false;
+      if (adminMasterFilter === 'msu' && !item.isMsu) return false;
+      if (adminMasterFilter === 'kku' && item.isMsu) return false;
+      if (!q) return true;
+      return [
+        item.name,
+        item.nickname,
+        item.callsign,
+        item.institution,
+        item.phone,
+        item.medicalSummary,
+        item.suppliesSummary,
+        item.paymentStatusLabel,
+        item.dormAndKeySummary
+      ].some(v => String(v || '').toLowerCase().includes(q));
+    });
+  }, [adminMasterData, adminMasterSearch, adminMasterFilter]);
 
   const displayedStaffMaleRooms = useMemo(() => {
     if (!staffOnlyAlerts) return roomData.maleRooms;
@@ -473,16 +685,18 @@ export default function AdminDocumentsView({
     try {
       const nameMap = {
         attendance: '1_ใบเซ็นชื่อ_การเข้าร่วมอบรม',
-        shirts: '2_ใบเซ็นชื่อ_รับมอบเสื้อ32ตัว',
-        rooms: '3_ใบเซ็นชื่อ_เข้าห้องพักกุดรัง_ปิดข้อมูลสุขภาพ',
-        'rooms-staff': '4_ใบตรวจห้อง_โรคประจำตัว_ยา_ของใช้_Staff'
+        'id-cards': '2_ใบเซ็นชื่อ_รับบัตรประจำตัว_IDCard',
+        shirts: '3_ใบเซ็นชื่อ_รับมอบเสื้อ32ตัว',
+        rooms: '4_ใบเซ็นชื่อ_เข้าห้องพักกุดรัง_ปิดข้อมูลสุขภาพ',
+        'rooms-staff': '5_ใบตรวจห้อง_โรคประจำตัว_ยา_ของใช้_Staff',
+        'admin-master': '6_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin'
       };
       const filename = `${nameMap[activeDoc] || 'document'}_JRE2027.png`;
       await exportElementToPng('printable-document-sheet', filename);
       if (triggerToast) triggerToast('🖼️ บันทึกเป็นรูปภาพ PNG ความละเอียดสูงเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการบันทึกภาพ: ' + err.message);
+      if (triggerToast) triggerToast('❌ เกิดข้อผิดพลาดในการบันทึกภาพ: ' + err.message, 'error');
     } finally {
       setIsExportingPng(false);
     }
@@ -494,36 +708,42 @@ export default function AdminDocumentsView({
     try {
       if (activeDoc === 'attendance') {
         await exportAttendanceRosterToExcel(attendanceData);
+      } else if (activeDoc === 'id-cards') {
+        await exportIdCardRosterToExcel(idCardData);
       } else if (activeDoc === 'shirts') {
         await exportShirtRosterToExcel(shirtData);
       } else if (activeDoc === 'rooms') {
         await exportDormitoryRosterToExcel(roomData.rooms, roomData.msuList);
-      } else {
+      } else if (activeDoc === 'rooms-staff') {
         await exportDormitoryStaffMedicalExcel(roomData.rooms, roomData.msuList);
+      } else {
+        await exportAdminMasterRosterExcel(displayedAdminMasterData);
       }
       if (triggerToast) triggerToast('📊 บันทึกไฟล์ Excel (.xlsx) เรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการสร้างไฟล์ Excel: ' + err.message);
+      if (triggerToast) triggerToast('❌ เกิดข้อผิดพลาดในการสร้างไฟล์ Excel: ' + err.message, 'error');
     } finally {
       setIsExportingExcel(false);
     }
   };
 
-  // Handler: Export Master 4-in-1 Excel
+  // Handler: Export Master 6-in-1 Excel
   const handleExportMasterExcel = async () => {
     setIsExportingExcel(true);
     try {
       await exportAllRostersToMasterExcel({
         attendanceRecords: attendanceData,
+        idCardRecords: idCardData,
         shirtRecords: shirtData,
         roomList: roomData.rooms,
-        msuList: roomData.msuList
+        msuList: roomData.msuList,
+        adminMasterRecords: adminMasterData
       });
-      if (triggerToast) triggerToast('⚡ ดาวน์โหลดชุดเอกสารครบทั้ง 4 ใบ (Master 4-in-1 Excel) สำเร็จ');
+      if (triggerToast) triggerToast('⚡ ดาวน์โหลดชุดเอกสารครบทั้ง 6 ใบ (Master 6-in-1 Excel) สำเร็จ');
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาด: ' + err.message);
+      if (triggerToast) triggerToast('❌ เกิดข้อผิดพลาดในการสร้าง Master Excel: ' + err.message, 'error');
     } finally {
       setIsExportingExcel(false);
     }
@@ -531,43 +751,57 @@ export default function AdminDocumentsView({
 
   // Handler: Export CSV
   const handleExportCsv = () => {
+    const csvCell = (val) => `"${String(val ?? '').replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`;
+    const makeRow = (cols) => cols.map(csvCell).join(',') + '\n';
     let csv = '';
     let filename = '';
 
     if (activeDoc === 'attendance') {
-      csv = 'ลำดับ,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,มหาวิทยาลัย/สังกัด,บทบาท,เบอร์โทรศัพท์,ลายมือชื่อ,หมายเหตุ\n';
+      csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'มหาวิทยาลัย/สังกัด', 'บทบาท', 'เบอร์โทรศัพท์', 'ลายมือชื่อ', 'หมายเหตุ']);
       attendanceData.forEach((r, idx) => {
-        csv += `"${idx + 1}","${r.name}","${r.nickname}","${r.callsign}","${r.institution}","${r.role}","${r.phone}","","${r.notes}"\n`;
+        csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.role, r.phone, '', r.notes]);
       });
-      filename = '1_ใบรายชื่อการเข้าร่วมการฝึกอบรม_JRE2027.csv';
+      filename = '1_ใบเซ็นชื่อ_เข้าร่วมอบรม_JRE2027.csv';
+    } else if (activeDoc === 'id-cards') {
+      csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'บทบาท', 'สถานะบัตรในระบบ', 'ลายมือชื่อผู้รับบัตร', 'วันที่รับ']);
+      idCardData.forEach((r, idx) => {
+        csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.role, r.idCardStatus, '', r.idCardReceivedAt]);
+      });
+      filename = '2_ใบเซ็นชื่อ_รับบัตรประจำตัว_IDCard_JRE2027.csv';
     } else if (activeDoc === 'shirts') {
-      csv = 'ลำดับ,ชื่อ - สกุล ผู้รับมอบ,นามเรียกขาน,สังกัด,ข้อความอกขวา,ขนาดไซส์,จำนวน,สถานะชำระเงิน,ลายมือชื่อผู้รับมอบ,วันที่รับมอบ\n';
+      csv = makeRow(['ลำดับ', 'ชื่อ - สกุล ผู้รับมอบ', 'นามเรียกขาน', 'สังกัด', 'ข้อความอกขวา', 'ขนาดไซส์', 'จำนวน', 'สถานะค่าเสื้อ/รับเสื้อ', 'ลายมือชื่อผู้รับมอบ', 'วันที่รับมอบ']);
       shirtData.forEach((r, idx) => {
-        csv += `"${idx + 1}","${r.name}","${r.callsign}","${r.uni}","${r.chest}","${r.size}","1","${r.payment}","","13 ก.พ. 70"\n`;
+        csv += makeRow([idx + 1, r.name, r.callsign, r.uni, r.chest, r.size, 1, `${r.payment} • ${r.pickupStatusLabel}`, '', '13 ก.พ. 70']);
       });
-      filename = '2_ใบรายชื่อรับมอบเสื้อฝึก_JRE2027.csv';
+      filename = '3_ใบเซ็นชื่อ_รับมอบเสื้อฝึก32ตัว_JRE2027.csv';
     } else if (activeDoc === 'rooms') {
-      csv = 'เลขห้อง,โซน/เพศ,เตียง,ชื่อ - นามสกุล ผู้เข้าพัก,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,สถานะเข้าพัก,สถานะกุญแจห้อง,ลายมือชื่อรับกุญแจ,ลายมือชื่อคืนกุญแจ\n';
+      csv = makeRow(['เลขห้อง', 'โซน/เพศ', 'เตียง', 'ชื่อ - นามสกุล ผู้เข้าพัก', 'ชื่อเล่น', 'นามเรียกขาน', 'เบอร์โทร', 'สถานะเข้าพัก', 'สถานะกุญแจห้อง', 'ลายมือชื่อรับกุญแจ', 'ลายมือชื่อคืนกุญแจ']);
       roomData.rooms.forEach(rm => {
         const isMale = rm.gender === 'ชาย';
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
-          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.stayStatusLabel : '-'}","${p ? p.keyStatusLabel : '-'}","",""\n`;
+          csv += makeRow([rm.room, isMale ? 'ชาย' : 'หญิง', b + 1, p ? p.name : '(ว่าง)', p ? p.nickname : '-', p ? p.callsign : '-', p ? p.phone : '-', p ? p.stayStatusLabel : '-', p ? p.keyStatusLabel : '-', '', '']);
         }
       });
-      filename = '3_ใบเซ็นชื่อเข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.csv';
-    } else {
-      csv = 'เลขห้อง,โซน/เพศ,ลำดับ/เตียง,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,สถานะเข้าพัก,สถานะกุญแจห้อง,โรคประจำตัว,แพ้อาหาร/ยา,หมู่เลือด,ยาที่ต้องการ/เวชภัณฑ์,ของที่ต้องใช้/ดูแลพิเศษ,เปิดเผยสุขภาพ (ผู้กด),ติดต่อฉุกเฉิน\n';
+      filename = '4_ใบเซ็นชื่อ_เข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.csv';
+    } else if (activeDoc === 'rooms-staff') {
+      csv = makeRow(['เลขห้อง', 'โซน/เพศ', 'ลำดับ/เตียง', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'เบอร์โทร', 'สถานะเข้าพัก', 'สถานะกุญแจห้อง', 'โรคประจำตัว', 'แพ้อาหาร/ยา', 'หมู่เลือด', 'ยาที่ต้องการ/เวชภัณฑ์', 'ของที่ต้องใช้/ดูแลพิเศษ', 'เปิดเผยสุขภาพ (ผู้กด)', 'ติดต่อฉุกเฉิน']);
       roomData.rooms.forEach(rm => {
         const isMale = rm.gender === 'ชาย';
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
           const consentLabel = p ? `${p.healthConsent?.statusLabel || (p.isHealthShared ? 'ยินยอม' : 'ไม่ยินยอม')} (${p.healthConsent?.actorLabel || '-'})` : '-';
           const emer = p && p.emergencyName !== '-' ? `${p.emergencyName} (${p.emergencyPhone})` : '-';
-          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.stayStatusLabel : '-'}","${p ? p.keyStatusLabel : '-'}","${p ? p.medicalHistory : '-'}","${p ? p.foodAllergy : '-'}","${p ? p.bloodGroup : '-'}","${p?.medicalEquipmentNeeded || '-'}","${p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-')}","${consentLabel}","${emer}"\n`;
+          csv += makeRow([rm.room, isMale ? 'ชาย' : 'หญิง', b + 1, p ? p.name : '(ว่าง)', p ? p.nickname : '-', p ? p.callsign : '-', p ? p.phone : '-', p ? p.stayStatusLabel : '-', p ? p.keyStatusLabel : '-', p ? p.medicalHistory : '-', p ? p.foodAllergy : '-', p ? p.bloodGroup : '-', p?.medicalEquipmentNeeded || '-', p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-'), consentLabel, emer]);
         }
       });
-      filename = '4_ใบเตรียมยา_ของใช้_โรคประจำตัวตามห้อง_Staff_JRE2027.csv';
+      filename = '5_ใบตรวจห้อง_โรค_ยา_ของใช้_Staff_JRE2027.csv';
+    } else {
+      csv = makeRow(['ลำดับ', 'ชื่อ-สกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'ประเภทสมาชิก', 'บทบาท & ฝ่าย', 'เพศ', 'อายุ', 'หมู่เลือด', 'เบอร์โทร', 'อีเมล', 'RSVP', 'กลุ่มฝึก', 'ห้องพัก & กุญแจ', 'เสื้อ', 'บัตร ID', 'สถานะการเงิน', 'ยอดเงิน', 'หมายเหตุการเงิน', 'โรค/แพ้', 'ยา/ของใช้', 'เปิดเผยสุขภาพ (ผู้กด)', 'ติดต่อฉุกเฉิน']);
+      displayedAdminMasterData.forEach((r, idx) => {
+        csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.memberTypeLabel, r.roleWithDuty, r.gender, r.ageLabel, r.bloodGroup, r.phone, r.email, r.rsvpSummary, r.groupAssigned, r.dormAndKeySummary, r.shirtSummary, r.idCardSummary, r.paymentStatusLabel, r.paymentAmountsLabel, r.paymentNotesLabel, r.medicalSummary, r.suppliesSummary, r.healthConsentSummary, r.emergencyContact]);
+      });
+      filename = '6_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin_JRE2027.csv';
     }
 
     downloadCsv(csv, filename);
@@ -576,10 +810,14 @@ export default function AdminDocumentsView({
 
   const docBadgeLabel = {
     attendance: '1. ใบเซ็นชื่อเข้าร่วมอบรม',
-    shirts: '2. ใบเซ็นชื่อรับเสื้อ 32 ตัว',
-    rooms: '3. ใบเซ็นชื่อเข้าห้องพัก (ปิดข้อมูลสุขภาพ)',
-    'rooms-staff': '4. ใบตรวจห้อง & โรค/ยา/ของใช้ (Staff ไม่ต้องเซ็น)'
+    'id-cards': '2. ใบเซ็นชื่อรับบัตรประจำตัว ID Card',
+    shirts: '3. ใบเซ็นชื่อรับเสื้อ 32 ตัว',
+    rooms: '4. ใบเซ็นชื่อเข้าห้องพัก & กุญแจ (ปิดข้อมูลสุขภาพ)',
+    'rooms-staff': '5. ใบตรวจห้อง & โรค/ยา/ของใช้ (Staff ไม่ต้องเซ็น)',
+    'admin-master': '6. ทะเบียนข้อมูลละเอียดครบทุกมิติ (Admin)'
   }[activeDoc];
+
+  const isInternalAdminDoc = activeDoc === 'rooms-staff' || activeDoc === 'admin-master';
 
   return (
     <div className="space-y-6">
@@ -592,7 +830,7 @@ export default function AdminDocumentsView({
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 rounded-full text-xs font-black bg-teal-500/20 text-teal-300 border border-teal-400/30 flex items-center gap-1.5 shadow-sm">
                 <FileText className="w-3.5 h-3.5 text-teal-400" />
-                <span>ศูนย์รวมใบรายชื่อและเอกสารลงลายมือชื่อ</span>
+                <span>ศูนย์รวมใบรายชื่อและเอกสารลงลายมือชื่อครบชุด (6 เอกสาร)</span>
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 URL: /admin/documents
@@ -600,96 +838,143 @@ export default function AdminDocumentsView({
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
-              <span>📄 ศูนย์จัดทำเอกสาร JRE 2027 (แยกใบเซ็นชื่อ PDPA + ใบเตรียมยา/ของใช้ Staff)</span>
+              <span>📄 ศูนย์จัดทำเอกสาร JRE 2027 (แยกใบเซ็นชื่อ PDPA 4 ใบ + เอกสารละเอียด Admin/Staff 2 ใบ)</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              แยก <strong>ใบเซ็นชื่อเข้าห้องพัก (ปิดข้อมูลสุขภาพ)</strong> ออกจาก <strong>ใบตรวจสอบห้องพัก โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับ Staff)</strong> อย่างชัดเจน รองรับ Excel (.xlsx), CSV, พิมพ์/PDF และ PNG
+              ครบทุกเอกสารทั้ง <strong>ชุดลงลายมือชื่อ (PDPA ปิดข้อมูลสุขภาพ)</strong> และ <strong>ชุดข้อมูลละเอียดสำหรับ Admin / Staff</strong> (ห้องพัก/ไม่พัก/กุญแจ, การเงินครบงวด/ค้าง/หลังงาน, โรค/ยา/ของใช้/ผู้กดยินยอม, ติดต่อฉุกเฉิน) รองรับ Excel (.xlsx), CSV, PDF A4 และ PNG
             </p>
           </div>
 
-          {/* Master 4-in-1 Quick Export Action */}
+          {/* Master 6-in-1 Quick Export Action */}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={handleExportMasterExcel}
               disabled={isExportingExcel}
-              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white font-black text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>⚡ ดาวน์โหลดครบชุด (Master 4-in-1 Excel)</span>
+              <span>⚡ ดาวน์โหลดครบชุด (Master 6-in-1 Excel)</span>
             </button>
           </div>
         </div>
 
-        {/* 4 DOCUMENT SELECTOR TABS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-6 mt-6 border-t border-slate-800/80 text-xs">
-          <button
-            type="button"
-            onClick={() => setActiveDoc('attendance')}
-            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-              activeDoc === 'attendance'
-                ? 'bg-teal-950/80 border-teal-400 text-white ring-2 ring-teal-400/30 shadow-lg'
-                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <div className="flex items-center justify-between font-bold mb-1">
-              <span>1. ใบเซ็นชื่อเข้าร่วม</span>
-              <Users className="w-4 h-4 text-teal-400" />
-            </div>
-            <div className="text-sm font-black text-white">ลงทะเบียนอบรม ({attendanceData.length} คน)</div>
-            <span className="text-[10px] text-teal-300">มีช่องลงลายมือชื่อเข้าร่วม</span>
-          </button>
+        {/* GROUP A: 4 SIGNING DOCUMENTS (PDPA-SAFE) */}
+        <div className="pt-6 mt-6 border-t border-slate-800/80 space-y-3 text-xs">
+          <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-teal-300">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>หมวด ก. เอกสารลงลายมือชื่อหน้างาน (4 ใบ • ปิดข้อมูลสุขภาพ PDPA)</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveDoc('attendance')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                activeDoc === 'attendance'
+                  ? 'bg-teal-950/80 border-teal-400 text-white ring-2 ring-teal-400/30 shadow-lg'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-1">
+                <span>1. ใบเซ็นชื่อเข้าร่วมอบรม</span>
+                <Users className="w-4 h-4 text-teal-400" />
+              </div>
+              <div className="text-sm font-black text-white">ลงทะเบียนอบรม ({attendanceData.length} คน)</div>
+              <span className="text-[10px] text-teal-300">มีช่องลงลายมือชื่อ + หมายเหตุ</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveDoc('shirts')}
-            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-              activeDoc === 'shirts'
-                ? 'bg-purple-950/80 border-purple-400 text-white ring-2 ring-purple-400/30 shadow-lg'
-                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <div className="flex items-center justify-between font-bold mb-1">
-              <span>2. ใบเซ็นชื่อรับเสื้อ</span>
-              <Shirt className="w-4 h-4 text-purple-400" />
-            </div>
-            <div className="text-sm font-black text-white">รับมอบเสื้อฝึก ({shirtData.length} ตัว)</div>
-            <span className="text-[10px] text-purple-300">TSIKKU / RCPMSU + ช่องเซ็น</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveDoc('id-cards')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                activeDoc === 'id-cards'
+                  ? 'bg-indigo-950/80 border-indigo-400 text-white ring-2 ring-indigo-400/30 shadow-lg'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-1">
+                <span>2. ใบเซ็นชื่อรับบัตร ID Card</span>
+                <CreditCard className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="text-sm font-black text-white">รับบัตรประจำตัว ({idCardData.length} ใบ)</div>
+              <span className="text-[10px] text-indigo-300">สถานะรูปบัตร + ลายมือชื่อรับบัตร</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveDoc('rooms')}
-            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-              activeDoc === 'rooms'
-                ? 'bg-sky-950/80 border-sky-400 text-white ring-2 ring-sky-400/30 shadow-lg'
-                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <div className="flex items-center justify-between font-bold mb-1">
-              <span>3. ใบเซ็นชื่อเข้าห้องพัก</span>
-              <ShieldCheck className="w-4 h-4 text-sky-400" />
-            </div>
-            <div className="text-sm font-black text-white">ปิดข้อมูลสุขภาพ (PDPA)</div>
-            <span className="text-[10px] text-sky-300">เซ็นรับ/คืนกุญแจ • ไม่โชว์โรค</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveDoc('shirts')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                activeDoc === 'shirts'
+                  ? 'bg-purple-950/80 border-purple-400 text-white ring-2 ring-purple-400/30 shadow-lg'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-1">
+                <span>3. ใบเซ็นชื่อรับมอบเสื้อ</span>
+                <Shirt className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="text-sm font-black text-white">เสื้อฝึกปฏิบัติการ ({shirtData.length} ตัว)</div>
+              <span className="text-[10px] text-purple-300">TSIKKU / RCPMSU + ช่องเซ็นรับ</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveDoc('rooms-staff')}
-            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-              activeDoc === 'rooms-staff'
-                ? 'bg-rose-950/80 border-rose-400 text-white ring-2 ring-rose-400/30 shadow-lg'
-                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <div className="flex items-center justify-between font-bold mb-1">
-              <span>4. ใบตรวจห้อง & ยา/ของใช้</span>
-              <Stethoscope className="w-4 h-4 text-rose-400" />
-            </div>
-            <div className="text-sm font-black text-white">สำหรับ Staff (ไม่ต้องเซ็น)</div>
-            <span className="text-[10px] text-rose-300">บอกห้อง • โรคประจำตัว • ยา/ของใช้</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveDoc('rooms')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                activeDoc === 'rooms'
+                  ? 'bg-sky-950/80 border-sky-400 text-white ring-2 ring-sky-400/30 shadow-lg'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-1">
+                <span>4. ใบเซ็นชื่อเข้าห้องพัก</span>
+                <ShieldCheck className="w-4 h-4 text-sky-400" />
+              </div>
+              <div className="text-sm font-black text-white">เข้าพัก & รับ-คืนกุญแจ (PDPA)</div>
+              <span className="text-[10px] text-sky-300">เชื่อมสถานะไม่พักหอ/กุญแจ • ไม่โชว์โรค</span>
+            </button>
+          </div>
+
+          {/* GROUP B: 2 INTERNAL ADMIN/STAFF DETAILED DOCUMENTS */}
+          <div className="flex items-center gap-2 pt-2 text-[11px] font-black uppercase tracking-wider text-rose-300">
+            <Stethoscope className="w-3.5 h-3.5" />
+            <span>หมวด ข. เอกสารข้อมูลละเอียดสำหรับ Admin / Staff (2 ใบ • ไม่ต้องให้ผู้เข้าร่วมเซ็น)</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveDoc('rooms-staff')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                activeDoc === 'rooms-staff'
+                  ? 'bg-rose-950/80 border-rose-400 text-white ring-2 ring-rose-400/30 shadow-lg'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-1">
+                <span>5. ใบตรวจห้อง & โรคประจำตัว / ยา / ของใช้</span>
+                <Stethoscope className="w-4 h-4 text-rose-400" />
+              </div>
+              <div className="text-sm font-black text-white">สำหรับ Staff พยาบาล & หอพัก (ชั้น 1 ห้อง 101-110 + มมส)</div>
+              <span className="text-[10px] text-rose-300">ระบุห้องพัก/ไม่พัก, กุญแจ, โรค, แพ้, ยา, ของที่ต้องใช้, ผู้ติดต่อฉุกเฉิน, ความยินยอม</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveDoc('admin-master')}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                activeDoc === 'admin-master'
+                  ? 'bg-amber-950/80 border-amber-400 text-white ring-2 ring-amber-400/30 shadow-lg'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-1">
+                <span>6. ทะเบียนข้อมูลละเอียดครบทุกมิติ (Admin Master)</span>
+                <ClipboardList className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-sm font-black text-white">สรุปครบทั้ง {adminMasterData.length} คน ในใบเดียว</div>
+              <span className="text-[10px] text-amber-300">RSVP • ห้องพัก/กุญแจ • เสื้อ/บัตร • การเงินครบ/ค้าง/หลังงาน • สุขภาพ & ผู้กดยินยอม</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -715,6 +1000,31 @@ export default function AdminDocumentsView({
               {staffOnlyAlerts ? '✓ แสดงเฉพาะห้องที่ต้องเตรียมยา/เฝ้าระวัง' : 'แสดงทุกห้อง (10 ห้อง)'}
             </button>
           )}
+          {activeDoc === 'admin-master' && (
+            <div className="flex flex-wrap items-center gap-2 ml-1">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={adminMasterSearch}
+                  onChange={e => setAdminMasterSearch(e.target.value)}
+                  placeholder="ค้นหาชื่อ/เรียกขาน/โรค/การเงิน..."
+                  className="pl-8 pr-3 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <select
+                value={adminMasterFilter}
+                onChange={e => setAdminMasterFilter(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-amber-200 font-semibold focus:outline-none focus:border-amber-400"
+              >
+                <option value="all">ทั้งหมด ({adminMasterData.length})</option>
+                <option value="alerts">เฉพาะมีโรค/แพ้/ดูแลพิเศษ</option>
+                <option value="unpaid">เฉพาะค้างจ่าย / รอตรวจสลิป</option>
+                <option value="msu">เฉพาะ มมส</option>
+                <option value="kku">เฉพาะ มข</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -722,10 +1032,10 @@ export default function AdminDocumentsView({
             type="button"
             onClick={handleExportSingleExcel}
             disabled={isExportingExcel}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Excel (.xlsx)</span>
+            <span>{isExportingExcel ? 'กำลังสร้าง Excel...' : 'Excel (.xlsx)'}</span>
           </button>
 
           <button
@@ -750,7 +1060,7 @@ export default function AdminDocumentsView({
             type="button"
             onClick={handleExportPng}
             disabled={isExportingPng}
-            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
           >
             <ImageIcon className="w-3.5 h-3.5" />
             <span>{isExportingPng ? 'กำลังสร้างรูป...' : 'รูปภาพ PNG'}</span>
@@ -762,21 +1072,25 @@ export default function AdminDocumentsView({
       <div className="overflow-x-auto pb-4">
         <div 
           id="printable-document-sheet"
-          className="mx-auto bg-white text-slate-900 p-8 sm:p-12 rounded-2xl shadow-2xl border border-slate-300 min-w-[850px] max-w-[1040px] text-xs font-sans print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none"
+          className={`mx-auto bg-white text-slate-900 p-8 sm:p-10 rounded-2xl shadow-2xl border border-slate-300 ${
+            activeDoc === 'admin-master' ? 'min-w-[1160px] max-w-[1360px]' : 'min-w-[850px] max-w-[1040px]'
+          } text-xs font-sans print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none`}
         >
           {/* OFFICIAL HEADER SECTION */}
           <div className="text-center pb-5 border-b-2 border-slate-900 mb-6 space-y-1">
             <div className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] mb-1 uppercase tracking-wider border border-slate-300">
-              {activeDoc === 'rooms-staff'
-                ? 'Joint Response Exercise (JRE 2027) • Staff Internal Medical & Logistics Checklist'
-                : 'Joint Response Exercise (JRE 2027) • Official Signing Document'}
+              {isInternalAdminDoc
+                ? 'Joint Response Exercise (JRE 2027) • Admin & Staff Internal Detailed Report'
+                : 'Joint Response Exercise (JRE 2027) • Official PDPA-Safe Signing Document'}
             </div>
 
             <h2 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
               {activeDoc === 'attendance' && 'บัญชีลงเวลาและลงลายมือชื่อเข้าร่วมการฝึกอบรม'}
+              {activeDoc === 'id-cards' && 'บัญชีลงลายมือชื่อรับบัตรประจำตัวผู้เข้าร่วม / Staff (ID Card)'}
               {activeDoc === 'shirts' && 'บัญชีลงลายมือชื่อรับมอบเสื้อฝึกปฏิบัติการ JRE 2027'}
-              {activeDoc === 'rooms' && 'บัญชีลงลายมือชื่อเข้าห้องพักและรับกุญแจ หอพักกุดรัง (ฉบับปิดข้อมูลสุขภาพ)'}
+              {activeDoc === 'rooms' && 'บัญชีลงลายมือชื่อเข้าห้องพักและรับ-คืนกุญแจ หอพักกุดรัง (ฉบับปิดข้อมูลสุขภาพ)'}
               {activeDoc === 'rooms-staff' && 'ใบตรวจสอบห้องพัก โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับ Staff)'}
+              {activeDoc === 'admin-master' && 'ทะเบียนข้อมูลผู้ลงทะเบียนละเอียดครบทุกมิติ (สำหรับ Admin / คณะกรรมการ)'}
             </h2>
 
             <p className="text-sm font-bold text-slate-700">
@@ -790,9 +1104,11 @@ export default function AdminDocumentsView({
               <span>•</span>
               <span className="font-bold text-slate-800">
                 {activeDoc === 'attendance' && `ยอดรวม ${attendanceData.length} คน`}
+                {activeDoc === 'id-cards' && `บัตรทั้งหมด ${idCardData.length} ใบ (คุ้มครองข้อมูลสุขภาพ PDPA)`}
                 {activeDoc === 'shirts' && `ยอดผลิตรวม ${shirtData.length} ตัว`}
                 {activeDoc === 'rooms' && 'ชั้น 1 ห้อง 101 - 110 • คุ้มครองข้อมูลสุขภาพ (PDPA)'}
                 {activeDoc === 'rooms-staff' && 'ไม่ต้องลงลายมือชื่อ • สำหรับฝ่ายพยาบาล/สวัสดิการเตรียมความพร้อม'}
+                {activeDoc === 'admin-master' && `แสดงผล ${displayedAdminMasterData.length} / ${adminMasterData.length} ท่าน (ข้อมูลภายใน Admin)`}
               </span>
             </div>
           </div>
@@ -835,7 +1151,56 @@ export default function AdminDocumentsView({
             </div>
           )}
 
-          {/* TABLE CONTENT 2: SHIRT DISTRIBUTION ROSTER (32 PRODUCTION SHIRTS) */}
+          {/* TABLE CONTENT 2: ID CARD SIGN-IN ROSTER (PDPA-SAFE) */}
+          {activeDoc === 'id-cards' && (
+            <div className="space-y-4">
+              <div className="p-2.5 bg-indigo-50 border border-indigo-300 rounded-lg text-[11px] text-indigo-950 font-semibold flex flex-wrap items-center justify-between gap-2">
+                <span>🪪 ใบเซ็นชื่อรับบัตรประจำตัวผู้เข้าร่วม / Staff (PDPA-Safe: ไม่แสดงข้อมูลสุขภาพ)</span>
+                <span className="font-mono font-bold">
+                  พร้อมจ่าย {idCardData.filter(d => d.hasPhoto).length}/{idCardData.length} • รับบัตรแล้ว {idCardData.filter(d => d.isReceived).length} ใบ
+                </span>
+              </div>
+
+              <table className="w-full text-left text-xs border-collapse border border-slate-900">
+                <thead>
+                  <tr className="bg-indigo-900 text-white font-bold border-b border-slate-900 text-center">
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-10">ลำดับ</th>
+                    <th className="py-2.5 px-3 border-r border-indigo-700 text-left">ชื่อ - นามสกุล</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-20">ชื่อเล่น</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-28">นามเรียกขาน</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-14">สังกัด</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-36">ประเภทบัตร / บทบาท</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-32">สถานะบัตร</th>
+                    <th className="py-2.5 px-4 border-r border-indigo-700 w-36">ลายมือชื่อผู้รับบัตร</th>
+                    <th className="py-2.5 px-2 w-20">วันที่รับ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-400">
+                  {idCardData.map((c, idx) => (
+                    <tr key={c.id} className={idx % 2 === 1 ? 'bg-indigo-50/40' : 'bg-white'}>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
+                      <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">{c.name}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center">{c.nickname}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold">{c.callsign}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-bold">{c.institution}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-[11px]">{c.role}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center text-[10px] font-semibold">
+                        <span className={c.isReceived ? 'text-emerald-700 font-bold' : (c.hasPhoto ? 'text-indigo-800' : 'text-amber-700')}>
+                          {c.idCardStatus}
+                        </span>
+                      </td>
+                      <td className="py-2 px-4 border-r border-slate-400 text-center">
+                        <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                      </td>
+                      <td className="py-2 px-2 text-center font-mono text-[11px]">{c.idCardReceivedAt}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* TABLE CONTENT 3: SHIRT DISTRIBUTION ROSTER (32 PRODUCTION SHIRTS) */}
           {activeDoc === 'shirts' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 p-2.5 rounded-lg border border-slate-300">
@@ -1015,11 +1380,102 @@ export default function AdminDocumentsView({
             </div>
           )}
 
-          {/* OFFICIAL SIGNATURE FOOTER (For signing documents only; Staff checklist shows prep note) */}
-          {activeDoc === 'rooms-staff' ? (
+          {/* TABLE CONTENT 6: COMPREHENSIVE ADMIN MASTER ROSTER (INTERNAL ADMIN ONLY) */}
+          {activeDoc === 'admin-master' && (
+            <div className="space-y-4">
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-950 font-semibold flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  📋 ทะเบียนข้อมูลละเอียดครบทุกมิติสำหรับ Admin ({displayedAdminMasterData.length}/{adminMasterData.length} ท่าน) — แสดงข้อมูลการเงิน ห้องพัก/ไม่พัก/กุญแจ เสื้อ บัตร ID โรคประจำตัว ยา ของใช้ ผู้กดยินยอมสุขภาพ และติดต่อฉุกเฉิน
+                </span>
+                <span className="font-mono font-bold text-rose-800">เอกสารลับเฉพาะ Admin/คณะกรรมการ</span>
+              </div>
+
+              <table className="w-full text-left text-[11px] border-collapse border border-slate-900">
+                <thead>
+                  <tr className="bg-slate-900 text-white font-bold border-b border-slate-900 text-center">
+                    <th className="py-2 px-1.5 border-r border-slate-700 w-8">ที่</th>
+                    <th className="py-2 px-2 border-r border-slate-700 text-left w-44">ชื่อ-สกุล / นามเรียกขาน</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-24">สังกัด / บทบาท</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-24">RSVP / กลุ่ม</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-32">ห้องพัก & กุญแจ</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-24">เสื้อ & บัตร ID</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-44 text-left">การเงิน & หมายเหตุ</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-44 text-left">โรค/แพ้/ยา/ของใช้</th>
+                    <th className="py-2 px-2 border-r border-slate-700 w-32">เปิดเผยสุขภาพ</th>
+                    <th className="py-2 px-2 text-left w-36">ติดต่อฉุกเฉิน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-400">
+                  {displayedAdminMasterData.map((r, idx) => (
+                    <tr key={r.id} className={r.hasHealthAlert ? 'bg-rose-50/70' : (idx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}>
+                      <td className="py-2 px-1.5 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
+                      <td className="py-2 px-2 border-r border-slate-400">
+                        <div className="font-bold text-slate-950">{r.name}</div>
+                        <div className="text-[10px] text-slate-600 font-mono">
+                          ({r.nickname}) • {r.callsign}
+                        </div>
+                        <div className="text-[9.5px] text-slate-500 font-mono">
+                          {r.gender} • {r.ageLabel} • เลือด {r.bloodGroup} • {r.phone}
+                        </div>
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center">
+                        <div className="font-bold text-slate-900">{r.institution}</div>
+                        <div className="text-[9.5px] text-slate-600">{r.memberTypeLabel}</div>
+                        <div className="text-[9.5px] text-indigo-800 font-semibold">{r.roleWithDuty}</div>
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center">
+                        <div className="font-semibold text-slate-800 text-[10px]">{r.rsvpSummary}</div>
+                        <div className="text-[9.5px] text-slate-600 font-mono mt-0.5">{r.groupAssigned}</div>
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-[10px]">
+                        <div className="font-semibold text-slate-800">{r.dormAndKeySummary}</div>
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center text-[10px]">
+                        <div className="font-semibold text-purple-900">👕 {r.shirtSummary}</div>
+                        <div className="text-indigo-900 mt-0.5">🪪 {r.idCardSummary}</div>
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-[10px]">
+                        <div className="font-bold text-slate-900">{r.paymentStatusLabel}</div>
+                        <div className="text-[9.5px] text-slate-700 font-mono">{r.paymentAmountsLabel}</div>
+                        {r.paymentNotesLabel !== '-' && (
+                          <div className="text-[9.5px] text-amber-800 font-semibold">{r.paymentNotesLabel}</div>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-[10px]">
+                        <div className={r.hasHealthAlert ? 'font-bold text-rose-800' : 'text-emerald-700'}>
+                          {r.medicalSummary}
+                        </div>
+                        {r.suppliesSummary !== '-' && (
+                          <div className="text-[9.5px] text-indigo-900 font-semibold mt-0.5">
+                            📦 {r.suppliesSummary}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center text-[9.5px] font-semibold text-slate-700">
+                        {r.healthConsentSummary}
+                      </td>
+                      <td className="py-2 px-2 text-[10px] text-rose-900 font-semibold">
+                        {r.emergencyContact}
+                      </td>
+                    </tr>
+                  ))}
+                  {displayedAdminMasterData.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-slate-500">
+                        ไม่พบข้อมูลที่ตรงกับตัวกรอง
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* OFFICIAL SIGNATURE FOOTER (For signing documents only; Staff/Admin internal docs show prep note) */}
+          {isInternalAdminDoc ? (
             <div className="pt-6 mt-6 border-t border-slate-400 flex items-center justify-between text-[11px] text-slate-600">
-              <span>* เอกสารนี้ไม่ต้องลงลายมือชื่อผู้เข้าพัก • ใช้สำหรับฝ่ายพยาบาล สวัสดิการ และผู้ดูแลหอพักตรวจสอบความพร้อมเท่านั้น</span>
-              <span className="font-mono font-bold text-slate-800">ผู้ตรวจสอบ (Staff): ................................................</span>
+              <span>* เอกสารข้อมูลภายในสำหรับ Admin / Staff เท่านั้น (ไม่ต้องลงลายมือชื่อผู้เข้าอบรม) • ข้อมูลเชื่อมตรงกับฐานข้อมูลระบบแบบ Real-time</span>
+              <span className="font-mono font-bold text-slate-800">ผู้ตรวจสอบ (Admin/Staff): ................................................</span>
             </div>
           ) : (
             <div className="pt-10 mt-8 border-t border-slate-400 grid grid-cols-2 gap-8 text-center text-xs">

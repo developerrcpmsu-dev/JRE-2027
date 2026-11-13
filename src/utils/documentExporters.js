@@ -102,25 +102,17 @@ const thinBorder = {
 };
 
 /**
- * 1. Export Attendance & Training Sign-in Roster to Excel
+ * Shared worksheet populator: 1. Attendance & Training Sign-in Roster
  */
-export async function exportAttendanceRosterToExcel(records, filename = '1_ใบรายชื่อการเข้าร่วมการฝึกอบรม_JRE2027.xlsx') {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'JRE 2027 Admin Suite';
-  wb.created = new Date();
-
-  const ws = wb.addWorksheet('ใบลงทะเบียนเข้าร่วมอบรม', {
-    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
-  });
-
+function populateAttendanceSheet(ws, records = []) {
   setupWorksheetHeader(
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงเวลาและลงลายมือชื่อเข้าร่วมการฝึกอบรม (Attendance & Sign-in Roster)',
-    'วันที่ 13 - 15 กุมภาพันธ์ 2570 • ณ ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม (มมส)'
+    'วันที่ 13 - 15 กุมภาพันธ์ 2570 • ณ ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม (มมส)',
+    'I'
   );
 
-  // Table Headers at Row 5
   const headers = [
     { header: 'ลำดับ', key: 'no', width: 8, align: 'center' },
     { header: 'ชื่อ - นามสกุล', key: 'name', width: 26, align: 'left' },
@@ -130,7 +122,7 @@ export async function exportAttendanceRosterToExcel(records, filename = '1_ใ�
     { header: 'ประเภท/บทบาท', key: 'role', width: 20, align: 'center' },
     { header: 'เบอร์โทรศัพท์', key: 'phone', width: 16, align: 'center' },
     { header: 'ลายมือชื่อผู้เข้าร่วม (Signature)', key: 'signature', width: 26, align: 'center' },
-    { header: 'หมายเหตุ', key: 'notes', width: 18, align: 'left' }
+    { header: 'หมายเหตุ', key: 'notes', width: 20, align: 'left' }
   ];
 
   const headerRow = ws.getRow(5);
@@ -140,13 +132,12 @@ export async function exportAttendanceRosterToExcel(records, filename = '1_ใ�
     cell.value = h.header;
     cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } }; // Teal 700
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
     cell.border = thinBorder;
     ws.getColumn(colNumber).width = h.width;
   });
   headerRow.height = 28;
 
-  // Add Data Rows
   records.forEach((r, idx) => {
     const rowNum = 6 + idx;
     const row = ws.getRow(rowNum);
@@ -160,19 +151,33 @@ export async function exportAttendanceRosterToExcel(records, filename = '1_ใ�
     row.getCell(5).value = r.institution || '-';
     row.getCell(6).value = r.role || '-';
     row.getCell(7).value = r.phone || '-';
-    row.getCell(8).value = ''; // Space for physical signature
+    row.getCell(8).value = '';
     row.getCell(9).value = r.notes || '';
 
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);
       cell.font = { name: 'TH Sarabun New', size: 11 };
-      cell.alignment = { horizontal: h.align, vertical: 'middle' };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.border = thinBorder;
     });
 
     row.height = 24;
   });
+}
+
+/**
+ * 1. Export Attendance & Training Sign-in Roster to Excel
+ */
+export async function exportAttendanceRosterToExcel(records, filename = '1_ใบรายชื่อการเข้าร่วมการฝึกอบรม_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Admin Suite';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('ใบลงทะเบียนเข้าร่วมอบรม', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateAttendanceSheet(ws, records);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -180,22 +185,98 @@ export async function exportAttendanceRosterToExcel(records, filename = '1_ใ�
 }
 
 /**
- * 2. Export Shirt Receipt Roster to Excel (32 Production Shirts)
+ * Shared worksheet populator: 2. ID Card Pickup Sign-in Roster (PDPA-Safe)
  */
-export async function exportShirtRosterToExcel(records, filename = '2_ใบรายชื่อรับมอบเสื้อฝึก_JRE2027.xlsx') {
+function populateIdCardSheet(ws, records = []) {
+  setupWorksheetHeader(
+    ws,
+    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
+    'บัญชีลงลายมือชื่อรับบัตรประจำตัวผู้เข้าร่วม / Staff (ID Card Sign-in Roster)',
+    'บัตรประจำตัวโครงการ JRE 2027 • ตรวจสอบรายชื่อ นามเรียกขาน และลงลายมือชื่อเมื่อรับบัตร (คุ้มครองข้อมูลสุขภาพ PDPA)',
+    'I'
+  );
+
+  const headers = [
+    { header: 'ลำดับ', key: 'no', width: 8, align: 'center' },
+    { header: 'ชื่อ - นามสกุล', key: 'name', width: 26, align: 'left' },
+    { header: 'ชื่อเล่น', key: 'nickname', width: 13, align: 'center' },
+    { header: 'นามเรียกขาน', key: 'callsign', width: 18, align: 'center' },
+    { header: 'สังกัด', key: 'institution', width: 14, align: 'center' },
+    { header: 'ประเภทบัตร / บทบาท', key: 'role', width: 22, align: 'center' },
+    { header: 'สถานะบัตรในระบบ', key: 'idCardStatus', width: 18, align: 'center' },
+    { header: 'ลายมือชื่อผู้รับบัตร (Signature)', key: 'signature', width: 26, align: 'center' },
+    { header: 'วันที่รับบัตร', key: 'pickupDate', width: 14, align: 'center' }
+  ];
+
+  const headerRow = ws.getRow(5);
+  headers.forEach((h, i) => {
+    const colNumber = i + 1;
+    const cell = headerRow.getCell(colNumber);
+    cell.value = h.header;
+    cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4338CA' } };
+    cell.border = thinBorder;
+    ws.getColumn(colNumber).width = h.width;
+  });
+  headerRow.height = 28;
+
+  records.forEach((r, idx) => {
+    const rowNum = 6 + idx;
+    const row = ws.getRow(rowNum);
+    const isEven = idx % 2 === 1;
+    const bg = isEven ? 'FFEEF2FF' : 'FFFFFFFF';
+
+    row.getCell(1).value = idx + 1;
+    row.getCell(2).value = r.name || '-';
+    row.getCell(3).value = r.nickname || '-';
+    row.getCell(4).value = r.callsign || '-';
+    row.getCell(5).value = r.institution || '-';
+    row.getCell(6).value = r.role || '-';
+    row.getCell(7).value = r.idCardStatus || 'รอรับบัตร';
+    row.getCell(8).value = '';
+    row.getCell(9).value = r.idCardReceivedAt || '13 ก.พ. 70';
+
+    headers.forEach((h, i) => {
+      const cell = row.getCell(i + 1);
+      cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 3 };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      cell.border = thinBorder;
+    });
+
+    row.height = 24;
+  });
+}
+
+/**
+ * 2. Export ID Card Receipt Roster to Excel
+ */
+export async function exportIdCardRosterToExcel(records, filename = '2_ใบรายชื่อรับบัตรประจำตัว_ID_Card_JRE2027.xlsx') {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'JRE 2027 Admin Suite';
   wb.created = new Date();
 
-  const ws = wb.addWorksheet('ใบรับมอบเสื้อฝึก 32 ตัว', {
+  const ws = wb.addWorksheet('ใบเซ็นชื่อรับบัตร ID Card', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
+  populateIdCardSheet(ws, records);
 
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, filename);
+}
+
+/**
+ * Shared worksheet populator: 3. Shirt Receipt Roster
+ */
+function populateShirtSheet(ws, records = []) {
   setupWorksheetHeader(
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงลายมือชื่อรับมอบเสื้อฝึกปฏิบัติการ JRE 2027 (ยอดผลิตรวม 32 ตัว)',
-    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว)'
+    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว)',
+    'J'
   );
 
   const headers = [
@@ -206,7 +287,7 @@ export async function exportShirtRosterToExcel(records, filename = '2_ใบร�
     { header: 'ข้อความอกขวา', key: 'chest', width: 18, align: 'center' },
     { header: 'ขนาดไซส์', key: 'size', width: 14, align: 'center' },
     { header: 'จำนวน', key: 'qty', width: 10, align: 'center' },
-    { header: 'สถานะค่าเสื้อ', key: 'payment', width: 18, align: 'center' },
+    { header: 'สถานะค่าเสื้อ / รับเสื้อ', key: 'payment', width: 22, align: 'center' },
     { header: 'ลายมือชื่อผู้รับมอบเสื้อ (Signature)', key: 'signature', width: 26, align: 'center' },
     { header: 'วันที่รับมอบ', key: 'date', width: 14, align: 'center' }
   ];
@@ -218,7 +299,7 @@ export async function exportShirtRosterToExcel(records, filename = '2_ใบร�
     cell.value = h.header;
     cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9333EA' } }; // Purple 600
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9333EA' } };
     cell.border = thinBorder;
     ws.getColumn(colNumber).width = h.width;
   });
@@ -237,20 +318,34 @@ export async function exportShirtRosterToExcel(records, filename = '2_ใบร�
     row.getCell(5).value = r.chest || '-';
     row.getCell(6).value = r.size || '-';
     row.getCell(7).value = 1;
-    row.getCell(8).value = r.payment || 'ชำระแล้ว';
+    row.getCell(8).value = r.pickupStatusLabel ? `${r.payment || 'ชำระแล้ว'} • ${r.pickupStatusLabel}` : (r.payment || 'ชำระแล้ว');
     row.getCell(9).value = '';
     row.getCell(10).value = '13 ก.พ. 70';
 
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);
-      cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 5 }; // Bold size
-      cell.alignment = { horizontal: h.align, vertical: 'middle' };
+      cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 5 };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.border = thinBorder;
     });
 
     row.height = 24;
   });
+}
+
+/**
+ * 3. Export Shirt Receipt Roster to Excel (32 Production Shirts)
+ */
+export async function exportShirtRosterToExcel(records, filename = '3_ใบรายชื่อรับมอบเสื้อฝึก_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Admin Suite';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('ใบรับมอบเสื้อฝึก 32 ตัว', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateShirtSheet(ws, records);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -547,130 +642,154 @@ export async function exportDormitoryStaffMedicalExcel(roomList, msuList = [], f
 }
 
 /**
- * 5. Master 4-in-1 Excel Workbook (Attendance, Shirts, Dorm Sign-in [PDPA-safe], Dorm Staff Health & Supplies)
+ * Shared worksheet populator: 6. Comprehensive Admin Master Roster (All Details)
  */
-export async function exportAllRostersToMasterExcel({
-  attendanceRecords = [],
-  shirtRecords = [],
-  roomList = [],
-  msuList = []
-}, filename = 'JRE2027_เอกสารใบรายชื่อครบชุด_4in1_Master.xlsx') {
+function populateAdminMasterSheet(ws, records = []) {
+  setupWorksheetHeader(
+    ws,
+    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
+    'ทะเบียนข้อมูลละเอียดครบทุกมิติสำหรับ Admin / คณะกรรมการ (Admin Master Roster)',
+    'รวบรวมข้อมูลทะเบียน การยืนยันเข้าร่วม ห้องพัก-กุญแจ เสื้อ บัตร ID การเงิน สุขภาพ (รวมผู้กดยินยอม) และผู้ติดต่อฉุกเฉิน',
+    'S'
+  );
+
+  const headers = [
+    { header: 'ลำดับ', width: 7, align: 'center' },
+    { header: 'รหัส / ชื่อ-สกุล (TH / EN)', width: 28, align: 'left' },
+    { header: 'ชื่อเล่น / นามเรียกขาน', width: 20, align: 'center' },
+    { header: 'สังกัด / สถานะสมาชิก', width: 20, align: 'left' },
+    { header: 'บทบาท & ฝ่ายงาน', width: 22, align: 'left' },
+    { header: 'เพศ / อายุ / หมู่เลือด', width: 18, align: 'center' },
+    { header: 'เบอร์โทร / อีเมล', width: 24, align: 'left' },
+    { header: 'ยืนยันเข้าร่วม (RSVP)', width: 20, align: 'center' },
+    { header: 'กลุ่มฝึก', width: 12, align: 'center' },
+    { header: 'ห้องพัก / สถานะพัก / กุญแจ', width: 24, align: 'left' },
+    { header: 'เสื้อฝึก (ไซส์ / สถานะรับ)', width: 18, align: 'center' },
+    { header: 'บัตร ID Card', width: 18, align: 'center' },
+    { header: 'แผนชำระ & สถานะการเงิน', width: 24, align: 'left' },
+    { header: 'ยอดกำหนด / จ่ายแล้ว / ค้างรับ', width: 24, align: 'center' },
+    { header: 'หมายเหตุการเงิน (หลังงาน/ยกเลิก)', width: 24, align: 'left' },
+    { header: 'โรคประจำตัว & อาการแพ้', width: 26, align: 'left' },
+    { header: 'ยา / เวชภัณฑ์ / ของใช้ที่ต้องเตรียม', width: 24, align: 'left' },
+    { header: 'เปิดเผยสุขภาพ (สถานะ / ผู้กด)', width: 22, align: 'center' },
+    { header: 'ผู้ติดต่อฉุกเฉิน', width: 24, align: 'left' }
+  ];
+
+  const headerRow = ws.getRow(5);
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = h.header;
+    cell.font = { name: 'TH Sarabun New', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    cell.border = thinBorder;
+    ws.getColumn(i + 1).width = h.width;
+  });
+  headerRow.height = 30;
+
+  records.forEach((r, idx) => {
+    const row = ws.getRow(6 + idx);
+    const hasAlert = Boolean(r.hasHealthAlert);
+    const bg = hasAlert ? 'FFFFF1F2' : (idx % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF');
+
+    row.getCell(1).value = idx + 1;
+    row.getCell(2).value = r.fullNameWithEn || r.name || '-';
+    row.getCell(3).value = `${r.nickname || '-'} / ${r.callsign || '-'}`;
+    row.getCell(4).value = `${r.institution || '-'} (${r.memberTypeLabel || '-'})`;
+    row.getCell(5).value = r.roleWithDuty || r.role || '-';
+    row.getCell(6).value = `${r.gender || '-'} • ${r.ageLabel || '-'} • เลือด ${r.bloodGroup || '-'}`;
+    row.getCell(7).value = `${r.phone || '-'}\n${r.email || '-'}`;
+    row.getCell(8).value = r.rsvpSummary || '-';
+    row.getCell(9).value = r.groupAssigned || 'ยังไม่จัดกลุ่ม';
+    row.getCell(10).value = r.dormAndKeySummary || '-';
+    row.getCell(11).value = r.shirtSummary || '-';
+    row.getCell(12).value = r.idCardSummary || '-';
+    row.getCell(13).value = r.paymentStatusLabel || '-';
+    row.getCell(14).value = r.paymentAmountsLabel || '-';
+    row.getCell(15).value = r.paymentNotesLabel || '-';
+    row.getCell(16).value = r.medicalSummary || 'ปกติ';
+    row.getCell(17).value = r.suppliesSummary || '-';
+    row.getCell(18).value = r.healthConsentSummary || '-';
+    row.getCell(19).value = r.emergencyContact || '-';
+
+    headers.forEach((h, i) => {
+      const c = row.getCell(i + 1);
+      c.font = {
+        name: 'TH Sarabun New',
+        size: 10,
+        bold: i === 1 || (hasAlert && i === 15),
+        color: { argb: hasAlert && i === 15 ? 'FFBE123C' : 'FF0F172A' }
+      };
+      c.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      c.border = thinBorder;
+    });
+    row.height = 36;
+  });
+}
+
+/**
+ * 6. Export Comprehensive Admin Master Roster to Excel
+ */
+export async function exportAdminMasterRosterExcel(records, filename = '6_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin_JRE2027.xlsx') {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'JRE 2027 Admin Suite';
   wb.created = new Date();
 
-  // Sheet 1: Attendance
-  const ws1 = wb.addWorksheet('1_ลงทะเบียนเข้าร่วมอบรม');
-  setupWorksheetHeader(
-    ws1,
-    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
-    'บัญชีลงเวลาและลงลายมือชื่อเข้าร่วมการฝึกอบรม (Attendance & Sign-in Roster)',
-    'วันที่ 13 - 15 กุมภาพันธ์ 2570 • ณ ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม (มมส)'
-  );
-  const h1 = [
-    { header: 'ลำดับ', width: 8, align: 'center' },
-    { header: 'ชื่อ - นามสกุล', width: 26, align: 'left' },
-    { header: 'ชื่อเล่น', width: 14, align: 'center' },
-    { header: 'นามเรียกขาน', width: 18, align: 'center' },
-    { header: 'มหาวิทยาลัย/สังกัด', width: 22, align: 'left' },
-    { header: 'ประเภท/บทบาท', width: 20, align: 'center' },
-    { header: 'เบอร์โทรศัพท์', width: 16, align: 'center' },
-    { header: 'ลายมือชื่อผู้เข้าร่วม', width: 26, align: 'center' },
-    { header: 'หมายเหตุ', width: 18, align: 'left' }
-  ];
-  const r1Head = ws1.getRow(5);
-  h1.forEach((h, i) => {
-    const cell = r1Head.getCell(i + 1);
-    cell.value = h.header;
-    cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
-    cell.border = thinBorder;
-    ws1.getColumn(i + 1).width = h.width;
-  });
-  attendanceRecords.forEach((r, idx) => {
-    const row = ws1.getRow(6 + idx);
-    row.getCell(1).value = idx + 1;
-    row.getCell(2).value = r.name || '-';
-    row.getCell(3).value = r.nickname || '-';
-    row.getCell(4).value = r.callsign || '-';
-    row.getCell(5).value = r.institution || '-';
-    row.getCell(6).value = r.role || '-';
-    row.getCell(7).value = r.phone || '-';
-    row.getCell(8).value = '';
-    row.getCell(9).value = r.notes || '';
-    h1.forEach((h, i) => {
-      const c = row.getCell(i + 1);
-      c.font = { name: 'TH Sarabun New', size: 11 };
-      c.alignment = { horizontal: h.align, vertical: 'middle' };
-      c.border = thinBorder;
-    });
-    row.height = 24;
-  });
-
-  // Sheet 2: Shirts
-  const ws2 = wb.addWorksheet('2_รับมอบเสื้อฝึก_32ตัว');
-  setupWorksheetHeader(
-    ws2,
-    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
-    'บัญชีลงลายมือชื่อรับมอบเสื้อฝึกปฏิบัติการ JRE 2027 (ยอดผลิตรวม 32 ตัว)',
-    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว)',
-    'J'
-  );
-  const h2 = [
-    { header: 'ลำดับ', width: 8, align: 'center' },
-    { header: 'ชื่อ - สกุล ผู้รับมอบ', width: 26, align: 'left' },
-    { header: 'นามเรียกขาน', width: 18, align: 'center' },
-    { header: 'สังกัด', width: 14, align: 'center' },
-    { header: 'ข้อความอกขวา', width: 18, align: 'center' },
-    { header: 'ขนาดไซส์', width: 14, align: 'center' },
-    { header: 'จำนวน', width: 10, align: 'center' },
-    { header: 'สถานะค่าเสื้อ', width: 18, align: 'center' },
-    { header: 'ลายมือชื่อผู้รับมอบเสื้อ', width: 26, align: 'center' },
-    { header: 'วันที่รับมอบ', width: 14, align: 'center' }
-  ];
-  const r2Head = ws2.getRow(5);
-  h2.forEach((h, i) => {
-    const cell = r2Head.getCell(i + 1);
-    cell.value = h.header;
-    cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9333EA' } };
-    cell.border = thinBorder;
-    ws2.getColumn(i + 1).width = h.width;
-  });
-  shirtRecords.forEach((r, idx) => {
-    const row = ws2.getRow(6 + idx);
-    row.getCell(1).value = idx + 1;
-    row.getCell(2).value = r.name || '-';
-    row.getCell(3).value = r.callsign || '-';
-    row.getCell(4).value = r.uni || '-';
-    row.getCell(5).value = r.chest || '-';
-    row.getCell(6).value = r.size || '-';
-    row.getCell(7).value = 1;
-    row.getCell(8).value = r.payment || 'ชำระแล้ว';
-    row.getCell(9).value = '';
-    row.getCell(10).value = '13 ก.พ. 70';
-    h2.forEach((h, i) => {
-      const c = row.getCell(i + 1);
-      c.font = { name: 'TH Sarabun New', size: 11, bold: i === 5 };
-      c.alignment = { horizontal: h.align, vertical: 'middle' };
-      c.border = thinBorder;
-    });
-    row.height = 24;
-  });
-
-  // Sheet 3: Dormitory Sign-in (PDPA-Safe: NO health info)
-  const ws3 = wb.addWorksheet('3_เซ็นชื่อเข้าห้องพัก_ปิดสุขภาพ', {
-    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
-  });
-  populateDormitorySignInSheet(ws3, roomList, msuList);
-
-  // Sheet 4: Staff Room Health, Medicine & Equipment Checklist (NO signature column)
-  const ws4 = wb.addWorksheet('4_ตรวจห้อง_โรค_ยา_ของใช้_Staff', {
+  const ws = wb.addWorksheet('ทะเบียนข้อมูลละเอียด Admin', {
     pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
-  populateDormitoryStaffMedicalSheet(ws4, roomList, msuList);
+  populateAdminMasterSheet(ws, records);
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, filename);
+}
+
+/**
+ * 7. Master 6-in-1 Excel Workbook (4 Signing Sheets [PDPA-Safe] + 2 Admin/Staff Detailed Sheets)
+ */
+export async function exportAllRostersToMasterExcel({
+  attendanceRecords = [],
+  idCardRecords = [],
+  shirtRecords = [],
+  roomList = [],
+  msuList = [],
+  adminMasterRecords = []
+}, filename = 'JRE2027_ชุดเอกสารครบชุด_6in1_Master.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Admin Suite';
+  wb.created = new Date();
+
+  const ws1 = wb.addWorksheet('1_เซ็นชื่อเข้าร่วมอบรม', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateAttendanceSheet(ws1, attendanceRecords);
+
+  const ws2 = wb.addWorksheet('2_เซ็นชื่อรับบัตร_IDCard', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateIdCardSheet(ws2, idCardRecords.length > 0 ? idCardRecords : attendanceRecords);
+
+  const ws3 = wb.addWorksheet('3_เซ็นชื่อรับเสื้อ_32ตัว', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateShirtSheet(ws3, shirtRecords);
+
+  const ws4 = wb.addWorksheet('4_เซ็นชื่อเข้าห้องพัก_ปิดสุขภาพ', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateDormitorySignInSheet(ws4, roomList, msuList);
+
+  const ws5 = wb.addWorksheet('5_ตรวจห้อง_โรค_ยา_ของใช้_Staff', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateDormitoryStaffMedicalSheet(ws5, roomList, msuList);
+
+  const ws6 = wb.addWorksheet('6_ทะเบียนข้อมูลละเอียด_Admin', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateAdminMasterSheet(ws6, adminMasterRecords);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

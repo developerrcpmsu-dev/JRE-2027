@@ -4566,6 +4566,7 @@ export default function AdminDashboardView({
     let fullPlanPaidCount = 0;
     let installmentPlanCount = 0;
     let installmentBothPaidCount = 0;
+    let installmentR1UnpaidOrReviewCount = 0;
     let fullyPaidCount = 0;
     let partialPaidCount = 0;
     let pendingReviewCount = 0;
@@ -4666,8 +4667,14 @@ export default function AdminDashboardView({
 
       if (payRes.isInstallment) {
         installmentPlanCount++;
-        if (payRes.isFullyPaid && !isStaff) {
+        if (payRes.isFullyPaid) {
           installmentBothPaidCount++;
+        } else if (
+          !payRes.isRound2CancelledAbsent &&
+          !payRes.isDeferredPostProject &&
+          payRes.statusBucket !== 'partial_paid'
+        ) {
+          installmentR1UnpaidOrReviewCount++;
         }
       } else {
         fullPlanCount++;
@@ -4712,6 +4719,7 @@ export default function AdminDashboardView({
       fullPlanPaidCount,
       installmentPlanCount,
       installmentBothPaidCount,
+      installmentR1UnpaidOrReviewCount,
       fullyPaidCount,
       partialPaidCount,
       pendingReviewCount,
@@ -6234,6 +6242,7 @@ export default function AdminDashboardView({
                 งวด 1 แล้ว {regMetrics.partialPaidCount} · ครบ {regMetrics.installmentBothPaidCount}
                 {regMetrics.deferredPostProjectCount > 0 ? ` · หลังงาน ${regMetrics.deferredPostProjectCount}` : ''}
                 {regMetrics.round2CancelledCount > 0 ? ` · ยกเลิก ${regMetrics.round2CancelledCount}` : ''}
+                {regMetrics.installmentR1UnpaidOrReviewCount > 0 ? ` · รอ/ตรวจงวด 1 ${regMetrics.installmentR1UnpaidOrReviewCount}` : ''}
               </div>
             </button>
 
@@ -18901,6 +18910,7 @@ export default function AdminDashboardView({
         <AdminDocumentsView
           registrations={registrations}
           merchandiseOrders={merchandiseOrders}
+          paymentConfig={paymentConfig}
           triggerToast={triggerToast}
         />
       )}

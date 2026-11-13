@@ -897,7 +897,10 @@ export default function AdminExecutiveSummaryView({
     setUpdatingId(item.id);
     try {
       await onUpdateAllocation(item.id, {
-        attendance_need_accommodation: nextNeed
+        attendance_need_accommodation: nextNeed,
+        dorm_opt_out: !nextNeed && !item.uniInfo?.isMsu,
+        dorm_opt_out_by: !nextNeed && !item.uniInfo?.isMsu ? 'admin' : '',
+        dorm_opt_out_at: !nextNeed && !item.uniInfo?.isMsu ? new Date().toISOString() : ''
       });
       if (triggerToast) {
         triggerToast(`อัปเดตที่พักของคุณ ${item.fullName}: ${label}`);
@@ -1046,6 +1049,9 @@ export default function AdminExecutiveSummaryView({
       if (triggerToast) {
         triggerToast(`🗑️ ลบรายชื่อ "${item.fullName}" ออกจากตารางเรียบร้อยแล้ว`);
       }
+    } catch (err) {
+      console.error('Failed to delete row:', err);
+      if (triggerToast) triggerToast(err?.message || 'ลบรายชื่อไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -1067,6 +1073,9 @@ export default function AdminExecutiveSummaryView({
       if (triggerToast) {
         triggerToast(`✅ เพิ่ม "${spec.display_name}" เข้าสู่ตารางเรียบร้อยแล้ว`);
       }
+    } catch (err) {
+      console.error('Failed to re-add committee member:', err);
+      if (triggerToast) triggerToast(err?.message || 'เพิ่มรายชื่อไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setIsSyncingCommittee(false);
     }
@@ -1323,6 +1332,9 @@ export default function AdminExecutiveSummaryView({
       if (triggerToast) {
         triggerToast(`✅ บันทึกยืนยันการเข้าร่วมให้ผู้สมัคร ${targets.length} คน เรียบร้อยแล้ว!`);
       }
+    } catch (err) {
+      console.error('Failed bulk confirmation:', err);
+      if (triggerToast) triggerToast(err?.message || 'บันทึกการยืนยันทั้งกลุ่มไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setIsBulkUpdating(false);
     }
