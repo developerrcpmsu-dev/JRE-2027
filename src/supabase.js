@@ -18,7 +18,8 @@ import {
   resolveCommitteeDutyNote,
   findMatchingCommitteeMemberSpec,
   INITIAL_STAFF_ADMIN_ACCOUNTS,
-  isAuthorizedStaffOrAdminEmail
+  isAuthorizedStaffOrAdminEmail,
+  resolveKnownThaiNameFallback
 } from './data/defaultData';
 import { processImageFile } from './utils/imageUtils';
 import { 
@@ -278,10 +279,27 @@ const unpackRegistration = (row) => {
   // Determine authoritative first/last names: If extra JSON contains valid Thai names,
   // ensure they take precedence over English or Google account nicknames
   const THAI_CHAR_RE = /[\u0E00-\u0E7F]/;
-  const resolvedFirstNameTh = extra.first_name_th || (THAI_CHAR_RE.test(row.first_name || '') ? row.first_name : '') || '';
-  const resolvedLastNameTh = extra.last_name_th || (THAI_CHAR_RE.test(row.last_name || '') ? row.last_name : '') || '';
-  const resolvedFirstName = (resolvedFirstNameTh && THAI_CHAR_RE.test(resolvedFirstNameTh)) ? resolvedFirstNameTh : (row.first_name || extra.first_name || '');
-  const resolvedLastName = (resolvedLastNameTh && THAI_CHAR_RE.test(resolvedLastNameTh)) ? resolvedLastNameTh : (row.last_name || extra.last_name || '');
+  const rawFirstTh = extra.first_name_th || (THAI_CHAR_RE.test(row.first_name || '') ? row.first_name : '') || '';
+  const rawLastTh = extra.last_name_th || (THAI_CHAR_RE.test(row.last_name || '') ? row.last_name : '') || '';
+  let resolvedFirstName = (rawFirstTh && THAI_CHAR_RE.test(rawFirstTh)) ? rawFirstTh : (row.first_name || extra.first_name || '');
+  let resolvedLastName = (rawLastTh && THAI_CHAR_RE.test(rawLastTh)) ? rawLastTh : (row.last_name || extra.last_name || '');
+  let resolvedFirstNameTh = rawFirstTh;
+  let resolvedLastNameTh = rawLastTh;
+
+  if (!THAI_CHAR_RE.test(resolvedFirstName) || !THAI_CHAR_RE.test(resolvedLastName)) {
+    const knownThai = resolveKnownThaiNameFallback(
+      { ...extra, ...row },
+      resolvedFirstName,
+      resolvedLastName,
+      row.full_name_affiliation || extra.full_name_affiliation || ''
+    );
+    if (knownThai) {
+      resolvedFirstName = knownThai.firstName;
+      resolvedLastName = knownThai.lastName;
+      resolvedFirstNameTh = knownThai.firstName;
+      resolvedLastNameTh = knownThai.lastName;
+    }
+  }
 
   const unpacked = {
     ...extra,

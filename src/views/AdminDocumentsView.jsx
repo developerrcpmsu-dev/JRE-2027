@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { 
   FileText, 
   Download, 
@@ -11,7 +12,8 @@ import {
   ShieldCheck,
   CreditCard,
   ClipboardList,
-  Search
+  Search,
+  QrCode
 } from 'lucide-react';
 import { 
   resolveUniversityInfo, 
@@ -71,10 +73,10 @@ function DormSignInZoneTable({ title, subtitle, rooms, altBgClass, zoneLabel }) 
           <tr className="bg-slate-200 text-slate-950 font-bold border-b border-slate-900 text-center">
             <th className="py-2.5 px-2 border-r border-slate-900 w-20">ห้อง</th>
             <th className="py-2.5 px-2 border-r border-slate-900 w-16">เตียง</th>
-            <th className="py-2.5 px-3 border-r border-slate-900 text-left">ชื่อ - นามสกุล ผู้เข้าพัก</th>
-            <th className="py-2.5 px-2 border-r border-slate-900 w-20">ชื่อเล่น</th>
-            <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
-            <th className="py-2.5 px-2 border-r border-slate-900 w-24">เบอร์โทร</th>
+            <th className="py-2.5 px-3 border-r border-slate-900 text-left min-w-[200px] whitespace-nowrap">ชื่อ - นามสกุล ผู้เข้าพัก</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-20 whitespace-nowrap">ชื่อเล่น</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-28 whitespace-nowrap">นามเรียกขาน</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-24 whitespace-nowrap">เบอร์โทร</th>
             <th className="py-2.5 px-2 border-r border-slate-900 w-28">เข้าพัก & กุญแจ</th>
             <th className="py-2.5 px-4 border-r border-slate-900 w-28">ลายมือชื่อรับกุญแจ</th>
             <th className="py-2.5 px-4 w-28">ลายมือชื่อคืนกุญแจ</th>
@@ -103,21 +105,21 @@ function DormSignInZoneTable({ title, subtitle, rooms, altBgClass, zoneLabel }) 
                       </td>
                     )}
                     <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
-                    <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
+                    <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950 whitespace-nowrap">
                       {p ? (
-                        <div>
-                          <span>{p.name}</span>
+                        <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                          <span className="whitespace-nowrap">{p.name}</span>
                           {isOptOut && (
-                            <span className="ml-1.5 inline-block px-1.5 py-0.2 bg-amber-200 text-amber-950 rounded text-[9px] font-black">
+                            <span className="px-1.5 py-0.2 bg-amber-200 text-amber-950 rounded text-[9px] font-black whitespace-nowrap">
                               ไม่พักหอ
                             </span>
                           )}
                         </div>
                       ) : '(ว่าง)'}
                     </td>
-                    <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
-                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
-                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center whitespace-nowrap">{p ? p.nickname : '-'}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono whitespace-nowrap">{p ? p.callsign : '-'}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono whitespace-nowrap">{p ? p.phone : '-'}</td>
                     <td className="py-2 px-2 border-r border-slate-400 text-center text-[10px]">
                       <div className="font-mono font-bold text-slate-700">K-{rm.room}</div>
                       {p ? (
@@ -171,7 +173,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
           <tr className="bg-rose-950 text-white font-bold border-b border-slate-900 text-center">
             <th className="py-2 px-2 border-r border-slate-700 w-20">ห้อง</th>
             <th className="py-2 px-1.5 border-r border-slate-700 w-14">ลำดับ</th>
-            <th className="py-2 px-2.5 border-r border-slate-700 text-left w-48">ชื่อ - นามสกุล / ติดต่อ</th>
+            <th className="py-2 px-2.5 border-r border-slate-700 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล / ติดต่อ</th>
             <th className="py-2 px-2.5 border-r border-slate-700 text-left">โรคประจำตัว / อาการแพ้ / หมู่เลือด</th>
             <th className="py-2 px-2.5 border-r border-slate-700 text-left">ยาที่ต้องการ / เวชภัณฑ์</th>
             <th className="py-2 px-2.5 border-r border-slate-700 text-left">ของที่ต้องใช้ / ดูแลพิเศษ</th>
@@ -219,12 +221,12 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                       <td className="py-2 px-2.5 border-r border-slate-400">
                         {p ? (
                           <div className="space-y-0.5">
-                            <div className="font-bold text-slate-950">
-                              {p.name}{' '}
-                              {p.nickname !== '-' && <span className="font-normal text-slate-600">({p.nickname})</span>}
+                            <div className="font-bold text-slate-950 whitespace-nowrap">
+                              {p.name}
                             </div>
-                            <div className="text-[10px] text-slate-600 font-mono">
-                              {p.callsign} • โทร: {p.phone}
+                            <div className="text-[10px] text-slate-600">
+                              {p.nickname !== '-' && <span className="font-semibold text-slate-700">({p.nickname}) • </span>}
+                              <span className="font-mono">{p.callsign} • โทร: {p.phone}</span>
                             </div>
                             <div className="text-[9.5px] font-bold flex flex-wrap gap-1">
                               <span className={p.dormOptOut ? 'text-amber-800' : 'text-emerald-800'}>
@@ -324,6 +326,7 @@ export default function AdminDocumentsView({
   const [adminMasterFilter, setAdminMasterFilter] = useState('all'); // 'all' | 'alerts' | 'unpaid' | 'msu' | 'kku'
   const [isExportingPng, setIsExportingPng] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [shirtQrMap, setShirtQrMap] = useState({});
 
   // 1. Prepare Attendance Data (36 Persons)
   const attendanceData = useMemo(() => {
@@ -438,8 +441,12 @@ export default function AdminDocumentsView({
         extra.shirt_received || extra.shirt_pickup_status === 'received'
       );
 
+      const rawQrId = String(reg.id || reg.user_id || '').trim();
+      const qrPayload = `JRE27-SHIRT-${rawQrId.toUpperCase()}`;
+
       rows.push({
-        id: reg.id || reg.user_id,
+        id: rawQrId,
+        qrPayload,
         name: nameData.fullName,
         nickname: extra.nickname || reg.nickname || '-',
         callsign,
@@ -461,8 +468,10 @@ export default function AdminDocumentsView({
       (ord.items || []).forEach((it, idx) => {
         const chest = ord.institution?.includes('ขอนแก่น') ? 'TSIKKU' : 'RCPMSU';
         const isShirtReceived = Boolean(ord.shirt_received || ord.shirt_pickup_status === 'received');
+        const qrPayload = String(ord.order_number || ord.id || idx).trim().toUpperCase();
         rows.push({
           id: `${ord.order_number}-${idx}`,
+          qrPayload,
           name: ord.customer_name || 'ลูกค้าสั่งเพิ่ม',
           nickname: ord.nickname || (isNewton ? 'นิวตั้น' : '-'),
           callsign: ord.callsign || (isNewton ? 'RCP 16-02' : '(กองกลาง)'),
@@ -484,6 +493,36 @@ export default function AdminDocumentsView({
       return a.name.localeCompare(b.name, 'th');
     });
   }, [registrations, merchandiseOrders]);
+
+  // Generate QR codes per shirt recipient row so Admin can scan directly off the sheet/screen
+  useEffect(() => {
+    let cancelled = false;
+    const generateShirtQrs = async () => {
+      if (!shirtData || shirtData.length === 0) {
+        if (!cancelled) setShirtQrMap({});
+        return;
+      }
+      const nextMap = {};
+      for (const s of shirtData) {
+        if (!s.qrPayload) continue;
+        try {
+          nextMap[s.id] = await QRCode.toDataURL(s.qrPayload, {
+            width: 120,
+            margin: 1,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#0f172a', light: '#ffffff' }
+          });
+        } catch (err) {
+          console.error('Shirt QR generation failed:', s.id, err);
+        }
+      }
+      if (!cancelled) setShirtQrMap(nextMap);
+    };
+    generateShirtQrs();
+    return () => {
+      cancelled = true;
+    };
+  }, [shirtData]);
 
   // 4. Prepare Dormitory Rooms Data (Rooms 101 - 110, sorted #1 care, #2 healthy)
   const roomData = useMemo(() => {
@@ -776,9 +815,9 @@ export default function AdminDocumentsView({
       });
       filename = '2_ใบเซ็นชื่อ_รับบัตรประจำตัว_IDCard_JRE2027.csv';
     } else if (activeDoc === 'shirts') {
-      csv = makeRow(['ลำดับ', 'ชื่อ - สกุล ผู้รับมอบ', 'นามเรียกขาน', 'สังกัด', 'ข้อความอกขวา', 'ขนาดไซส์', 'จำนวน', 'สถานะค่าเสื้อ/รับเสื้อ', 'ลายมือชื่อผู้รับมอบ', 'วันที่รับมอบ']);
+      csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล ผู้รับมอบ', 'นามเรียกขาน', 'สังกัด', 'ข้อความอกขวา', 'ขนาดไซส์', 'จำนวน', 'สถานะค่าเสื้อ/รับเสื้อ', 'รหัส QR สแกนรับเสื้อ', 'ลายมือชื่อผู้รับมอบ', 'วันที่รับมอบ']);
       shirtData.forEach((r, idx) => {
-        csv += makeRow([idx + 1, r.name, r.callsign, r.uni, r.chest, r.size, 1, `${r.payment} • ${r.pickupStatusLabel}`, '', '13 ก.พ. 70']);
+        csv += makeRow([idx + 1, r.name, r.callsign, r.uni, r.chest, r.size, 1, `${r.payment} • ${r.pickupStatusLabel}`, r.qrPayload || '-', '', '13 ก.พ. 70']);
       });
       filename = '3_ใบเซ็นชื่อ_รับมอบเสื้อฝึก32ตัว_JRE2027.csv';
     } else if (activeDoc === 'rooms') {
@@ -1080,7 +1119,7 @@ export default function AdminDocumentsView({
         <div 
           id="printable-document-sheet"
           className={`mx-auto bg-white text-slate-900 p-8 sm:p-10 rounded-2xl shadow-2xl border border-slate-300 ${
-            activeDoc === 'admin-master' ? 'min-w-[1160px] max-w-[1360px]' : 'min-w-[850px] max-w-[1040px]'
+            activeDoc === 'admin-master' ? 'min-w-[1240px] max-w-[1440px]' : 'min-w-[980px] max-w-[1180px]'
           } text-xs font-sans print:m-0 print:p-0 print:border-none print:shadow-none print:rounded-none`}
         >
           {/* OFFICIAL HEADER SECTION */}
@@ -1127,12 +1166,12 @@ export default function AdminDocumentsView({
                 <thead>
                   <tr className="bg-slate-200 text-slate-950 font-bold border-b border-slate-900 text-center">
                     <th className="py-2.5 px-2 border-r border-slate-900 w-10">ลำดับ</th>
-                    <th className="py-2.5 px-3 border-r border-slate-900 text-left">ชื่อ - นามสกุล</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-20">ชื่อเล่น</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-16">สถาบัน</th>
+                    <th className="py-2.5 px-3 border-r border-slate-900 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-20 whitespace-nowrap">ชื่อเล่น</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-28 whitespace-nowrap">นามเรียกขาน</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-16 whitespace-nowrap">สถาบัน</th>
                     <th className="py-2.5 px-2 border-r border-slate-900 w-36">ประเภท / บทบาท</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-24">เบอร์โทร</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-24 whitespace-nowrap">เบอร์โทร</th>
                     <th className="py-2.5 px-4 border-r border-slate-900 w-36">ลายมือชื่อผู้เข้าร่วม</th>
                     <th className="py-2.5 px-2 w-28">หมายเหตุ</th>
                   </tr>
@@ -1141,12 +1180,12 @@ export default function AdminDocumentsView({
                   {attendanceData.map((p, idx) => (
                     <tr key={p.id} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
                       <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
-                      <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">{p.name}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center">{p.nickname}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold">{p.callsign}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-bold">{p.institution}</td>
+                      <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950 whitespace-nowrap">{p.name}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center whitespace-nowrap">{p.nickname}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold whitespace-nowrap">{p.callsign}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-bold whitespace-nowrap">{p.institution}</td>
                       <td className="py-2 px-2 border-r border-slate-400 text-[11px]">{p.role}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p.phone}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono whitespace-nowrap">{p.phone}</td>
                       <td className="py-2 px-4 border-r border-slate-400 text-center">
                         <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
                       </td>
@@ -1172,10 +1211,10 @@ export default function AdminDocumentsView({
                 <thead>
                   <tr className="bg-indigo-900 text-white font-bold border-b border-slate-900 text-center">
                     <th className="py-2.5 px-2 border-r border-indigo-700 w-10">ลำดับ</th>
-                    <th className="py-2.5 px-3 border-r border-indigo-700 text-left">ชื่อ - นามสกุล</th>
-                    <th className="py-2.5 px-2 border-r border-indigo-700 w-20">ชื่อเล่น</th>
-                    <th className="py-2.5 px-2 border-r border-indigo-700 w-28">นามเรียกขาน</th>
-                    <th className="py-2.5 px-2 border-r border-indigo-700 w-14">สังกัด</th>
+                    <th className="py-2.5 px-3 border-r border-indigo-700 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-20 whitespace-nowrap">ชื่อเล่น</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-28 whitespace-nowrap">นามเรียกขาน</th>
+                    <th className="py-2.5 px-2 border-r border-indigo-700 w-14 whitespace-nowrap">สังกัด</th>
                     <th className="py-2.5 px-2 border-r border-indigo-700 w-36">ประเภทบัตร / บทบาท</th>
                     <th className="py-2.5 px-2 border-r border-indigo-700 w-32">สถานะบัตร</th>
                     <th className="py-2.5 px-4 border-r border-indigo-700 w-36">ลายมือชื่อผู้รับบัตร</th>
@@ -1186,10 +1225,10 @@ export default function AdminDocumentsView({
                   {idCardData.map((c, idx) => (
                     <tr key={c.id} className={idx % 2 === 1 ? 'bg-indigo-50/40' : 'bg-white'}>
                       <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
-                      <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">{c.name}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center">{c.nickname}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold">{c.callsign}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-bold">{c.institution}</td>
+                      <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950 whitespace-nowrap">{c.name}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center whitespace-nowrap">{c.nickname}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold whitespace-nowrap">{c.callsign}</td>
+                      <td className="py-2 px-2 border-r border-slate-400 text-center font-bold whitespace-nowrap">{c.institution}</td>
                       <td className="py-2 px-2 border-r border-slate-400 text-[11px]">{c.role}</td>
                       <td className="py-2 px-2 border-r border-slate-400 text-center text-[10px] font-semibold">
                         <span className={c.isReceived ? 'text-emerald-700 font-bold' : (c.hasPhoto ? 'text-indigo-800' : 'text-amber-700')}>
@@ -1210,42 +1249,72 @@ export default function AdminDocumentsView({
           {/* TABLE CONTENT 3: SHIRT DISTRIBUTION ROSTER (32 PRODUCTION SHIRTS) */}
           {activeDoc === 'shirts' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 p-2.5 rounded-lg border border-slate-300">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700 bg-slate-100 p-2.5 rounded-lg border border-slate-300">
                 <span>🏛️ มข (อกขวา TSIKKU): 19 ตัว (S:3, M:4, L:4, XL:2, 2XL:2, 4XL:3, 5XL:1)</span>
                 <span>🏛️ มมส (อกขวา RCPMSU): 13 ตัว (S:2, M:1, L:1, XL:6, 2XL:1, 4XL:1, 6XL:1)</span>
-                <span className="font-black text-slate-950">รวมผลิต: {shirtData.length} ตัว</span>
+                <span className="font-black text-slate-950">
+                  รวมผลิต: {shirtData.length} ตัว • รับแล้ว {shirtData.filter(s => s.isShirtReceived).length}/{shirtData.length}
+                </span>
+              </div>
+
+              <div className="p-2.5 bg-purple-50 border border-purple-300 rounded-lg text-[11px] text-purple-950 font-semibold flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <QrCode className="w-4 h-4 text-purple-700 shrink-0" />
+                  <span>มี QR Code สแกนรับเสื้อท้ายรายชื่อทุกท่าน — ใช้ปุ่ม &quot;📷 สแกน QR อเนกประสงค์&quot; ด้านบนเพื่อสแกนจากกระดาษหรือหน้าจอ และกดบันทึกรับเสื้อแล้วได้ทันที</span>
+                </span>
+                <span className="font-mono text-[10px] text-purple-800">พร้อมสแกน (JPEG/Print/PNG/Excel)</span>
               </div>
 
               <table className="w-full text-left text-xs border-collapse border border-slate-900">
                 <thead>
                   <tr className="bg-slate-200 text-slate-950 font-bold border-b border-slate-900 text-center">
                     <th className="py-2.5 px-2 border-r border-slate-900 w-10">ลำดับ</th>
-                    <th className="py-2.5 px-3 border-r border-slate-900 text-left">ชื่อ - นามสกุล ผู้รับมอบ</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-16">สังกัด</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-24">อกขวา</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-20">ไซส์เสื้อ</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-14">จำนวน</th>
-                    <th className="py-2.5 px-2 border-r border-slate-900 w-32">สถานะค่าเสื้อ</th>
-                    <th className="py-2.5 px-4 border-r border-slate-900 w-36">ลายมือชื่อผู้รับมอบ</th>
-                    <th className="py-2.5 px-2 w-20">วันที่รับ</th>
+                    <th className="py-2.5 px-3 border-r border-slate-900 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล ผู้รับมอบ</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-24 whitespace-nowrap">นามเรียกขาน</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-14 whitespace-nowrap">สังกัด</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-20 whitespace-nowrap">อกขวา</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-16 whitespace-nowrap">ไซส์เสื้อ</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-12">จำนวน</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-32">สถานะค่าเสื้อ / รับมอบ</th>
+                    <th className="py-2.5 px-2 border-r border-slate-900 w-20 whitespace-nowrap bg-purple-100">QR รับเสื้อ</th>
+                    <th className="py-2.5 px-3 border-r border-slate-900 w-32">ลายมือชื่อผู้รับมอบ</th>
+                    <th className="py-2.5 px-2 w-20 whitespace-nowrap">วันที่รับ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-400">
                   {shirtData.map((s, idx) => (
-                    <tr key={s.id} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
-                      <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">{s.name}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-semibold">{s.callsign}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-bold">{s.uni}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-black">{s.chest}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono font-black text-sm bg-purple-50">{s.size}</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">1</td>
-                      <td className="py-2 px-2 border-r border-slate-400 text-[11px] text-center">{s.payment}</td>
-                      <td className="py-2 px-4 border-r border-slate-400 text-center">
+                    <tr key={s.id} className={s.isShirtReceived ? 'bg-emerald-50/40' : (idx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
+                      <td className="py-1.5 px-3 border-r border-slate-400 font-bold text-slate-950 whitespace-nowrap">{s.name}</td>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-center font-mono font-semibold whitespace-nowrap">{s.callsign}</td>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-center font-bold whitespace-nowrap">{s.uni}</td>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-center font-mono font-black whitespace-nowrap">{s.chest}</td>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-center font-mono font-black text-sm bg-purple-50 whitespace-nowrap">{s.size}</td>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-center font-mono">1</td>
+                      <td className="py-1.5 px-2 border-r border-slate-400 text-[10px] text-center">
+                        <div>{s.payment}</div>
+                        <div className={`mt-0.5 font-bold ${s.isShirtReceived ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {s.isShirtReceived ? '✓ รับเสื้อแล้ว' : '⏳ รอรับเสื้อ'}
+                        </div>
+                      </td>
+                      <td className="py-1 px-1.5 border-r border-slate-400 text-center bg-purple-50/30">
+                        {shirtQrMap[s.id] ? (
+                          <div className="flex flex-col items-center justify-center">
+                            <img
+                              src={shirtQrMap[s.id]}
+                              alt={`QR ${s.name}`}
+                              className="w-12 h-12 block bg-white p-0.5 rounded border border-slate-300"
+                            />
+                            <span className="text-[8px] font-mono text-slate-600 mt-0.5 leading-none">สแกนรับ</span>
+                          </div>
+                        ) : (
+                          <span className="text-[9px] text-slate-400">กำลังสร้าง QR...</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-3 border-r border-slate-400 text-center">
                         <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
                       </td>
-                      <td className="py-2 px-2 text-center font-mono text-[11px]">13 ก.พ. 70</td>
+                      <td className="py-1.5 px-2 text-center font-mono text-[11px] whitespace-nowrap">13 ก.พ. 70</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1338,7 +1407,7 @@ export default function AdminDocumentsView({
                     <thead>
                       <tr className="bg-amber-900 text-white font-bold border-b border-slate-900 text-center">
                         <th className="py-2 px-2 border-r border-amber-700 w-24">ประเภท</th>
-                        <th className="py-2 px-2.5 border-r border-amber-700 text-left w-48">ชื่อ - นามสกุล / ติดต่อ</th>
+                        <th className="py-2 px-2.5 border-r border-amber-700 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล / ติดต่อ</th>
                         <th className="py-2 px-2.5 border-r border-amber-700 text-left">โรคประจำตัว / อาการแพ้ / หมู่เลือด</th>
                         <th className="py-2 px-2.5 border-r border-amber-700 text-left">ยาที่ต้องการ / เวชภัณฑ์</th>
                         <th className="py-2 px-2.5 border-r border-amber-700 text-left">ของที่ต้องใช้ / ดูแลพิเศษ</th>
@@ -1350,7 +1419,7 @@ export default function AdminDocumentsView({
                         <tr key={p.id || idx} className="bg-amber-50/50">
                           <td className="py-2 px-2 border-r border-slate-400 text-center font-bold text-amber-900">ไป-กลับ มมส</td>
                           <td className="py-2 px-2.5 border-r border-slate-400">
-                            <div className="font-bold text-slate-950">{p.name}</div>
+                            <div className="font-bold text-slate-950 whitespace-nowrap">{p.name}</div>
                             <div className="text-[10px] text-slate-600 font-mono">{p.callsign} • โทร: {p.phone}</div>
                             {p.emergencyName && p.emergencyName !== '-' && (
                               <div className="text-[9.5px] text-rose-800 font-semibold">
@@ -1401,7 +1470,7 @@ export default function AdminDocumentsView({
                 <thead>
                   <tr className="bg-slate-900 text-white font-bold border-b border-slate-900 text-center">
                     <th className="py-2 px-1.5 border-r border-slate-700 w-8">ที่</th>
-                    <th className="py-2 px-2 border-r border-slate-700 text-left w-44">ชื่อ-สกุล / นามเรียกขาน</th>
+                    <th className="py-2 px-2 border-r border-slate-700 text-left min-w-[215px] whitespace-nowrap">ชื่อ-สกุล / นามเรียกขาน</th>
                     <th className="py-2 px-2 border-r border-slate-700 w-24">สังกัด / บทบาท</th>
                     <th className="py-2 px-2 border-r border-slate-700 w-24">RSVP / กลุ่ม</th>
                     <th className="py-2 px-2 border-r border-slate-700 w-32">ห้องพัก & กุญแจ</th>
@@ -1417,7 +1486,7 @@ export default function AdminDocumentsView({
                     <tr key={r.id} className={r.hasHealthAlert ? 'bg-rose-50/70' : (idx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}>
                       <td className="py-2 px-1.5 border-r border-slate-400 text-center font-mono font-bold">{idx + 1}</td>
                       <td className="py-2 px-2 border-r border-slate-400">
-                        <div className="font-bold text-slate-950">{r.name}</div>
+                        <div className="font-bold text-slate-950 whitespace-nowrap">{r.name}</div>
                         <div className="text-[10px] text-slate-600 font-mono">
                           ({r.nickname}) • {r.callsign}
                         </div>

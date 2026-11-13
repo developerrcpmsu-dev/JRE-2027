@@ -120,10 +120,10 @@ function RoomOccupantCell({
           )}
 
           <div className="min-w-0">
-            <div className={`font-bold text-white text-xs ${hoverText} transition-colors flex items-center gap-1.5 truncate`}>
-              <span>{person.name}</span>
+            <div className={`font-bold text-white text-xs ${hoverText} transition-colors flex items-center gap-1.5 min-w-0`}>
+              <span className="whitespace-nowrap">{person.name}</span>
               {person.nickname !== '-' && (
-                <span className="text-amber-300 font-normal">({person.nickname})</span>
+                <span className="text-amber-300 font-normal truncate">({person.nickname})</span>
               )}
             </div>
             <div className={`text-[11px] ${subText} font-mono mt-0.5 truncate`}>
@@ -1681,7 +1681,7 @@ export default function AdminRoomsView({
                       <td className="py-3 px-3 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-white">{person.name}</span>
+                          <span className="font-bold text-white whitespace-nowrap">{person.name}</span>
                           {person.nickname !== '-' && (
                             <span className="text-amber-300 text-[11px]">({person.nickname})</span>
                           )}

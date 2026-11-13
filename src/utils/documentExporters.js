@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
 
 /**
  * Triggers a download of a Blob as a file
@@ -41,7 +42,7 @@ export async function exportElementToPng(elementOrId, filename = 'document.png')
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: 1200
+      windowWidth: Math.max(1320, el.scrollWidth + 40)
     });
 
     const dataUrl = canvas.toDataURL('image/png');
@@ -115,7 +116,7 @@ function populateAttendanceSheet(ws, records = []) {
 
   const headers = [
     { header: 'ลำดับ', key: 'no', width: 8, align: 'center' },
-    { header: 'ชื่อ - นามสกุล', key: 'name', width: 26, align: 'left' },
+    { header: 'ชื่อ - นามสกุล', key: 'name', width: 32, align: 'left' },
     { header: 'ชื่อเล่น', key: 'nickname', width: 14, align: 'center' },
     { header: 'นามเรียกขาน', key: 'callsign', width: 18, align: 'center' },
     { header: 'มหาวิทยาลัย/สังกัด', key: 'institution', width: 22, align: 'left' },
@@ -157,7 +158,7 @@ function populateAttendanceSheet(ws, records = []) {
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);
       cell.font = { name: 'TH Sarabun New', size: 11 };
-      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: i !== 1 };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.border = thinBorder;
     });
@@ -198,7 +199,7 @@ function populateIdCardSheet(ws, records = []) {
 
   const headers = [
     { header: 'ลำดับ', key: 'no', width: 8, align: 'center' },
-    { header: 'ชื่อ - นามสกุล', key: 'name', width: 26, align: 'left' },
+    { header: 'ชื่อ - นามสกุล', key: 'name', width: 32, align: 'left' },
     { header: 'ชื่อเล่น', key: 'nickname', width: 13, align: 'center' },
     { header: 'นามเรียกขาน', key: 'callsign', width: 18, align: 'center' },
     { header: 'สังกัด', key: 'institution', width: 14, align: 'center' },
@@ -240,7 +241,7 @@ function populateIdCardSheet(ws, records = []) {
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);
       cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 3 };
-      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: i !== 1 };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.border = thinBorder;
     });
@@ -270,25 +271,26 @@ export async function exportIdCardRosterToExcel(records, filename = '2_ใบร
 /**
  * Shared worksheet populator: 3. Shirt Receipt Roster
  */
-function populateShirtSheet(ws, records = []) {
+async function populateShirtSheet(wb, ws, records = []) {
   setupWorksheetHeader(
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงลายมือชื่อรับมอบเสื้อฝึกปฏิบัติการ JRE 2027 (ยอดผลิตรวม 32 ตัว)',
-    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว)',
-    'J'
+    'เสื้อพิมพ์ลาย สีเทาดำ คอปกซิปแขนสั้น • มข (TSIKKU: 19 ตัว) / มมส (RCPMSU: 13 ตัว) • สแกน QR ท้ายรายชื่อเพื่อรับเสื้อทันที',
+    'K'
   );
 
   const headers = [
     { header: 'ลำดับ', key: 'no', width: 8, align: 'center' },
-    { header: 'ชื่อ - สกุล ผู้รับมอบ', key: 'name', width: 26, align: 'left' },
+    { header: 'ชื่อ - นามสกุล ผู้รับมอบ', key: 'name', width: 32, align: 'left' },
     { header: 'นามเรียกขาน', key: 'callsign', width: 18, align: 'center' },
-    { header: 'สังกัด', key: 'uni', width: 14, align: 'center' },
-    { header: 'ข้อความอกขวา', key: 'chest', width: 18, align: 'center' },
-    { header: 'ขนาดไซส์', key: 'size', width: 14, align: 'center' },
+    { header: 'สังกัด', key: 'uni', width: 13, align: 'center' },
+    { header: 'ข้อความอกขวา', key: 'chest', width: 16, align: 'center' },
+    { header: 'ขนาดไซส์', key: 'size', width: 12, align: 'center' },
     { header: 'จำนวน', key: 'qty', width: 10, align: 'center' },
-    { header: 'สถานะค่าเสื้อ / รับเสื้อ', key: 'payment', width: 22, align: 'center' },
-    { header: 'ลายมือชื่อผู้รับมอบเสื้อ (Signature)', key: 'signature', width: 26, align: 'center' },
+    { header: 'สถานะค่าเสื้อ / รับเสื้อ', key: 'payment', width: 24, align: 'center' },
+    { header: 'QR สแกนรับเสื้อ (Admin)', key: 'qr', width: 13, align: 'center' },
+    { header: 'ลายมือชื่อผู้รับมอบเสื้อ (Signature)', key: 'signature', width: 24, align: 'center' },
     { header: 'วันที่รับมอบ', key: 'date', width: 14, align: 'center' }
   ];
 
@@ -305,11 +307,12 @@ function populateShirtSheet(ws, records = []) {
   });
   headerRow.height = 28;
 
-  records.forEach((r, idx) => {
+  for (let idx = 0; idx < records.length; idx++) {
+    const r = records[idx];
     const rowNum = 6 + idx;
     const row = ws.getRow(rowNum);
     const isEven = idx % 2 === 1;
-    const bg = isEven ? 'FFFDF4FF' : 'FFFFFFFF';
+    const bg = r.isShirtReceived ? 'FFECFDF5' : (isEven ? 'FFFDF4FF' : 'FFFFFFFF');
 
     row.getCell(1).value = idx + 1;
     row.getCell(2).value = r.name || '-';
@@ -318,20 +321,39 @@ function populateShirtSheet(ws, records = []) {
     row.getCell(5).value = r.chest || '-';
     row.getCell(6).value = r.size || '-';
     row.getCell(7).value = 1;
-    row.getCell(8).value = r.pickupStatusLabel ? `${r.payment || 'ชำระแล้ว'} • ${r.pickupStatusLabel}` : (r.payment || 'ชำระแล้ว');
+    row.getCell(8).value = r.pickupStatusLabel ? `${r.payment || 'ชำระแล้ว'}\n${r.pickupStatusLabel}` : (r.payment || 'ชำระแล้ว');
     row.getCell(9).value = '';
-    row.getCell(10).value = '13 ก.พ. 70';
+    row.getCell(10).value = '';
+    row.getCell(11).value = '13 ก.พ. 70';
 
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);
-      cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 5 };
-      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 1 || i === 5 };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: i !== 1 };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.border = thinBorder;
     });
 
-    row.height = 24;
-  });
+    if (wb && r.qrPayload) {
+      try {
+        const dataUrl = await QRCode.toDataURL(r.qrPayload, {
+          width: 120,
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#0f172a', light: '#ffffff' }
+        });
+        const imgId = wb.addImage({ base64: dataUrl, extension: 'png' });
+        ws.addImage(imgId, {
+          tl: { col: 8.15, row: rowNum - 1 + 0.08 },
+          ext: { width: 52, height: 52 }
+        });
+      } catch (err) {
+        row.getCell(9).value = r.qrPayload;
+      }
+    }
+
+    row.height = 48;
+  }
 }
 
 /**
@@ -345,7 +367,7 @@ export async function exportShirtRosterToExcel(records, filename = '3_ใบร�
   const ws = wb.addWorksheet('ใบรับมอบเสื้อฝึก 32 ตัว', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
-  populateShirtSheet(ws, records);
+  await populateShirtSheet(wb, ws, records);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -391,7 +413,7 @@ function populateDormitorySignInSheet(ws, roomList, msuList = []) {
     { header: 'เลขห้อง', width: 12, align: 'center' },
     { header: 'โซน/เพศ', width: 11, align: 'center' },
     { header: 'ลำดับ / เตียง', width: 12, align: 'center' },
-    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', width: 25, align: 'left' },
+    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', width: 32, align: 'left' },
     { header: 'ชื่อเล่น', width: 12, align: 'center' },
     { header: 'นามเรียกขาน', width: 15, align: 'center' },
     { header: 'เบอร์โทร', width: 14, align: 'center' },
@@ -485,7 +507,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
     { header: 'เลขห้อง', width: 11, align: 'center' },
     { header: 'โซน/เพศ', width: 10, align: 'center' },
     { header: 'ลำดับ', width: 10, align: 'center' },
-    { header: 'ชื่อ - นามสกุล (ชื่อเล่น / นามเรียกขาน / โทร)', width: 30, align: 'left' },
+    { header: 'ชื่อ - นามสกุล (ชื่อเล่น / นามเรียกขาน / โทร)', width: 36, align: 'left' },
     { header: 'สถานะเข้าพัก & กุญแจห้อง', width: 22, align: 'left' },
     { header: 'โรคประจำตัว / อาการแพ้ / หมู่เลือด', width: 26, align: 'left' },
     { header: 'ยาที่ต้องการ / เวชภัณฑ์', width: 22, align: 'left' },
@@ -655,7 +677,7 @@ function populateAdminMasterSheet(ws, records = []) {
 
   const headers = [
     { header: 'ลำดับ', width: 7, align: 'center' },
-    { header: 'รหัส / ชื่อ-สกุล (TH / EN)', width: 28, align: 'left' },
+    { header: 'รหัส / ชื่อ-สกุล (TH / EN)', width: 36, align: 'left' },
     { header: 'ชื่อเล่น / นามเรียกขาน', width: 20, align: 'center' },
     { header: 'สังกัด / สถานะสมาชิก', width: 20, align: 'left' },
     { header: 'บทบาท & ฝ่ายงาน', width: 22, align: 'left' },
@@ -774,7 +796,7 @@ export async function exportAllRostersToMasterExcel({
   const ws3 = wb.addWorksheet('3_เซ็นชื่อรับเสื้อ_32ตัว', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
-  populateShirtSheet(ws3, shirtRecords);
+  await populateShirtSheet(wb, ws3, shirtRecords);
 
   const ws4 = wb.addWorksheet('4_เซ็นชื่อเข้าห้องพัก_ปิดสุขภาพ', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }

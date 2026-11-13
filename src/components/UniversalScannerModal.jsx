@@ -292,11 +292,29 @@ export default function UniversalScannerModal({
     // 2. Raw Text / String Evaluation
     const qLower = raw.toLowerCase();
     const qDigits = normalizeDigits(raw);
+    const shirtQrCodeMatch = qLower.match(/^jre27-shirt-([a-z0-9_-]+)$/i);
+    const shirtQrToken = shirtQrCodeMatch ? shirtQrCodeMatch[1].toLowerCase() : '';
 
     // Try finding in registrations
     if (!matchedParticipant) {
       // Check using specialized idCard helper first
       matchedParticipant = findRegistrationByIdCard(regList, raw);
+
+      // Direct Shirt Distribution Roster QR match (supports full id/user_id or >=6-char prefix, no 6-char collision for full IDs)
+      if (!matchedParticipant && shirtQrToken) {
+        matchedParticipant =
+          regList.find(r => {
+            const rId = cleanStr(r.id).toLowerCase();
+            const rUserId = cleanStr(r.user_id).toLowerCase();
+            return (rId && rId === shirtQrToken) || (rUserId && rUserId === shirtQrToken);
+          }) ||
+          regList.find(r => {
+            if (shirtQrToken.length < 6) return false;
+            const rId = cleanStr(r.id).toLowerCase();
+            const rUserId = cleanStr(r.user_id).toLowerCase();
+            return (rId && rId.startsWith(shirtQrToken)) || (rUserId && rUserId.startsWith(shirtQrToken));
+          });
+      }
 
       // Deep string search across participant fields
       if (!matchedParticipant && !parsedBadgePayload?.isUrl) {
@@ -352,6 +370,25 @@ export default function UniversalScannerModal({
         if (oEmail && oEmail.includes(qLower)) return true;
         return false;
       });
+    }
+
+    // If scanned raw Shirt Roster QR (JRE27-SHIRT-...) for a registered participant, build synthetic order card too
+    if (!matchedOrder && shirtQrToken && matchedParticipant) {
+      const registrationId = cleanStr(matchedParticipant.id || matchedParticipant.user_id);
+      matchedOrder = {
+        ...matchedParticipant,
+        id: `reg_shirt_${registrationId}`,
+        registration_id: registrationId,
+        order_number: raw,
+        customer_name: resolvePersonFullNameWithTitle(matchedParticipant).fullName,
+        customer_phone: matchedParticipant.phone || '',
+        total_amount: 0,
+        registration_paid_amount: 0,
+        order_type: 'registration_shirt',
+        pickup_status: matchedParticipant.shirt_pickup_status === 'received' || matchedParticipant.shirt_received ? 'received' : 'pending',
+        payment_status: ['paid', 'full'].includes(matchedParticipant.payment_status) || matchedParticipant.installment_1_status === 'paid' ? 'paid_verified' : 'pending_verification',
+        items: [{ product_name: 'เสื้อปฏิบัติการกู้ภัย JRE 2027', size: matchedParticipant.shirt_size || 'L', quantity: 1, unit_price: 0 }]
+      };
     }
 
     // 3. Multi-matches check for search query (if query has >= 2 characters and is not a direct URL/JSON)

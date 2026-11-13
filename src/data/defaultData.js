@@ -2080,6 +2080,54 @@ const TITLE_PREFIX_REGEX = /^(?:ว่าที่ร้อยตรีหญิ
  * Resolves person's title, first name, last name, and full name with guaranteed prefix
  * and strictly PREVENTS any duplicate prefix (e.g. "นาย นาย...", "นางสาว นางสาว...").
  */
+const KNOWN_THAI_NAME_FALLBACKS = [
+  {
+    emails: ['khaohom.sutti@gmail.com', 'chakriya.tu@kkumail.com'],
+    phones: ['0893699422'],
+    enNames: ['chakriya turisut'],
+    title: 'นางสาว',
+    firstName: 'ชากริยา',
+    lastName: 'ตุริสุต'
+  }
+];
+
+export function resolveKnownThaiNameFallback(person, firstName = '', lastName = '', extraText = '') {
+  if (!person && !firstName && !extraText) return null;
+  const emailCandidates = [
+    person?.user_email,
+    person?.email,
+    person?.rawRegistration?.user_email,
+    person?.rawRegistration?.email
+  ]
+    .map(v => String(v || '').trim().toLowerCase())
+    .filter(Boolean);
+
+  const phoneCandidates = [
+    person?.phone,
+    person?.customer_phone,
+    person?.rawRegistration?.phone
+  ]
+    .map(v => String(v || '').replace(/\D/g, ''))
+    .filter(Boolean);
+
+  const normEn = (str) =>
+    String(str || '')
+      .replace(/^(?:นางสาว|นาง|นาย|miss|ms\.?|mrs\.?|mr\.?|dr\.?)\s*/i, '')
+      .replace(/\(.*?\)|\[.*?\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+  const combinedName = normEn(`${firstName} ${lastName}`);
+  const combinedExtra = normEn(extraText);
+
+  return KNOWN_THAI_NAME_FALLBACKS.find(entry => {
+    if (entry.emails?.some(e => emailCandidates.includes(e))) return true;
+    if (entry.phones?.some(p => phoneCandidates.includes(p))) return true;
+    return entry.enNames?.some(n => combinedName === n || combinedExtra.includes(n));
+  }) || null;
+}
+
 export function resolvePersonFullNameWithTitle(person) {
   if (!person) {
     return {
@@ -2200,17 +2248,28 @@ export function resolvePersonFullNameWithTitle(person) {
     }
   }
 
+  let formattedFirstName = cleanFirst || (person.first_name || '').trim();
+  let formattedLastName = cleanLast || (person.last_name || '').trim();
+
+  // Check authoritative Thai name fallback if first/last name contains no Thai characters
+  if (!THAI_CHAR_RE.test(formattedFirstName) || !THAI_CHAR_RE.test(formattedLastName)) {
+    const knownThai = resolveKnownThaiNameFallback(person, formattedFirstName, formattedLastName, rawAff);
+    if (knownThai) {
+      formattedFirstName = knownThai.firstName;
+      formattedLastName = knownThai.lastName;
+      if (knownThai.title) finalTitle = knownThai.title;
+    }
+  }
+
   // 5. Clean finalTitle of any duplicate words (e.g. "นาย นาย" -> "นาย")
   finalTitle = finalTitle.replace(/^(นาย|นางสาว|นาง)\s+(นาย|นางสาว|นาง)$/g, '$1').trim();
 
   // 6. Format prefix:
-  // "นาย", "นาง", "นางสาว" are directly prefixed to the name without space (e.g. "นายกรวิฐ", "นางสาวชลธิชา")
-  // Titles like "ว่าที่ร้อยตรี", "ด.ช.", "Mr." have a space.
+  // "นาย", "นาง", "นางสาว" are directly prefixed to Thai names without space (e.g. "นายกรวิฐ", "นางสาวชลธิชา")
+  // Titles like "ว่าที่ร้อยตรี", "ด.ช.", "Mr." or Thai title before English/Latin text ALWAYS have a space.
   const NO_SPACE_TITLES = new Set(['นาย', 'นาง', 'นางสาว']);
-  const prefix = NO_SPACE_TITLES.has(finalTitle) ? finalTitle : `${finalTitle} `;
-
-  const formattedFirstName = cleanFirst || (person.first_name || '').trim();
-  const formattedLastName = cleanLast || (person.last_name || '').trim();
+  const startsWithThai = /^[\u0E00-\u0E7F]/.test(formattedFirstName);
+  const prefix = (NO_SPACE_TITLES.has(finalTitle) && startsWithThai) ? finalTitle : `${finalTitle} `;
 
   const fullName = `${prefix}${formattedFirstName} ${formattedLastName}`.trim();
 
