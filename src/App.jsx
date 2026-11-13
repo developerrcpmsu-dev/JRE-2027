@@ -31,6 +31,20 @@ import { getRegistrationScheduleStatus } from './utils/registrationSchedule';
 import { isAuthorizedStaffOrAdminEmail, INITIAL_STAFF_ADMIN_ACCOUNTS, KNOWN_EMAIL_ALIASES } from './data/defaultData';
 
 const DEV_ADMIN_EMAIL = 'developer.rcpmsu@gmail.com';
+const STRICT_DEV_EMAILS = ['developer.rcpmsu@gmail.com', 'bestasic22@gmail.com', '68011211206@msu.ac.th'];
+
+const isStrictDevIdentity = (identity, whitelist = INITIAL_STAFF_ADMIN_ACCOUNTS) => {
+  if (!identity) return false;
+  const role = String(identity?.role || identity?.user_metadata?.role || '').trim().toLowerCase();
+  if (role === 'dev' || role === 'developer') return true;
+  const email = String(identity?.email || identity?.user_metadata?.email || '').trim().toLowerCase();
+  if (!email) return false;
+  if (STRICT_DEV_EMAILS.includes(email)) return true;
+  const authAccount = isAuthorizedStaffOrAdminEmail(email, whitelist);
+  if (authAccount && ['dev', 'developer'].includes(String(authAccount.role || '').trim().toLowerCase())) return true;
+  return false;
+};
+
 const isGoogleDevIdentity = (identity, whitelist = INITIAL_STAFF_ADMIN_ACCOUNTS) => {
   if (!identity) return false;
   const role = identity?.role || identity?.user_metadata?.role;
@@ -1331,14 +1345,13 @@ export default function App() {
     }
   };
 
-  const hasDevOrAdminPrivilege = Boolean(
-    isAdmin ||
-    isGoogleDevIdentity(user, staffAdminWhitelist) ||
-    devGoogleSignedIn
+  const isStrictDevUser = Boolean(
+    isStrictDevIdentity(user, staffAdminWhitelist) ||
+    (isAdmin && (!user || String(user?.email || '').trim().toLowerCase() === 'admin@admin.com'))
   );
   const rawInspectUid = route?.inspectUid ? String(route.inspectUid).trim() : '';
-  const isDevInspectActive = Boolean(rawInspectUid && hasDevOrAdminPrivilege && currentTab !== 'admin' && currentTab !== 'users');
-  const isDevInspectRestricted = Boolean(rawInspectUid && !hasDevOrAdminPrivilege);
+  const isDevInspectActive = Boolean(rawInspectUid && isStrictDevUser && currentTab !== 'admin' && currentTab !== 'users');
+  const isDevInspectRestricted = Boolean(rawInspectUid && !isStrictDevUser);
 
   const inspectRegistration = isDevInspectActive
     ? (registrations || []).find(r => {
@@ -1476,26 +1489,8 @@ export default function App() {
         />
       )}
 
-      {/* Restricted UID link notice when unauthenticated or non-Dev user visits ?uid= / /u/:uid */}
-      {isDevInspectRestricted && (
-        <div className="w-full bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="text-amber-200 font-bold">
-              🔒 URL ตรวจสอบมุมมองบัญชีตาม UID (<code className="font-mono">{rawInspectUid}</code>) สงวนสิทธิ์เฉพาะบัญชี Dev / Admin เท่านั้น
-            </span>
-            <button
-              type="button"
-              onClick={handleAdminEntry}
-              className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer"
-            >
-              เข้าสู่ระบบ Dev / Admin
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
-      {effectiveUser && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={effectiveUser} />}
+      {!isDevInspectRestricted && effectiveUser && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={effectiveUser} />}
 
       {/* Main Content Pages - Full Screen Width on Admin Dashboard & User Dashboard */}
       <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-5 2xl:py-6 transition-all ${
@@ -1505,6 +1500,50 @@ export default function App() {
             ? 'w-full max-w-[1680px] px-3 sm:px-5 lg:px-8 2xl:px-10 overflow-x-hidden'
             : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
       }`}>
+        {isDevInspectRestricted ? (
+          <div className="max-w-lg mx-auto my-12 p-7 rounded-3xl bg-slate-900 border border-rose-500/40 shadow-2xl text-center space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/15 border border-rose-500/40 mx-auto flex items-center justify-center text-rose-300">
+              <Lock className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-black uppercase tracking-wider">
+                Access Restricted • Dev Only
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                ไม่อนุญาตให้เปิดดูบัญชีผู้อื่นตาม UID
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                ลิงก์ที่มีรหัส <code className="px-1.5 py-0.5 rounded bg-slate-800 text-rose-300 font-mono">?uid={rawInspectUid}</code> สงวนสิทธิ์ให้เฉพาะผู้พัฒนาระบบ (Dev) ที่เข้าสู่ระบบแล้วเท่านั้น บัญชีทั่วไปหรือบุคคลภายนอกไม่สามารถเข้าดูข้อมูลของผู้อื่นได้
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setCurrentTab('home', null, { clearInspectUid: true })}
+                className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 cursor-pointer"
+              >
+                กลับหน้าแรก (ล้าง UID)
+              </button>
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab(myRegistration ? 'dashboard' : 'register', null, { clearInspectUid: true })}
+                  className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black cursor-pointer"
+                >
+                  ไปหน้าของฉันเอง
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => (user ? setAdminModalOpen(true) : setGoogleModalOpen(true))}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black cursor-pointer"
+              >
+                เข้าสู่ระบบ Dev
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         {currentTab === 'home' && (
           <HomeView
             teamMembers={teamMembers}
@@ -1603,7 +1642,8 @@ export default function App() {
             onTabChange={(tab, opts = {}) => {
               setCurrentTab('admin', tab, opts);
             }}
-            onOpenUserPage={handleOpenUserPageAsDev}
+            onOpenUserPage={isStrictDevUser ? handleOpenUserPageAsDev : null}
+            isStrictDev={isStrictDevUser}
             registrations={registrations}
             onSaveRegistration={handleSaveRegistration}
             onUpdateAllocation={handleUpdateAllocation}
@@ -1719,6 +1759,8 @@ export default function App() {
             onNavigateHome={() => setCurrentTab('home')}
             onNavigateAdmin={() => setCurrentTab('admin')}
           />
+        )}
+        </>
         )}
       </main>
 

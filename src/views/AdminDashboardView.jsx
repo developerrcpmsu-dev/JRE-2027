@@ -189,6 +189,7 @@ export default function AdminDashboardView({
   onRefreshRegistrations,
   onAdminLogout,
   onOpenUserPage,
+  isStrictDev = false,
   user = null,
   isAdmin = true
 }) {
@@ -197,10 +198,13 @@ export default function AdminDashboardView({
   const operatorEmail = String(user?.email || '').trim().toLowerCase();
   const operatorRole = String(user?.role || '').trim().toLowerCase();
   const isDevOperator = Boolean(
+    isStrictDev ||
     operatorRole === 'dev' ||
     operatorRole === 'developer' ||
     operatorAuthAccount?.role === 'dev' ||
     operatorEmail === 'developer.rcpmsu@gmail.com' ||
+    operatorEmail === 'bestasic22@gmail.com' ||
+    operatorEmail === '68011211206@msu.ac.th' ||
     operatorEmail === 'admin@admin.com'
   );
   const resolveDedicatedSubpage = (tab) => {
@@ -6772,7 +6776,7 @@ export default function AdminDashboardView({
               <option value="speakers_speaker">🎖️ วิทยากรประจำโครงการ ({speakerStats.speakersCount} ท่าน)</option>
               <option value="team">👥 คณะดำเนินงาน & ทีมงาน ({localTeam.length} คน)</option>
               <option value="users">👤 จัดการบัญชีผู้ใช้ ({userAccounts.length} บัญชี)</option>
-              <option value="dev-urls">🔗 ศูนย์รวม URL รายบุคคลตาม UID (Dev) (/admin/dev-urls)</option>
+              {isDevOperator && <option value="dev-urls">🔗 ศูนย์รวม URL รายบุคคลตาม UID (Dev) (/admin/dev-urls)</option>}
               <option value="staff-accounts">🛡️ สิทธิ์ Staff & Admin Whitelist (Google RBAC)</option>
             </select>
           </div>
@@ -7022,18 +7026,20 @@ export default function AdminDashboardView({
             <span>บัญชีผู้ใช้ ({userAccounts.length})</span>
           </button>
 
-          <button
-            onClick={() => handleTabChange('dev-urls')}
-            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
-              activeTab === 'dev-urls'
-                ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-slate-950 shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300/50 font-black'
-                : 'text-cyan-300 hover:text-white bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/40'
-            }`}
-            title="ศูนย์รวม URL หน้าทุกหน้าตาม UID ของทุกคนสำหรับ Dev (/admin/dev-urls)"
-          >
-            <Link2 className="w-4 h-4 text-cyan-300 shrink-0" />
-            <span>🔗 URL รายคน (Dev)</span>
-          </button>
+          {isDevOperator && (
+            <button
+              onClick={() => handleTabChange('dev-urls')}
+              className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+                activeTab === 'dev-urls'
+                  ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-slate-950 shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300/50 font-black'
+                  : 'text-cyan-300 hover:text-white bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/40'
+              }`}
+              title="ศูนย์รวม URL หน้าทุกหน้าตาม UID ของทุกคนสำหรับ Dev (/admin/dev-urls)"
+            >
+              <Link2 className="w-4 h-4 text-cyan-300 shrink-0" />
+              <span>🔗 URL รายคน (Dev)</span>
+            </button>
+          )}
 
           <button
             onClick={() => handleTabChange('staff-accounts')}
@@ -19163,7 +19169,7 @@ export default function AdminDashboardView({
           registrations={registrations}
           onUpdateAllocation={onUpdateAllocation}
           onOpenProfileModal={(reg) => handleOpenProfileModal(reg, 'info')}
-          onOpenUserPage={onOpenUserPage}
+          onOpenUserPage={isDevOperator ? onOpenUserPage : null}
           triggerToast={triggerToast}
           askConfirm={askConfirm}
         />
@@ -19171,13 +19177,32 @@ export default function AdminDashboardView({
 
       {/* TAB: DEV UID URL DIRECTORY (/admin/dev-urls) */}
       {activeTab === 'dev-urls' && (
-        <DevUserUrlsView
-          registrations={registrations}
-          userAccounts={userAccounts}
-          onOpenUserPage={onOpenUserPage}
-          onNavigateAdminTab={handleTabChange}
-          triggerToast={triggerToast}
-        />
+        isDevOperator ? (
+          <DevUserUrlsView
+            registrations={registrations}
+            userAccounts={userAccounts}
+            onOpenUserPage={onOpenUserPage}
+            onNavigateAdminTab={handleTabChange}
+            triggerToast={triggerToast}
+          />
+        ) : (
+          <div className="max-w-lg mx-auto my-12 p-7 rounded-3xl bg-slate-900 border border-rose-500/40 text-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/40 mx-auto flex items-center justify-center text-rose-300">
+              <Lock className="w-7 h-7" />
+            </div>
+            <h3 className="text-xl font-black text-white">สงวนสิทธิ์เฉพาะผู้พัฒนาระบบ (Dev Only)</h3>
+            <p className="text-xs sm:text-sm text-slate-300">
+              ศูนย์รวม URL ตรวจสอบบัญชีรายบุคคลตาม UID สามารถเข้าถึงได้เฉพาะบัญชีระดับ Dev เท่านั้น
+            </p>
+            <button
+              type="button"
+              onClick={() => handleTabChange('applicants')}
+              className="px-5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 cursor-pointer"
+            >
+              กลับหน้าจัดการผู้สมัคร
+            </button>
+          </div>
+        )
       )}
 
       {/* TAB: OFFICIAL SIGNING DOCUMENTS & ROSTERS HUB (/admin/documents) */}
