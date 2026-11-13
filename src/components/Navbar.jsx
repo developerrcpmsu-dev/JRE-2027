@@ -76,20 +76,20 @@ export default function Navbar({
               />
             </div>
             <div className="shrink-0 flex items-center gap-1">
-              <span className="text-base sm:text-lg min-[1600px]:text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
+              <span className="text-base sm:text-lg font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
                 JRE <span className="text-rescue-500">2027</span>
               </span>
-              <span className="hidden min-[1560px]:inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
+              <span className="hidden 2xl:inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
                 มมส
               </span>
             </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden xl:flex flex-1 min-w-0 items-center justify-center gap-1 min-[1650px]:gap-1.5 overflow-x-auto no-scrollbar px-1">
+          <nav className="hidden xl:flex flex-1 min-w-0 items-center justify-center gap-1 2xl:gap-1.5 overflow-x-auto no-scrollbar px-1">
             <button
               onClick={() => handleNav('home')}
-              className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentTab === 'home'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -101,7 +101,7 @@ export default function Navbar({
 
             <button
               onClick={() => handleNav('schedule')}
-              className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentTab === 'schedule'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -115,7 +115,7 @@ export default function Navbar({
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('pr')}
-                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'pr' || (currentTab === 'announcements' && currentSubRoute === 'public')
                     ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -123,13 +123,13 @@ export default function Navbar({
                 title="ประชาสัมพันธ์ข้อมูลและเงื่อนไขการรับสมัคร"
               >
                 <Megaphone className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                <span>ข่าวสาร<span className="hidden min-[1680px]:inline">ประชาสัมพันธ์</span></span>
+                <span>ข่าวสาร</span>
               </button>
             ) : (
               /* คำสั่งและประกาศสำหรับสมาชิก (แสดงเมื่อสมัครแล้ว) */
               <button
                 onClick={() => handleNav('orders')}
-                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer relative ${
+                className={`px-2 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer relative ${
                   currentTab === 'orders' || (currentTab === 'announcements' && currentSubRoute === 'members')
                     ? 'bg-indigo-600/30 text-indigo-300 shadow-sm border border-indigo-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -137,7 +137,7 @@ export default function Navbar({
                 title="คำสั่งและประกาศสำหรับสมาชิกผู้เข้าร่วม"
               >
                 <Bell className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span>คำสั่ง<span className="hidden min-[1680px]:inline">สมาชิก</span></span>
+                <span>คำสั่ง</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
               </button>
             )}
@@ -145,20 +145,20 @@ export default function Navbar({
             {canSeeGroupChat && (
               <button
                 onClick={() => handleNav('chat')}
-                className={`relative px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`relative px-2 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'chat' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title={`แชทกลุ่มผู้เข้าร่วม${chatUnreadCount ? ` (${chatUnreadCount} ข้อความยังไม่อ่าน)` : ''}`}
               >
                 <MessageCircle className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
-                <span>แชท<span className="hidden min-[1560px]:inline">กลุ่ม</span></span>
+                <span>แชทกลุ่ม</span>
                 {chatUnreadCount > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-black text-white flex items-center justify-center">{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
               </button>
             )}
 
             <button
               onClick={() => handleNav('merchandise')}
-              className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentTab === 'merchandise' || currentTab === 'shop'
                   ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -166,26 +166,26 @@ export default function Navbar({
               title="สั่งซื้อเสื้อ & กางเกงกู้ภัยโครงการ JRE 2027"
             >
               <Shirt className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-              <span>สั่งเสื้อ<span className="hidden min-[1680px]:inline">/กางเกง</span></span>
+              <span>สั่งเสื้อ</span>
             </button>
 
             {/* Applicant Registration CTA or Dashboard Button */}
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('register')}
-                className={`px-2 min-[1650px]:px-3 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'register'
                     ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-lg ring-2 ring-orange-400/80'
                     : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white hover:shadow-orange-500/30'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5 shrink-0" />
-                <span>สมัคร<span className="hidden min-[1680px]:inline">เข้าร่วม</span>โครงการ</span>
+                <span>สมัครโครงการ</span>
               </button>
             ) : (
               <button
                 onClick={() => handleNav('dashboard')}
-                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1 shadow-sm active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'dashboard' || currentTab === 'register'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
                     : 'bg-slate-900 text-emerald-400 border border-emerald-500/40 hover:bg-slate-850 hover:border-emerald-300'
@@ -193,14 +193,14 @@ export default function Navbar({
                 title="แดชบอร์ดของฉัน"
               >
                 <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>แดชบอร์ด<span className="hidden min-[1680px]:inline">ของฉัน</span></span>
+                <span>แดชบอร์ด</span>
               </button>
             )}
 
             {myRegistration && (
               <button
                 onClick={() => handleNav('id-card')}
-                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'id-card'
                     ? 'bg-orange-500/20 text-orange-300 shadow-sm border border-orange-400/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -215,7 +215,7 @@ export default function Navbar({
             {myRegistration && (
               <button
                 onClick={() => handleNav('my-room')}
-                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'my-room'
                     ? 'bg-sky-500/20 text-sky-300 shadow-sm border border-sky-400/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -232,7 +232,7 @@ export default function Navbar({
               <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-1.5 rounded-xl shrink-0 shadow-sm">
                 <button
                   onClick={() => handleNav('admin')}
-                  className={`px-2 py-1 rounded-lg text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer ${
                     currentTab === 'admin'
                       ? 'bg-purple-600 text-white shadow-md'
                       : 'text-purple-300 hover:text-white hover:bg-purple-900/60'
@@ -250,13 +250,12 @@ export default function Navbar({
                   className="p-1.5 rounded-lg text-rose-300 hover:text-white hover:bg-rose-600/40 transition-all flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="text-[11px] whitespace-nowrap hidden min-[1750px]:inline font-medium">ออก Admin</span>
                 </button>
               </div>
             ) : hasStaffPrivilege ? (
               <button
                 onClick={onOpenAdminLogin}
-                className="px-2 py-1 rounded-lg text-xs font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-sm"
+                className="px-2 py-1 rounded-lg text-xs font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer shadow-sm"
                 title="ท่านมีสิทธิ์ Staff/Admin: คลิกเพื่อเข้าสู่ระบบ Admin Console"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -309,9 +308,9 @@ export default function Navbar({
                     <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border-2 border-slate-900 rounded-full" />
                   </div>
                   <div className="text-left text-xs leading-tight shrink-0">
-                    <p className="font-bold text-white truncate max-w-[75px] min-[1650px]:max-w-[115px] whitespace-nowrap">{user.name || user.email?.split('@')[0]}</p>
+                    <p className="font-bold text-white truncate max-w-[80px] 2xl:max-w-[115px] whitespace-nowrap">{user.name || user.email?.split('@')[0]}</p>
                     <p className="text-slate-400 text-[10px] flex items-center gap-1 font-medium mt-0.5 whitespace-nowrap">
-                      <span className="text-emerald-400 font-semibold truncate max-w-[70px] min-[1650px]:max-w-[110px]">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
+                      <span className="text-emerald-400 font-semibold truncate max-w-[75px] 2xl:max-w-[110px]">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
                     </p>
                   </div>
                 </button>
