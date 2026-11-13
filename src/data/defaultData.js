@@ -2236,18 +2236,6 @@ export function resolvePersonFullNameWithTitle(person) {
     }
   }
 
-  // 4. If still no title, infer from Gender (ชาย -> นาย, หญิง -> นางสาว)
-  if (!finalTitle) {
-    const gender = person.gender || resolveGender(person.rawRegistration || person);
-    if (gender === 'ชาย') {
-      finalTitle = 'นาย';
-    } else if (gender === 'หญิง') {
-      finalTitle = 'นางสาว';
-    } else {
-      finalTitle = 'นาย';
-    }
-  }
-
   let formattedFirstName = cleanFirst || (person.first_name || '').trim();
   let formattedLastName = cleanLast || (person.last_name || '').trim();
 
@@ -2261,6 +2249,20 @@ export function resolvePersonFullNameWithTitle(person) {
     }
   }
 
+  // 4. If still no title, infer from Gender (ชาย -> นาย, หญิง -> นางสาว)
+  // Skip inferring formal title onto informal MC/staff names starting with น้อง / พี่ / คุณ
+  const hasInformalPrefix = /^(น้อง|พี่|คุณ)[\u0E00-\u0E7F]/.test(formattedFirstName);
+  if (!finalTitle && !hasInformalPrefix) {
+    const gender = person.gender || resolveGender(person.rawRegistration || person);
+    if (gender === 'ชาย') {
+      finalTitle = 'นาย';
+    } else if (gender === 'หญิง') {
+      finalTitle = 'นางสาว';
+    } else {
+      finalTitle = 'นาย';
+    }
+  }
+
   // 5. Clean finalTitle of any duplicate words (e.g. "นาย นาย" -> "นาย")
   finalTitle = finalTitle.replace(/^(นาย|นางสาว|นาง)\s+(นาย|นางสาว|นาง)$/g, '$1').trim();
 
@@ -2269,7 +2271,9 @@ export function resolvePersonFullNameWithTitle(person) {
   // Titles like "ว่าที่ร้อยตรี", "ด.ช.", "Mr." or Thai title before English/Latin text ALWAYS have a space.
   const NO_SPACE_TITLES = new Set(['นาย', 'นาง', 'นางสาว']);
   const startsWithThai = /^[\u0E00-\u0E7F]/.test(formattedFirstName);
-  const prefix = (NO_SPACE_TITLES.has(finalTitle) && startsWithThai) ? finalTitle : `${finalTitle} `;
+  const prefix = finalTitle
+    ? ((NO_SPACE_TITLES.has(finalTitle) && startsWithThai) ? finalTitle : `${finalTitle} `)
+    : '';
 
   const fullName = `${prefix}${formattedFirstName} ${formattedLastName}`.trim();
 
@@ -2691,6 +2695,26 @@ export const hasMedicalCondition = (reg) => {
 
 export const hasFoodOrDrugAllergy = (reg) => {
   return hasHealthCondition(getApplicantAllergy(reg));
+};
+
+/**
+ * Format medical condition label without duplicating leading "โรค" (e.g. "โรคหัวใจ" stays "โรคหัวใจ", "G6PD" -> "โรค: G6PD").
+ */
+export const formatMedicalLabel = (text) => {
+  const cleaned = String(text || '').trim();
+  if (!cleaned) return '';
+  if (/^โรค(?:ประจำตัว)?(?:\s*[:：-]|\S)/.test(cleaned)) return cleaned;
+  return `โรค: ${cleaned}`;
+};
+
+/**
+ * Format allergy label without duplicating leading "แพ้" (e.g. "แพ้กุ้ง" stays "แพ้กุ้ง", "ถั่วปากอ้า" -> "แพ้: ถั่วปากอ้า").
+ */
+export const formatAllergyLabel = (text) => {
+  const cleaned = String(text || '').trim();
+  if (!cleaned) return '';
+  if (/^(?:อาการ)?แพ้/.test(cleaned)) return cleaned;
+  return `แพ้: ${cleaned}`;
 };
 
 /**

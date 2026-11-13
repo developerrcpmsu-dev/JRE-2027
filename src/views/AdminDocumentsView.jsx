@@ -27,6 +27,8 @@ import {
   getApplicantAllergy,
   hasMedicalCondition,
   hasFoodOrDrugAllergy,
+  formatMedicalLabel,
+  formatAllergyLabel,
   hasSpecialCareCondition,
   getMedicalEquipmentNeeded,
   getHealthConsentInfo,
@@ -168,7 +170,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
     <div>
       <h3 className="text-sm font-black text-slate-950 mb-2 flex items-center justify-between">
         <span>{title}</span>
-        <span className="text-[11px] font-semibold text-slate-600">ลำดับในห้อง: คนที่ 1 มีโรคประจำตัว/แพ้ • คนที่ 2 ปกติ (ช่วยดูแล)</span>
+        <span className="text-[11px] font-semibold text-slate-600">เรียงตามเลขห้องและชั้นจริง • แถบสีชมพู / ป้าย &quot;เฝ้าระวัง&quot; = มีข้อมูลสุขภาพหรือการดูแลพิเศษ</span>
       </h3>
 
       <table className="w-full text-left text-xs border-collapse border border-slate-900">
@@ -210,16 +212,16 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           <span className="block text-[9px] font-sans font-bold text-sky-900 mt-0.5">
                             🔑 {rm.keySummaryLabel}
                           </span>
-                          {roomHasAlert && (
-                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-sans font-bold">
-                              เฝ้าระวัง
-                            </span>
-                          )}
                         </td>
                       )}
                       <td className="py-2 px-1.5 border-r border-slate-400 text-center font-mono text-[11px] font-bold">
                         {b + 1}
                         <span className="block text-[9px] font-normal text-slate-500">เตียง {b + 1}</span>
+                        {hasCare && (
+                          <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-sans font-bold">
+                            เฝ้าระวัง
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 px-2.5 border-r border-slate-400">
                         {p ? (
@@ -253,10 +255,10 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           p.hasMedicalHistory || p.hasFoodAllergy ? (
                             <div className="space-y-0.5 text-[11px]">
                               {p.hasMedicalHistory && (
-                                <div className="font-bold text-rose-800">🩺 โรค: {p.medicalHistory}</div>
+                                <div className="font-bold text-rose-800">🩺 {formatMedicalLabel(p.medicalHistory)}</div>
                               )}
                               {p.hasFoodAllergy && (
-                                <div className="font-bold text-amber-800">⚠️ แพ้: {p.foodAllergy}</div>
+                                <div className="font-bold text-amber-800">⚠️ {formatAllergyLabel(p.foodAllergy)}</div>
                               )}
                               <div className="text-[10px] font-mono text-slate-700">
                                 🩸 หมู่เลือด: {p.bloodGroup}
@@ -301,7 +303,9 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                               <span>เตรียมแล้ว</span>
                             </span>
                           ) : (
-                            <span className="text-[10px] text-slate-500">ผู้ช่วยดูแล</span>
+                            <span className={`text-[10px] ${roomHasAlert ? 'font-semibold text-emerald-800' : 'text-slate-500'}`}>
+                              {roomHasAlert ? '✓ ปกติ (ช่วยดูแล)' : '✓ ปกติ'}
+                            </span>
                           )
                         ) : '-'}
                       </td>
@@ -671,8 +675,8 @@ export default function AdminDocumentsView({
       const hasMed = hasMedicalCondition(reg);
       const hasAlg = hasFoodOrDrugAllergy(reg);
       const medParts = [];
-      if (hasMed && med) medParts.push(`โรค: ${med}`);
-      if (hasAlg && alg) medParts.push(`แพ้: ${alg}`);
+      if (hasMed && med) medParts.push(formatMedicalLabel(med));
+      if (hasAlg && alg) medParts.push(formatAllergyLabel(alg));
       const medicalSummary = medParts.length > 0 ? medParts.join(' | ') : 'ปกติ';
       const medEquip = getMedicalEquipmentNeeded(reg);
       const specialItems = getSpecialItemsNeeded(reg, extra);
@@ -831,9 +835,11 @@ export default function AdminDocumentsView({
       } else if (activeDoc === 'shirts') {
         await exportShirtRosterToExcel(shirtData);
       } else if (activeDoc === 'rooms') {
-        await exportDormitoryRosterToExcel(roomData.rooms, roomData.msuList);
+        const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
+        await exportDormitoryRosterToExcel(orderedRooms.length ? orderedRooms : roomData.rooms, roomData.msuList);
       } else if (activeDoc === 'rooms-staff') {
-        await exportDormitoryStaffMedicalExcel(roomData.rooms, roomData.msuList);
+        const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
+        await exportDormitoryStaffMedicalExcel(orderedRooms.length ? orderedRooms : roomData.rooms, roomData.msuList);
       } else {
         await exportAdminMasterRosterExcel(displayedAdminMasterData);
       }
@@ -850,11 +856,12 @@ export default function AdminDocumentsView({
   const handleExportMasterExcel = async () => {
     setIsExportingExcel(true);
     try {
+      const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
       await exportAllRostersToMasterExcel({
         attendanceRecords: attendanceData,
         idCardRecords: idCardData,
         shirtRecords: shirtData,
-        roomList: roomData.rooms,
+        roomList: orderedRooms.length ? orderedRooms : roomData.rooms,
         msuList: roomData.msuList,
         adminMasterRecords: adminMasterData
       });
@@ -894,7 +901,8 @@ export default function AdminDocumentsView({
       filename = '3_ใบเซ็นชื่อ_รับมอบเสื้อฝึก32ตัว_JRE2027.csv';
     } else if (activeDoc === 'rooms') {
       csv = makeRow(['เลขห้อง', 'โซน/เพศ', 'เตียง', 'ชื่อ - นามสกุล ผู้เข้าพัก', 'ชื่อเล่น', 'นามเรียกขาน', 'เบอร์โทร', 'สถานะเข้าพัก', 'สถานะกุญแจห้อง', 'ลายมือชื่อรับกุญแจ', 'ลายมือชื่อคืนกุญแจ']);
-      roomData.rooms.forEach(rm => {
+      const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
+      (orderedRooms.length ? orderedRooms : roomData.rooms).forEach(rm => {
         const isMale = rm.gender === 'ชาย';
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
@@ -904,7 +912,8 @@ export default function AdminDocumentsView({
       filename = '4_ใบเซ็นชื่อ_เข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.csv';
     } else if (activeDoc === 'rooms-staff') {
       csv = makeRow(['เลขห้อง', 'โซน/เพศ', 'ลำดับ/เตียง', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'เบอร์โทร', 'สถานะเข้าพัก', 'สถานะกุญแจห้อง', 'โรคประจำตัว', 'แพ้อาหาร/ยา', 'หมู่เลือด', 'ยาที่ต้องการ/เวชภัณฑ์', 'ของที่ต้องใช้/ดูแลพิเศษ', 'เปิดเผยสุขภาพ (ผู้กด)', 'ติดต่อฉุกเฉิน']);
-      roomData.rooms.forEach(rm => {
+      const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
+      (orderedRooms.length ? orderedRooms : roomData.rooms).forEach(rm => {
         const isMale = rm.gender === 'ชาย';
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
@@ -1426,13 +1435,14 @@ export default function AdminDocumentsView({
             <div className="space-y-6">
               <div className="p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-[11px] text-sky-900 font-semibold flex flex-wrap items-center justify-between gap-2">
                 <span>🔒 ใบเซ็นชื่อเข้าห้องพักฉบับนี้ปิดข้อมูลสุขภาพ/โรคประจำตัวทั้งหมด เพื่อคุ้มครองข้อมูลส่วนบุคคล (PDPA) ณ จุดลงทะเบียน</span>
-                <span className="font-mono font-bold">เรียงลำดับตามห้อง {roomData.rooms.map(r => r.room).join(', ')}</span>
+                <span className="font-mono font-bold">เรียงลำดับตามโซน ชาย ({roomData.maleRooms.map(r => r.room).join(', ')}) • หญิง ({roomData.femaleRooms.map(r => r.room).join(', ')})</span>
               </div>
 
               <div className="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-[11px] text-slate-800 font-semibold flex flex-wrap items-center justify-between gap-2">
                 <span>
                   🛏️ สถานะห้องพักจริง: เข้าพักหอ <strong>{roomData.totalStaying}</strong> คน •
                   ไม่ประสงค์พักหอ <strong className="text-amber-800">{roomData.totalOptedOut}</strong> คน •
+                  ไป-กลับ มมส <strong>{roomData.msuList.length}</strong> คน •
                   จ่ายกุญแจแล้ว <strong>{roomData.totalKeysIssued}</strong> ดอก •
                   คืนกุญแจแล้ว <strong>{roomData.totalKeysReturned}/{roomData.totalKeysIssued}</strong> ดอก
                 </span>
@@ -1476,7 +1486,7 @@ export default function AdminDocumentsView({
             <div className="space-y-6">
               <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-[11px] text-rose-950 font-semibold flex flex-wrap items-center justify-between gap-2">
                 <span>
-                  🩺 เอกสาร Staff (ไม่ต้องเซ็น): แสดงห้องพัก, สถานะเข้าพัก/ไม่พัก, กุญแจ, โรค/แพ้, ยา, ของที่ต้องใช้, ผู้ติดต่อฉุกเฉิน และความยินยอมเปิดเผยสุขภาพ ({roomData.totalStaying} พักหอ / {roomData.totalOptedOut} ไม่พักหอ • กุญแจจ่าย {roomData.totalKeysIssued} / คืน {roomData.totalKeysReturned})
+                  🩺 เอกสาร Staff (ไม่ต้องเซ็น): แสดงห้องพัก, สถานะเข้าพัก/ไม่พัก, กุญแจ, โรค/แพ้, ยา, ของที่ต้องใช้, ผู้ติดต่อฉุกเฉิน และความยินยอมเปิดเผยสุขภาพ ({roomData.totalStaying} พักหอ / {roomData.totalOptedOut} ไม่ประสงค์พักหอ / {roomData.msuList.length} ไป-กลับ มมส • กุญแจจ่าย {roomData.totalKeysIssued} / คืน {roomData.totalKeysReturned})
                 </span>
                 <span className="font-mono font-bold">เฉพาะ Staff</span>
               </div>
@@ -1523,9 +1533,12 @@ export default function AdminDocumentsView({
                             )}
                           </td>
                           <td className="py-2 px-2.5 border-r border-slate-400 text-[11px]">
-                            {p.hasMedicalHistory && <div className="font-bold text-rose-800">🩺 โรค: {p.medicalHistory}</div>}
-                            {p.hasFoodAllergy && <div className="font-bold text-amber-800">⚠️ แพ้: {p.foodAllergy}</div>}
+                            {p.hasMedicalHistory && <div className="font-bold text-rose-800">🩺 {formatMedicalLabel(p.medicalHistory)}</div>}
+                            {p.hasFoodAllergy && <div className="font-bold text-amber-800">⚠️ {formatAllergyLabel(p.foodAllergy)}</div>}
                             {!p.hasMedicalHistory && !p.hasFoodAllergy && <span className="text-emerald-700">✓ ปกติ</span>}
+                            {p.bloodGroup && p.bloodGroup !== '-' && (
+                              <div className="text-[10px] font-mono text-slate-700">🩸 หมู่เลือด: {p.bloodGroup}</div>
+                            )}
                             <div className="text-[9.5px] text-slate-600 mt-0.5">
                               {p.healthConsent?.fullLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')}
                             </div>

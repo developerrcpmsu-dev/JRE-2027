@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
+import { formatMedicalLabel, formatAllergyLabel } from '../data/defaultData';
 
 /**
  * Triggers a download of a Blob as a file
@@ -386,10 +387,10 @@ function formatPersonMedicalSummary(p) {
   const algText = p.foodAllergy || p.allergy;
 
   if (hasMed && medText && medText !== 'ไม่มี') {
-    parts.push(`โรค: ${medText}`);
+    parts.push(formatMedicalLabel(medText));
   }
   if (hasAlg && algText && algText !== 'ไม่มี') {
-    parts.push(`แพ้: ${algText}`);
+    parts.push(formatAllergyLabel(algText));
   }
   if (p.bloodGroup && p.bloodGroup !== '-') {
     parts.push(`หมู่เลือด: ${p.bloodGroup}`);
@@ -499,7 +500,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) — เอกสารเฉพาะ Staff',
     'ใบตรวจสอบห้องพัก เข้าพัก/ไม่พัก กุญแจ โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับ Staff)',
-    'เรียงลำดับห้องที่มีผู้เฝ้าระวังสุขภาพไว้ห้องต้นๆ • แสดงสถานะกุญแจ ผู้ติดต่อฉุกเฉิน และความยินยอมเปิดเผยสุขภาพ (เจ้าตัว vs Admin) • (ไม่ต้องลงลายมือชื่อ)',
+    'เรียงตามเลขห้องและชั้นจริง (ไฮไลต์สีชมพู = ผู้เฝ้าระวังสุขภาพ) • แสดงสถานะกุญแจ ผู้ติดต่อฉุกเฉิน และความยินยอมเปิดเผยสุขภาพ (เจ้าตัว vs Admin) • (ไม่ต้องลงลายมือชื่อ)',
     'J'
   );
 
@@ -533,11 +534,13 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
   roomList.forEach((rm) => {
     const isMale = rm.gender === 'ชาย';
     const occupants = rm.occupants || [];
+    const isCarePerson = (occ) => Boolean(occ && (occ.needsBuddyCare || occ.hasMedicalHistory || occ.hasFoodAllergy || occ.hasMed || occ.hasAlg || occ.medicalEquipmentNeeded || occ.specialItemsNeeded || occ.isSpecialCare));
+    const roomHasCare = occupants.some(isCarePerson);
 
     for (let b = 0; b < 2; b++) {
       const p = occupants[b];
       const row = ws.getRow(currentRow);
-      const hasCare = Boolean(p && (p.needsBuddyCare || p.hasMedicalHistory || p.hasFoodAllergy || p.hasMed || p.hasAlg || p.medicalEquipmentNeeded || p.specialItemsNeeded));
+      const hasCare = isCarePerson(p);
       const bg = p?.dormOptOut ? 'FFFEF3C7' : (hasCare ? 'FFFFF1F2' : (isMale ? 'FFF8FAFC' : 'FFFDF2F8'));
       const consentTxt = p
         ? `${p.healthConsent?.statusLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')} (${p.healthConsent?.actorLabel || '-'})`
@@ -558,7 +561,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
       row.getCell(8).value = p?.specialItemsNeeded || (p?.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
       row.getCell(9).value = consentTxt;
       row.getCell(10).value = p
-        ? `${emerTxt}\n${hasCare ? '☐ เตรียมยา/ของใช้แล้ว' : '✓ ปกติ (ผู้ช่วยดูแล)'}`
+        ? `${emerTxt}\n${hasCare ? '☐ เตรียมยา/ของใช้แล้ว' : (roomHasCare ? '✓ ปกติ (ช่วยดูแล)' : '✓ ปกติ')}`
         : '-';
 
       headers.forEach((h, i) => {
