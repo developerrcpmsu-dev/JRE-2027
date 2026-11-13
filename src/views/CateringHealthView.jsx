@@ -37,6 +37,7 @@ import {
 } from '../data/defaultData';
 import { getAttendanceConfirmationInfo } from '../supabase';
 import { getRegistrationCardData } from '../utils/idCard';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 
 export default function CateringHealthView({
   registrations = [],
@@ -237,7 +238,7 @@ export default function CateringHealthView({
   };
 
   const handlePrint = () => {
-    window.print();
+    printWithDocumentTitle('บัญชีอาหารและสุขภาวะ_แพ้ยา_โรคประจำตัว_JRE2027');
   };
 
   // Export dedicated Catering & Medical Excel sheet

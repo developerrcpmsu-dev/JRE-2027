@@ -43,7 +43,8 @@ import {
   exportDormitoryRosterToExcel,
   exportDormitoryStaffMedicalExcel,
   exportElementToPng,
-  downloadCsv
+  downloadCsv,
+  printWithDocumentTitle
 } from '../utils/documentExporters';
 
 function RoomOccupantCell({
@@ -1009,7 +1010,7 @@ export default function AdminRoomsView({
     window.addEventListener('afterprint', cleanup);
     setTimeout(cleanup, 45000);
     setTimeout(() => {
-      window.print();
+      printWithDocumentTitle('บัญชีจัดสรรห้องพักหอพักกุดรัง_JRE2027');
     }, 250);
   };
 

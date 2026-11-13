@@ -18,6 +18,64 @@ function downloadBlob(blob, filename) {
 }
 
 /**
+ * Format local Thai B.E. date and time for automatic PDF / PNG / CSV / Excel filenames:
+ * e.g. 13-11-2569_16-08น
+ */
+export function formatExportTimestamp(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const dd = pad(date.getDate());
+  const mm = pad(date.getMonth() + 1);
+  const yyyyBE = date.getFullYear() + 543;
+  const hh = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${dd}-${mm}-${yyyyBE}_${hh}-${min}น`;
+}
+
+export function sanitizeDocFilenamePart(raw = '') {
+  return String(raw)
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_-]+|[_-]+$/g, '');
+}
+
+/**
+ * Build a clean timestamped document filename (without or with extension).
+ */
+export function buildTimestampedDocFilename(baseName = 'เอกสาร_JRE2027', ext = '', date = new Date()) {
+  const cleanBase = sanitizeDocFilenamePart(baseName) || 'เอกสาร_JRE2027';
+  const stamped = `${cleanBase}_${formatExportTimestamp(date)}`;
+  if (!ext) return stamped;
+  const cleanExt = ext.startsWith('.') ? ext : `.${ext}`;
+  return stamped.endsWith(cleanExt) ? stamped : `${stamped}${cleanExt}`;
+}
+
+/**
+ * Set document.title dynamically right before window.print() so Chrome/Edge/Safari
+ * Save-as-PDF automatically uses a clear Thai filename + current Thai date & time,
+ * then restores the original page title after printing finishes.
+ */
+export function printWithDocumentTitle(docBaseName = 'เอกสาร_JRE2027') {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const previousTitle = document.title;
+  document.title = buildTimestampedDocFilename(docBaseName);
+
+  let restored = false;
+  let fallbackTimer = null;
+  const restoreTitle = () => {
+    if (restored) return;
+    restored = true;
+    if (fallbackTimer) window.clearTimeout(fallbackTimer);
+    window.removeEventListener('afterprint', restoreTitle);
+    document.title = previousTitle;
+  };
+
+  window.addEventListener('afterprint', restoreTitle, { once: true });
+  fallbackTimer = window.setTimeout(restoreTitle, 15000);
+  window.print();
+}
+
+/**
  * Downloads plain text as a file (e.g. CSV with UTF-8 BOM)
  */
 export function downloadCsv(csvContent, filename) {

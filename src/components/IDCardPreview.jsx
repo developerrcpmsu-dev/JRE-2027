@@ -18,6 +18,7 @@ import {
   Radio,
   Edit3
 } from 'lucide-react';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 import { getIdCardQrPayload, getRegistrationCardData } from '../utils/idCard';
 import {
   getMasterCardLayout,
@@ -1343,7 +1344,7 @@ export default function IDCardPreview({
       onPrint();
       return;
     }
-    window.print();
+    printWithDocumentTitle(`บัตรประจำตัว_ID_Card_${cardData?.cardCode || cardData?.fullName || 'JRE2027'}`);
   };
 
   const handleCopyCode = async () => {

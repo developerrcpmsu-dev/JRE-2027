@@ -5,6 +5,7 @@ import {
   Database, Filter, Globe2, LockKeyhole, Printer, Search, ShieldCheck,
   Terminal, Wrench
 } from 'lucide-react';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 
 const findings = [
   {
@@ -210,7 +211,7 @@ export default function SecurityAuditView({ onNavigateHome, onNavigateAdmin, sub
     `}</style>
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-3 sm:p-4 rounded-2xl shadow-xl no-print print:hidden">
       <div className="flex items-center gap-2 flex-wrap">{onNavigateHome && <button onClick={onNavigateHome} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5"><ArrowLeft className="w-3.5 h-3.5" /> หน้าแรก</button>}{onNavigateAdmin && <button onClick={onNavigateAdmin} className="px-3 py-2 bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-800/60 text-xs font-bold rounded-xl flex items-center gap-1.5"><LockKeyhole className="w-3.5 h-3.5" /> ระบบ Admin</button>}</div>
-      <div className="flex items-center gap-2 flex-wrap"><button onClick={copyUrl} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> {copiedUrl ? 'คัดลอกแล้ว' : 'คัดลอก URL'}</button><button onClick={() => window.print()} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> พิมพ์ / PDF</button></div>
+      <div className="flex items-center gap-2 flex-wrap"><button onClick={copyUrl} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> {copiedUrl ? 'คัดลอกแล้ว' : 'คัดลอก URL'}</button><button onClick={() => printWithDocumentTitle(`รายงาน_${activeTab === 'audit' ? 'ตรวจสอบความปลอดภัย' : 'นำเสนอระบบ'}_JRE2027`)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> พิมพ์ / PDF</button></div>
     </div>
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl shadow-xl no-print print:hidden"><div className="grid grid-cols-2 gap-2"><button onClick={() => setTab('presentation')} className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 ${activeTab === 'presentation' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Code2 className="w-4 h-4" /> นำเสนอ AI & MCP</button><button onClick={() => setTab('audit')} className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 ${activeTab === 'audit' ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><ShieldCheck className="w-4 h-4" /> รายงานหลักฐานความปลอดภัย</button></div><span className="text-xs font-mono text-slate-500 px-3">{reportUrl}</span></div>
     <div className="official-audit-print space-y-6">

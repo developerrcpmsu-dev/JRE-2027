@@ -63,8 +63,22 @@ import {
   exportEmrRecordsToExcel,
   exportAllRostersToMasterExcel,
   downloadCsv,
-  exportElementToPng
+  exportElementToPng,
+  buildTimestampedDocFilename,
+  printWithDocumentTitle
 } from '../utils/documentExporters';
+
+const DOC_EXPORT_BASE_NAMES = {
+  attendance: '1_ใบเซ็นชื่อ_การเข้าร่วมอบรม_JRE2027',
+  'id-cards': '2_ใบเซ็นชื่อ_รับบัตรประจำตัว_IDCard_JRE2027',
+  shirts: '3_ใบเซ็นชื่อ_รับมอบเสื้อฝึก_JRE2027',
+  rooms: '4_ใบเซ็นชื่อ_เข้าห้องพักกุดรัง_ปิดข้อมูลสุขภาพ_JRE2027',
+  'qr-master': '5_เอกสารรวม_QRCode_ทุกคน_ใบเดียว_JRE2027',
+  'rooms-staff': '6_ใบตรวจห้อง_โรคประจำตัว_ยา_ของใช้_Staff_JRE2027',
+  'admin-master': '7_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin_JRE2027',
+  'medical-supplies': '8_เอกสารขอยา_จัดเตรียมยา_เวชภัณฑ์_JRE2027',
+  'emr-records': '9_เอกสารเวชระเบียน_รายคน_รายเคส_JRE2027'
+};
 
 const VALID_DOC_TABS = new Set([
   'attendance',
@@ -1402,7 +1416,7 @@ export default function AdminDocumentsView({
     window.addEventListener('afterprint', cleanup);
     setTimeout(cleanup, 45000);
     setTimeout(() => {
-      window.print();
+      printWithDocumentTitle(DOC_EXPORT_BASE_NAMES[activeDoc] || 'เอกสาร_JRE2027');
     }, 150);
   };
 
@@ -1410,18 +1424,7 @@ export default function AdminDocumentsView({
   const handleExportPng = async () => {
     setIsExportingPng(true);
     try {
-      const nameMap = {
-        attendance: '1_ใบเซ็นชื่อ_การเข้าร่วมอบรม',
-        'id-cards': '2_ใบเซ็นชื่อ_รับบัตรประจำตัว_IDCard',
-        shirts: '3_ใบเซ็นชื่อ_รับมอบเสื้อ32ตัว',
-        rooms: '4_ใบเซ็นชื่อ_เข้าห้องพักกุดรัง_ปิดข้อมูลสุขภาพ',
-        'qr-master': '5_เอกสารรวม_QRCode_ทุกคน_ใบเดียว',
-        'rooms-staff': '6_ใบตรวจห้อง_โรคประจำตัว_ยา_ของใช้_Staff',
-        'admin-master': '7_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin',
-        'medical-supplies': '8_เอกสารขอยา_จัดเตรียมยา_เวชภัณฑ์',
-        'emr-records': '9_เอกสารเวชระเบียน_รายคน_รายเคส'
-      };
-      const filename = `${nameMap[activeDoc] || 'document'}_JRE2027.png`;
+      const filename = buildTimestampedDocFilename(DOC_EXPORT_BASE_NAMES[activeDoc] || 'document_JRE2027', '.png');
       await exportElementToPng('printable-document-sheet', filename);
       if (triggerToast) triggerToast('🖼️ บันทึกเป็นรูปภาพ PNG ความละเอียดสูงเรียบร้อยแล้ว');
     } catch (err) {
@@ -1436,26 +1439,27 @@ export default function AdminDocumentsView({
   const handleExportSingleExcel = async () => {
     setIsExportingExcel(true);
     try {
+      const excelName = buildTimestampedDocFilename(DOC_EXPORT_BASE_NAMES[activeDoc] || 'เอกสาร_JRE2027', '.xlsx');
       if (activeDoc === 'attendance') {
-        await exportAttendanceRosterToExcel(attendanceData);
+        await exportAttendanceRosterToExcel(attendanceData, excelName);
       } else if (activeDoc === 'id-cards') {
-        await exportIdCardRosterToExcel(idCardData);
+        await exportIdCardRosterToExcel(idCardData, excelName);
       } else if (activeDoc === 'shirts') {
-        await exportShirtRosterToExcel(shirtData);
+        await exportShirtRosterToExcel(shirtData, excelName);
       } else if (activeDoc === 'rooms') {
         const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
-        await exportDormitoryRosterToExcel(orderedRooms.length ? orderedRooms : roomData.rooms, roomData.msuList);
+        await exportDormitoryRosterToExcel(orderedRooms.length ? orderedRooms : roomData.rooms, roomData.msuList, excelName);
       } else if (activeDoc === 'qr-master') {
-        await exportAllQrMasterToExcel(qrMasterData);
+        await exportAllQrMasterToExcel(qrMasterData, excelName);
       } else if (activeDoc === 'rooms-staff') {
         const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
-        await exportDormitoryStaffMedicalExcel(orderedRooms.length ? orderedRooms : roomData.rooms, roomData.msuList);
+        await exportDormitoryStaffMedicalExcel(orderedRooms.length ? orderedRooms : roomData.rooms, roomData.msuList, excelName);
       } else if (activeDoc === 'medical-supplies') {
-        await exportMedicalSuppliesPrepToExcel(medicalSuppliesPrep.prepRows, medicalSuppliesPrep.summaryItems);
+        await exportMedicalSuppliesPrepToExcel(medicalSuppliesPrep.prepRows, medicalSuppliesPrep.summaryItems, excelName);
       } else if (activeDoc === 'emr-records') {
-        await exportEmrRecordsToExcel(emrDocData.caseRows, emrDocData.personRows);
+        await exportEmrRecordsToExcel(emrDocData.caseRows, emrDocData.personRows, excelName);
       } else {
-        await exportAdminMasterRosterExcel(displayedAdminMasterData);
+        await exportAdminMasterRosterExcel(displayedAdminMasterData, excelName);
       }
       if (triggerToast) triggerToast('📊 บันทึกไฟล์ Excel (.xlsx) เรียบร้อยแล้ว');
     } catch (err) {
@@ -1483,7 +1487,7 @@ export default function AdminDocumentsView({
         medicalSupplySummary: medicalSuppliesPrep.summaryItems,
         emrCaseRecords: emrDocData.allCaseRows,
         emrPersonRecords: emrDocData.allPersonRows
-      });
+      }, buildTimestampedDocFilename('JRE2027_ชุดเอกสารครบชุด_Master_9in1', '.xlsx'));
       if (triggerToast) triggerToast('⚡ ดาวน์โหลดชุดเอกสารครบทั้ง 9 ใบ (Master 9-in-1 Excel) สำเร็จ');
     } catch (err) {
       console.error(err);
@@ -1498,26 +1502,23 @@ export default function AdminDocumentsView({
     const csvCell = (val) => `"${String(val ?? '').replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`;
     const makeRow = (cols) => cols.map(csvCell).join(',') + '\n';
     let csv = '';
-    let filename = '';
+    const filename = buildTimestampedDocFilename(DOC_EXPORT_BASE_NAMES[activeDoc] || 'เอกสาร_JRE2027', '.csv');
 
     if (activeDoc === 'attendance') {
       csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'มหาวิทยาลัย/สังกัด', 'บทบาท', 'เบอร์โทรศัพท์', 'ลายมือชื่อ', 'หมายเหตุ']);
       attendanceData.forEach((r, idx) => {
         csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.role, r.phone, '', r.notes]);
       });
-      filename = '1_ใบเซ็นชื่อ_เข้าร่วมอบรม_JRE2027.csv';
     } else if (activeDoc === 'id-cards') {
       csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'บทบาท', 'สถานะบัตรในระบบ', 'ลายมือชื่อผู้รับบัตร', 'วันที่รับ']);
       idCardData.forEach((r, idx) => {
         csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.role, r.idCardStatus, '', r.idCardReceivedAt]);
       });
-      filename = '2_ใบเซ็นชื่อ_รับบัตรประจำตัว_IDCard_JRE2027.csv';
     } else if (activeDoc === 'shirts') {
       csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล ผู้รับมอบ', 'นามเรียกขาน', 'สังกัด', 'ข้อความอกขวา', 'ขนาดไซส์', 'จำนวน', 'สถานะค่าเสื้อ/รับเสื้อ', 'รหัส QR สแกนรับเสื้อ', 'ลายมือชื่อผู้รับมอบ', 'วันที่รับมอบ']);
       shirtData.forEach((r, idx) => {
         csv += makeRow([idx + 1, r.name, r.callsign, r.uni, r.chest, r.size, 1, `${r.payment} • ${r.pickupStatusLabel}`, r.qrPayload || '-', '', '14 พ.ย. 69']);
       });
-      filename = '3_ใบเซ็นชื่อ_รับมอบเสื้อฝึก32ตัว_JRE2027.csv';
     } else if (activeDoc === 'rooms') {
       csv = makeRow(['เลขห้อง', 'โซน/เพศ', 'เตียง', 'ชื่อ - นามสกุล ผู้เข้าพัก', 'ชื่อเล่น', 'นามเรียกขาน', 'เบอร์โทร', 'สถานะเข้าพัก', 'สถานะกุญแจห้อง', 'ลายมือชื่อรับกุญแจ', 'ลายมือชื่อคืนกุญแจ']);
       const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
@@ -1528,13 +1529,11 @@ export default function AdminDocumentsView({
           csv += makeRow([rm.room, isMale ? 'ชาย' : 'หญิง', b + 1, p ? p.name : '(ว่าง)', p ? p.nickname : '-', p ? p.callsign : '-', p ? p.phone : '-', p ? p.stayStatusLabel : '-', p ? p.keyStatusLabel : '-', '', '']);
         }
       });
-      filename = '4_ใบเซ็นชื่อ_เข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.csv';
     } else if (activeDoc === 'qr-master') {
       csv = makeRow(['ลำดับ', 'รหัสบัตร ID', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'บทบาท', 'กลุ่มฝึก', 'ห้องพัก', 'QR Payload URL']);
       qrMasterData.forEach((r, idx) => {
         csv += makeRow([idx + 1, r.cardCode, r.name, r.nickname, r.callsign, r.institution, r.role, r.groupAssigned || 'รอจัดกลุ่ม', r.roomNote, r.qrPayload]);
       });
-      filename = '5_เอกสารรวม_QRCode_ทุกคน_ใบเดียว_JRE2027.csv';
     } else if (activeDoc === 'rooms-staff') {
       csv = makeRow(['เลขห้อง', 'โซน/เพศ', 'ลำดับ/เตียง', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'เบอร์โทร', 'สถานะเข้าพัก', 'สถานะกุญแจห้อง', 'โรคประจำตัว', 'แพ้อาหาร/ยา', 'หมู่เลือด', 'ยาที่ต้องการ/เวชภัณฑ์', 'ของที่ต้องใช้/ดูแลพิเศษ', 'เปิดเผยสุขภาพ (ผู้กด)', 'ติดต่อฉุกเฉิน', 'เช็คเตรียม (Staff)']);
       const orderedRooms = [...(roomData.maleRooms || []), ...(roomData.femaleRooms || [])];
@@ -1550,13 +1549,11 @@ export default function AdminDocumentsView({
           csv += makeRow([rm.room, isMale ? 'ชาย' : 'หญิง', b + 1, p ? p.name : '(ว่าง)', p ? p.nickname : '-', p ? p.callsign : '-', p ? p.phone : '-', p ? p.stayStatusLabel : '-', p ? p.keyStatusLabel : '-', p ? p.medicalHistory : '-', p ? p.foodAllergy : '-', p ? p.bloodGroup : '-', p?.medicalEquipmentNeeded || '-', p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-'), consentLabel, emer, p ? (hasPrep ? 'มีต้องเตรียม • [ ] เตรียมแล้ว' : 'ไม่มีต้องเตรียม') : '-']);
         }
       });
-      filename = '6_ใบตรวจห้อง_โรค_ยา_ของใช้_Staff_JRE2027.csv';
     } else if (activeDoc === 'medical-supplies') {
       csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'ห้องพัก', 'เบอร์โทร', 'ติดต่อฉุกเฉิน', 'โรค/แพ้/หมู่เลือด', 'ยา/เวชภัณฑ์ที่ขอเตรียม', 'ของที่ต้องใช้/ดูแลพิเศษ', 'ความยินยอมสุขภาพ', 'เช็คเตรียม (Staff)', 'URL คำขอยารายคน']);
       medicalSuppliesPrep.prepRows.forEach((r, idx) => {
         csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.roomLabel, r.phone, r.emergencyContact, `${r.medicalSummary} • เลือด ${r.bloodGroup}`, r.medEquipment || '-', r.specialItems || (r.isSpecialCare ? 'ดูแลพิเศษ' : '-'), r.consentLabel, (r.hasCare || r.medEquipment || r.specialItems) ? 'มีต้องเตรียม • [ ] เตรียมแล้ว' : 'ไม่มีต้องเตรียม', r.requestUrl]);
       });
-      filename = '8_เอกสารขอยา_จัดเตรียมยา_เวชภัณฑ์_JRE2027.csv';
     } else if (activeDoc === 'emr-records') {
       csv = makeRow(['ประเภท', 'รหัสเคส', 'วันเวลา', 'ชื่อ-สกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด/กลุ่ม/ห้อง', 'หมู่เลือด', 'โรค/แพ้', 'สัญญาณชีพ (V/S)', 'อาการสำคัญ', 'เหตุการณ์', 'การปฐมพยาบาล', 'ยาที่จ่าย', 'ขนาดและเวลา', 'ผู้กรอก', 'ผู้จ่ายยา', 'หมายเหตุ', 'URL รายคน (Admin)', 'URL รายเคส (Admin)', 'URL หน้าเจ้าตัว (รายคน)', 'URL เคสในหน้าเจ้าตัว']);
       emrDocData.personRows.forEach(p => {
@@ -1565,13 +1562,11 @@ export default function AdminDocumentsView({
       emrDocData.caseRows.forEach(c => {
         csv += makeRow(['รายเคส', c.caseId, c.timeLabel, c.personName, c.nickname, c.callsign, `${c.institution} / ${c.group} / ${c.room}`, c.blood, `โรค: ${c.chronic} | แพ้: ${c.allergy}`, c.vitalSigns, c.symptoms, c.incidentDetail, c.firstAid, c.medicines, c.dosage, c.recorder, c.dispenser, c.notes, c.personUrl, c.caseUrl, c.myEmrUrl, c.myCaseUrl]);
       });
-      filename = '9_เอกสารเวชระเบียน_รายคน_รายเคส_JRE2027.csv';
     } else {
       csv = makeRow(['ลำดับ', 'ชื่อ-สกุล', 'ชื่อเล่น', 'นามเรียกขาน', 'สังกัด', 'ประเภทสมาชิก', 'บทบาท & ฝ่าย', 'เพศ', 'อายุ', 'หมู่เลือด', 'เบอร์โทร', 'อีเมล', 'RSVP', 'กลุ่มฝึก', 'ห้องพัก & กุญแจ', 'เสื้อ', 'บัตร ID', 'สถานะการเงิน', 'ยอดเงิน', 'หมายเหตุการเงิน', 'โรค/แพ้', 'ยา/ของใช้', 'เปิดเผยสุขภาพ (ผู้กด)', 'ติดต่อฉุกเฉิน']);
       displayedAdminMasterData.forEach((r, idx) => {
         csv += makeRow([idx + 1, r.name, r.nickname, r.callsign, r.institution, r.memberTypeLabel, `${r.roleWithDuty}${r.isNoAccount ? ' [Admin เพิ่ม • ไม่มีบัญชี]' : ''}`, r.gender, r.ageLabel, r.bloodGroup, r.phone, r.email, r.rsvpSummary, r.groupAssigned, r.dormAndKeySummary, r.shirtSummary, r.idCardSummary, r.paymentStatusLabel, r.paymentAmountsLabel, r.paymentNotesLabel, r.medicalSummary, r.suppliesSummary, r.healthConsentSummary, r.emergencyContact]);
       });
-      filename = '7_ทะเบียนข้อมูลละเอียดครบทุกมิติ_Admin_JRE2027.csv';
     }
 
     downloadCsv(csv, filename);

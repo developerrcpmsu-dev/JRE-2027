@@ -18,6 +18,7 @@ import {
   ExternalLink,
   ChevronRight
 } from 'lucide-react';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 import ModalPortal from './ModalPortal';
 import {
   getApplicantMedical,
@@ -195,7 +196,7 @@ export default function CateringHealthModal({
     window.addEventListener('afterprint', cleanup);
     setTimeout(cleanup, 45000);
     setTimeout(() => {
-      window.print();
+      printWithDocumentTitle('สรุปเตรียมอาหารและสุขภาวะ_JRE2027');
     }, 150);
   };
 

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import ModalPortal from './ModalPortal';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 import {
   DEFAULT_MERCHANDISE_CONFIG,
   OFFICIAL_NETWORK_INSTITUTIONS,
@@ -186,7 +187,7 @@ export default function ShirtOrderPrintModal({
   if (!isOpen) return null;
 
   const handleTriggerPrint = () => {
-    window.print();
+    printWithDocumentTitle('ใบสรุปสั่งซื้อเสื้อฝึกปฏิบัติการ_JRE2027');
   };
 
   const dedicatedUrl = typeof window !== 'undefined'

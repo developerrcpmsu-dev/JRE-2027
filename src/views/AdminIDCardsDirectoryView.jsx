@@ -39,6 +39,7 @@ import {
   OFFICIAL_NETWORK_INSTITUTIONS
 } from '../data/defaultData';
 import { getRegistrationCardData, getIdCardQrPayload } from '../utils/idCard';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 import QRCode from 'qrcode';
 
 export default function AdminIDCardsDirectoryView({
@@ -265,7 +266,7 @@ export default function AdminIDCardsDirectoryView({
   // Print Handler
   const handlePrint = () => {
     window.setTimeout(() => {
-      window.print();
+      printWithDocumentTitle('รวมบัตรประจำตัว_ID_Card_JRE2027');
     }, 150);
   };
 

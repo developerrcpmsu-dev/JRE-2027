@@ -32,6 +32,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import { printWithDocumentTitle } from '../utils/documentExporters';
 import QRCode from 'qrcode';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
@@ -1005,7 +1006,7 @@ export default function AdminMedicalView({
 
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => printWithDocumentTitle('ทะเบียนเวชระเบียนสนาม_และจ่ายยา_JRE2027')}
               className="px-3.5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
@@ -2523,7 +2524,7 @@ export default function AdminMedicalView({
                       type="button"
                       onClick={() => {
                         document.body.classList.add('document-print-active');
-                        setTimeout(() => window.print(), 120);
+                        setTimeout(() => printWithDocumentTitle(`เวชระเบียนรายเคส_${c.case_code || c.id || 'EMR'}_JRE2027`), 120);
                         setTimeout(() => document.body.classList.remove('document-print-active'), 30000);
                       }}
                       className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer"
