@@ -35,6 +35,8 @@ import {
 import { DataService, subscribeToRealtimeChanges } from '../supabase';
 import { resolveUserExtraDetails } from '../utils/userUtils';
 import { getUnpaidSlipTarget, uploadRemainingSlipFile } from '../utils/slipUploadHelper';
+import { resolveSlipUploaderDisplay } from '../utils/slipUploader';
+import SlipUploaderBadge from '../components/SlipUploaderBadge';
 import {
   getStaffPaymentSummary,
   isStaffRegistration,
@@ -46,6 +48,7 @@ import {
 export default function UserProfileView({
   userUid,
   currentUser,
+  isDevOperator = false,
   isAdmin,
   registrations = [],
   merchandiseOrders = [],
@@ -214,7 +217,10 @@ export default function UserProfileView({
         expectedAmount,
         isInstallmentRound2,
         installmentRound,
-        onUpdateRegistration
+        onUpdateRegistration,
+        operatorUser: currentUser,
+        isAdmin,
+        isDevOperator
       });
       setUserReg(prev => prev ? { ...prev, ...updatePayload } : prev);
 
@@ -640,14 +646,17 @@ export default function UserProfileView({
                     ยอดเงิน: {isStaffReg ? (staffSum?.r1SlipAmount || STAFF_SHIRT_FEE) : (regInfo.installment_1_amount || 400)} บาท
                   </div>
                   {r1PreviewSlip && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewImage(r1PreviewSlip)}
-                      className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>{isStaffReg ? 'ดูรูปสลิปค่าเสื้อ Staff' : 'ดูรูปสลิปงวดที่ 1'}</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(r1PreviewSlip)}
+                        className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>{isStaffReg ? 'ดูรูปสลิปค่าเสื้อ Staff' : 'ดูรูปสลิปงวดที่ 1'}</span>
+                      </button>
+                      <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(regInfo, 'round1')} size="xs" />
+                    </div>
                   )}
                 </div>
 
@@ -677,14 +686,17 @@ export default function UserProfileView({
                       : `${regInfo.installment_2_amount || (isMsuInstitution(regInfo.institution) ? 250 : 450)} บาท`}
                   </div>
                   {regInfo.installment_2_slip_url ? (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewImage(regInfo.installment_2_slip_url)}
-                      className="px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>{isStaffReg ? 'ดูรูปสลิปค่าที่พัก' : 'ดูรูปสลิปงวดที่ 2'}</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(regInfo.installment_2_slip_url)}
+                        className="px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>{isStaffReg ? 'ดูรูปสลิปค่าที่พัก' : 'ดูรูปสลิปงวดที่ 2'}</span>
+                      </button>
+                      <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(regInfo, 'round2')} size="xs" />
+                    </div>
                   ) : (
                     <div className="text-[11px] text-slate-400 italic">
                       {isStaffReg
@@ -722,14 +734,17 @@ export default function UserProfileView({
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {regInfo.payment_slip_url && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewImage(regInfo.payment_slip_url)}
-                      className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>ดูรูปสลิปโอนเงิน</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(regInfo.payment_slip_url)}
+                        className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>ดูรูปสลิปโอนเงิน</span>
+                      </button>
+                      <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(regInfo, 'full')} size="xs" />
+                    </div>
                   )}
                   {(() => {
                     const owedAmt = unpaidTarget && !unpaidTarget.isPaid ? unpaidTarget.expectedAmount : 0;

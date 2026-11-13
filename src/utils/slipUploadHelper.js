@@ -6,6 +6,11 @@ import {
   isMsuInstitution,
   STAFF_SHIRT_FEE
 } from '../data/defaultData';
+import {
+  resolveSlipActorMeta,
+  buildSlipUploaderFields,
+  stampOcrWithUploader
+} from './slipUploader';
 
 /**
  * Determine whether a registration still owes any fee and which slip target field applies.
@@ -160,7 +165,11 @@ export async function uploadRemainingSlipFile({
   expectedAmount,
   isInstallmentRound2 = true,
   installmentRound = null,
-  onUpdateRegistration
+  onUpdateRegistration,
+  operatorUser = null,
+  isAdmin = false,
+  isDevOperator = false,
+  forceOperatorContext = false
 }) {
   if (!file || !regTarget) {
     throw new Error('ไม่พบไฟล์สลิปหรือข้อมูลผู้สมัคร');
@@ -198,7 +207,16 @@ export async function uploadRemainingSlipFile({
     evaluated.isFullyVerified = Boolean(evaluated.isDetected && evaluated.matchExpected === true && !evaluated.isDuplicate);
   }
 
-  const verified = Boolean(evaluated?.isFullyVerified);
+  const actorMeta = resolveSlipActorMeta({
+    operatorUser,
+    isAdmin,
+    isDevOperator,
+    targetReg: regTarget,
+    forceOperatorContext
+  });
+  const nowIso = new Date().toISOString();
+  const stampedOcr = stampOcrWithUploader(evaluated, actorMeta, nowIso);
+  const verified = Boolean(stampedOcr?.isFullyVerified);
   const newStatus = verified ? 'paid' : 'pending_review';
   const markMessagesPaid = verified && Array.isArray(regTarget.admin_messages)
     ? {
@@ -215,10 +233,11 @@ export async function uploadRemainingSlipFile({
     updatePayload = {
       payment_plan: (staffSum.isStaff && verified) ? 'full' : 'installment',
       installment_2_slip_url: uploadResult.url,
-      installment_2_slip_date: new Date().toISOString(),
+      installment_2_slip_date: nowIso,
       installment_2_status: newStatus,
       installment_2_amount: expectedAmount,
-      slip_ocr_round2: evaluated,
+      slip_ocr_round2: stampedOcr,
+      ...buildSlipUploaderFields('installment_2_slip', actorMeta, nowIso),
       ...(verified
         ? {
             payment_status: 'paid',
@@ -233,10 +252,11 @@ export async function uploadRemainingSlipFile({
     updatePayload = {
       payment_plan: (staffSum.isStaff && staffSum.isMsu) ? 'full' : 'installment',
       installment_1_slip_url: uploadResult.url,
-      installment_1_slip_date: new Date().toISOString(),
+      installment_1_slip_date: nowIso,
       installment_1_status: newStatus,
       installment_1_amount: expectedAmount,
-      slip_ocr_round1: evaluated,
+      slip_ocr_round1: stampedOcr,
+      ...buildSlipUploaderFields('installment_1_slip', actorMeta, nowIso),
       ...(verified && (isR2Paid || (staffSum.isStaff && staffSum.isMsu))
         ? { payment_status: 'paid', payment_amount: 0, ...markMessagesPaid }
         : { payment_status: verified ? 'partial_paid' : 'pending_review' })
@@ -245,10 +265,11 @@ export async function uploadRemainingSlipFile({
     updatePayload = {
       payment_plan: 'full',
       payment_slip_url: uploadResult.url,
-      payment_slip_date: new Date().toISOString(),
+      payment_slip_date: nowIso,
       payment_status: newStatus,
       payment_amount: verified ? 0 : expectedAmount,
-      slip_ocr_full: evaluated,
+      slip_ocr_full: stampedOcr,
+      ...buildSlipUploaderFields('payment_slip', actorMeta, nowIso),
       ...(verified ? markMessagesPaid : {})
     };
   }

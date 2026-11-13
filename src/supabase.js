@@ -624,6 +624,17 @@ const packRegistrationForSupabase = (fullData) => {
     slip_ocr_round1: fullData.slip_ocr_round1 || null,
     slip_ocr_round2: fullData.slip_ocr_round2 || null,
     slip_ocr_full: fullData.slip_ocr_full || null,
+    ...(() => {
+      const uploaderExtra = {};
+      ['payment_slip', 'installment_1_slip', 'installment_2_slip', 'refund_slip'].forEach((prefix) => {
+        if (fullData[`${prefix}_uploaded_by`]) uploaderExtra[`${prefix}_uploaded_by`] = fullData[`${prefix}_uploaded_by`];
+        if (fullData[`${prefix}_uploaded_by_role`]) uploaderExtra[`${prefix}_uploaded_by_role`] = fullData[`${prefix}_uploaded_by_role`];
+        if (fullData[`${prefix}_uploaded_by_name`]) uploaderExtra[`${prefix}_uploaded_by_name`] = fullData[`${prefix}_uploaded_by_name`];
+        if (fullData[`${prefix}_uploaded_by_email`]) uploaderExtra[`${prefix}_uploaded_by_email`] = fullData[`${prefix}_uploaded_by_email`];
+        if (fullData[`${prefix}_uploaded_at`]) uploaderExtra[`${prefix}_uploaded_at`] = fullData[`${prefix}_uploaded_at`];
+      });
+      return uploaderExtra;
+    })(),
     round2_cancelled_absent: Boolean(fullData.round2_cancelled_absent),
     round2_cancelled_at: fullData.round2_cancelled_at || '',
     round2_cancelled_by: fullData.round2_cancelled_by || '',

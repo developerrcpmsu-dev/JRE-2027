@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { XCircle, ChevronLeft, ChevronRight, ExternalLink, Download, Maximize2, Image as ImageIcon, FileText } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import SlipUploaderBadge from './SlipUploaderBadge';
 
 const TONE_CLASSES = {
   emerald: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
@@ -151,7 +152,10 @@ export default function SlipGalleryModal({ gallery, onClose }) {
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-slate-400">
+                      {slip.uploader && (
+                        <SlipUploaderBadge uploader={slip.uploader} size="xs" showActorName={true} />
+                      )}
                       {formatSlipDate(slip.date) && <span>🕒 {formatSlipDate(slip.date)}</span>}
                       {slip.amount > 0 && (
                         <span>

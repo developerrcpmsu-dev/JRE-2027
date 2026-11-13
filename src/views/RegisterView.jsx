@@ -75,6 +75,15 @@ import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import { scanSlipImage } from '../utils/slipOcr';
 import { getUnpaidSlipTarget } from '../utils/slipUploadHelper';
+import SlipUploaderBadge from '../components/SlipUploaderBadge';
+import {
+  resolveSlipActorMeta,
+  buildSlipUploaderFields,
+  extractSlipUploaderFields,
+  clearSlipUploaderFields,
+  stampOcrWithUploader,
+  resolveSlipUploaderDisplay
+} from '../utils/slipUploader';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   OFFICIAL_NETWORK_INSTITUTIONS,
@@ -309,6 +318,8 @@ export const buildNicknameString = (th, en) => {
 
 export default function RegisterView({ 
   user, 
+  operatorUser = null,
+  isDevOperator = false,
   isAdmin = false,
   myRegistration, 
   allRegistrations = [],
@@ -2110,6 +2121,33 @@ export default function RegisterView({
 
       const resolvedFinalGender = gender || resolveGender({ title_th: titleTh === 'อื่นๆ' ? titleOtherTh.trim() : titleTh, title_en: titleEn });
 
+      const slipActorMeta = resolveSlipActorMeta({
+        operatorUser: operatorUser || user,
+        isAdmin,
+        isDevOperator,
+        targetReg: myRegistration || { user_id: user?.id, user_email: user?.email }
+      });
+      const slipNowIso = new Date().toISOString();
+      const nextFullSlipUrl = lockFull
+        ? (myRegistration?.payment_slip_url || '')
+        : submitEffectivePlan === 'full'
+          ? (formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url || '')
+          : (formSlipRound2 || formSlipRound1 || myRegistration?.payment_slip_url || '');
+      const nextR1SlipUrl = lockRound1
+        ? (myRegistration?.installment_1_slip_url || '')
+        : (submitEffectivePlan === 'full' ? '' : (formSlipRound1 || myRegistration?.installment_1_slip_url || ''));
+      const nextR2SlipUrl = lockRound2
+        ? (myRegistration?.installment_2_slip_url || '')
+        : (submitEffectivePlan === 'full' ? '' : (formSlipRound2 || myRegistration?.installment_2_slip_url || ''));
+
+      const fullSlipChanged = !lockFull && Boolean(nextFullSlipUrl) && nextFullSlipUrl !== (myRegistration?.payment_slip_url || '');
+      const r1SlipChanged = !lockRound1 && Boolean(nextR1SlipUrl) && nextR1SlipUrl !== (myRegistration?.installment_1_slip_url || '');
+      const r2SlipChanged = !lockRound2 && Boolean(nextR2SlipUrl) && nextR2SlipUrl !== (myRegistration?.installment_2_slip_url || '');
+
+      const rawFullOcr = lockFull ? (myRegistration?.slip_ocr_full || null) : (slipOcrFull || slipOcrRound1 || myRegistration?.slip_ocr_full || null);
+      const rawR1Ocr = lockRound1 ? (myRegistration?.slip_ocr_round1 || null) : (slipOcrRound1 || myRegistration?.slip_ocr_round1 || null);
+      const rawR2Ocr = lockRound2 ? (myRegistration?.slip_ocr_round2 || null) : (slipOcrRound2 || myRegistration?.slip_ocr_round2 || null);
+
       const payload = {
         user_id: user.id,
         user_email: user.email,
@@ -2165,37 +2203,44 @@ export default function RegisterView({
         payment_status: finalPaymentStatus,
         payment_amount: myRegistration?.payment_amount ?? feeInfo.totalFee,
         payment_bank_info: myRegistration?.payment_bank_info || `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
-        payment_slip_url: lockFull
-          ? (myRegistration?.payment_slip_url || '')
-          : submitEffectivePlan === 'full'
-            ? (formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url || '')
-            : (formSlipRound2 || formSlipRound1 || myRegistration?.payment_slip_url || ''),
+        payment_slip_url: nextFullSlipUrl,
         payment_slip_date: lockFull
           ? (myRegistration?.payment_slip_date || '')
           : (submitEffectivePlan === 'full' ? (formSlipFull || formSlipRound1) : (formSlipRound2 || formSlipRound1))
-            ? new Date().toISOString()
+            ? slipNowIso
             : (myRegistration?.payment_slip_date || ''),
+        ...(fullSlipChanged
+          ? buildSlipUploaderFields('payment_slip', slipActorMeta, slipNowIso)
+          : nextFullSlipUrl
+            ? extractSlipUploaderFields(myRegistration, 'payment_slip')
+            : clearSlipUploaderFields('payment_slip')),
         installment_1_status: submitEffectivePlan === 'full' ? (myRegistration?.installment_1_status || 'unpaid') : finalInstallment1Status,
         installment_1_amount: myRegistration?.installment_1_amount ?? feeInfo.round1Amount,
         installment_1_due: myRegistration?.installment_1_due || feeInfo.round1Due,
-        installment_1_slip_url: lockRound1
-          ? (myRegistration?.installment_1_slip_url || '')
-          : (submitEffectivePlan === 'full' ? '' : (formSlipRound1 || myRegistration?.installment_1_slip_url || '')),
+        installment_1_slip_url: nextR1SlipUrl,
         installment_1_slip_date: lockRound1
           ? (myRegistration?.installment_1_slip_date || '')
-          : (submitEffectivePlan !== 'full' && formSlipRound1 ? new Date().toISOString() : (submitEffectivePlan === 'full' ? '' : (myRegistration?.installment_1_slip_date || ''))),
+          : (submitEffectivePlan !== 'full' && formSlipRound1 ? slipNowIso : (submitEffectivePlan === 'full' ? '' : (myRegistration?.installment_1_slip_date || ''))),
+        ...(r1SlipChanged
+          ? buildSlipUploaderFields('installment_1_slip', slipActorMeta, slipNowIso)
+          : nextR1SlipUrl
+            ? extractSlipUploaderFields(myRegistration, 'installment_1_slip')
+            : clearSlipUploaderFields('installment_1_slip')),
         installment_2_status: submitEffectivePlan === 'full' ? (myRegistration?.installment_2_status || 'unpaid') : finalInstallment2Status,
         installment_2_amount: myRegistration?.installment_2_amount ?? feeInfo.round2Amount,
         installment_2_due: myRegistration?.installment_2_due || feeInfo.round2Due,
-        installment_2_slip_url: lockRound2
-          ? (myRegistration?.installment_2_slip_url || '')
-          : (submitEffectivePlan === 'full' ? '' : (formSlipRound2 || myRegistration?.installment_2_slip_url || '')),
+        installment_2_slip_url: nextR2SlipUrl,
         installment_2_slip_date: lockRound2
           ? (myRegistration?.installment_2_slip_date || '')
-          : (submitEffectivePlan !== 'full' && formSlipRound2 ? new Date().toISOString() : (submitEffectivePlan === 'full' ? '' : (myRegistration?.installment_2_slip_date || ''))),
-        slip_ocr_round1: lockRound1 ? (myRegistration?.slip_ocr_round1 || null) : (slipOcrRound1 || myRegistration?.slip_ocr_round1 || null),
-        slip_ocr_round2: lockRound2 ? (myRegistration?.slip_ocr_round2 || null) : (slipOcrRound2 || myRegistration?.slip_ocr_round2 || null),
-        slip_ocr_full: lockFull ? (myRegistration?.slip_ocr_full || null) : (slipOcrFull || slipOcrRound1 || myRegistration?.slip_ocr_full || null),
+          : (submitEffectivePlan !== 'full' && formSlipRound2 ? slipNowIso : (submitEffectivePlan === 'full' ? '' : (myRegistration?.installment_2_slip_date || ''))),
+        ...(r2SlipChanged
+          ? buildSlipUploaderFields('installment_2_slip', slipActorMeta, slipNowIso)
+          : nextR2SlipUrl
+            ? extractSlipUploaderFields(myRegistration, 'installment_2_slip')
+            : clearSlipUploaderFields('installment_2_slip')),
+        slip_ocr_round1: r1SlipChanged ? stampOcrWithUploader(rawR1Ocr, slipActorMeta, slipNowIso) : rawR1Ocr,
+        slip_ocr_round2: r2SlipChanged ? stampOcrWithUploader(rawR2Ocr, slipActorMeta, slipNowIso) : rawR2Ocr,
+        slip_ocr_full: fullSlipChanged ? stampOcrWithUploader(rawFullOcr, slipActorMeta, slipNowIso) : rawFullOcr,
         admin_messages: myRegistration?.admin_messages || [],
         requested_docs: myRegistration?.requested_docs || [],
         status: 'confirmed'
@@ -2302,6 +2347,14 @@ export default function RegisterView({
 
         const newPaymentStatus = ocrInfo?.isFullyVerified ? 'paid' : 'pending_review';
         const autoStaff = Boolean(ocrInfo?.isStaffAmountDetected || regFee.isStaff);
+        const slipActorMeta = resolveSlipActorMeta({
+          operatorUser: operatorUser || user,
+          isAdmin,
+          isDevOperator,
+          targetReg: myRegistration
+        });
+        const nowIso = new Date().toISOString();
+        const stampedOcr = stampOcrWithUploader(ocrInfo, slipActorMeta, nowIso);
 
         const updatePayload = {
           payment_plan: 'full',
@@ -2309,9 +2362,10 @@ export default function RegisterView({
           registration_type: autoStaff ? 'staff' : (myRegistration.registration_type || 'participant'),
           payment_amount: newPaymentStatus === 'paid' ? 0 : (autoStaff ? STAFF_SHIRT_FEE : regFee.totalFee),
           payment_slip_url: uploadResult.url,
-          payment_slip_date: new Date().toISOString(),
+          payment_slip_date: nowIso,
           payment_status: newPaymentStatus,
-          slip_ocr_full: ocrInfo
+          slip_ocr_full: stampedOcr,
+          ...buildSlipUploaderFields('payment_slip', slipActorMeta, nowIso)
         };
         if (newPaymentStatus === 'paid' && Array.isArray(myRegistration.admin_messages)) {
           updatePayload.admin_messages = myRegistration.admin_messages.map(m =>
@@ -2385,13 +2439,22 @@ export default function RegisterView({
           ocrInfo = await evaluateSlipWithRegistry(rawOcr, expectedAmount, otherTransRef);
         } catch (ocrErr) {}
 
-        const roundStatus = ocrInfo?.isFullyVerified ? 'paid' : 'pending_review';
+        const slipActorMeta = resolveSlipActorMeta({
+          operatorUser: operatorUser || user,
+          isAdmin,
+          isDevOperator,
+          targetReg: myRegistration
+        });
+        const nowIso = new Date().toISOString();
+        const stampedOcr = stampOcrWithUploader(ocrInfo, slipActorMeta, nowIso);
+        const roundStatus = stampedOcr?.isFullyVerified ? 'paid' : 'pending_review';
         const update = {
           payment_plan: (staffSum.isStaff && round === 2 && roundStatus === 'paid') ? 'full' : 'installment',
           [`installment_${round}_slip_url`]: uploadResult.url,
-          [`installment_${round}_slip_date`]: new Date().toISOString(),
+          [`installment_${round}_slip_date`]: nowIso,
           [`installment_${round}_status`]: roundStatus,
-          [`slip_ocr_round${round}`]: ocrInfo
+          [`slip_ocr_round${round}`]: stampedOcr,
+          ...buildSlipUploaderFields(`installment_${round}_slip`, slipActorMeta, nowIso)
         };
 
         if (round === 2) {
@@ -3593,14 +3656,17 @@ export default function RegisterView({
 
                 <div className="flex flex-wrap items-center gap-2.5">
                   {myRegistration.installment_2_slip_url && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url)}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/40 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>ดูสลิปค่าที่พักที่แนบไว้</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url)}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/40 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>ดูสลิปค่าที่พักที่แนบไว้</span>
+                      </button>
+                      <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round2')} size="xs" />
+                    </div>
                   )}
 
                   {!staffSummary.isAccommodationPaid && (
@@ -3656,14 +3722,17 @@ export default function RegisterView({
                   </div>
 
                   {myRegistration.refund_slip_url && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewSlipModal(myRegistration.refund_slip_url)}
-                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl text-xs font-black inline-flex items-center gap-1.5 shadow-lg cursor-pointer shrink-0"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span>ดูสลิปโอนเงินคืนจากโครงการ (+{overpaidAmt} บ.)</span>
-                    </button>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewSlipModal(myRegistration.refund_slip_url)}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl text-xs font-black inline-flex items-center gap-1.5 shadow-lg cursor-pointer shrink-0"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>ดูสลิปโอนเงินคืนจากโครงการ (+{overpaidAmt} บ.)</span>
+                      </button>
+                      <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'refund')} size="xs" />
+                    </div>
                   )}
                 </div>
 
@@ -3965,10 +4034,11 @@ export default function RegisterView({
                         >
                           <img src={myRegistration.payment_slip_url || myRegistration.slip_url} alt="สลิปเต็มจำนวน" className="w-full h-full object-cover" />
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 space-y-0.5">
                           <span className="text-[10px] text-emerald-400 font-bold block truncate">
                             {isFullyPaid ? '✓ ยืนยันยอดเงินแล้ว (ล็อคสลิป)' : '✓ แนบสลิปแล้ว (รอตรวจ)'}
                           </span>
+                          <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'full')} size="xs" />
                           {myRegistration.slip_ocr_full && (
                             <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_full.uploadTimeStr}>
                               {myRegistration.slip_ocr_full.isDetected 
@@ -4044,10 +4114,11 @@ export default function RegisterView({
                           >
                             <img src={myRegistration.installment_1_slip_url || myRegistration.payment_slip_url || myRegistration.slip_url} alt="สลิปงวด 1" className="w-full h-full object-cover" />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 space-y-0.5">
                             <span className="text-[10px] text-emerald-400 font-bold block truncate">
                               {(isFullyPaid || myRegistration.installment_1_status === 'paid') ? '✓ อนุมัติงวด 1 แล้ว' : '✓ แนบสลิปแล้ว'}
                             </span>
+                            <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round1')} size="xs" />
                             {myRegistration.slip_ocr_round1 && (
                               <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round1.uploadTimeStr}>
                                 {myRegistration.slip_ocr_round1.isDetected 
@@ -4134,10 +4205,11 @@ export default function RegisterView({
                           >
                             <img src={myRegistration.installment_2_slip_url || myRegistration.payment_slip_url || myRegistration.slip_url} alt="สลิปงวด 2" className="w-full h-full object-cover" />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 space-y-0.5">
                             <span className="text-[10px] text-emerald-400 font-bold block truncate">
                               {(isFullyPaid || isRound2Paid) ? '✓ อนุมัติแล้ว' : '✓ แนบสลิปแล้ว'}
                             </span>
+                            <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round2')} size="xs" />
                             {myRegistration.slip_ocr_round2 && (
                               <span className="text-[9px] text-slate-300 block font-mono truncate" title={myRegistration.slip_ocr_round2.uploadTimeStr}>
                                 {myRegistration.slip_ocr_round2.isDetected 
@@ -5005,10 +5077,11 @@ export default function RegisterView({
                             <Maximize2 className="w-4 h-4 text-white" />
                           </div>
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 space-y-0.5">
                           <span className="text-[11px] text-emerald-400 font-semibold block">
                             ✓ อัปโหลดสลิปงวดที่ 1 แล้ว
                           </span>
+                          <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round1')} size="xs" />
                           <span className="text-[10px] text-slate-500 block truncate">
                             {myRegistration.installment_1_slip_date ? new Date(myRegistration.installment_1_slip_date).toLocaleString('th-TH') : '-'}
                           </span>
@@ -5117,10 +5190,11 @@ export default function RegisterView({
                           <Maximize2 className="w-4 h-4 text-white" />
                         </div>
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 space-y-0.5">
                         <span className="text-[11px] text-emerald-400 font-semibold block">
                           ✓ อัปโหลดสลิปแล้ว
                         </span>
+                        <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round2')} size="xs" />
                         <span className="text-[10px] text-slate-500 block truncate">
                           {myRegistration.installment_2_slip_date ? new Date(myRegistration.installment_2_slip_date).toLocaleString('th-TH') : '-'}
                         </span>
@@ -5188,10 +5262,11 @@ export default function RegisterView({
                           <Maximize2 className="w-4 h-4 text-white" />
                         </div>
                       </div>
-                      <div>
+                      <div className="space-y-0.5">
                         <span className="text-[11px] text-emerald-400 font-semibold block">
                           ✓ อัปโหลดสลิปเต็มจำนวนแล้ว
                         </span>
+                        <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'full')} size="xs" />
                         <span className="text-[10px] text-slate-500 block">
                           ส่งเมื่อ: {myRegistration.payment_slip_date ? new Date(myRegistration.payment_slip_date).toLocaleString('th-TH') : '-'}
                         </span>

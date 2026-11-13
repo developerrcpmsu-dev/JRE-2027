@@ -140,7 +140,15 @@ import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import ShirtOrderPrintModal from '../components/ShirtOrderPrintModal';
 import RegistrationCountdown from '../components/RegistrationCountdown';
 import SlipGalleryModal from '../components/SlipGalleryModal';
+import SlipUploaderBadge from '../components/SlipUploaderBadge';
 import { collectRegistrationSlips } from '../utils/slipGallery';
+import {
+  resolveSlipActorMeta,
+  buildSlipUploaderFields,
+  clearSlipUploaderFields,
+  resolveSlipUploaderDisplay,
+  isDevActorIdentity
+} from '../utils/slipUploader';
 import { 
   formatDateTimeLocalInput, 
   formatThaiDateTime, 
@@ -1513,7 +1521,7 @@ export default function AdminDashboardView({
             e.stopPropagation();
             openSlipGallery(reg, slips);
           }}
-          title={slips.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}
+          title={slips.map((s, i) => `${i + 1}. ${s.label}${s.uploader ? ` (${s.uploader.label})` : ''}`).join('\n')}
           className="w-full justify-center py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-600/30 via-indigo-600/30 to-purple-600/30 hover:from-purple-600/50 hover:to-indigo-600/50 text-white border border-purple-400/50 text-xs font-black flex items-center gap-2 cursor-pointer shadow-lg transition-all"
         >
           <Eye className="w-4 h-4 text-purple-300" />
@@ -2891,6 +2899,13 @@ export default function AdminDashboardView({
 
           const targetKey = profileModalReg.user_id || profileModalReg.id;
           const nowIso = new Date().toISOString();
+          const slipActorMeta = resolveSlipActorMeta({
+            operatorUser: user,
+            isAdmin,
+            isDevOperator: Boolean(isStrictDev || isDevActorIdentity(user)),
+            targetReg: profileModalReg,
+            forceOperatorContext: true
+          });
           const isModalStaffReg = isStaffRegistration(profileModalReg);
           const isModalMsuReg = isMsuInstitution(profileModalReg.institution);
           const round2Fee = isModalMsuReg
@@ -2905,15 +2920,17 @@ export default function AdminDashboardView({
               installment_1_slip_url: uploaded.url,
               installment_1_slip_date: nowIso,
               installment_1_status: nextR1Status,
+              ...buildSlipUploaderFields('installment_1_slip', slipActorMeta, nowIso),
               payment_slip_url: profileModalReg.payment_slip_url || uploaded.url,
+              ...(!profileModalReg.payment_slip_url ? buildSlipUploaderFields('payment_slip', slipActorMeta, nowIso) : {}),
               ...(!isModalStaffReg && profileModalReg.payment_plan === 'installment' && !isR2AlreadyPaid
                 ? {
                     payment_status: 'unpaid',
                     payment_amount: round2Fee,
-                    payment_notes: `Admin อัปโหลดและยืนยันสลิปงวด 1 แล้ว (ค้างงวด 2: ${round2Fee} บ.)`
+                    payment_notes: `${slipActorMeta.type === 'dev' ? 'Dev' : 'Admin'} อัปโหลดและยืนยันสลิปงวด 1 แล้ว (ค้างงวด 2: ${round2Fee} บ.)`
                   }
                 : isModalStaffReg && isModalMsuReg
-                ? { payment_status: 'paid', payment_amount: 0, payment_notes: 'Admin อัปโหลดสลิปค่าเสื้อ Staff 280 บ. แล้ว' }
+                ? { payment_status: 'paid', payment_amount: 0, payment_notes: `${slipActorMeta.type === 'dev' ? 'Dev' : 'Admin'} อัปโหลดสลิปค่าเสื้อ Staff 280 บ. แล้ว` }
                 : isR2AlreadyPaid
                 ? { payment_status: 'paid', payment_amount: 0 }
                 : {})
@@ -2924,12 +2941,15 @@ export default function AdminDashboardView({
               installment_2_slip_url: uploaded.url,
               installment_2_slip_date: nowIso,
               installment_2_status: 'paid',
+              ...buildSlipUploaderFields('installment_2_slip', slipActorMeta, nowIso),
               ...(isModalStaffReg ? { staff_accommodation_paid: true } : {}),
               ...(isR1AlreadyPaid
                 ? {
                     payment_status: 'paid',
                     payment_amount: 0,
-                    payment_notes: isModalStaffReg ? 'Admin อัปโหลดและยืนยันสลิปค่าที่พัก Staff แล้ว' : 'Admin อัปโหลดและยืนยันสลิปงวดที่ 2 แล้ว (ชำระครบ 2 งวด)'
+                    payment_notes: isModalStaffReg
+                      ? `${slipActorMeta.type === 'dev' ? 'Dev' : 'Admin'} อัปโหลดและยืนยันสลิปค่าที่พัก Staff แล้ว`
+                      : `${slipActorMeta.type === 'dev' ? 'Dev' : 'Admin'} อัปโหลดและยืนยันสลิปงวดที่ 2 แล้ว (ชำระครบ 2 งวด)`
                   }
                 : {})
             };
@@ -2942,7 +2962,9 @@ export default function AdminDashboardView({
               payment_status: 'paid',
               installment_1_status: 'paid',
               payment_amount: 0,
-              payment_notes: 'Admin อัปโหลดและยืนยันสลิปในระบบแล้ว'
+              ...buildSlipUploaderFields('payment_slip', slipActorMeta, nowIso),
+              ...buildSlipUploaderFields('installment_1_slip', slipActorMeta, nowIso),
+              payment_notes: `${slipActorMeta.type === 'dev' ? 'Dev' : 'Admin'} อัปโหลดและยืนยันสลิปในระบบแล้ว`
             };
           }
 
@@ -3023,7 +3045,10 @@ export default function AdminDashboardView({
               installment_1_slip_date: null,
               slip_ocr_round1: null,
               installment_1_status: 'unpaid',
-              ...(profileModalReg.payment_slip_url === profileModalReg.installment_1_slip_url ? { payment_slip_url: '', payment_slip_date: null, slip_ocr_full: null } : {}),
+              ...clearSlipUploaderFields('installment_1_slip'),
+              ...(profileModalReg.payment_slip_url === profileModalReg.installment_1_slip_url
+                ? { payment_slip_url: '', payment_slip_date: null, slip_ocr_full: null, ...clearSlipUploaderFields('payment_slip') }
+                : {}),
               payment_status: 'unpaid',
               payment_amount: totalFee,
               payment_notes: 'DEV ลบรูปสลิปงวดที่ 1 ออกจากระบบแล้ว'
@@ -3034,6 +3059,7 @@ export default function AdminDashboardView({
               installment_2_slip_date: null,
               slip_ocr_round2: null,
               installment_2_status: 'unpaid',
+              ...clearSlipUploaderFields('installment_2_slip'),
               ...(isModalStaffReg ? { staff_accommodation_paid: false } : {}),
               payment_status: 'unpaid',
               payment_amount: round2Fee,
@@ -3047,6 +3073,8 @@ export default function AdminDashboardView({
               installment_1_slip_url: '',
               installment_1_slip_date: null,
               slip_ocr_round1: null,
+              ...clearSlipUploaderFields('payment_slip'),
+              ...clearSlipUploaderFields('installment_1_slip'),
               payment_status: 'unpaid',
               installment_1_status: 'unpaid',
               payment_amount: totalFee,
@@ -3190,6 +3218,21 @@ export default function AdminDashboardView({
         ? userTypedFullName
         : (autoBuiltFullName || userTypedFullName);
 
+      const saveActorMeta = resolveSlipActorMeta({
+        operatorUser: user,
+        isAdmin,
+        isDevOperator: Boolean(isStrictDev || isDevActorIdentity(user)),
+        targetReg: profileModalReg,
+        forceOperatorContext: true
+      });
+      const saveNowIso = new Date().toISOString();
+      const nextFullUrl = modalPaymentSlipUrl || profileModalReg.payment_slip_url || null;
+      const nextR1Url = modalInstallment1SlipUrl || profileModalReg.installment_1_slip_url || null;
+      const nextR2Url = (modalIsStaff && isModalMsu) ? null : (modalInstallment2SlipUrl || profileModalReg.installment_2_slip_url || null);
+      const fullChanged = Boolean(nextFullUrl && nextFullUrl !== (profileModalReg.payment_slip_url || profileModalReg.slip_url || ''));
+      const r1Changed = Boolean(nextR1Url && nextR1Url !== (profileModalReg.installment_1_slip_url || ''));
+      const r2Changed = Boolean(nextR2Url && nextR2Url !== (profileModalReg.installment_2_slip_url || ''));
+
       const updates = {
         title_th: cleanTitleTh,
         first_name: cleanFirstName,
@@ -3278,15 +3321,18 @@ export default function AdminDashboardView({
         payment_amount: effectiveAmount,
         payment_bank_info: modalPaymentBank.trim(),
         payment_notes: modalPaymentNotes.trim(),
-        payment_slip_url: modalPaymentSlipUrl || profileModalReg.payment_slip_url || null,
+        payment_slip_url: nextFullUrl,
+        ...(fullChanged ? buildSlipUploaderFields('payment_slip', saveActorMeta, saveNowIso) : {}),
         installment_1_status: modalInstallment1Status || 'unpaid',
         installment_1_amount: Number(modalInstallment1Amount) || 0,
         installment_1_notes: (modalInstallment1Notes || '').trim(),
-        installment_1_slip_url: modalInstallment1SlipUrl || profileModalReg.installment_1_slip_url || null,
+        installment_1_slip_url: nextR1Url,
+        ...(r1Changed ? buildSlipUploaderFields('installment_1_slip', saveActorMeta, saveNowIso) : {}),
         installment_2_status: (modalIsStaff && isModalMsu) ? 'unpaid' : (modalInstallment2Status || 'unpaid'),
         installment_2_amount: (modalIsStaff && isModalMsu) ? 0 : (Number(modalInstallment2Amount) || 0),
         installment_2_notes: (modalIsStaff && isModalMsu) ? '' : (modalInstallment2Notes || '').trim(),
-        installment_2_slip_url: (modalIsStaff && isModalMsu) ? null : (modalInstallment2SlipUrl || profileModalReg.installment_2_slip_url || null),
+        installment_2_slip_url: nextR2Url,
+        ...(r2Changed ? buildSlipUploaderFields('installment_2_slip', saveActorMeta, saveNowIso) : {}),
         staff_accommodation_paid: Boolean(modalIsStaff && !isModalMsu && (modalInstallment2Status === 'paid' || modalPaymentStatus === 'paid')),
         round2_cancelled_absent: Boolean(modalRound2CancelledAbsent),
         round2_cancelled_note: modalRound2CancelledAbsent ? (modalRound2CancelledNote || 'ไม่ได้เข้าร่วมอบรม — ยกเลิกการจ่ายรอบที่ 2').trim() : '',
@@ -3587,6 +3633,16 @@ export default function AdminDashboardView({
       ? `หมายเหตุ: คณะกรรมการดำเนินงาน (STAFF) ชำระค่าเสื้อ 280 บ. (โอนมาจริง ${slipAmt} บ. / โอนคืนเงินส่วนเกิน +${overpaid} บ. เรียบร้อยแล้ว ✓)`
       : `หมายเหตุ: คณะกรรมการดำเนินงาน (STAFF) ชำระค่าเสื้อ 280 บ. (โอนมาจริง ${slipAmt} บ. / ชำระเกินค่าเสื้อ +${overpaid} บ. • รอโอนเงินส่วนเกินคืน)`;
 
+    const refundActorMeta = partialRefundUpdates.refund_slip_url
+      ? resolveSlipActorMeta({
+          operatorUser: user,
+          isAdmin,
+          isDevOperator: Boolean(isStrictDev || isDevActorIdentity(user)),
+          targetReg: reg,
+          forceOperatorContext: true
+        })
+      : null;
+
     const updates = {
       overpaid_amount: overpaid,
       refund_amount: overpaid,
@@ -3596,6 +3652,7 @@ export default function AdminDashboardView({
       refund_account_holder: partialRefundUpdates.refund_account_holder !== undefined ? partialRefundUpdates.refund_account_holder : (reg.refund_account_holder || `${reg.first_name || ''} ${reg.last_name || ''}`.trim()),
       refund_citizen_id: partialRefundUpdates.refund_citizen_id !== undefined ? partialRefundUpdates.refund_citizen_id : (reg.refund_citizen_id || ''),
       refund_slip_url: partialRefundUpdates.refund_slip_url !== undefined ? partialRefundUpdates.refund_slip_url : (reg.refund_slip_url || ''),
+      ...(refundActorMeta ? buildSlipUploaderFields('refund_slip', refundActorMeta, new Date().toISOString()) : {}),
       refund_at: isNowRefunded ? (reg.refund_at || new Date().toISOString()) : (reg.refund_at || ''),
       requested_docs: currentDocs,
       payment_notes: updatedPaymentNotes
@@ -9691,7 +9748,36 @@ export default function AdminDashboardView({
                               </button>
                             );
                           })()}
-                          <div className="mt-1.5">{renderSlipGalleryButton(reg)}</div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {renderSlipGalleryButton(reg)}
+                            {(() => {
+                              const rowSlips = collectRegistrationSlips(reg);
+                              if (!rowSlips.length) return null;
+                              const uniqueUploaders = [];
+                              const seenLabels = new Set();
+                              rowSlips.forEach((s) => {
+                                if (!s.uploader) return;
+                                const keyTag = rowSlips.length > 1 ? `${s.key}:${s.uploader.type}` : s.uploader.type;
+                                if (seenLabels.has(keyTag)) return;
+                                seenLabels.add(keyTag);
+                                uniqueUploaders.push({ slip: s, uploader: s.uploader });
+                              });
+                              return uniqueUploaders.slice(0, 3).map(({ slip, uploader }) => (
+                                <SlipUploaderBadge
+                                  key={`${slip.key}-${uploader.type}`}
+                                  uploader={
+                                    rowSlips.length > 1
+                                      ? {
+                                          ...uploader,
+                                          label: `${slip.key === 'round1' ? 'งวด1' : slip.key === 'round2' ? 'งวด2' : slip.key === 'refund' ? 'คืน' : 'เต็ม'}: ${uploader.shortLabel}`
+                                        }
+                                      : uploader
+                                  }
+                                  size="xs"
+                                />
+                              ));
+                            })()}
+                          </div>
                         </td>
 
                         {/* Documents Status & Quick Message Trigger */}
@@ -12314,18 +12400,21 @@ export default function AdminDashboardView({
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[11px] font-bold text-slate-300">หลักฐานการโอนเงินคืนจาก Admin:</span>
                             {profileModalReg.refund_slip_url ? (
-                              <button
-                                type="button"
-                                onClick={() => setPreviewDoc({
-                                  title: `สลิปโอนเงินคืนส่วนเกิน (+${overpaidAmt} บ.) - ${profileModalReg.first_name}`,
-                                  file_url: profileModalReg.refund_slip_url,
-                                  file_name: 'refund-slip.jpg'
-                                })}
-                                className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-[11px] font-bold cursor-pointer inline-flex items-center gap-1"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>ดูสลิปโอนเงินคืนที่แนบไว้</span>
-                              </button>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc({
+                                    title: `สลิปโอนเงินคืนส่วนเกิน (+${overpaidAmt} บ.) - ${profileModalReg.first_name}`,
+                                    file_url: profileModalReg.refund_slip_url,
+                                    file_name: 'refund-slip.jpg'
+                                  })}
+                                  className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-[11px] font-bold cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ดูสลิปโอนเงินคืนที่แนบไว้</span>
+                                </button>
+                                <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(profileModalReg, 'refund')} size="xs" showActorName={true} />
+                              </div>
                             ) : (
                               <span className="text-[11px] text-slate-400 italic">ยังไม่ได้แนบสลิปโอนเงินคืน</span>
                             )}
@@ -12739,6 +12828,9 @@ export default function AdminDashboardView({
                                     </button>
                                   </div>
                                 </div>
+                                <div className="pt-0.5">
+                                  <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(profileModalReg, 'round1', r1Ocr)} size="xs" showActorName={true} />
+                                </div>
 
                                 {profileModalReg.installment_1_notes && (
                                   <p className="text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">
@@ -12999,6 +13091,9 @@ export default function AdminDashboardView({
                                       <span>เปิดดู</span>
                                     </button>
                                   </div>
+                                </div>
+                                <div className="pt-0.5">
+                                  <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(profileModalReg, 'round2')} size="xs" showActorName={true} />
                                 </div>
 
                                 {profileModalReg.installment_2_notes && (
@@ -13318,11 +13413,12 @@ export default function AdminDashboardView({
 
                           <div className="space-y-3 flex-1 w-full">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <div>
+                              <div className="space-y-1">
                                 <p className="text-slate-400 text-xs">วันที่ส่งสลิป:</p>
                                 <p className="text-white font-semibold text-xs mt-0.5">
                                   {effectiveSlipDate ? new Date(effectiveSlipDate).toLocaleString('th-TH') : '-'}
                                 </p>
+                                <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(profileModalReg, 'full', effectiveOcr)} size="xs" showActorName={true} />
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <button
@@ -19701,7 +19797,7 @@ export default function AdminDashboardView({
                                         </span>
                                       </div>
                                       {(reg.payment_slip_url || reg.installment_1_slip_url) && (
-                                        <div className="pt-1">
+                                        <div className="pt-1 space-y-1">
                                           <button
                                             type="button"
                                             onClick={() => setPreviewSlipUrl(reg.payment_slip_url || reg.installment_1_slip_url)}
@@ -19710,6 +19806,7 @@ export default function AdminDashboardView({
                                             <Eye className="w-3.5 h-3.5 text-purple-400" />
                                             <span>ดูหลักฐานสลิปโอนเงิน</span>
                                           </button>
+                                          <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(reg, 'full')} size="xs" showActorName={true} />
                                         </div>
                                       )}
                                     </div>
@@ -19744,7 +19841,7 @@ export default function AdminDashboardView({
                                           </span>
                                         </div>
                                         {(reg.installment_1_slip_url || reg.payment_slip_url) && (
-                                          <div className="pt-1">
+                                          <div className="pt-1 space-y-1">
                                             <button
                                               type="button"
                                               onClick={() => setPreviewSlipUrl(reg.installment_1_slip_url || reg.payment_slip_url)}
@@ -19753,6 +19850,7 @@ export default function AdminDashboardView({
                                               <Eye className="w-3.5 h-3.5 text-purple-400" />
                                               <span>ดูสลิปงวดที่ 1</span>
                                             </button>
+                                            <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(reg, 'round1')} size="xs" showActorName={true} />
                                           </div>
                                         )}
                                       </div>
@@ -19786,7 +19884,7 @@ export default function AdminDashboardView({
                                           </span>
                                         </div>
                                         {reg.installment_2_slip_url && (
-                                          <div className="pt-1">
+                                          <div className="pt-1 space-y-1">
                                             <button
                                               type="button"
                                               onClick={() => setPreviewSlipUrl(reg.installment_2_slip_url)}
@@ -19795,6 +19893,7 @@ export default function AdminDashboardView({
                                               <Eye className="w-3.5 h-3.5 text-purple-400" />
                                               <span>ดูสลิปงวดที่ 2</span>
                                             </button>
+                                            <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(reg, 'round2')} size="xs" showActorName={true} />
                                           </div>
                                         )}
                                       </div>

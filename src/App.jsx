@@ -1580,6 +1580,8 @@ export default function App() {
           <RegisterView
             key={effectiveRegistration?.id || effectiveUser?.id || 'reg-self'}
             user={effectiveUser}
+            operatorUser={user}
+            isDevOperator={isStrictDevUser}
             isAdmin={isAdmin}
             myRegistration={effectiveRegistration}
             allRegistrations={registrations}
@@ -1716,6 +1718,7 @@ export default function App() {
           <UserProfileView
             userUid={currentSubRoute}
             currentUser={user}
+            isDevOperator={isStrictDevUser}
             isAdmin={isAdmin}
             registrations={registrations}
             merchandiseOrders={merchandiseOrders}

@@ -1,4 +1,5 @@
 import { isStaffRegistration, isMsuInstitution } from '../data/defaultData';
+import { resolveSlipUploaderDisplay } from './slipUploader';
 
 /**
  * แปลงสถานะการชำระเงินในฐานข้อมูลเป็นป้ายกำกับภาษาไทยสำหรับแสดงในแกลเลอรีสลิป
@@ -160,6 +161,9 @@ export const collectRegistrationSlips = (reg) => {
       if (!existing.date && c.date) existing.date = c.date;
       if (!existing.amount && c.amount) existing.amount = c.amount;
       if (!existing.statusMeta) existing.statusMeta = resolveSlipStatusMeta(c.status);
+      if ((!existing.uploader || !existing.uploader.isRecorded) && c.uploader?.isRecorded) {
+        existing.uploader = c.uploader;
+      }
       return;
     }
     byUrl.set(url, {
@@ -170,7 +174,8 @@ export const collectRegistrationSlips = (reg) => {
       date: c.date || null,
       amount: c.amount || 0,
       statusMeta: resolveSlipStatusMeta(c.status),
-      kind: c.kind
+      kind: c.kind,
+      uploader: c.uploader || resolveSlipUploaderDisplay(reg, c.key)
     });
   });
 
