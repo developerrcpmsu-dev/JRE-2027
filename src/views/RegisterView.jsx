@@ -54,7 +54,10 @@ import {
   Bell,
   BellOff,
   CheckCheck,
+  ChevronLeft,
   ChevronRight,
+  Search,
+  Filter,
   Globe,
   Tag
 } from 'lucide-react';
@@ -450,11 +453,18 @@ export default function RegisterView({
     setConsentHealthShare(isHealthSharedWithRoommate(myRegistration));
   }, [myRegistration]);
 
-  // Medicine & Equipment Preparation request
+  // Medicine & Equipment Preparation request & Field EMR Search/Filter/Pagination
   const [userMedicalEquipment, setUserMedicalEquipment] = useState(() => getMedicalEquipmentNeeded(myRegistration));
   const [isSavingMedEquip, setIsSavingMedEquip] = useState(false);
   const [medDispenseLogs, setMedDispenseLogs] = useState([]);
   const [isLoadingMedLogs, setIsLoadingMedLogs] = useState(false);
+  const [emrSearchQuery, setEmrSearchQuery] = useState('');
+  const [emrFilterType, setEmrFilterType] = useState('all'); // 'all' | 'with_meds' | 'with_notes'
+  const [emrPage, setEmrPage] = useState(1);
+
+  useEffect(() => {
+    setEmrPage(1);
+  }, [emrSearchQuery, emrFilterType, medDispenseLogs.length]);
 
   useEffect(() => {
     setUserMedicalEquipment(getMedicalEquipmentNeeded(myRegistration));
@@ -2687,7 +2697,7 @@ export default function RegisterView({
     };
 
     return (
-      <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
+      <div className="w-full max-w-none mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-300">
         
         {/* Official Header Banner */}
         <div className="flex justify-center">
@@ -2822,21 +2832,23 @@ export default function RegisterView({
           );
         })()}
 
-        {/* ATTENDANCE CONFIRMATION / RSVP CARD (For preparing exact food & dormitory room quantities) */}
-        <AttendanceConfirmationCard
-          myRegistration={myRegistration}
-          onUpdateRegistration={onUpdateRegistration}
-          onToast={triggerToast}
-        />
+        {/* Top Priority Action Row: RSVP + Official Group Chat (Side-by-side on Desktop, Stacked on Mobile) */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-5 items-stretch">
+          <div className="xl:col-span-6 flex flex-col">
+            <AttendanceConfirmationCard
+              myRegistration={myRegistration}
+              onUpdateRegistration={onUpdateRegistration}
+              onToast={triggerToast}
+            />
+          </div>
 
-        {/* Official JRE 2027 Participant Group Chat Banner (Mandatory Join) */}
-        <section className="rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-purple-950/90 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 relative overflow-hidden">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
-            <div className="flex items-start gap-3.5">
+          {/* Official JRE 2027 Participant Group Chat Banner (Mandatory Join) */}
+          <section className="xl:col-span-6 rounded-3xl border-2 border-blue-500/60 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-purple-950/90 p-5 sm:p-6 shadow-2xl shadow-blue-950/40 relative overflow-hidden flex flex-col justify-between gap-4">
+            <div className="flex items-start gap-3.5 relative z-10">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/30 shrink-0">
                 <MessageSquare className="w-6 h-6" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2.5 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/50 text-[10px] font-black uppercase tracking-wider animate-pulse">
                     📢 ประกาศด่วน! ทุกคนต้องกดเข้ากลุ่ม
@@ -2854,20 +2866,20 @@ export default function RegisterView({
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0">
+            <div className="flex items-center justify-end pt-2 border-t border-blue-500/20 relative z-10">
               <a
                 href={OFFICIAL_GROUP_CHAT_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-5 py-3 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
+                className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>กดเข้าร่วมแชทกลุ่ม JRE 2027</span>
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         {/* Top Header Profile Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
@@ -4186,47 +4198,77 @@ export default function RegisterView({
             </div>
           )}
 
-          {/* ADMIN ALLOCATIONS: Group & Room (Top Priority Display) */}
-          <div className="mt-8 p-5 bg-gradient-to-r from-indigo-950/40 via-slate-950 to-amber-950/40 border border-indigo-700/40 rounded-3xl shadow-xl">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-rescue-500" />
-                <h2 className="text-base sm:text-lg font-black text-white">
-                  ผลการจัดสรรกลุ่มฝึก & ห้องนอนจากผู้ดูแลระบบ (Admin Assignment)
-                </h2>
+          {/* 1. ADMIN ALLOCATIONS: Group & Room (Clean 2-Card Responsive Layout) */}
+          <div className="mt-6 p-4 sm:p-6 bg-gradient-to-br from-indigo-950/35 via-slate-950/90 to-amber-950/30 border border-indigo-600/35 rounded-3xl shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/90 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rescue-500/15 border border-rescue-500/30 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-rescue-400" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-lg font-black text-white">
+                    ผลการจัดสรรกลุ่มฝึก & ห้องนอนจากผู้ดูแลระบบ (Admin Assignment)
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    อัปเดตแบบเรียลไทม์ตามคำสั่งโครงการ JRE 2027
+                  </p>
+                </div>
               </div>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
-                อัปเดตตามคำสั่งโครงการ JRE 2027
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700/80 text-[10px] font-bold text-slate-300 w-fit">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                ข้อมูลเชื่อมโยง Admin Console
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Group Assigned Card */}
-              <div className="bg-slate-900/90 border border-indigo-600/50 p-5 rounded-2xl relative overflow-hidden shadow-lg">
-                <p className="text-xs uppercase font-bold text-indigo-300 tracking-wider flex items-center gap-1.5">
-                  <span>🎯</span> กลุ่มฝึกปฏิบัติการที่สังกัด (Assigned Group)
-                </p>
-                <div className="mt-2.5">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+              {/* Card A: Assigned Training Group */}
+              <div className="lg:col-span-5 bg-slate-900/90 border border-indigo-500/40 p-4 sm:p-5 rounded-2xl shadow-lg flex flex-col justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase font-bold text-indigo-300 tracking-wider flex items-center gap-1.5">
+                      <span>🎯</span> กลุ่มฝึกปฏิบัติการที่สังกัด (Assigned Group)
+                    </p>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                      myRegistration.group_assigned
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    }`}>
+                      {myRegistration.group_assigned ? 'จัดสรรแล้ว' : 'รอจัดสรร'}
+                    </span>
+                  </div>
+
                   {myRegistration.group_assigned ? (
-                    <div>
-                      <p className="text-2xl sm:text-3xl font-black text-white text-indigo-200">
+                    <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-1.5">
+                      <p className="text-2xl sm:text-3xl font-black text-indigo-200 tracking-tight">
                         {myRegistration.group_assigned}
                       </p>
-                      <p className="text-[11px] text-slate-300 mt-1.5 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      <p className="text-xs text-slate-300 flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                         <span>เข้ารายงานตัว ณ จุดรวมพลของกลุ่มตามเวลากำหนดการ</span>
                       </p>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-amber-400 py-2">
-                      <Clock className="w-4 h-4 animate-spin-slow" />
-                      <span className="text-sm font-semibold">กำลังรอ Admin จัดสรรกลุ่มฝึกปฏิบัติการ...</span>
+                    <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+                      <div className="flex items-center gap-2 text-amber-300">
+                        <Clock className="w-4 h-4 animate-spin-slow shrink-0" />
+                        <span className="text-sm font-bold">กำลังรอ Admin จัดสรรกลุ่มฝึกปฏิบัติการ...</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        เมื่อฝ่ายอำนวยการฝึกจัดแบ่งกลุ่มฐานฝึก (Station/Team) เรียบร้อยแล้ว ชื่อกลุ่มและจุดรวมพลจะปรากฏที่นี่โดยอัตโนมัติ
+                      </p>
                     </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                  <span>📋 ตรวจสอบกำหนดการฐานฝึกได้ที่เมนู &ldquo;กำหนดการ&rdquo;</span>
+                  {myRegistration.group_assigned && (
+                    <span className="font-mono text-indigo-300 font-bold">GROUP ACTIVE</span>
                   )}
                 </div>
               </div>
 
-              {/* Room Assigned & Roommate Comprehensive Card */}
+              {/* Card B: Accommodation & Roommate Card */}
               {(() => {
                 const isMsuUser = isMsuInstitution(myRegistration?.institution);
                 const rawRoom = String(myRegistration?.room_assigned || '').trim();
@@ -4240,7 +4282,6 @@ export default function RegisterView({
                 const myDormOptOut = Boolean(myRegistration?.dorm_opt_out);
                 const myKeyHeld = Boolean(myRegistration?.room_key_held);
                 const myKeyReturned = Boolean(myRegistration?.room_key_returned);
-                const healthConsentInfo = getHealthConsentInfo(myRegistration);
 
                 // Find Roommate from allRegistrations
                 const roommate = (() => {
@@ -4291,560 +4332,756 @@ export default function RegisterView({
                 })();
 
                 return (
-                  <div className="space-y-4">
+                  <div className="lg:col-span-7 flex flex-col">
                     {!hasRoom ? (
-                      <div className="bg-slate-900/90 border border-slate-700/60 p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
-                          <span>🏠</span> ข้อมูลที่พักค้างแรม (Accommodation Status)
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
-                            isMsuUser
-                              ? 'bg-slate-800 text-slate-300 border-slate-700'
-                              : myDormOptOut
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                          }`}>
-                            {isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่พักหอ (Admin บันทึกให้)' : 'เข้าพักหอพัก (รอระบุเลขห้อง)'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {isMsuUser ? (
-                        <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
-                          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-                            <span>🏠 ไม่ได้พักหอพัก (เดินทางไป-กลับเอง)</span>
-                          </div>
-                          <p className="text-xs text-amber-100/90 leading-relaxed">
-                            ท่านสังกัดมหาวิทยาลัยมหาสารคาม (มมส) พักอาศัยในพื้นที่ จึงไม่ได้จัดสรรห้องพักหอพักกุดรัง โดยท่านสามารถเดินทางมาเข้าร่วมการฝึกตามกำหนดการในแต่ละวันได้ตามปกติครับ
-                          </p>
-                        </div>
-                      ) : myDormOptOut ? (
-                        <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/40 space-y-1">
-                          <div className="text-amber-300 font-bold text-sm">
-                            🚫 สถานะห้องพัก: ไม่พักหอพัก (Admin บันทึกให้)
-                          </div>
-                          <p className="text-xs text-amber-100/80 leading-relaxed">
-                            Admin ฝ่ายสถานที่ได้บันทึกยกเว้นการเข้าพักหอพักของท่านในระบบแล้ว (หากมีการเปลี่ยนแปลงกรุณาติดต่อ Admin)
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
-                          <div className="flex items-center gap-2 text-sky-300 font-bold text-sm">
-                            <Clock className="w-4 h-4 animate-spin-slow text-sky-400" />
-                            <span>กำลังรอ Admin ฝ่ายสถานที่จัดสรรเลขห้องพัก...</span>
-                          </div>
-                          <p className="text-xs text-slate-400 leading-relaxed">
-                            ผู้เข้าร่วมจากต่างมหาวิทยาลัยทุกคนเข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม เตียงเดี่ยวคู่ ห้องละ 2 คน • หากมีเหตุสุดวิสัยโปรดติดต่อ Admin)
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    ) : (
-                      <div className={`bg-gradient-to-br from-slate-900 via-slate-900 ${myDormOptOut ? 'to-amber-950/35 border-amber-500/50' : 'to-sky-950/40 border-sky-500/40'} border p-5 sm:p-6 rounded-3xl relative overflow-hidden shadow-2xl space-y-4`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
-                      <div>
-                        <span className="text-[10px] uppercase font-black text-sky-400 tracking-wider flex items-center gap-1.5">
-                          <Building className="w-3.5 h-3.5" /> หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)
-                        </span>
-                        <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex flex-wrap items-center gap-2">
-                          <span>{/^\d/.test(roomNum) ? `ห้อง ${roomNum}` : roomNum}</span>
-                          <span className="text-xs font-normal text-sky-300 bg-sky-950/60 px-2.5 py-0.5 rounded-full border border-sky-500/30">
-                            ชั้น {roomFloorNum} • ห้องละ 2 คน
-                          </span>
-                        </h3>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        {myDormOptOut ? (
-                          <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
-                            <span>🚫 ไม่พักหอพัก (Admin บันทึกให้)</span>
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>เข้าพักหอพัก ✓</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Key Status & Opt-Out Banner */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-950/75 p-3 rounded-2xl border border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-300">🔑 สถานะกุญแจห้องพักของคุณ:</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
-                          myKeyReturned
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : myKeyHeld
-                              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                              : myDormOptOut
-                                ? 'bg-slate-800 text-slate-400 border-slate-700'
-                                : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                        }`}>
-                          {myKeyReturned
-                            ? '✅ คืนกุญแจห้องแล้ว'
-                            : myKeyHeld
-                              ? '🔑 ได้รับกุญแจห้องแล้ว (อยู่ที่คุณ)'
-                              : myDormOptOut
-                                ? 'ไม่ต้องรับกุญแจ (Admin บันทึกไม่พักหอ)'
-                                : '⏳ ยังไม่ได้รับกุญแจ'}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-400">
-                        {myDormOptOut
-                          ? '* Admin บันทึกสถานะไม่พักหอให้แล้ว หากเปลี่ยนแปลงโปรดแจ้ง Admin'
-                          : '* ผู้เข้าร่วมต่างมหาวิทยาลัยทุกคนเข้าพักหอพักที่โครงการจัดเตรียมให้ (หากจำเป็นต้องปรับโปรดติดต่อ Admin)'}
-                      </span>
-                    </div>
-
-                    {/* Facilities row */}
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                      <span className="text-sky-300 font-semibold">❄️ ห้องปรับอากาศ (แอร์)</span>
-                      <span>•</span>
-                      <span className="text-amber-300 font-semibold">🚿 น้ำอุ่น</span>
-                      <span>•</span>
-                      <span className="text-emerald-300 font-semibold">🛏️ เตียงเดี่ยวคู่ (2 เตียง)</span>
-                      <span>•</span>
-                      <span className="text-slate-400">หมอนและผ้าห่มพร้อม</span>
-                    </div>
-
-                    {/* ROOMMATE CARD SECTION */}
-                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-black text-white flex items-center gap-2">
-                          <span>🤝 เพื่อนร่วมห้องของคุณ (Your Roommate):</span>
-                        </span>
-                        {roommate && (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {roommate.dormOptOut ? (
-                              <span className="text-[10px] font-bold text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-500/40">
-                                🚫 เมทแจ้งไม่ประสงค์พักหอพัก
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-                                พักห้องเดียวกัน 2/2 คน
-                              </span>
-                            )}
-                            {roommate.roomKeyHeld && (
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                roommate.roomKeyReturned
-                                  ? 'text-emerald-300 bg-emerald-950/40 border-emerald-500/30'
-                                  : 'text-sky-300 bg-sky-950/40 border-sky-500/30'
-                              }`}>
-                                {roommate.roomKeyReturned ? '✅ เมทคืนกุญแจแล้ว' : '🔑 เมทถือกุญแจอยู่'}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {roommate ? (
+                      <div className="flex-1 bg-slate-900/90 border border-slate-700/60 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg flex flex-col justify-between gap-3">
                         <div className="space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-700/60">
-                            <div>
-                              <div className="font-bold text-white text-sm flex items-center gap-2">
-                                <span>{roommate.name}</span>
-                                {roommate.nickname !== '-' && (
-                                  <span className="text-amber-300 font-normal">({roommate.nickname})</span>
-                                )}
-                              </div>
-                              <div className="text-xs text-sky-300 font-mono mt-0.5">
-                                📡 นามเรียกขาน: <strong>{roommate.callsign}</strong>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={`tel:${roommate.phone}`}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
-                              >
-                                <Phone className="w-3.5 h-3.5" />
-                                <span>โทรหาเมท: {roommate.phone}</span>
-                              </a>
-                            </div>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
+                              <span>🏠</span> ข้อมูลที่พักค้างแรม (Accommodation Status)
+                            </p>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
+                              isMsuUser
+                                ? 'bg-slate-800 text-slate-300 border-slate-700'
+                                : myDormOptOut
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                            }`}>
+                              {isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่พักหอ (Admin บันทึกให้)' : 'เข้าพักหอพัก (รอระบุเลขห้อง)'}
+                            </span>
                           </div>
 
-                          {/* Roommate Medical & Emergency Health Card */}
-                          {!roommate.isHealthShared ? (
-                            <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
-                              <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
-                                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                                <span>🔒 เมทเลือกไม่ประสงค์เปิดเผยข้อมูลสุขภาพส่วนบุคคล</span>
+                          {isMsuUser ? (
+                            <div className="p-3.5 sm:p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
+                              <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                                <span>🏠 ไม่ได้พักหอพัก (เดินทางไป-กลับเอง)</span>
                               </div>
-                              <p className="text-[11px] text-slate-300 leading-relaxed">
-                                เพื่อนร่วมห้องของท่านขอสงวนสิทธิ์ไม่เปิดเผยรายละเอียดโรคประจำตัวหรืออาการแพ้ในระบบ หากเพื่อนร่วมห้องมีอาการผิดปกติ สามารถโทรติดต่อผู้ติดต่อฉุกเฉินของเมท ({roommate.emergencyPhone}) หรือแจ้ง Staff / ทีมแพทย์สนามได้ทันทีครับ
+                              <p className="text-xs text-amber-100/90 leading-relaxed">
+                                ท่านสังกัดมหาวิทยาลัยมหาสารคาม (มมส) พักอาศัยในพื้นที่ จึงไม่ได้จัดสรรห้องพักหอพักกุดรัง โดยท่านสามารถเดินทางมาเข้าร่วมการฝึกตามกำหนดการในแต่ละวันได้ตามปกติครับ
+                              </p>
+                            </div>
+                          ) : myDormOptOut ? (
+                            <div className="p-3.5 sm:p-4 rounded-xl bg-amber-950/35 border border-amber-500/40 space-y-1.5">
+                              <div className="text-amber-300 font-bold text-sm">
+                                🚫 สถานะห้องพัก: ไม่พักหอพัก (Admin บันทึกให้)
+                              </div>
+                              <p className="text-xs text-amber-100/80 leading-relaxed">
+                                Admin ฝ่ายสถานที่ได้บันทึกยกเว้นการเข้าพักหอพักของท่านในระบบแล้ว (หากมีการเปลี่ยนแปลงกรุณาติดต่อ Admin)
                               </p>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                              {/* Allergy Alert */}
-                              <div className={`p-2.5 rounded-xl border ${
-                                roommate.hasAlg 
-                                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-200' 
-                                  : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                              }`}>
-                                <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                                  <UtensilsCrossed className={`w-3.5 h-3.5 ${roommate.hasAlg ? 'text-amber-400' : 'text-slate-400'}`} />
-                                  <span>ประวัติแพ้อาหาร/ยาของเมท:</span>
-                                </div>
-                                <div className={roommate.hasAlg ? 'font-black text-amber-300' : 'text-slate-400'}>
-                                  {roommate.hasAlg ? `⚠️ ${roommate.allergy}` : 'ปกติ (ไม่มีประวัติแพ้อาหาร/ยา)'}
-                                </div>
+                            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                              <div className="flex items-center gap-2 text-sky-300 font-bold text-sm">
+                                <Clock className="w-4 h-4 animate-spin-slow text-sky-400 shrink-0" />
+                                <span>กำลังรอ Admin ฝ่ายสถานที่จัดสรรเลขห้องพัก...</span>
                               </div>
-
-                              {/* Medical Condition Alert */}
-                              <div className={`p-2.5 rounded-xl border ${
-                                roommate.hasMed 
-                                  ? 'bg-rose-950/40 border-rose-500/50 text-rose-200' 
-                                  : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                              }`}>
-                                <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                                  <Stethoscope className={`w-3.5 h-3.5 ${roommate.hasMed ? 'text-rose-400' : 'text-slate-400'}`} />
-                                  <span>โรคประจำตัว/ข้อจำกัดของเมท:</span>
-                                </div>
-                                <div className={roommate.hasMed ? 'font-black text-rose-300' : 'text-slate-400'}>
-                                  {roommate.hasMed ? `🩺 ${roommate.medical}` : 'ปกติ (ไม่มีโรคประจำตัว)'}
-                                </div>
-                              </div>
+                              <p className="text-xs text-slate-400 leading-relaxed">
+                                ผู้เข้าร่วมจากต่างมหาวิทยาลัยทุกคนเข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม เตียงเดี่ยวคู่ ห้องละ 2 คน • หากมีเหตุสุดวิสัยโปรดติดต่อ Admin)
+                              </p>
                             </div>
                           )}
+                        </div>
 
-                          {/* Roommate Blood Group & Emergency Contact */}
-                          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-400">🩸 กรุ๊ปเลือดเมท:</span>
-                              <strong className="text-rose-300 font-mono text-sm">{roommate.bloodGroup}</strong>
-                            </div>
+                        <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                          <span>📍 สถานที่ฝึก: ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มมส</span>
+                          <span className="font-mono text-slate-500">ACCOMMODATION INFO</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`flex-1 bg-gradient-to-br from-slate-900 via-slate-900 ${myDormOptOut ? 'to-amber-950/35 border-amber-500/50' : 'to-sky-950/40 border-sky-500/40'} border p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-xl space-y-4`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                          <div>
+                            <span className="text-[10px] uppercase font-black text-sky-400 tracking-wider flex items-center gap-1.5">
+                              <Building className="w-3.5 h-3.5" /> หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)
+                            </span>
+                            <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex flex-wrap items-center gap-2">
+                              <span>{/^\d/.test(roomNum) ? `ห้อง ${roomNum}` : roomNum}</span>
+                              <span className="text-xs font-normal text-sky-300 bg-sky-950/60 px-2.5 py-0.5 rounded-full border border-sky-500/30">
+                                ชั้น {roomFloorNum} • ห้องละ 2 คน
+                              </span>
+                            </h3>
+                          </div>
 
-                            {roommate.emergencyName !== '-' && (
-                              <div className="flex items-center gap-1.5 text-[11px]">
-                                <span className="text-slate-400">🚨 ติดต่อฉุกเฉินของเมท:</span>
-                                <span className="text-white font-bold">{roommate.emergencyName}</span>
-                                <a href={`tel:${roommate.emergencyPhone}`} className="text-sky-300 underline font-mono">
-                                  ({roommate.emergencyPhone})
-                                </a>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {myDormOptOut ? (
+                              <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                                <span>🚫 ไม่พักหอพัก (Admin บันทึกให้)</span>
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>เข้าพักหอพัก ✓</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Key Status & Opt-Out Banner */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-950/75 p-3 rounded-xl border border-slate-800">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-slate-300">🔑 สถานะกุญแจห้องพัก:</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
+                              myKeyReturned
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : myKeyHeld
+                                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                  : myDormOptOut
+                                    ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            }`}>
+                              {myKeyReturned
+                                ? '✅ คืนกุญแจห้องแล้ว'
+                                : myKeyHeld
+                                  ? '🔑 ได้รับกุญแจห้องแล้ว (อยู่ที่คุณ)'
+                                  : myDormOptOut
+                                    ? 'ไม่ต้องรับกุญแจ (Admin บันทึกไม่พักหอ)'
+                                    : '⏳ ยังไม่ได้รับกุญแจ'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400">
+                            {myDormOptOut
+                              ? '* Admin บันทึกสถานะไม่พักหอให้แล้ว หากเปลี่ยนแปลงโปรดแจ้ง Admin'
+                              : '* ผู้เข้าร่วมต่างมหาวิทยาลัยทุกคนเข้าพักหอพักที่โครงการจัดเตรียมให้'}
+                          </span>
+                        </div>
+
+                        {/* Facilities row */}
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                          <span className="text-sky-300 font-semibold">❄️ ห้องปรับอากาศ (แอร์)</span>
+                          <span>•</span>
+                          <span className="text-amber-300 font-semibold">🚿 น้ำอุ่น</span>
+                          <span>•</span>
+                          <span className="text-emerald-300 font-semibold">🛏️ เตียงเดี่ยวคู่ (2 เตียง)</span>
+                          <span>•</span>
+                          <span className="text-slate-400">หมอนและผ้าห่มพร้อม</span>
+                        </div>
+
+                        {/* ROOMMATE CARD SECTION */}
+                        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-black text-white flex items-center gap-2">
+                              <span>🤝 เพื่อนร่วมห้องของคุณ (Your Roommate):</span>
+                            </span>
+                            {roommate && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {roommate.dormOptOut ? (
+                                  <span className="text-[10px] font-bold text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-500/40">
+                                    🚫 เมทแจ้งไม่ประสงค์พักหอพัก
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+                                    พักห้องเดียวกัน 2/2 คน
+                                  </span>
+                                )}
+                                {roommate.roomKeyHeld && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                    roommate.roomKeyReturned
+                                      ? 'text-emerald-300 bg-emerald-950/40 border-emerald-500/30'
+                                      : 'text-sky-300 bg-sky-950/40 border-sky-500/30'
+                                  }`}>
+                                    {roommate.roomKeyReturned ? '✅ เมทคืนกุญแจแล้ว' : '🔑 เมทถือกุญแจอยู่'}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
 
-                          <p className="text-[11px] text-slate-400 italic">
-                            💡 หมายเหตุเพื่อความปลอดภัย: ช่วยกันดูแลสังเกตอาการของเพื่อนร่วมห้อง หากเกิดอาการแพ้หรือเจ็บป่วยฉุกเฉินยามวิกาล สามารถโทรหาผู้ติดต่อฉุกเฉินของเมท หรือแจ้งสายด่วนพยาบาลสนามได้ทันที
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="p-3 text-center text-xs text-slate-500 italic">
-                          เตียงเดี่ยวคู่ (ยังไม่พบเพื่อนร่วมห้องในระบบ หรืออยู่ระหว่างการลงทะเบียน)
-                        </div>
-                      )}
-                    </div>
+                          {roommate ? (
+                            <div className="space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-700/60">
+                                <div>
+                                  <div className="font-bold text-white text-sm flex items-center gap-2 flex-wrap">
+                                    <span>{roommate.name}</span>
+                                    {roommate.nickname !== '-' && (
+                                      <span className="text-amber-300 font-normal">({roommate.nickname})</span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-sky-300 font-mono mt-0.5">
+                                    📡 นามเรียกขาน: <strong>{roommate.callsign}</strong>
+                                  </div>
+                                </div>
 
+                                <div className="flex items-center gap-2">
+                                  {roommate.phone && roommate.phone !== '-' ? (
+                                    <a
+                                      href={`tel:${roommate.phone}`}
+                                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                                    >
+                                      <Phone className="w-3.5 h-3.5" />
+                                      <span>โทรหาเมท: {roommate.phone}</span>
+                                    </a>
+                                  ) : (
+                                    <span className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 text-xs font-semibold">
+                                      ไม่มีเบอร์โทรเมท
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Roommate Medical & Emergency Health Card */}
+                              {!roommate.isHealthShared ? (
+                                <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
+                                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                                    <span>🔒 เมทเลือกไม่ประสงค์เปิดเผยข้อมูลสุขภาพส่วนบุคคล</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    เพื่อนร่วมห้องของท่านขอสงวนสิทธิ์ไม่เปิดเผยรายละเอียดโรคประจำตัวหรืออาการแพ้ในระบบ หากเพื่อนร่วมห้องมีอาการผิดปกติ สามารถโทรติดต่อผู้ติดต่อฉุกเฉินของเมท ({roommate.emergencyPhone}) หรือแจ้ง Staff / ทีมแพทย์สนามได้ทันทีครับ
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                  <div className={`p-2.5 rounded-xl border ${
+                                    roommate.hasAlg
+                                      ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+                                      : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                                  }`}>
+                                    <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                                      <UtensilsCrossed className={`w-3.5 h-3.5 ${roommate.hasAlg ? 'text-amber-400' : 'text-slate-400'}`} />
+                                      <span>ประวัติแพ้อาหาร/ยาของเมท:</span>
+                                    </div>
+                                    <div className={roommate.hasAlg ? 'font-black text-amber-300' : 'text-slate-400'}>
+                                      {roommate.hasAlg ? `⚠️ ${roommate.allergy}` : 'ปกติ (ไม่มีประวัติแพ้อาหาร/ยา)'}
+                                    </div>
+                                  </div>
+
+                                  <div className={`p-2.5 rounded-xl border ${
+                                    roommate.hasMed
+                                      ? 'bg-rose-950/40 border-rose-500/50 text-rose-200'
+                                      : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                                  }`}>
+                                    <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                                      <Stethoscope className={`w-3.5 h-3.5 ${roommate.hasMed ? 'text-rose-400' : 'text-slate-400'}`} />
+                                      <span>โรคประจำตัว/ข้อจำกัดของเมท:</span>
+                                    </div>
+                                    <div className={roommate.hasMed ? 'font-black text-rose-300' : 'text-slate-400'}>
+                                      {roommate.hasMed ? `🩺 ${roommate.medical}` : 'ปกติ (ไม่มีโรคประจำตัว)'}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Roommate Blood Group & Emergency Contact */}
+                              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-slate-400">🩸 กรุ๊ปเลือดเมท:</span>
+                                  <strong className="text-rose-300 font-mono text-sm">{roommate.bloodGroup}</strong>
+                                </div>
+
+                                {roommate.emergencyName !== '-' && (
+                                  <div className="flex items-center gap-1.5 text-[11px]">
+                                    <span className="text-slate-400">🚨 ติดต่อฉุกเฉินของเมท:</span>
+                                    <span className="text-white font-bold">{roommate.emergencyName}</span>
+                                    {roommate.emergencyPhone && roommate.emergencyPhone !== '-' && (
+                                      <a href={`tel:${roommate.emergencyPhone}`} className="text-sky-300 underline font-mono">
+                                        ({roommate.emergencyPhone})
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-slate-400 italic">
+                                💡 หมายเหตุเพื่อความปลอดภัย: ช่วยกันดูแลสังเกตอาการของเพื่อนร่วมห้อง หากเกิดอาการแพ้หรือเจ็บป่วยฉุกเฉินยามวิกาล สามารถโทรหาผู้ติดต่อฉุกเฉินของเมท หรือแจ้งสายด่วนพยาบาลสนามได้ทันที
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-3 text-center text-xs text-slate-500 italic">
+                              เตียงเดี่ยวคู่ (ยังไม่พบเพื่อนร่วมห้องในระบบ หรืออยู่ระหว่างการลงทะเบียน)
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
-
-                    {/* HEALTH PRIVACY CONSENT SETTING CARD (SHOWN TO EVERYONE) */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/90 border border-indigo-500/40 space-y-3.5 shadow-lg">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-                            <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-black text-white">
-                              🛡️ สิทธิ์ความเป็นส่วนตัวข้อมูลสุขภาพ (Roommate Health Privacy)
-                            </h4>
-                            <span className="text-[10px] text-slate-400">
-                              ควบคุมการแสดงข้อมูลโรคประจำตัวและประวัติการแพ้ให้เพื่อนร่วมห้อง
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
-                            consentHealthShare 
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                              : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                          }`}>
-                            {consentHealthShare ? '👁️ ยินยอมเปิดเผยให้เมททราบ' : '🔒 ปิดเป็นความลับ (ซ่อนจากเมท)'}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-slate-300 border border-slate-700">
-                            {healthConsentInfo.fullLabel}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Official explanation text requested by user */}
-                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-relaxed space-y-1.5">
-                        <p className="font-semibold text-sky-200">
-                          (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว)
-                        </p>
-                        <p>
-                          ทางเราขออนุญาตให้เมทของท่านทราบในกรณีที่ท่านมีอาการอะไร เมทของท่านจะได้ช่วยเหลือท่านได้อย่างถูกต้องเพื่อความปลอดภัยของตัวท่าน ทางเราไม่ได้มีเจตนาที่จะเปิดเผยประวัติสุขภาพของท่านไปในทางที่ไม่ดีหรือสู่สาธารณะแต่อย่างใด หากท่านไม่ยินยอม สามารถตั้งค่าปิดได้ตลอดเวลา หรือแจ้ง Staff ทุกคนให้ปิดข้อมูลของท่านได้ทุกเมื่อครับ
-                        </p>
-                      </div>
-
-                      {/* Interactive Choice Buttons (ยอมรับ / ตกลง vs ปฏิเสธ) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setConsentHealthShare(true)}
-                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
-                            consentHealthShare
-                              ? 'bg-emerald-500/15 border-emerald-500 text-white ring-2 ring-emerald-500/40 shadow-md'
-                              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-                          }`}
-                        >
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
-                            consentHealthShare ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600 bg-slate-800'
-                          }`}>
-                            {consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className="text-xs font-bold block text-emerald-300">
-                              ✅ ยินยอม / ตกลงเปิดเผยข้อมูลสุขภาพ
-                            </span>
-                            <span className="text-[11px] text-slate-300 block leading-tight">
-                              ยินยอมให้เพื่อนร่วมห้องและทีมงานทราบข้อมูลโรคประจำตัว/การแพ้ เพื่อความปลอดภัยและการปฐมพยาบาล
-                            </span>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setConsentHealthShare(false)}
-                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
-                            !consentHealthShare
-                              ? 'bg-amber-500/15 border-amber-500 text-white ring-2 ring-amber-500/40 shadow-md'
-                              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-                          }`}
-                        >
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
-                            !consentHealthShare ? 'bg-amber-500 border-amber-400 text-slate-950' : 'border-slate-600 bg-slate-800'
-                          }`}>
-                            {!consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className="text-xs font-bold block text-amber-300">
-                              ❌ ปฏิเสธ / ไม่ยินยอมเปิดเผยข้อมูลสุขภาพ
-                            </span>
-                            <span className="text-[11px] text-slate-300 block leading-tight">
-                              ปิดเป็นความลับ ซ่อนจากเพื่อนร่วมห้อง • แสดงเฉพาะฝ่ายพยาบาลสนามเมื่อจำเป็นเท่านั้น
-                            </span>
-                          </div>
-                        </button>
-                      </div>
-
-                      {/* Save Status & Button */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2">
-                        <span className="text-[11px] text-slate-400">
-                          {consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
-                            ? '⚡ มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก: กรุณากดปุ่มบันทึกด้านขวา'
-                            : '✓ บันทึกการตั้งค่าเป็นปัจจุบันแล้ว'}
-                        </span>
-
-                        <button
-                          type="button"
-                          disabled={isSavingHealthConsent || consentHealthShare === isHealthSharedWithRoommate(myRegistration)}
-                          onClick={async () => {
-                            setIsSavingHealthConsent(true);
-                            try {
-                              const healthPayload = {
-                                share_health_with_roommate: consentHealthShare,
-                                health_consent_by: 'user',
-                                health_consent_at: new Date().toISOString()
-                              };
-                              if (onUpdateRegistration) {
-                                await onUpdateRegistration(myRegistration.id || myRegistration.user_id, healthPayload);
-                              } else {
-                                await DataService.updateRegistrationDetails(myRegistration.id || myRegistration.user_id, healthPayload);
-                              }
-                              triggerToast(
-                                consentHealthShare
-                                  ? '✓ บันทึกสำเร็จ: ยินยอมเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบเพื่อความปลอดภัยแล้ว'
-                                  : '✓ บันทึกสำเร็จ: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะทีมแพทย์สนามและ Staff ที่มองเห็นได้)',
-                                'success'
-                              );
-                            } catch (err) {
-                              console.error(err);
-                              triggerToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่าความเป็นส่วนตัว', 'error');
-                            } finally {
-                              setIsSavingHealthConsent(false);
-                            }
-                          }}
-                          className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
-                            consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
-                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
-                              : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                          }`}
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                          <span>{isSavingHealthConsent ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่า'}</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 );
               })()}
             </div>
           </div>
 
-          {/* SECTION: 🩺 คำขอเตรียมยา / เวชภัณฑ์ประจำตัว (Medical Equipment & Medicine Request) */}
-          <div className="mt-6 p-5 sm:p-6 rounded-3xl bg-slate-950/80 border border-emerald-500/30 space-y-4 shadow-xl">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-                  <Stethoscope className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-                    <span>🩺 คำขอเตรียมยา / เวชภัณฑ์ภาคสนาม</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      Medical Support
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    แจ้งรายการยาหรือเวชภัณฑ์ที่ต้องการให้ทีมแพทย์สนามและฝ่ายพยาบาลจัดเตรียมล่วงหน้า (ทั้งผู้มีโรคประจำตัวและคนปกติ)
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                disabled={isSavingMedEquip || userMedicalEquipment === (getMedicalEquipmentNeeded(myRegistration) || '')}
-                onClick={async () => {
-                  setIsSavingMedEquip(true);
-                  try {
-                    const targetId = myRegistration.id || myRegistration.user_id;
-                    const val = userMedicalEquipment.trim();
-                    if (onUpdateRegistration) {
-                      await onUpdateRegistration(targetId, { medical_equipment_needed: val });
-                    } else {
-                      await DataService.updateRegistrationDetails(targetId, { medical_equipment_needed: val });
-                    }
-                    triggerToast('✓ บันทึกคำขอเตรียมยาและเวชภัณฑ์เรียบร้อยแล้ว คณะทำงานและทีมแพทย์สนามจะจัดเตรียมไว้ให้ครับ', 'success');
-                  } catch (err) {
-                    console.error(err);
-                    triggerToast('เกิดข้อผิดพลาดในการบันทึกคำขอเตรียมยา', 'error');
-                  } finally {
-                    setIsSavingMedEquip(false);
-                  }
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
-                  userMedicalEquipment !== (getMedicalEquipmentNeeded(myRegistration) || '')
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
-                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{isSavingMedEquip ? 'กำลังบันทึก...' : '💾 บันทึกคำขอเตรียมยา'}</span>
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <textarea
-                rows="3"
-                value={userMedicalEquipment}
-                onChange={e => setUserMedicalEquipment(e.target.value)}
-                placeholder="เช่น ขอยาพาราเซตามอลสำรอง, ขอยาทากันยุง / คาลาไมน์แก้คัน, ยาแก้แพ้แก้คัดจมูก, ผงเกลือแร่ ORS, ผ้าพันแผล หรือระบุยาประจำตัวที่ต้องนำติดตัวมา"
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-                <span className="flex items-center gap-1">
-                  <span>💡 คำแนะนำ:</span>
-                  <span className="text-slate-300">กดปุ่มเพื่อเพิ่มข้อความอัตโนมัติ:</span>
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[
-                    'ยาพาราเซตามอล',
-                    'ยาแก้แพ้ / คัดจมูก',
-                    'ผงเกลือแร่ ORS',
-                    'ยาทากันยุง / คาลาไมน์',
-                    'พลาสเตอร์ยา / ทำแผล'
-                  ].map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        const cur = userMedicalEquipment.trim();
-                        if (!cur.includes(tag)) {
-                          setUserMedicalEquipment(cur ? `${cur}, ${tag}` : tag);
-                        }
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500/40 border border-slate-700 text-[10px] text-slate-300 cursor-pointer transition-colors"
-                    >
-                      + {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* PERSONAL MEDICAL DISPENSE RECORDS (เวชระเบียนสนามของผู้ใช้) */}
-            <div className="pt-4 border-t border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                  <HeartPulse className="w-4 h-4 text-rose-400" />
-                  <span>📋 ประวัติการรับยาและเวชระเบียนสนามของคุณ (Field EMR Records)</span>
-                </h4>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  {medDispenseLogs.length} รายการ
-                </span>
-              </div>
-
-              {isLoadingMedLogs ? (
-                <div className="p-4 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl">
-                  กำลังโหลดข้อมูลเวชระเบียน...
-                </div>
-              ) : medDispenseLogs.length === 0 ? (
-                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-500">
-                  ยังไม่มีประวัติการเบิกรับยา ณ จุดปฐมพยาบาลสนาม JRE 2027 (หากท่านมารับยา ระบบจะบันทึกและแสดงที่นี่แบบเรียลไทม์)
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {medDispenseLogs.map((log, idx) => (
-                    <div
-                      key={log.id || idx}
-                      className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 space-y-2 text-xs"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
-                            จ่ายยาแล้ว ✓
-                          </span>
-                          <span className="font-bold text-white">
-                            อาการ: <span className="text-amber-300">{log.symptoms || log.chief_complaint || 'ไม่ระบุ'}</span>
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          📅 {log.dispensed_at || log.created_at || 'เมื่อเร็วๆ นี้'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">💊 ยาและเวชภัณฑ์ที่ได้รับ:</span>
-                          <span className="font-bold text-emerald-300">{log.medications_dispensed || '-'}</span>
+          {/* 2. HEALTH PRIVACY & FIELD MEDICAL SUPPORT (2 Separate Side-by-Side Cards on Desktop, Stacked on Mobile) */}
+          {(() => {
+            const healthConsentInfo = getHealthConsentInfo(myRegistration);
+            return (
+              <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-stretch">
+                {/* LEFT CARD: 🛡️ Roommate Health Privacy */}
+                <div className="lg:col-span-6 p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-indigo-500/35 shadow-xl flex flex-col justify-between gap-4">
+                  <div className="space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="w-5 h-5 text-indigo-400" />
                         </div>
                         <div>
-                          <span className="text-slate-400 block text-[10px]">🩺 คำแนะนำในการใช้ยา:</span>
-                          <span className="text-slate-200">{log.instructions || 'ตามแพทย์/พยาบาลสั่ง'}</span>
+                          <h3 className="text-sm sm:text-base font-black text-white">
+                            🛡️ สิทธิ์ความเป็นส่วนตัวข้อมูลสุขภาพ (Roommate Health Privacy)
+                          </h3>
+                          <p className="text-[11px] text-slate-400">
+                            ควบคุมการแสดงข้อมูลโรคประจำตัวและประวัติการแพ้ให้เพื่อนร่วมห้อง
+                          </p>
                         </div>
-                      </div>
-
-                      <div className="pt-1.5 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-400">
-                        <span>
-                          👨‍⚕️ ผู้จ่ายยา: <strong className="text-purple-300">{log.dispenser_name || 'เจ้าหน้าที่พยาบาล'}</strong>
-                          {log.dispenser_callsign && <span className="font-mono text-slate-400"> ({log.dispenser_callsign})</span>}
-                        </span>
-                        <span className="font-mono text-slate-500">ID: {log.id ? String(log.id).slice(0, 8) : `#${idx + 1}`}</span>
                       </div>
                     </div>
-                  ))}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-[11px] font-black border ${
+                        consentHealthShare
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      }`}>
+                        {consentHealthShare ? '👁️ ยินยอมเปิดเผยให้เมททราบ' : '🔒 ปิดเป็นความลับ (ซ่อนจากเมท)'}
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-900 text-slate-300 border border-slate-700">
+                        {healthConsentInfo.fullLabel}
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-[11px] sm:text-xs text-slate-300 leading-relaxed space-y-1.5">
+                      <p className="font-semibold text-sky-200">
+                        (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว)
+                      </p>
+                      <p>
+                        ทางเราขออนุญาตให้เมทของท่านทราบในกรณีที่ท่านมีอาการอะไร เมทของท่านจะได้ช่วยเหลือท่านได้อย่างถูกต้องเพื่อความปลอดภัยของตัวท่าน ทางเราไม่ได้มีเจตนาที่จะเปิดเผยประวัติสุขภาพของท่านไปในทางที่ไม่ดีหรือสู่สาธารณะแต่อย่างใด หากท่านไม่ยินยอม สามารถตั้งค่าปิดได้ตลอดเวลา หรือแจ้ง Staff ทุกคนให้ปิดข้อมูลของท่านได้ทุกเมื่อครับ
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setConsentHealthShare(true)}
+                        className={`p-3 rounded-2xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
+                          consentHealthShare
+                            ? 'bg-emerald-500/15 border-emerald-500 text-white ring-2 ring-emerald-500/40 shadow-md'
+                            : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
+                          consentHealthShare ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600 bg-slate-800'
+                        }`}>
+                          {consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold block text-emerald-300">
+                            ✅ ยินยอม / ตกลงเปิดเผยข้อมูลสุขภาพ
+                          </span>
+                          <span className="text-[11px] text-slate-300 block leading-snug">
+                            ยินยอมให้เพื่อนร่วมห้องและทีมงานทราบข้อมูลโรคประจำตัว/การแพ้ เพื่อความปลอดภัยและการปฐมพยาบาล
+                          </span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setConsentHealthShare(false)}
+                        className={`p-3 rounded-2xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
+                          !consentHealthShare
+                            ? 'bg-amber-500/15 border-amber-500 text-white ring-2 ring-amber-500/40 shadow-md'
+                            : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
+                          !consentHealthShare ? 'bg-amber-500 border-amber-400 text-slate-950' : 'border-slate-600 bg-slate-800'
+                        }`}>
+                          {!consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold block text-amber-300">
+                            ❌ ปฏิเสธ / ไม่ยินยอมเปิดเผยข้อมูลสุขภาพ
+                          </span>
+                          <span className="text-[11px] text-slate-300 block leading-snug">
+                            ปิดเป็นความลับ ซ่อนจากเพื่อนร่วมห้อง • แสดงเฉพาะฝ่ายพยาบาลสนามเมื่อจำเป็นเท่านั้น
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-800/80">
+                    <span className="text-[11px] text-slate-400">
+                      {consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
+                        ? '⚡ มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก: กรุณากดปุ่มบันทึกด้านขวา'
+                        : '✓ บันทึกการตั้งค่าเป็นปัจจุบันแล้ว'}
+                    </span>
+
+                    <button
+                      type="button"
+                      disabled={isSavingHealthConsent || consentHealthShare === isHealthSharedWithRoommate(myRegistration)}
+                      onClick={async () => {
+                        setIsSavingHealthConsent(true);
+                        try {
+                          const healthPayload = {
+                            share_health_with_roommate: consentHealthShare,
+                            health_consent_by: 'user',
+                            health_consent_at: new Date().toISOString()
+                          };
+                          if (onUpdateRegistration) {
+                            await onUpdateRegistration(myRegistration.id || myRegistration.user_id, healthPayload);
+                          } else {
+                            await DataService.updateRegistrationDetails(myRegistration.id || myRegistration.user_id, healthPayload);
+                          }
+                          triggerToast(
+                            consentHealthShare
+                              ? '✓ บันทึกสำเร็จ: ยินยอมเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบเพื่อความปลอดภัยแล้ว'
+                              : '✓ บันทึกสำเร็จ: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะทีมแพทย์สนามและ Staff ที่มองเห็นได้)',
+                            'success'
+                          );
+                        } catch (err) {
+                          console.error(err);
+                          triggerToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่าความเป็นส่วนตัว', 'error');
+                        } finally {
+                          setIsSavingHealthConsent(false);
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
+                        consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
+                          : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingHealthConsent ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่า'}</span>
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+
+                {/* RIGHT CARD: 🩺 Medical Equipment & Medicine Request */}
+                <div className="lg:col-span-6 p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-emerald-500/35 shadow-xl flex flex-col justify-between gap-4">
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                          <Stethoscope className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-white text-sm sm:text-base flex flex-wrap items-center gap-2">
+                            <span>🩺 คำขอเตรียมยา / เวชภัณฑ์ภาคสนาม</span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Medical Support
+                            </span>
+                          </h3>
+                          <p className="text-[11px] text-slate-400">
+                            แจ้งรายการยาหรือเวชภัณฑ์ที่ต้องการให้ทีมแพทย์สนามและฝ่ายพยาบาลจัดเตรียมล่วงหน้า (ทั้งผู้มีโรคประจำตัวและคนปกติ)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <textarea
+                        rows="4"
+                        value={userMedicalEquipment}
+                        onChange={e => setUserMedicalEquipment(e.target.value)}
+                        placeholder="เช่น ขอยาพาราเซตามอลสำรอง, ขอยาทากันยุง / คาลาไมน์แก้คัน, ยาแก้แพ้แก้คัดจมูก, ผงเกลือแร่ ORS, ผ้าพันแผล หรือระบุยาประจำตัวที่ต้องนำติดตัวมา"
+                        className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                      />
+
+                      <div className="space-y-2 p-3 rounded-2xl bg-slate-900/70 border border-slate-800/90">
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-semibold">
+                          <span>💡 คำแนะนำ:</span>
+                          <span className="text-slate-400 font-normal">กดปุ่มเพื่อเพิ่มรายการอัตโนมัติ</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {[
+                            'ยาพาราเซตามอล',
+                            'ยาแก้แพ้ / คัดจมูก',
+                            'ผงเกลือแร่ ORS',
+                            'ยาทากันยุง / คาลาไมน์',
+                            'พลาสเตอร์ยา / ทำแผล'
+                          ].map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => {
+                                const cur = userMedicalEquipment.trim();
+                                if (!cur.includes(tag)) {
+                                  setUserMedicalEquipment(cur ? `${cur}, ${tag}` : tag);
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500/40 border border-slate-700 text-[11px] font-medium text-slate-200 cursor-pointer transition-colors"
+                            >
+                              + {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-800/80">
+                    <span className="text-[11px] text-slate-400">
+                      {userMedicalEquipment !== (getMedicalEquipmentNeeded(myRegistration) || '')
+                        ? '⚡ มีคำขอที่ยังไม่ได้บันทึก: กรุณากดปุ่มบันทึกด้านขวา'
+                        : '✓ ข้อมูลคำขอเตรียมยาเป็นปัจจุบันแล้ว'}
+                    </span>
+
+                    <button
+                      type="button"
+                      disabled={isSavingMedEquip || userMedicalEquipment === (getMedicalEquipmentNeeded(myRegistration) || '')}
+                      onClick={async () => {
+                        setIsSavingMedEquip(true);
+                        try {
+                          const targetId = myRegistration.id || myRegistration.user_id;
+                          const val = userMedicalEquipment.trim();
+                          if (onUpdateRegistration) {
+                            await onUpdateRegistration(targetId, { medical_equipment_needed: val });
+                          } else {
+                            await DataService.updateRegistrationDetails(targetId, { medical_equipment_needed: val });
+                          }
+                          triggerToast('✓ บันทึกคำขอเตรียมยาและเวชภัณฑ์เรียบร้อยแล้ว คณะทำงานและทีมแพทย์สนามจะจัดเตรียมไว้ให้ครับ', 'success');
+                        } catch (err) {
+                          console.error(err);
+                          triggerToast('เกิดข้อผิดพลาดในการบันทึกคำขอเตรียมยา', 'error');
+                        } finally {
+                          setIsSavingMedEquip(false);
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
+                        userMedicalEquipment !== (getMedicalEquipmentNeeded(myRegistration) || '')
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
+                          : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingMedEquip ? 'กำลังบันทึก...' : '💾 บันทึกคำขอเตรียมยา'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 3. DEDICATED FIELD EMR RECORDS SECTION (Search, Filter & < 0 > Pagination) */}
+          {(() => {
+            const EMR_PAGE_SIZE = 4;
+            const q = emrSearchQuery.trim().toLowerCase();
+            const filteredLogs = (medDispenseLogs || []).filter(log => {
+              const medsText = String(log.medicines_dispensed || log.medications_dispensed || '').trim();
+              const notesText = String(log.medical_notes || '').trim();
+              if (emrFilterType === 'with_meds' && (!medsText || medsText === '-')) return false;
+              if (emrFilterType === 'with_notes' && !notesText) return false;
+              if (!q) return true;
+              return [
+                log.symptoms,
+                log.chief_complaint,
+                medsText,
+                log.dosage_instruction,
+                log.instructions,
+                log.dispenser_name,
+                log.dispenser_callsign,
+                notesText
+              ].some(val => String(val || '').toLowerCase().includes(q));
+            });
+
+            const totalFiltered = filteredLogs.length;
+            const totalPages = totalFiltered === 0 ? 0 : Math.ceil(totalFiltered / EMR_PAGE_SIZE);
+            const currentPage = totalPages === 0 ? 0 : Math.min(Math.max(1, emrPage), totalPages);
+            const startIdx = totalPages === 0 ? 0 : (currentPage - 1) * EMR_PAGE_SIZE;
+            const pagedLogs = totalPages === 0 ? [] : filteredLogs.slice(startIdx, startIdx + EMR_PAGE_SIZE);
+
+            return (
+              <div className="mt-6 p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-rose-500/35 shadow-xl space-y-4">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/30">
+                      <HeartPulse className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-white flex flex-wrap items-center gap-2">
+                        <span>📋 ประวัติการรับยาและเวชระเบียนสนามของคุณ (Field EMR Records)</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        บันทึกอาการ การจ่ายยา และคำแนะนำจากทีมแพทย์/พยาบาลสนามแบบเรียลไทม์ • ค้นหาและกรองประวัติได้ทันที
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold px-3 py-1 rounded-full bg-slate-900 text-slate-200 border border-slate-700">
+                      {totalFiltered === medDispenseLogs.length
+                        ? `ทั้งหมด ${medDispenseLogs.length} รายการ`
+                        : `พบ ${totalFiltered} / ${medDispenseLogs.length} รายการ`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Search + Filter + < 0 > Pagination Bar */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/75 border border-slate-800">
+                  {/* Search & Filter */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={emrSearchQuery}
+                        onChange={e => setEmrSearchQuery(e.target.value)}
+                        placeholder="ค้นหาอาการ, ยาที่ได้รับ, ผู้จ่ายยา, หมายเหตุ..."
+                        className="w-full pl-8 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-400"
+                      />
+                      {emrSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setEmrSearchQuery('')}
+                          aria-label="ล้างคำค้นหาเวชระเบียน"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1 shrink-0">
+                        <Filter className="w-3.5 h-3.5 text-rose-400" />
+                        <span className="hidden sm:inline">กรอง:</span>
+                      </span>
+                      <select
+                        value={emrFilterType}
+                        onChange={e => setEmrFilterType(e.target.value)}
+                        className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-slate-200 focus:outline-none focus:border-rose-400 cursor-pointer"
+                      >
+                        <option value="all">ทั้งหมด ({medDispenseLogs.length})</option>
+                        <option value="with_meds">เฉพาะที่มีรายการเบิกจ่ายยา</option>
+                        <option value="with_notes">เฉพาะที่มีหมายเหตุ/เฝ้าระวัง</option>
+                      </select>
+                      {(emrSearchQuery || emrFilterType !== 'all') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmrSearchQuery('');
+                            setEmrFilterType('all');
+                          }}
+                          className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                        >
+                          ล้างตัวกรอง
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* < 0 > Pagination Control */}
+                  <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800 shrink-0">
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      หน้า:
+                    </span>
+                    <div className="inline-flex items-center rounded-xl bg-slate-950 border border-slate-700 p-0.5 shadow-inner">
+                      <button
+                        type="button"
+                        disabled={currentPage <= 1}
+                        onClick={() => setEmrPage(p => Math.max(1, p - 1))}
+                        aria-label="หน้าเวชระเบียนก่อนหน้า"
+                        className="w-8 h-7 rounded-lg flex items-center justify-center text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="px-3 text-xs font-mono font-black text-white min-w-[48px] text-center select-none">
+                        {totalPages === 0 ? '0' : `${currentPage} / ${totalPages}`}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={currentPage >= totalPages || totalPages === 0}
+                        onClick={() => setEmrPage(p => Math.min(totalPages, p + 1))}
+                        aria-label="หน้าเวชระเบียนถัดไป"
+                        className="w-8 h-7 rounded-lg flex items-center justify-center text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* EMR List Content */}
+                {isLoadingMedLogs ? (
+                  <div className="p-6 text-center text-xs text-slate-400 bg-slate-900/60 rounded-2xl border border-slate-800 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                    <span>กำลังโหลดข้อมูลเวชระเบียน...</span>
+                  </div>
+                ) : medDispenseLogs.length === 0 ? (
+                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 space-y-1">
+                    <p className="font-semibold text-slate-300">ยังไม่มีประวัติการเบิกรับยา ณ จุดปฐมพยาบาลสนาม JRE 2027</p>
+                    <p className="text-[11px] text-slate-500">หากท่านมารับยาหรือตรวจอาการ ระบบจะบันทึกและแสดงที่นี่แบบเรียลไทม์</p>
+                  </div>
+                ) : pagedLogs.length === 0 ? (
+                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 space-y-2">
+                    <p className="font-semibold text-slate-300">ไม่พบประวัติเวชระเบียนที่ตรงกับคำค้นหาหรือตัวกรองที่เลือก</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmrSearchQuery('');
+                        setEmrFilterType('all');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-[11px] cursor-pointer"
+                    >
+                      แสดงทั้งหมด ({medDispenseLogs.length} รายการ)
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    {pagedLogs.map((log, idx) => {
+                      const medsDispensed = log.medicines_dispensed || log.medications_dispensed || '-';
+                      const dosageText = log.dosage_instruction || log.instructions || 'ตามแพทย์/พยาบาลสั่ง';
+                      const rawTime = log.dispensed_at || log.created_at;
+                      const formattedTime = rawTime ? new Date(rawTime).toLocaleString('th-TH', {
+                        year: '2-digit',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : 'เมื่อเร็วๆ นี้';
+
+                      return (
+                        <div
+                          key={log.id || `${startIdx}-${idx}`}
+                          className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-rose-500/40 transition-colors space-y-2.5 text-xs flex flex-col justify-between"
+                        >
+                          <div className="space-y-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
+                                  จ่ายยาแล้ว ✓
+                                </span>
+                                <span className="font-bold text-white">
+                                  อาการ: <span className="text-amber-300">{log.symptoms || log.chief_complaint || 'ไม่ระบุ'}</span>
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                📅 {formattedTime}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
+                              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                                <span className="text-slate-400 block text-[10px] mb-0.5">💊 ยาและเวชภัณฑ์ที่ได้รับ:</span>
+                                <span className="font-bold text-emerald-300 break-words">{medsDispensed}</span>
+                              </div>
+                              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                                <span className="text-slate-400 block text-[10px] mb-0.5">🩺 คำแนะนำในการใช้ยา:</span>
+                                <span className="text-slate-200 break-words">{dosageText}</span>
+                              </div>
+                            </div>
+
+                            {log.medical_notes && (
+                              <div className="p-2 rounded-xl bg-amber-950/25 border border-amber-500/25 text-[11px] text-amber-200">
+                                <span className="font-bold">📝 บันทึกเพิ่มเติม:</span> {log.medical_notes}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400">
+                            <span>
+                              👨‍⚕️ ผู้จ่ายยา: <strong className="text-purple-300">{log.dispenser_name || 'เจ้าหน้าที่พยาบาล'}</strong>
+                              {log.dispenser_callsign && <span className="font-mono text-slate-400"> ({log.dispenser_callsign})</span>}
+                            </span>
+                            <span className="font-mono text-slate-500">ID: {log.id ? String(log.id).slice(0, 8) : `#${startIdx + idx + 1}`}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ADMIN SPECIAL CARE REMARKS (If flagged by Admin) */}
           {myRegistration.is_special_care && (

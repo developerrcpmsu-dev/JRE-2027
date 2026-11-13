@@ -1359,11 +1359,13 @@ export default function App() {
       {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
       {user && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={user} />}
 
-      {/* Main Content Pages - Full Screen Width on Admin Dashboard for Effortless Table Management */}
-      <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-4 2xl:py-6 transition-all ${
+      {/* Main Content Pages - Full Screen Width on Admin Dashboard & User Dashboard */}
+      <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-5 2xl:py-6 transition-all ${
         currentTab === 'admin'
           ? 'w-full max-w-none px-2 sm:px-4 lg:px-6 2xl:px-8'
-          : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
+          : (currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(myRegistration)))
+            ? 'w-full max-w-[1680px] px-3 sm:px-5 lg:px-8 2xl:px-10 overflow-x-hidden'
+            : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
       }`}>
         {currentTab === 'home' && (
           <HomeView
