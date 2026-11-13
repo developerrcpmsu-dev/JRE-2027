@@ -57,7 +57,16 @@ export function parseCurrentRoute() {
       return { mainTab: 'medical-support', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/medical-support?uid=${uidParam}` };
     }
     if (pageSeg === 'my-emr' || pageSeg === 'field-emr' || pageSeg === 'my-medical') {
-      return { mainTab: 'my-emr', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/my-emr?uid=${uidParam}` };
+      const caseParam = url.searchParams.get('case');
+      const caseSuffix = caseParam ? `&case=${encodeURIComponent(caseParam)}` : '';
+      return {
+        mainTab: 'my-emr',
+        subRoute: null,
+        inspectUid: uidRaw,
+        caseId: caseParam || null,
+        fromDevUrlShortcut: true,
+        canonicalPath: `/my-emr?uid=${uidParam}${caseSuffix}`
+      };
     }
     if (pageSeg === 'my-payment' || pageSeg === 'payment' || pageSeg === 'payment-status' || pageSeg === 'slip' || pageSeg === 'fee' || pageSeg === 'my-fee') {
       return { mainTab: 'my-payment', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/my-payment?uid=${uidParam}` };
@@ -71,7 +80,10 @@ export function parseCurrentRoute() {
     if (pageSeg === 'orders' || pageSeg === 'my-orders') {
       return { mainTab: 'merchandise', subRoute: 'my_orders', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/merchandise/orders?uid=${uidParam}` };
     }
-    if (pageSeg === 'register' || pageSeg === 'form' || pageSeg === 'edit') {
+    if (pageSeg === 'edit' || pageSeg === 'edit-profile') {
+      return { mainTab: 'register', subRoute: 'edit', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/register/edit?uid=${uidParam}` };
+    }
+    if (pageSeg === 'register' || pageSeg === 'form') {
       return { mainTab: 'register', subRoute: 'form', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/register?uid=${uidParam}` };
     }
     if (pageSeg === 'chat' || pageSeg === 'group-chat') {
@@ -172,11 +184,31 @@ export function parseCurrentRoute() {
   }
 
   if (first === 'my-emr' || first === 'field-emr' || first === 'my-medical') {
-    return withUid({ mainTab: 'my-emr', subRoute: null, canonicalPath: '/my-emr' });
+    const queryCase = url.searchParams.get('case') || '';
+    const caseParam = queryCase || ((second === 'case' || second === 'c') && rawThird ? decodeURIComponent(rawThird) : '');
+    return withUid({
+      mainTab: 'my-emr',
+      subRoute: null,
+      caseId: caseParam || null,
+      canonicalPath: caseParam ? `/my-emr?case=${encodeURIComponent(caseParam)}` : '/my-emr'
+    });
   }
 
   if (first === 'my-payment' || first === 'payment' || first === 'payment-status' || first === 'my-fee' || first === 'slip') {
     return withUid({ mainTab: 'my-payment', subRoute: null, canonicalPath: '/my-payment' });
+  }
+  // ✏️ หน้าแก้ไขข้อมูล & เปลี่ยนรูปทำบัตร ID Card (แยก URL ชัดเจน ไม่พาไปหน้าบัตร)
+  if (
+    first === 'edit-profile' || first === 'edit-registration' || first === 'edit-id-card' ||
+    ((first === 'register' || first === 'profile' || first === 'dashboard') && second === 'edit')
+  ) {
+    return withUid({ mainTab: 'register', subRoute: 'edit', canonicalPath: '/register/edit' });
+  }
+  if (
+    ((first === 'staff-register' || first === 'staff-id-card' || first === 'staff') && second === 'edit') ||
+    (first === 'register' && second === 'staff' && segments[2] === 'edit')
+  ) {
+    return withUid({ mainTab: 'register', subRoute: 'staff-edit', canonicalPath: '/staff-register/edit' });
   }
   if (
     first === 'staff-register' ||
@@ -223,16 +255,28 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'documents', canonicalPath: '/admin/documents' };
   }
 
-  // Standalone shortcuts for Medical Dispensary & EMR Records (/medical, /all-emr, /medical-records, /medical/person/:id, /admin/medical)
+  // Standalone shortcuts for Medical Dispensary & EMR Records (/medical, /all-emr, /medical-records, /medical/person/:id, /medical/case/:caseId, /admin/medical)
   if (first === 'medical' || first === 'dispensary' || first === 'clinic' || first === 'emr' || first === 'all-emr' || first === 'medical-records' || first === 'health-records' || first === 'firstaid' || first === 'first-aid' || first === 'pharmacy') {
     const queryPerson = url.searchParams.get('person') || '';
-    const pathPerson = (second === 'person' || second === 'p' || second === 'member') && rawThird ? decodeURIComponent(rawThird) : ((second && second !== 'all' && second !== 'summary') ? decodeURIComponent(rawSecond) : '');
+    const queryCase = url.searchParams.get('case') || '';
+    const isCasePath = second === 'case' || second === 'c' || second === 'log';
+    const pathCase = isCasePath && rawThird ? decodeURIComponent(rawThird) : '';
+    const pathPerson = !isCasePath
+      ? ((second === 'person' || second === 'p' || second === 'member') && rawThird
+          ? decodeURIComponent(rawThird)
+          : (second && second !== 'all' && second !== 'summary' ? decodeURIComponent(rawSecond) : ''))
+      : '';
     const personId = pathPerson || queryPerson;
+    const caseId = pathCase || queryCase;
+    const qParts = [];
+    if (personId) qParts.push(`person=${encodeURIComponent(personId)}`);
+    if (caseId) qParts.push(`case=${encodeURIComponent(caseId)}`);
     return {
       mainTab: 'admin',
       subRoute: 'medical',
       personId: personId || null,
-      canonicalPath: personId ? `/admin/medical?person=${encodeURIComponent(personId)}` : '/admin/medical'
+      caseId: caseId || null,
+      canonicalPath: qParts.length > 0 ? `/admin/medical?${qParts.join('&')}` : '/admin/medical'
     };
   }
 
@@ -438,23 +482,36 @@ export function parseCurrentRoute() {
     else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
     else canonicalPath = '/admin';
 
+    const isMedicalCasePath = third === 'case' || third === 'c' || third === 'log';
+    const medicalCaseId = targetSub === 'medical'
+      ? (
+          (isMedicalCasePath && rawSegments[3] ? decodeURIComponent(rawSegments[3]) : '') ||
+          url.searchParams.get('case') ||
+          ''
+        )
+      : '';
+
     const medicalPersonId = targetSub === 'medical'
       ? (
-          ((third === 'person' || third === 'p' || third === 'member') && rawSegments[3] ? decodeURIComponent(rawSegments[3]) : '') ||
-          (third && third !== 'all' && third !== 'summary' ? decodeURIComponent(rawThird) : '') ||
+          (!isMedicalCasePath && (third === 'person' || third === 'p' || third === 'member') && rawSegments[3] ? decodeURIComponent(rawSegments[3]) : '') ||
+          (!isMedicalCasePath && third && third !== 'all' && third !== 'summary' ? decodeURIComponent(rawThird) : '') ||
           url.searchParams.get('person') ||
           ''
         )
       : '';
 
-    if (targetSub === 'medical' && medicalPersonId) {
-      canonicalPath = `/admin/medical?person=${encodeURIComponent(medicalPersonId)}`;
+    if (targetSub === 'medical' && (medicalPersonId || medicalCaseId)) {
+      const qParts = [];
+      if (medicalPersonId) qParts.push(`person=${encodeURIComponent(medicalPersonId)}`);
+      if (medicalCaseId) qParts.push(`case=${encodeURIComponent(medicalCaseId)}`);
+      canonicalPath = `/admin/medical?${qParts.join('&')}`;
     }
 
     return { 
       mainTab: 'admin', 
       subRoute: targetSub, 
       personId: medicalPersonId || null,
+      caseId: medicalCaseId || null,
       canonicalPath 
     };
   }
@@ -506,6 +563,8 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'register':
       if (subRoute === 'dashboard') return '/dashboard';
       if (subRoute === 'staff') return '/staff-register';
+      if (subRoute === 'edit') return '/register/edit';
+      if (subRoute === 'staff-edit') return '/staff-register/edit';
       return '/register';
     case 'staff-register':
       return '/staff-register';
@@ -619,7 +678,7 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false, options = {})
     currentParams.set('id', options.postId);
   }
 
-  // Handle medical ?person= param
+  // Handle medical ?person= and ?case= params
   if (!(mainTab === 'admin' && subRoute === 'medical') && !options.keepPerson) {
     currentParams.delete('person');
   }
@@ -627,6 +686,15 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false, options = {})
     currentParams.delete('person');
   } else if (options.personId) {
     currentParams.set('person', options.personId);
+  }
+
+  if (!(mainTab === 'admin' && subRoute === 'medical') && mainTab !== 'my-emr' && !options.keepCase) {
+    currentParams.delete('case');
+  }
+  if (options.clearCase) {
+    currentParams.delete('case');
+  } else if (options.caseId) {
+    currentParams.set('case', options.caseId);
   }
 
   // Handle Dev UID inspection (?uid=...)
@@ -673,6 +741,9 @@ export function buildUserPageUrl(uid, page = 'dashboard', origin = '') {
       return `${base}/merchandise/orders?uid=${safeUid}`;
     case 'register':
       return `${base}/register?uid=${safeUid}`;
+    case 'edit':
+    case 'register-edit':
+      return `${base}/register/edit?uid=${safeUid}`;
     case 'chat':
       return `${base}/chat?uid=${safeUid}`;
     case 'profile':
@@ -684,5 +755,32 @@ export function buildUserPageUrl(uid, page = 'dashboard', origin = '') {
     default:
       return `${base}/dashboard?uid=${safeUid}`;
   }
+}
+
+export function buildEmrPersonUrl(personId, origin = '') {
+  const safeId = encodeURIComponent(String(personId || '').trim());
+  const base = origin ? String(origin).replace(/\/+$/, '') : '';
+  return safeId ? `${base}/admin/medical?person=${safeId}` : `${base}/admin/medical`;
+}
+
+export function buildEmrCaseUrl(caseId, personId = '', origin = '') {
+  const safeCase = encodeURIComponent(String(caseId || '').trim());
+  const safePerson = encodeURIComponent(String(personId || '').trim());
+  const base = origin ? String(origin).replace(/\/+$/, '') : '';
+  if (!safeCase) return buildEmrPersonUrl(personId, origin);
+  const parts = [];
+  if (safePerson) parts.push(`person=${safePerson}`);
+  parts.push(`case=${safeCase}`);
+  return `${base}/admin/medical?${parts.join('&')}`;
+}
+
+export function buildMyEmrCaseUrl(uid, caseId, origin = '') {
+  const safeUid = encodeURIComponent(String(uid || '').trim());
+  const safeCase = encodeURIComponent(String(caseId || '').trim());
+  const base = origin ? String(origin).replace(/\/+$/, '') : '';
+  const params = [];
+  if (safeUid) params.push(`uid=${safeUid}`);
+  if (safeCase) params.push(`case=${safeCase}`);
+  return params.length > 0 ? `${base}/my-emr?${params.join('&')}` : `${base}/my-emr`;
 }
 

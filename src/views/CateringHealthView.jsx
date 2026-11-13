@@ -356,7 +356,7 @@ export default function CateringHealthView({
       `}</style>
 
       {/* Page Header Banner */}
-      <div className="p-6 sm:p-8 bg-gradient-to-r from-amber-950/40 via-slate-900 to-rose-950/40 border border-amber-500/40 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="p-6 sm:p-8 bg-gradient-to-r from-amber-950/40 via-slate-900 to-rose-950/40 border border-amber-500/40 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 no-print print:hidden">
         <div className="flex items-start gap-4">
           <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-lg shadow-amber-950/50">
             <UtensilsCrossed className="w-7 h-7" />
@@ -668,20 +668,79 @@ export default function CateringHealthView({
       </div>
 
       {/* Main Table / Cards List */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl print-clean">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl print-clean print:bg-white print:border-none print:p-0">
         
-        {/* Printable Header (Visible only on print) */}
-        <div className="hidden print-header">
-          <h2 className="text-xl font-bold">โครงการ Joint Response Exercise (JRE 2027)</h2>
-          <h3 className="text-base font-semibold">สรุปข้อมูลจัดเตรียมอาหาร & สุขภาวะ (Catering & Welfare List)</h3>
-          <p className="text-xs text-gray-600">
-            พิมพ์เมื่อ: {new Date().toLocaleString('th-TH')} • จำนวนผู้มีข้อจำกัด: {filteredList.length} คน
-          </p>
-          <hr className="my-3" />
+        {/* Official Thai Government Print Table (Visible only on Print / PDF) */}
+        <div id="printable-catering-sheet" className="hidden print:block official-doc-sheet space-y-4">
+          <div className="pb-3 border-b-4 border-double border-slate-950 space-y-1">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-900 text-[11px] font-bold">
+              <span>แบบฟอร์มราชการ / เอกสารโครงการฝึกซ้อมร่วมประจำปี (JRE 2027)</span>
+              <span className="font-mono">รหัสเอกสาร: จป-2570-อาหาร-สุขภาวะ • เฉพาะฝ่ายสวัสดิการ/แพทย์</span>
+            </div>
+            <h2 className="text-xl font-black text-black text-center pt-1">
+              บัญชีรายชื่อผู้มีข้อจำกัดด้านอาหาร ประวัติแพ้ยา และโรคประจำตัว
+            </h2>
+            <p className="text-xs font-bold text-center text-slate-900">
+              โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) ระหว่าง มหาวิทยาลัยขอนแก่น และ มหาวิทยาลัยมหาสารคาม
+            </p>
+            <div className="flex items-center justify-between pt-1.5 border-t border-slate-400 text-[10.5px] font-semibold">
+              <span>วันที่ 13 - 15 กุมภาพันธ์ พ.ศ. 2570 • ณ มหาวิทยาลัยมหาสารคาม</span>
+              <span>จำนวนรายการที่แสดง: {filteredList.length} คน</span>
+            </div>
+          </div>
+
+          <table className="official-table print-table w-full text-left text-[10.5px] border-collapse border-2 border-slate-950">
+            <thead>
+              <tr className="bg-slate-200 text-black font-bold text-center">
+                <th className="py-1.5 px-1.5 border-[1.5px] border-slate-950 w-8">ที่</th>
+                <th className="py-1.5 px-2 border-[1.5px] border-slate-950 text-left">ชื่อ - นามสกุล / นามเรียกขาน</th>
+                <th className="py-1.5 px-2 border-[1.5px] border-slate-950">สังกัด / กลุ่ม / ห้องพัก</th>
+                <th className="py-1.5 px-2 border-[1.5px] border-slate-950 text-left">ประวัติแพ้อาหาร / แพ้ยา / มังสวิรัติ</th>
+                <th className="py-1.5 px-2 border-[1.5px] border-slate-950 text-left">โรคประจำตัว / ข้อจำกัดทางกาย</th>
+                <th className="py-1.5 px-2 border-[1.5px] border-slate-950 text-left">หมายเหตุ / การดูแลพิเศษ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredList.map((reg, index) => {
+                const cardData = getRegistrationCardData(reg);
+                const medText = getApplicantMedical(reg) || 'ไม่มี';
+                const allergyText = getApplicantAllergy(reg) || 'ไม่มี';
+                return (
+                  <tr key={reg.id || index}>
+                    <td className="py-1.5 px-1.5 border border-slate-700 text-center font-mono font-bold">{index + 1}</td>
+                    <td className="py-1.5 px-2 border border-slate-700">
+                      <div className="font-bold text-black">{reg.first_name} {reg.last_name}{reg.nickname ? ` (${reg.nickname})` : ''}</div>
+                      <div className="text-[9.5px] font-mono">{reg.callsign || '-'} • {reg.phone || '-'}</div>
+                    </td>
+                    <td className="py-1.5 px-2 border border-slate-700 text-center">
+                      <div className="font-bold">{cardData.affiliation || '-'}</div>
+                      <div className="text-[9.5px]">กลุ่ม {reg.group_assigned || '-'} • ห้อง {reg.room_assigned || '-'}</div>
+                    </td>
+                    <td className="py-1.5 px-2 border border-slate-700 font-semibold">{allergyText}</td>
+                    <td className="py-1.5 px-2 border border-slate-700 font-semibold">{medText}</td>
+                    <td className="py-1.5 px-2 border border-slate-700">{getCleanSpecialNotes(reg) || (reg.is_special_care ? 'ดูแลพิเศษ' : '-')}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="grid grid-cols-2 gap-8 pt-6 mt-4 border-t-2 border-slate-950 text-center text-xs text-black" style={{ breakInside: 'avoid' }}>
+            <div>
+              <p className="mb-7">ลงชื่อ ..................................................................... เจ้าหน้าที่ฝ่ายสวัสดิการและอาหาร</p>
+              <p className="font-bold">( ..................................................................... )</p>
+              <p className="text-[10.5px]">วันที่ ............ / ........................ / 2570</p>
+            </div>
+            <div>
+              <p className="mb-7">ลงชื่อ ..................................................................... ประธาน / ผู้รับผิดชอบโครงการ</p>
+              <p className="font-bold">( ..................................................................... )</p>
+              <p className="text-[10.5px]">วันที่ ............ / ........................ / 2570</p>
+            </div>
+          </div>
         </div>
 
         {filteredList.length === 0 ? (
-          <div className="py-20 text-center space-y-3">
+          <div className="py-20 text-center space-y-3 no-print print:hidden">
             <div className="w-16 h-16 rounded-3xl bg-slate-800/80 border border-slate-700 flex items-center justify-center mx-auto text-slate-500">
               <UtensilsCrossed className="w-8 h-8" />
             </div>
@@ -693,7 +752,7 @@ export default function CateringHealthView({
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 no-print print:hidden">
             {filteredList.map((reg, index) => {
               const cardData = getRegistrationCardData(reg);
               const medText = getApplicantMedical(reg);

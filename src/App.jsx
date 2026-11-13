@@ -1442,6 +1442,10 @@ export default function App() {
       setCurrentTab('merchandise', 'my_orders', { inspectUid: cleanUid });
       return;
     }
+    if (page === 'edit' || page === 'edit-profile') {
+      setCurrentTab('register', 'edit', { inspectUid: cleanUid });
+      return;
+    }
     if (page === 'register') {
       setCurrentTab('register', 'form', { inspectUid: cleanUid });
       return;
@@ -1507,7 +1511,9 @@ export default function App() {
                       ? 'id-card'
                       : currentTab === 'merchandise'
                         ? (currentSubRoute === 'my_orders' ? 'orders' : 'merchandise')
-                        : (currentTab === 'register' && currentSubRoute === 'form' ? 'register' : 'dashboard');
+                        : (currentTab === 'register' && (currentSubRoute === 'edit' || currentSubRoute === 'staff-edit')
+                          ? 'edit'
+                          : (currentTab === 'register' && currentSubRoute === 'form' ? 'register' : 'dashboard'));
             handleOpenUserPageAsDev(nextUid, curPage);
           }}
           onSwitchInspectPage={(page) => handleOpenUserPageAsDev(rawInspectUid, page)}
@@ -1674,6 +1680,7 @@ export default function App() {
             isAdmin={isAdmin}
             initialTab={currentSubRoute || 'applicants'}
             initialMedicalPersonId={route?.personId || null}
+            initialMedicalCaseId={route?.caseId || null}
             onTabChange={(tab, opts = {}) => {
               setCurrentTab('admin', tab, opts);
             }}
@@ -1772,6 +1779,12 @@ export default function App() {
             registration={effectiveRegistration}
             onNavigateDashboard={() => setCurrentTab('dashboard')}
             onNavigateRegister={() => setCurrentTab('register')}
+            onNavigateEdit={() => setCurrentTab(
+              'register',
+              isStaffRegistration(effectiveRegistration) && effectiveRegistration?.staff_id_card_only
+                ? 'staff-edit'
+                : 'edit'
+            )}
           />
         )}
 
@@ -1808,6 +1821,13 @@ export default function App() {
             myRegistration={effectiveRegistration}
             isAdmin={isAdmin}
             isDevOperator={isStrictDevUser}
+            initialCaseId={route?.caseId || null}
+            onCaseChange={(nextCaseId) => {
+              setCurrentTab('my-emr', null, {
+                ...(inspectUid ? { inspectUid } : {}),
+                ...(nextCaseId ? { caseId: nextCaseId } : { clearCase: true })
+              });
+            }}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             onNavigateDashboard={() => setCurrentTab('dashboard')}
             onNavigateRegister={() => setCurrentTab('register')}

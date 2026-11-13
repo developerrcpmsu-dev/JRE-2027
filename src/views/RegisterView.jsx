@@ -402,6 +402,7 @@ export default function RegisterView({
   const scheduleStatus = getRegistrationScheduleStatus(effectivePaymentConfig);
   const isStaffPortal = Boolean(
     subRoute === 'staff' ||
+    subRoute === 'staff-edit' ||
     (typeof window !== 'undefined' && (
       window.location.pathname.toLowerCase().includes('staff-register') ||
       window.location.pathname.toLowerCase().includes('staff-signup') ||
@@ -430,12 +431,12 @@ export default function RegisterView({
       setIsEditing(false);
     } else if (subRoute === 'staff' && myRegistration) {
       setIsEditing(false);
-    } else if (subRoute === 'form' && myRegistration) {
+    } else if ((subRoute === 'form' || subRoute === 'edit' || subRoute === 'staff-edit') && myRegistration) {
       populateFormFromRegistration(myRegistration);
       setCurrentFormStep(1);
       setIsEditing(true);
     }
-  }, [subRoute, myRegistration]);
+  }, [subRoute, myRegistration?.id]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -1522,10 +1523,11 @@ export default function RegisterView({
     if (phone.length !== 10 || !/^0\d{9}$/.test(phone)) {
       errs.phone = 'กรุณาระบุเบอร์โทรศัพท์มือถือให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)';
     }
-    if (!emergencyName.trim() && !isStaffPortal) {
+    const allowOptionalEmergency = isStaffPortal || Boolean(myRegistration?.staff_id_card_only);
+    if (!emergencyName.trim() && !allowOptionalEmergency) {
       errs.emergencyName = 'กรุณาระบุชื่อ-สกุล บุคคลติดต่อฉุกเฉิน';
     }
-    if ((emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) && !isStaffPortal) {
+    if ((emergencyPhone.length !== 10 || !/^0\d{9}$/.test(emergencyPhone)) && !allowOptionalEmergency) {
       errs.emergencyPhone = 'กรุณาระบุเบอร์โทรศัพท์ติดต่อฉุกเฉินให้ครบ 10 หลักพอดี (ขึ้นต้นด้วย 0)';
     }
     if (isStaffPortal && !idCardPhoto && !(myRegistration?.id_card_photo || myRegistration?.user_avatar || user?.avatar)) {
@@ -1763,11 +1765,17 @@ export default function RegisterView({
     };
 
     try {
-      await onSaveRegistration(payload);
+      if (myRegistration && onUpdateRegistration) {
+        const targetId = myRegistration.id || myRegistration.user_id || user.id;
+        const { user_id: _uid, user_email: _uemail, ...safeStaffUpdates } = payload;
+        await onUpdateRegistration(targetId, safeStaffUpdates);
+      } else {
+        await onSaveRegistration(payload);
+      }
       localStorage.removeItem(DRAFT_KEY);
       setHasDraftRestored(false);
       setIsEditing(false);
-      if (onSubRouteChange) onSubRouteChange(isStaffPortal ? 'staff' : 'dashboard');
+      if (onSubRouteChange) onSubRouteChange(isStaffPortal && !myRegistration ? 'staff' : 'dashboard');
       setStatusMessage({
         type: 'success',
         text: '🎉 บันทึกข้อมูลคณะทำงาน (ORGANIZING STAFF) เข้าระบบ และออกบัตรประจำตัว ID Card เรียบร้อยแล้ว!'
@@ -2250,7 +2258,13 @@ export default function RegisterView({
       };
 
     try {
-      await onSaveRegistration(payload);
+      if (myRegistration && onUpdateRegistration) {
+        const targetId = myRegistration.id || myRegistration.user_id || user.id;
+        const { user_id: _uid, user_email: _uemail, ...safeStaffUpdates } = payload;
+        await onUpdateRegistration(targetId, safeStaffUpdates);
+      } else {
+        await onSaveRegistration(payload);
+      }
       localStorage.removeItem(DRAFT_KEY);
       setHasDraftRestored(false);
       setIsEditing(false);
@@ -2814,6 +2828,19 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => {
+                  populateFormFromRegistration(myRegistration);
+                  setCurrentFormStep(1);
+                  setIsEditing(true);
+                  if (onSubRouteChange) onSubRouteChange('staff-edit');
+                }}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs shadow-lg inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Edit className="w-4 h-4" />
+                <span>✏️ แก้ไขข้อมูล & เปลี่ยนรูปทำบัตร ID Card</span>
+              </button>
               <a
                 href="/id-card"
                 className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black text-xs shadow-lg inline-flex items-center gap-1.5"
@@ -3332,7 +3359,7 @@ export default function RegisterView({
                   if (myRegistration) populateFormFromRegistration(myRegistration);
                   setCurrentFormStep(1);
                   setIsEditing(true);
-                  if (onSubRouteChange) onSubRouteChange(isStaffPortal || isStaffReg ? 'staff' : 'form');
+                  if (onSubRouteChange) onSubRouteChange(isStaffPortal || isStaffReg ? 'staff-edit' : 'edit');
                 }}
                 className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
                 title="แก้ไขข้อมูลส่วนตัว และอัปโหลด/เปลี่ยนรูปถ่ายทำบัตร ID Card (ยกเว้นไซส์เสื้อและสลิปที่อนุมัติแล้ว)"
@@ -3465,8 +3492,10 @@ export default function RegisterView({
               <button
                 type="button"
                 onClick={() => {
+                  if (myRegistration) populateFormFromRegistration(myRegistration);
+                  setCurrentFormStep(1);
                   setIsEditing(true);
-                  if (onSubRouteChange) onSubRouteChange('staff');
+                  if (onSubRouteChange) onSubRouteChange('staff-edit');
                 }}
                 className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl font-black text-xs shadow-lg shadow-amber-500/25 inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
@@ -7664,7 +7693,7 @@ export default function RegisterView({
               ) : <div />}
 
               <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
-                {(isStaffPortal || isStaff) ? (
+                {((isStaffPortal && !myRegistration) || (myRegistration?.staff_id_card_only) || (isStaff && !myRegistration)) ? (
                   <button
                     type="button"
                     onClick={handleDirectStaffSave}
@@ -7672,7 +7701,7 @@ export default function RegisterView({
                     className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-2xl shadow-xl shadow-amber-500/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-5 h-5" />
-                    <span>{isSubmitting ? 'กำลังบันทึกข้อมูล Staff เข้าระบบ...' : '💾 บันทึกข้อมูล Staff เข้าระบบ & ออกบัตรประจำตัว ID Card ทันที'}</span>
+                    <span>{isSubmitting ? 'กำลังบันทึกข้อมูล Staff เข้าระบบ...' : (isEditing && myRegistration ? '💾 บันทึกการแก้ไขข้อมูล & รูปบัตร Staff ทันที' : '💾 บันทึกข้อมูล Staff เข้าระบบ & ออกบัตรประจำตัว ID Card ทันที')}</span>
                   </button>
                 ) : (isEditing && myRegistration) && (
                   <button

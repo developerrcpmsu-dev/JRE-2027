@@ -169,6 +169,7 @@ import {
 export default function AdminDashboardView({
   initialTab = 'applicants',
   initialMedicalPersonId = null,
+  initialMedicalCaseId = null,
   onTabChange,
   registrations,
   onSaveRegistration,
@@ -309,6 +310,7 @@ export default function AdminDashboardView({
   const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(() => isDevOperator);
   const [medicalPersonId, setMedicalPersonId] = useState(initialMedicalPersonId || '');
+  const [medicalCaseId, setMedicalCaseId] = useState(initialMedicalCaseId || '');
   const [showCreatePersonModal, setShowCreatePersonModal] = useState(false);
   const [isCreatingPerson, setIsCreatingPerson] = useState(false);
   const [newPersonForm, setNewPersonForm] = useState({
@@ -345,11 +347,16 @@ export default function AdminDashboardView({
     setMedicalPersonId(initialMedicalPersonId || '');
   }, [initialMedicalPersonId]);
 
+  React.useEffect(() => {
+    setMedicalCaseId(initialMedicalCaseId || '');
+  }, [initialMedicalCaseId]);
+
   const handleOpenMedicalPersonPage = (targetPersonId = '') => {
     setMedicalPersonId(targetPersonId || '');
+    setMedicalCaseId('');
     setActiveTab('medical');
     if (onTabChange) {
-      onTabChange('medical', targetPersonId ? { personId: targetPersonId } : { clearPerson: true });
+      onTabChange('medical', targetPersonId ? { personId: targetPersonId, clearCase: true } : { clearPerson: true, clearCase: true });
     }
   };
 
@@ -538,6 +545,7 @@ export default function AdminDashboardView({
           setDedicatedSubpage(null);
           if (tab !== 'medical') {
             setMedicalPersonId('');
+            setMedicalCaseId('');
           }
           if (tab === 'applicants') {
             setFilterType('all');
@@ -558,6 +566,7 @@ export default function AdminDashboardView({
     setDedicatedSubpage(null);
     if (tab !== 'medical') {
       setMedicalPersonId('');
+      setMedicalCaseId('');
     }
     if (tab === 'applicants') {
       setFilterType('all');
@@ -6222,9 +6231,9 @@ export default function AdminDashboardView({
         </div>
       )}
 
-      {/* Header & Stats Banner (Only rendered on main /admin dashboard) */}
+      {/* Header & Stats Banner (Only rendered on main /admin dashboard; hidden on print/PDF) */}
       {!dedicatedSubpage && (
-      <>
+      <div className="space-y-6 no-print print:hidden">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
@@ -6823,7 +6832,7 @@ export default function AdminDashboardView({
               <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
               <option value="medical">🩺 หน่วยพยาบาลสนาม & เบิกจ่ายยา/เวชระเบียน</option>
               <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 3 (ห้อง 307 - 333)</option>
-              <option value="documents">📑 ศูนย์รวมเอกสาร & ใบตรวจยา Staff (6 ใบ)</option>
+              <option value="documents">📑 ศูนย์รวมเอกสาร &amp; ใบตรวจยา Staff (9 ใบ)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
               <option value="forms">📝 แบบทดสอบ & ประเมิน Google Forms</option>
@@ -6969,7 +6978,7 @@ export default function AdminDashboardView({
             }`}
           >
             <FileText className="w-4 h-4 text-teal-400 shrink-0" />
-            <span>📄 เอกสาร & ใบเช็คยา Staff (6 ใบ)</span>
+            <span>📄 เอกสาร &amp; ใบเช็คยา Staff (9 ใบ)</span>
           </button>
 
           <button
@@ -7112,7 +7121,7 @@ export default function AdminDashboardView({
           </button>
         </div>
       </div>
-      </>
+      </div>
       )}
 
       {/* TAB 1: APPLICANTS & ALLOCATION & PROFILE VIEWER */}
@@ -7127,7 +7136,7 @@ export default function AdminDashboardView({
             <div className="space-y-6 animate-in fade-in duration-300">
               
               {/* Top Chrome: Breadcrumb, Direct Canonical URL, View Toggle & Subpage Switcher */}
-              <div className="p-4 sm:p-6 bg-slate-950/90 border border-slate-800 rounded-3xl shadow-2xl space-y-4">
+              <div className="p-4 sm:p-6 bg-slate-950/90 border border-slate-800 rounded-3xl shadow-2xl space-y-4 no-print print:hidden">
                 
                 {/* Row 1: Breadcrumb + Action Controls */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
@@ -19246,10 +19255,31 @@ export default function AdminDashboardView({
           currentUser={user}
           isDevOperator={isDevOperator}
           initialPersonId={medicalPersonId}
+          initialCaseId={medicalCaseId}
           onPersonChange={(nextPersonId) => {
             setMedicalPersonId(nextPersonId || '');
+            setMedicalCaseId('');
             if (onTabChange) {
-              onTabChange('medical', nextPersonId ? { personId: nextPersonId } : { clearPerson: true });
+              onTabChange('medical', nextPersonId ? { personId: nextPersonId, clearCase: true } : { clearPerson: true, clearCase: true });
+            }
+          }}
+          onCaseChange={(nextCaseId, nextPersonId = '') => {
+            setMedicalCaseId(nextCaseId || '');
+            if (nextPersonId !== undefined && nextPersonId !== null && nextPersonId !== '') {
+              setMedicalPersonId(nextPersonId);
+            }
+            if (onTabChange) {
+              if (nextCaseId) {
+                onTabChange('medical', {
+                  caseId: nextCaseId,
+                  ...(nextPersonId ? { personId: nextPersonId } : { clearPerson: true })
+                });
+              } else {
+                onTabChange('medical', {
+                  clearCase: true,
+                  ...(nextPersonId ? { personId: nextPersonId } : {})
+                });
+              }
             }
           }}
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
@@ -19308,6 +19338,18 @@ export default function AdminDashboardView({
           merchandiseOrders={merchandiseOrders}
           paymentConfig={paymentConfig}
           userAccounts={userAccounts}
+          onOpenEmrPerson={(personId) => handleOpenMedicalPersonPage(personId)}
+          onOpenEmrCase={(caseId, personId = '') => {
+            setMedicalCaseId(caseId || '');
+            if (personId) setMedicalPersonId(personId);
+            setActiveTab('medical');
+            if (onTabChange) {
+              onTabChange('medical', {
+                caseId,
+                ...(personId ? { personId } : { clearPerson: true })
+              });
+            }
+          }}
           triggerToast={triggerToast}
         />
       )}

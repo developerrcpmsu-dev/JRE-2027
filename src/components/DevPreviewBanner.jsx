@@ -62,7 +62,7 @@ export default function DevPreviewBanner({
   };
 
   return (
-    <div className="sticky top-14 sm:top-16 z-40 w-full bg-gradient-to-r from-cyan-950/95 via-slate-900/95 to-indigo-950/95 border-b border-cyan-500/40 backdrop-blur-md shadow-lg">
+    <div className="sticky top-14 sm:top-16 z-40 w-full bg-gradient-to-r from-cyan-950/95 via-slate-900/95 to-indigo-950/95 border-b border-cyan-500/40 backdrop-blur-md shadow-lg no-print print:hidden">
       <div className="w-full max-w-[1850px] mx-auto px-3 sm:px-5 py-2 flex flex-col xl:flex-row xl:items-center justify-between gap-2">
         {/* Left: Target account badge + Switcher */}
         <div className="flex flex-wrap items-center gap-2 min-w-0">

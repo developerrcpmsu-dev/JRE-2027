@@ -10,7 +10,7 @@ export default function FormsBanner({ formsConfig, user }) {
   if (activeForms.length === 0) return null;
 
   return (
-    <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-1">
+    <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-1 no-print print:hidden">
       <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-slate-950/95 border border-slate-700/70 hover:border-slate-600/80 p-3.5 sm:p-5 shadow-2xl shadow-orange-500/5 backdrop-blur-xl transition-all duration-300">
         
         {/* Ambient Subtle Glows */}

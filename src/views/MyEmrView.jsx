@@ -20,13 +20,15 @@ import {
   normalizeCallsignSpacing
 } from '../data/defaultData';
 import { matchEmrLogToPerson } from '../utils/emrUtils';
-import { buildUserPageUrl } from '../utils/router';
+import { buildMyEmrCaseUrl, buildUserPageUrl } from '../utils/router';
 
 export default function MyEmrView({
   user,
   myRegistration,
   isAdmin = false,
   isDevOperator = false,
+  initialCaseId = null,
+  onCaseChange = null,
   onOpenGoogleLogin,
   onNavigateDashboard,
   onNavigateRegister,
@@ -255,6 +257,89 @@ export default function MyEmrView({
           </span>
         </div>
 
+        {/* Focused Single Case View (/my-emr?case=<caseId>) */}
+        {initialCaseId && (() => {
+          const focused = medDispenseLogs.find((l) => String(l.id) === String(initialCaseId));
+          if (!focused) return null;
+          const caseUrl = buildMyEmrCaseUrl(uid, focused.id, origin);
+          const formattedCaseTime = new Date(focused.dispensed_at || focused.created_at).toLocaleString('th-TH', {
+            dateStyle: 'full',
+            timeStyle: 'short'
+          });
+          return (
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-950/50 via-slate-900 to-cyan-950/40 border-2 border-emerald-500/50 shadow-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300 block">
+                    📌 ใบเวชระเบียนเฉพาะเคส • Case ID: {focused.id}
+                  </span>
+                  <h2 className="text-sm sm:text-base font-black text-white mt-0.5">
+                    อาการ: <span className="text-amber-300">{focused.symptoms || focused.chief_complaint || 'ไม่ระบุ'}</span>
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-mono">📅 {formattedCaseTime}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(caseUrl);
+                      triggerToast(`คัดลอก URL เคสนี้แล้ว:\n${caseUrl}`, 'success');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-[11px] font-mono text-cyan-200 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>คัดลอก URL เคส</span>
+                  </button>
+                  {onCaseChange && (
+                    <button
+                      type="button"
+                      onClick={() => onCaseChange(null)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200 cursor-pointer"
+                    >
+                      ดูรวมทุกเคส
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950/75 border border-slate-800 space-y-1.5">
+                  <div>
+                    <span className="text-slate-400">เหตุการณ์ / เป็นเมื่อไหร่:</span>{' '}
+                    <span className="text-slate-100">{focused.incident_detail || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">สัญญาณชีพ (Vital Signs):</span>{' '}
+                    <span className="font-mono text-sky-300">{focused.vital_signs || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">การปฐมพยาบาล:</span>{' '}
+                    <span className="text-pink-200 font-semibold">{focused.first_aid_action || focused.first_aid_done || '-'}</span>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/75 border border-slate-800 space-y-1.5">
+                  <div>
+                    <span className="text-slate-400">ยาและเวชภัณฑ์ที่ได้รับ:</span>{' '}
+                    <strong className="text-emerald-300">{focused.medicines_dispensed || focused.medications_dispensed || '-'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">ขนาดและเวลาที่ใช้ยา:</span>{' '}
+                    <span className="text-slate-100">{focused.dosage_instruction || focused.instructions || '-'}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    ผู้กรอก: <strong>{focused.recorder_name || focused.dispenser_name || '-'}</strong> • ผู้จ่ายยา: <strong className="text-purple-300">{focused.dispenser_name || '-'}</strong>
+                  </div>
+                </div>
+              </div>
+              {focused.medical_notes && (
+                <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200">
+                  <strong>📝 หมายเหตุ/ติดตามอาการ:</strong> {focused.medical_notes}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Search + Filter + < 0 > Pagination Bar */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/75 border border-slate-800">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
@@ -430,6 +515,37 @@ export default function MyEmrView({
                       ID: {log.id ? String(log.id).slice(0, 8) : `#${startIdx + idx + 1}`}
                     </span>
                   </div>
+
+                  {log.id && (
+                    <div className="pt-2 border-t border-slate-800/60 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onCaseChange) onCaseChange(log.id);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer border transition-colors ${
+                          String(initialCaseId || '') === String(log.id)
+                            ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200'
+                            : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                        }`}
+                      >
+                        {String(initialCaseId || '') === String(log.id) ? '✓ กำลังเปิดเคสนี้' : 'เปิดรายละเอียดเคส'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const caseUrl = buildMyEmrCaseUrl(uid, log.id, origin);
+                          navigator.clipboard.writeText(caseUrl);
+                          triggerToast(`คัดลอกลิงก์เวชระเบียนเคสนี้แล้ว:\n${caseUrl}`, 'success');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-[10px] font-mono text-cyan-200 inline-flex items-center gap-1 cursor-pointer"
+                        title={buildMyEmrCaseUrl(uid, log.id, origin)}
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>คัดลอก URL เคส</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -27,9 +27,12 @@ import {
   Filter,
   ArrowLeft,
   Pill,
-  FileHeart
+  FileHeart,
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import QRCode from 'qrcode';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   getParticipantPhoto,
@@ -43,7 +46,8 @@ import {
   hasFoodOrDrugAllergy
 } from '../data/defaultData';
 import { DataService } from '../supabase';
-import { downloadCsv } from '../utils/documentExporters';
+import { downloadCsv, exportElementToPng } from '../utils/documentExporters';
+import { buildEmrCaseUrl, buildEmrPersonUrl } from '../utils/router';
 import { confirmWithModal } from '../utils/confirmHelper';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import PaginationBar from '../components/PaginationBar';
@@ -64,7 +68,9 @@ export default function AdminMedicalView({
   currentUser = null,
   isDevOperator = false,
   initialPersonId = null,
+  initialCaseId = null,
   onPersonChange = null,
+  onCaseChange = null,
   onSelectApplicant,
   onUpdateAllocation,
   triggerToast,
@@ -74,9 +80,14 @@ export default function AdminMedicalView({
   const [logs, setLogs] = useState([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(true);
 
-  // Active sub-tab: 'logs' | 'roster' | 'person'
-  const [activeSubView, setActiveSubView] = useState(initialPersonId ? 'person' : 'logs');
+  // Active sub-tab: 'logs' | 'roster' | 'person' | 'case'
+  const [activeSubView, setActiveSubView] = useState(
+    initialCaseId ? 'case' : initialPersonId ? 'person' : 'logs'
+  );
   const [inspectedPersonId, setInspectedPersonId] = useState(initialPersonId || '');
+  const [inspectedCaseId, setInspectedCaseId] = useState(initialCaseId || '');
+  const [caseQrDataUrl, setCaseQrDataUrl] = useState('');
+  const [isExportingCasePng, setIsExportingCasePng] = useState(false);
 
   // Form states (Create or Edit)
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -125,16 +136,23 @@ export default function AdminMedicalView({
   // Image lightbox popup
   const [previewDoc, setPreviewDoc] = useState(null);
 
-  // Sync URL ?person=<id> when initialPersonId changes externally (including Back button clearing)
+  // Sync URL ?person=<id> and ?case=<caseId> when external props change (including Back button)
   useEffect(() => {
+    if (initialCaseId) {
+      setInspectedCaseId(initialCaseId);
+      if (initialPersonId) setInspectedPersonId(initialPersonId);
+      setActiveSubView('case');
+      return;
+    }
+    setInspectedCaseId('');
     if (initialPersonId) {
       setInspectedPersonId(initialPersonId);
       setActiveSubView('person');
     } else {
       setInspectedPersonId('');
-      setActiveSubView(prev => (prev === 'person' ? 'logs' : prev));
+      setActiveSubView(prev => (prev === 'person' || prev === 'case' ? 'logs' : prev));
     }
-  }, [initialPersonId]);
+  }, [initialPersonId, initialCaseId]);
 
   useEffect(() => {
     const defaultOp = getDefaultOperatorName(currentUser);
@@ -187,17 +205,19 @@ export default function AdminMedicalView({
         ? personOrId
         : (personOrId?.id || personOrId?.user_id || '');
     if (!targetId) return;
+    setInspectedCaseId('');
     setInspectedPersonId(targetId);
     setActiveSubView('person');
     if (onPersonChange) {
       onPersonChange(targetId);
     } else if (typeof window !== 'undefined') {
-      const nextUrl = `/admin/medical?person=${encodeURIComponent(targetId)}`;
+      const nextUrl = buildEmrPersonUrl(targetId);
       window.history.pushState({ mainTab: 'admin', subRoute: 'medical' }, '', nextUrl);
     }
   };
 
   const clearPersonEmrPage = (targetTab = 'logs') => {
+    setInspectedCaseId('');
     setInspectedPersonId('');
     setActiveSubView(targetTab);
     if (onPersonChange) {
@@ -207,11 +227,36 @@ export default function AdminMedicalView({
     }
   };
 
-  const handleCopyPersonUrl = () => {
-    if (!inspectedPersonId || typeof window === 'undefined') return;
-    const shareUrl = `${window.location.origin}/admin/medical?person=${encodeURIComponent(inspectedPersonId)}`;
+  const openCaseEmrPage = (logOrId) => {
+    const targetCaseId = typeof logOrId === 'string' ? logOrId : (logOrId?.id ? String(logOrId.id) : '');
+    if (!targetCaseId) return;
+    const logObj = typeof logOrId === 'object' ? logOrId : logs.find(l => String(l.id) === targetCaseId);
+    const matchedReg = logObj ? findPersonForEmrLog(logObj, registrations) : null;
+    const personId = matchedReg?.id || matchedReg?.user_id || logObj?.recipient_id || logObj?.recipient_user_id || '';
+    setInspectedCaseId(targetCaseId);
+    if (personId) setInspectedPersonId(personId);
+    setActiveSubView('case');
+    if (onCaseChange) {
+      onCaseChange(targetCaseId, personId);
+    } else if (typeof window !== 'undefined') {
+      const nextUrl = buildEmrCaseUrl(targetCaseId, personId);
+      window.history.pushState({ mainTab: 'admin', subRoute: 'medical' }, '', nextUrl);
+    }
+  };
+
+  const handleCopyPersonUrl = (targetId = inspectedPersonId) => {
+    if (!targetId || typeof window === 'undefined') return;
+    const shareUrl = buildEmrPersonUrl(targetId, window.location.origin);
     navigator.clipboard?.writeText(shareUrl).then(() => {
-      if (triggerToast) triggerToast('✓ คัดลอกลิงก์เวชระเบียนรายบุคคลแล้ว', 'success');
+      if (triggerToast) triggerToast(`✓ คัดลอกลิงก์เวชระเบียนรายบุคคลแล้ว:\n${shareUrl}`, 'success');
+    }).catch(() => {});
+  };
+
+  const handleCopyCaseUrl = (targetCaseId = inspectedCaseId, targetPersonId = inspectedPersonId) => {
+    if (!targetCaseId || typeof window === 'undefined') return;
+    const shareUrl = buildEmrCaseUrl(targetCaseId, targetPersonId, window.location.origin);
+    navigator.clipboard?.writeText(shareUrl).then(() => {
+      if (triggerToast) triggerToast(`✓ คัดลอกลิงก์เวชระเบียนรายเคสแล้ว:\n${shareUrl}`, 'success');
     }).catch(() => {});
   };
 
@@ -719,6 +764,52 @@ export default function AdminMedicalView({
       .sort((a, b) => new Date(b.dispensed_at || b.created_at) - new Date(a.dispensed_at || a.created_at));
   }, [logs, inspectedPerson]);
 
+  // Individual Case Log (/admin/medical?case=...)
+  const inspectedCaseLog = useMemo(() => {
+    if (!inspectedCaseId) return null;
+    return logs.find(l => String(l.id) === String(inspectedCaseId)) || null;
+  }, [logs, inspectedCaseId]);
+
+  const inspectedCasePerson = useMemo(() => {
+    if (!inspectedCaseLog) return inspectedPerson;
+    return findPersonForEmrLog(inspectedCaseLog, registrations) || inspectedPerson;
+  }, [inspectedCaseLog, inspectedPerson, registrations]);
+
+  const inspectedCasePersonSummary = useMemo(
+    () => (inspectedCasePerson ? formatPersonSummary(inspectedCasePerson) : null),
+    [inspectedCasePerson]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!inspectedCaseId || typeof window === 'undefined') {
+      setCaseQrDataUrl('');
+      return;
+    }
+    const personIdForCase =
+      inspectedCasePersonSummary?.id ||
+      inspectedCaseLog?.recipient_id ||
+      inspectedCaseLog?.recipient_user_id ||
+      inspectedPersonId ||
+      '';
+    const caseShareUrl = buildEmrCaseUrl(inspectedCaseId, personIdForCase, window.location.origin);
+    QRCode.toDataURL(caseShareUrl, {
+      width: 140,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0f172a', light: '#ffffff' }
+    })
+      .then((url) => {
+        if (!cancelled) setCaseQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setCaseQrDataUrl('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inspectedCaseId, inspectedCaseLog, inspectedCasePersonSummary, inspectedPersonId]);
+
   // Export to Excel (.xlsx)
   const handleExportExcel = async () => {
     const targetLogs = activeSubView === 'person' && inspectedPerson ? inspectedPersonLogs : filteredLogs;
@@ -853,7 +944,7 @@ export default function AdminMedicalView({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* HEADER BANNER */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 border border-rose-500/40 p-6 sm:p-8 shadow-2xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 border border-rose-500/40 p-6 sm:p-8 shadow-2xl no-print print:hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -991,7 +1082,7 @@ export default function AdminMedicalView({
       </div>
 
       {/* STATISTICS & VISUAL SUMMARY DASHBOARD */}
-      <div className="rounded-3xl bg-slate-900 border border-slate-800 p-5 shadow-xl space-y-4">
+      <div className="rounded-3xl bg-slate-900 border border-slate-800 p-5 shadow-xl space-y-4 no-print print:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-sky-400" />
@@ -1127,7 +1218,7 @@ export default function AdminMedicalView({
       </div>
 
       {/* ADD / EDIT EMR RECORD FORM (COLLAPSIBLE / EXPANDABLE) */}
-      <div ref={formRef}>
+      <div ref={formRef} className="no-print print:hidden">
         {showRecordForm && (
           <div className="rounded-3xl bg-slate-900 border-2 border-rose-500/40 p-5 sm:p-7 shadow-2xl space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
@@ -1532,7 +1623,7 @@ export default function AdminMedicalView({
       </div>
 
       {/* SUB-VIEW TABS */}
-      <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 p-2 rounded-2xl border border-slate-800">
+      <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 p-2 rounded-2xl border border-slate-800 no-print print:hidden">
         <button
           type="button"
           onClick={() => clearPersonEmrPage('logs')}
@@ -1579,8 +1670,21 @@ export default function AdminMedicalView({
       {/* TAB 1: ALL-PARTICIPANTS UNIFIED EMR LOGS WITH MULTI-FILTER & < 0 > PAGING */}
       {/* ======================================================================== */}
       {activeSubView === 'logs' && (
-        <div className="rounded-3xl bg-slate-900 border border-slate-800 p-5 sm:p-7 shadow-2xl space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div className="rounded-3xl bg-slate-900 border border-slate-800 p-5 sm:p-7 shadow-2xl space-y-4 print:bg-white print:text-black print:border-none print:rounded-none print:p-0">
+          <div className="hidden print:block pb-3 border-b-4 border-double border-slate-950 space-y-1">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-900 text-[11px] font-bold">
+              <span>แบบฟอร์มเวชระเบียนสนาม • โครงการฝึกซ้อมร่วมประจำปี (JRE 2027)</span>
+              <span className="font-mono">รหัสเอกสาร: จป-2570-EMR • เฉพาะทีมแพทย์สนาม</span>
+            </div>
+            <h2 className="text-xl font-black text-black text-center pt-1">
+              ทะเบียนบันทึกเวชระเบียน การปฐมพยาบาล และการจ่ายยา ({filteredLogs.length} รายการ)
+            </h2>
+            <p className="text-xs font-bold text-center text-slate-900">
+              โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) ระหว่าง มหาวิทยาลัยขอนแก่น และ มหาวิทยาลัยมหาสารคาม
+            </p>
+          </div>
+
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800 no-print print:hidden">
             <div>
               <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-sky-400" />
@@ -1604,7 +1708,7 @@ export default function AdminMedicalView({
           </div>
 
           {/* Multi-filters bar */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs no-print print:hidden">
             <span className="text-slate-400 font-bold flex items-center gap-1 mr-1">
               <Filter className="w-3.5 h-3.5 text-sky-400" />
               ตัวกรอง:
@@ -1705,17 +1809,17 @@ export default function AdminMedicalView({
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="overflow-x-auto print:overflow-visible">
+                <table className="official-table w-full text-left text-xs border-collapse print:bg-white print:text-slate-950">
                   <thead>
-                    <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold uppercase tracking-wider text-[11px]">
+                    <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold uppercase tracking-wider text-[11px] print:bg-slate-200 print:text-slate-950">
                       <th className="py-3 px-3 w-12 text-center">#</th>
                       <th className="py-3 px-3 w-36">วันเวลา</th>
                       <th className="py-3 px-3 w-52">ผู้รับบริการ (คลิกดูรายคน)</th>
                       <th className="py-3 px-3 w-56">อาการ / เหตุการณ์ / สัญญาณชีพ</th>
                       <th className="py-3 px-3">การปฐมพยาบาล & ยาที่กิน/จ่าย</th>
                       <th className="py-3 px-3 w-44">ผู้กรอก / ผู้จ่ายยา</th>
-                      <th className="py-3 px-2 w-28 text-center">จัดการ</th>
+                      <th className="py-3 px-2 w-28 text-center no-print print:hidden">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1807,8 +1911,28 @@ export default function AdminMedicalView({
                             </div>
                           </td>
 
-                          <td className="py-3 px-2 text-center">
+                          <td className="py-3 px-2 text-center no-print print:hidden">
                             <div className="flex items-center justify-center gap-1">
+                              {log.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => openCaseEmrPage(log)}
+                                  className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold cursor-pointer"
+                                  title="เปิดใบเวชระเบียนรายเคส + URL เฉพาะเคส"
+                                >
+                                  ใบเคส
+                                </button>
+                              )}
+                              {log.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCaseUrl(log.id, personTargetId)}
+                                  className="p-1.5 rounded-lg text-cyan-300 hover:bg-cyan-950/50 cursor-pointer"
+                                  title="คัดลอก URL เฉพาะเคสนี้"
+                                >
+                                  <Link2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {personTargetId && (
                                 <button
                                   type="button"
@@ -1861,7 +1985,7 @@ export default function AdminMedicalView({
       {/* ======================================================================== */}
       {activeSubView === 'roster' && (
         <div className="rounded-3xl bg-slate-900 border border-slate-800 p-5 sm:p-7 shadow-2xl space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800 no-print print:hidden">
             <div>
               <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-sky-400" />
@@ -1884,7 +2008,7 @@ export default function AdminMedicalView({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs no-print print:hidden">
             <span className="text-slate-400 font-bold flex items-center gap-1 mr-1">
               <Filter className="w-3.5 h-3.5 text-sky-400" />
               ตัวกรอง:
@@ -2070,7 +2194,7 @@ export default function AdminMedicalView({
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800 no-print print:hidden">
                 <button
                   type="button"
                   onClick={() => clearPersonEmrPage('roster')}
@@ -2083,7 +2207,7 @@ export default function AdminMedicalView({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleCopyPersonUrl}
+                    onClick={() => handleCopyPersonUrl()}
                     className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <Link2 className="w-3.5 h-3.5" />
@@ -2219,7 +2343,29 @@ export default function AdminMedicalView({
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {log.id && (
+                              <button
+                                type="button"
+                                onClick={() => openCaseEmrPage(log)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1 cursor-pointer"
+                                title="เปิดหน้าใบเวชระเบียนเฉพาะเคสนี้"
+                              >
+                                <FileHeart className="w-3 h-3" />
+                                <span>เปิดใบเคส</span>
+                              </button>
+                            )}
+                            {log.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyCaseUrl(log.id, inspectedPersonId)}
+                                className="px-2.5 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/30 font-bold flex items-center gap-1 cursor-pointer"
+                                title="คัดลอก URL เฉพาะเคสนี้"
+                              >
+                                <Link2 className="w-3 h-3" />
+                                <span>URL เคส</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => openEditLogForm(log)}
@@ -2293,6 +2439,275 @@ export default function AdminMedicalView({
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ======================================================================== */}
+      {/* TAB 4: INDIVIDUAL CASE EMR RECORD PAGE (/admin/medical?case=ID)           */}
+      {/* ======================================================================== */}
+      {activeSubView === 'case' && (
+        <div className="rounded-3xl bg-slate-900 border border-emerald-500/40 p-5 sm:p-7 shadow-2xl space-y-5">
+          {isLoadingLogs ? (
+            <div className="p-10 text-center text-xs text-slate-400">กำลังโหลดข้อมูลเวชระเบียนเคส...</div>
+          ) : !inspectedCaseLog ? (
+            <div className="p-8 text-center space-y-3">
+              <p className="text-sm text-rose-300 font-bold">
+                ไม่พบเวชระเบียนเคสรหัส: {inspectedCaseId || '-'}
+              </p>
+              <button
+                type="button"
+                onClick={() => clearPersonEmrPage('logs')}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer"
+              >
+                ← กลับหน้ารวมเวชระเบียน
+              </button>
+            </div>
+          ) : (() => {
+            const c = inspectedCaseLog;
+            const pSum = inspectedCasePersonSummary;
+            const personIdForCase = pSum?.id || c.recipient_id || c.recipient_user_id || '';
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const caseUrl = buildEmrCaseUrl(c.id, personIdForCase, origin);
+            const personUrl = personIdForCase ? buildEmrPersonUrl(personIdForCase, origin) : '';
+            const emerName = inspectedCasePerson?.emergency_name || inspectedCasePerson?.emergency_contact_name || inspectedCasePerson?.emergency_contact || '-';
+            const emerPhone = inspectedCasePerson?.emergency_phone || inspectedCasePerson?.emergency_contact_phone || '';
+            const recordedTime = new Date(c.dispensed_at || c.created_at).toLocaleString('th-TH', {
+              dateStyle: 'full',
+              timeStyle: 'short'
+            });
+
+            return (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pb-4 border-b border-slate-800 no-print">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => clearPersonEmrPage('logs')}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>หน้ารวมทุกเคส</span>
+                    </button>
+                    {personIdForCase && (
+                      <button
+                        type="button"
+                        onClick={() => openPersonEmrPage(personIdForCase)}
+                        className="px-3.5 py-2 rounded-xl bg-sky-950/70 hover:bg-sky-900/70 text-sky-200 border border-sky-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        <span>ดูประวัติทั้งหมดของคนนี้</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCaseUrl(c.id, personIdForCase)}
+                      className="px-3 py-2 rounded-xl bg-cyan-950/70 hover:bg-cyan-900/80 text-cyan-200 border border-cyan-500/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      <span>คัดลอก URL เคสนี้</span>
+                    </button>
+                    {personIdForCase && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPersonUrl(personIdForCase)}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        <span>URL รายคน</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.body.classList.add('document-print-active');
+                        setTimeout(() => window.print(), 120);
+                        setTimeout(() => document.body.classList.remove('document-print-active'), 30000);
+                      }}
+                      className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>พิมพ์ / PDF ใบเคส</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isExportingCasePng}
+                      onClick={async () => {
+                        try {
+                          setIsExportingCasePng(true);
+                          await exportElementToPng('printable-emr-case-sheet', `EMR_Case_${String(c.id).slice(0, 8)}_${c.recipient_name || 'JRE2027'}.png`);
+                          if (triggerToast) triggerToast('🖼️ บันทึกรูปภาพใบเวชระเบียนรายเคสเรียบร้อยแล้ว', 'success');
+                        } catch (err) {
+                          if (triggerToast) triggerToast('❌ สร้างรูปภาพไม่สำเร็จ: ' + err.message, 'error');
+                        } finally {
+                          setIsExportingCasePng(false);
+                        }
+                      }}
+                      className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>{isExportingCasePng ? 'กำลังสร้าง PNG...' : 'PNG'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditLogForm(c)}
+                      className="px-3 py-2 rounded-xl bg-amber-600/25 hover:bg-amber-600/40 text-amber-200 border border-amber-500/40 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>แก้ไข</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleDeleteLog(c.id, c.recipient_name);
+                        clearPersonEmrPage('logs');
+                      }}
+                      className="px-3 py-2 rounded-xl bg-rose-600/25 hover:bg-rose-600/40 text-rose-200 border border-rose-500/40 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ลบเคส</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Printable Formal Case Medical Record Sheet */}
+                <div
+                  id="printable-emr-case-sheet"
+                  className="official-doc-sheet bg-white text-black rounded-none border-2 border-slate-950 p-6 sm:p-8 shadow-xl space-y-4 text-xs"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-900 text-[11px] font-bold text-slate-900">
+                    <span>แบบฟอร์มเวชระเบียนสนาม • โครงการฝึกซ้อมร่วมประจำปี JRE 2027</span>
+                    <span className="font-mono">รหัสเอกสาร: EMR-2570 • เอกสารทางการแพทย์ (เฉพาะเจ้าหน้าที่)</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-4 border-double border-slate-950 pb-4">
+                    <div className="space-y-1">
+                      <h2 className="text-xl font-black text-black">
+                        ใบเวชระเบียนการตรวจอาการ ปฐมพยาบาล และจ่ายยารายเคส
+                      </h2>
+                      <p className="text-xs font-bold text-slate-900">
+                        โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) ระหว่าง มหาวิทยาลัยขอนแก่น และ มหาวิทยาลัยมหาสารคาม
+                      </p>
+                      <p className="text-xs font-semibold text-slate-900">
+                        เลขที่เคส: <span className="font-mono font-black text-black">{c.id}</span> • วันเวลาบันทึก: <span className="font-bold">{recordedTime}</span>
+                      </p>
+                      <div className="text-[10px] font-mono text-slate-700 break-all space-y-0.5 pt-1">
+                        <div>URL เคส: {caseUrl}</div>
+                        {personUrl && <div>URL รายคน: {personUrl}</div>}
+                      </div>
+                    </div>
+
+                    {caseQrDataUrl && (
+                      <div className="flex flex-col items-center p-2 border-[1.5px] border-slate-950 bg-white shrink-0">
+                        <img src={caseQrDataUrl} alt="QR Case URL" className="w-20 h-20 block" />
+                        <span className="text-[9px] font-mono font-bold text-slate-900 mt-1">สแกนเปิดเคสนี้</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Patient Information Block */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-t-[1.5px] border-l-[1.5px] border-slate-950 bg-white">
+                    <div className="p-3 border-r-[1.5px] border-b-[1.5px] border-slate-950">
+                      <span className="text-[10px] font-bold text-slate-700 block">ชื่อ - นามสกุล / ชื่อเล่น</span>
+                      <strong className="text-sm text-black">{pSum?.name || c.recipient_name || '-'}</strong>
+                      {(pSum?.nickname || c.recipient_nickname) && (pSum?.nickname || c.recipient_nickname) !== '-' && (
+                        <span className="ml-1 font-bold text-slate-900">({pSum?.nickname || c.recipient_nickname})</span>
+                      )}
+                    </div>
+                    <div className="p-3 border-r-[1.5px] border-b-[1.5px] border-slate-950">
+                      <span className="text-[10px] font-bold text-slate-700 block">นามเรียกขาน / สังกัด</span>
+                      <strong className="font-mono text-black">{pSum?.callsign || c.recipient_callsign || '-'}</strong>
+                      <span className="text-slate-800 block text-[11px]">{pSum?.institutionFull || c.recipient_institution || '-'}</span>
+                    </div>
+                    <div className="p-3 border-r-[1.5px] border-b-[1.5px] border-slate-950">
+                      <span className="text-[10px] font-bold text-slate-700 block">กลุ่มฝึก / ห้องพัก / เบอร์โทร</span>
+                      <strong className="text-black">กลุ่ม {pSum?.group || c.recipient_group || '-'} • ห้อง {pSum?.room || c.recipient_room || '-'}</strong>
+                      <span className="text-slate-800 block font-mono text-[11px]">โทร: {pSum?.phone || c.recipient_phone || '-'}</span>
+                    </div>
+                    <div className="p-3 border-r-[1.5px] border-b-[1.5px] border-slate-950">
+                      <span className="text-[10px] font-bold text-slate-700 block">หมู่เลือด / ติดต่อฉุกเฉิน</span>
+                      <strong className="text-rose-900 font-mono">หมู่เลือด {pSum?.blood || c.recipient_blood || '-'}</strong>
+                      <span className="text-slate-800 block text-[11px]">
+                        ฉุกเฉิน: {emerName}{emerPhone ? ` (${emerPhone})` : ''}
+                      </span>
+                    </div>
+                    <div className="sm:col-span-2 bg-rose-50/50 p-3 border-r-[1.5px] border-b-[1.5px] border-slate-950">
+                      <span className="text-[10px] font-bold text-rose-950 block">โรคประจำตัว / ข้อจำกัดทางกาย</span>
+                      <span className="font-bold text-black">{pSum?.medical || c.recipient_chronic_diseases || 'ไม่มี'}</span>
+                    </div>
+                    <div className="sm:col-span-2 bg-amber-50/50 p-3 border-r-[1.5px] border-b-[1.5px] border-slate-950">
+                      <span className="text-[10px] font-bold text-amber-950 block">ประวัติแพ้ยา / แพ้อาหาร / ยาที่ขอเตรียม</span>
+                      <span className="font-bold text-black">
+                        แพ้: {pSum?.allergy || c.recipient_known_allergies || 'ไม่มี'}
+                        {(pSum?.requestedEquipment || c.recipient_requested_equipment) ? ` • ขอเตรียม: ${pSum?.requestedEquipment || c.recipient_requested_equipment}` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Clinical Assessment & Treatment Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t-[1.5px] border-l-[1.5px] border-slate-950">
+                    <div className="p-4 border-r-[1.5px] border-b-[1.5px] border-slate-950 space-y-2.5">
+                      <h3 className="font-black text-black text-sm border-b-[1.5px] border-slate-900 pb-1.5">
+                        1. การประเมินอาการและสัญญาณชีพ
+                      </h3>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-700 block">อาการสำคัญ / เป็นอะไร:</span>
+                        <p className="text-sm font-black text-black">{c.symptoms || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-700 block">รายละเอียดเหตุการณ์ / เป็นเมื่อไหร่ / อย่างไร:</span>
+                        <p className="text-slate-900 whitespace-pre-wrap">{c.incident_detail || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-700 block">สัญญาณชีพแรกรับ (Vital Signs):</span>
+                        <p className="font-mono font-bold text-black">{c.vital_signs || '-'}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 border-r-[1.5px] border-b-[1.5px] border-slate-950 space-y-2.5">
+                      <h3 className="font-black text-black text-sm border-b-[1.5px] border-slate-900 pb-1.5">
+                        2. การปฐมพยาบาลและการจ่ายยา
+                      </h3>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-700 block">วิธีการปฐมพยาบาล / หัตถการ:</span>
+                        <p className="font-bold text-black whitespace-pre-wrap">{c.first_aid_action || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-700 block">ยาและเวชภัณฑ์ที่กิน / จ่าย:</span>
+                        <p className="text-sm font-black text-black whitespace-pre-wrap">{c.medicines_dispensed || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-700 block">ขนาดและวิธีใช้ / รับประทานเมื่อไหร่:</span>
+                        <p className="text-slate-900 whitespace-pre-wrap">{c.dosage_instruction || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes & Operators Footer */}
+                  <div className="p-4 bg-slate-50 border-[1.5px] border-slate-950 space-y-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-700 block">หมายเหตุ / แผนการเฝ้าระวังและติดตามอาการ:</span>
+                      <p className="text-black font-semibold whitespace-pre-wrap">{c.medical_notes || '-'}</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-5 border-t border-slate-900 text-center">
+                      <div>
+                        <span className="text-[10px] text-slate-700 block mb-5">ลงชื่อผู้กรอกข้อมูล / ผู้บันทึกเวชระเบียน</span>
+                        <p className="font-bold text-black">( {c.recorder_name || c.dispenser_name || '.....................................................'} )</p>
+                        <p className="text-[10px] text-slate-700 mt-0.5">วันที่ ............ / ........................ / 2570</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-700 block mb-5">ลงชื่อผู้จ่ายยา / ผู้ทำการปฐมพยาบาล</span>
+                        <p className="font-bold text-black">( {c.dispenser_name || '.....................................................'} )</p>
+                        <p className="text-[10px] text-slate-700 mt-0.5">วันที่ ............ / ........................ / 2570</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 

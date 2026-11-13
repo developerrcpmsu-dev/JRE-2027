@@ -617,8 +617,8 @@ export function computeSmartRoomPlan(registrations = []) {
           newRoomValue: `ห้อง ${rm.room}`,
           bedNumber: idx + 1,
           reason: person.needsBuddyCare
-            ? 'จัดคนมีโรคประจำตัว/แพ้ไว้ห้องต้นๆ คู่คนปกติ'
-            : 'จัดคู่ดูแลผู้มีโรคประจำตัว/ขยับห้องตามลำดับ'
+            ? 'จัดคนมีโรคประจำตัว/แพ้ไว้ห้องตามแผน'
+            : 'จัดห้องพักตามลำดับ'
         });
       }
     });

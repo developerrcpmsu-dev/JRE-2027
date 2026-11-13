@@ -38,12 +38,59 @@ export async function exportElementToPng(elementOrId, filename = 'document.png')
   el.style.overflow = 'visible';
 
   try {
+    const targetId = typeof elementOrId === 'string' ? elementOrId : el.id;
     const canvas = await html2canvas(el, {
       scale: 2, // High-DPI 2x
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: Math.max(1320, el.scrollWidth + 40)
+      windowWidth: Math.max(1320, el.scrollWidth + 40),
+      onclone: (clonedDoc) => {
+        const clonedEl = targetId ? clonedDoc.getElementById(targetId) : null;
+        if (!clonedEl) return;
+
+        // Hide interactive web controls inside exported official PNGs
+        clonedEl.querySelectorAll('.no-print, .print\\:hidden, button:not(.print-include)').forEach((node) => {
+          node.style.display = 'none';
+        });
+
+        // Show official print-only headers inside PNG exports
+        clonedEl.querySelectorAll('.hidden.print\\:block').forEach((node) => {
+          node.style.display = 'block';
+        });
+
+        // Convert dark-themed containers (e.g., AdminRoomsView) to crisp white official form paper
+        clonedEl.style.background = '#ffffff';
+        clonedEl.style.color = '#000000';
+        clonedEl.style.padding = '24px';
+        clonedEl.style.fontFamily = "'Sarabun', 'TH Sarabun New', sans-serif";
+
+        if (targetId === 'printable-rooms-roster') {
+          clonedEl.querySelectorAll('div, span, p, h1, h2, h3').forEach((node) => {
+            node.style.color = '#000000';
+            node.style.textShadow = 'none';
+            if (node.className && typeof node.className === 'string' && /bg-(slate|blue|pink|sky|indigo|rose|emerald)-9/.test(node.className)) {
+              node.style.background = '#ffffff';
+            }
+          });
+        }
+
+        // Enforce sharp official grid borders on all tables inside PNG
+        clonedEl.querySelectorAll('table').forEach((tbl) => {
+          tbl.style.borderCollapse = 'collapse';
+          tbl.style.border = '2px solid #0f172a';
+          tbl.style.background = '#ffffff';
+        });
+        clonedEl.querySelectorAll('th').forEach((th) => {
+          th.style.border = '1.5px solid #0f172a';
+          th.style.backgroundColor = '#e2e8f0';
+          th.style.color = '#000000';
+        });
+        clonedEl.querySelectorAll('td').forEach((td) => {
+          td.style.border = '1px solid #334155';
+          td.style.color = '#000000';
+        });
+      }
     });
 
     const dataUrl = canvas.toDataURL('image/png');
@@ -561,7 +608,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
       row.getCell(8).value = p?.specialItemsNeeded || (p?.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
       row.getCell(9).value = consentTxt;
       row.getCell(10).value = p
-        ? `${emerTxt}\n${hasCare ? '☐ เตรียมยา/ของใช้แล้ว' : (roomHasCare ? '✓ ปกติ (ช่วยดูแล)' : '✓ ปกติ')}`
+        ? `${emerTxt}\n${hasCare ? 'มีต้องเตรียม • ☐ เตรียมแล้ว' : 'ไม่มีต้องเตรียม'}`
         : '-';
 
       headers.forEach((h, i) => {
@@ -613,7 +660,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
       row.getCell(7).value = p.medicalEquipmentNeeded || '-';
       row.getCell(8).value = p.specialItemsNeeded || (p.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
       row.getCell(9).value = consentTxt;
-      row.getCell(10).value = `${emerTxt}\n☐ เตรียมแล้ว (นอกหอ)`;
+      row.getCell(10).value = `${emerTxt}\nมีต้องเตรียม • ☐ เตรียมแล้ว (นอกหอ)`;
 
       headers.forEach((h, i) => {
         const cell = row.getCell(i + 1);
@@ -782,7 +829,414 @@ export async function exportAdminMasterRosterExcel(records, filename = '6_ทะ
 }
 
 /**
- * 7. Master 6-in-1 Excel Workbook (4 Signing Sheets [PDPA-Safe] + 2 Admin/Staff Detailed Sheets)
+ * 7. Shared worksheet populator: Master All-Participants QR Code Sheet (PDPA-Safe)
+ */
+async function populateAllQrMasterSheet(wb, ws, records = []) {
+  setupWorksheetHeader(
+    ws,
+    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
+    'เอกสารรวม QR Code ประจำตัวผู้เข้าร่วมทุกคนในใบเดียว (All-Participants QR Master Roster)',
+    'ใช้สแกนจุดเช็คชื่อ • รับบัตร ID Card • รับเสื้อ • เปิดเวชระเบียน EMR (PDPA-Safe: ปิดข้อมูลสุขภาพ)',
+    'J'
+  );
+
+  const headers = [
+    { header: 'ลำดับ', width: 7, align: 'center' },
+    { header: 'รหัสบัตร ID', width: 16, align: 'center' },
+    { header: 'ชื่อ - นามสกุล', width: 32, align: 'left' },
+    { header: 'ชื่อเล่น', width: 13, align: 'center' },
+    { header: 'นามเรียกขาน', width: 17, align: 'center' },
+    { header: 'สังกัด', width: 12, align: 'center' },
+    { header: 'บทบาท', width: 22, align: 'center' },
+    { header: 'กลุ่มฝึก / ห้องพัก', width: 20, align: 'center' },
+    { header: 'QR Code (สแกนทุกจุด)', width: 15, align: 'center' },
+    { header: 'ลายมือชื่อ / หมายเหตุ', width: 24, align: 'center' }
+  ];
+
+  const headerRow = ws.getRow(5);
+  headers.forEach((h, i) => {
+    const colNumber = i + 1;
+    const cell = headerRow.getCell(colNumber);
+    cell.value = h.header;
+    cell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0369A1' } };
+    cell.border = thinBorder;
+    ws.getColumn(colNumber).width = h.width;
+  });
+  headerRow.height = 28;
+
+  for (let idx = 0; idx < records.length; idx++) {
+    const r = records[idx];
+    const rowNum = 6 + idx;
+    const row = ws.getRow(rowNum);
+    const bg = idx % 2 === 1 ? 'FFF0F9FF' : 'FFFFFFFF';
+
+    row.getCell(1).value = idx + 1;
+    row.getCell(2).value = r.cardCode || '-';
+    row.getCell(3).value = r.name || '-';
+    row.getCell(4).value = r.nickname || '-';
+    row.getCell(5).value = r.callsign || '-';
+    row.getCell(6).value = r.institution || '-';
+    row.getCell(7).value = r.role || '-';
+    row.getCell(8).value = `${r.groupAssigned || 'รอจัดกลุ่ม'}\n${r.roomNote || '-'}`;
+    row.getCell(9).value = '';
+    row.getCell(10).value = '';
+
+    headers.forEach((h, i) => {
+      const cell = row.getCell(i + 1);
+      cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 1 || i === 2 || i === 4 };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      cell.border = thinBorder;
+    });
+
+    if (wb && r.qrPayload) {
+      try {
+        const dataUrl = await QRCode.toDataURL(r.qrPayload, {
+          width: 140,
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#0f172a', light: '#ffffff' }
+        });
+        const imgId = wb.addImage({ base64: dataUrl, extension: 'png' });
+        ws.addImage(imgId, {
+          tl: { col: 8.18, row: rowNum - 1 + 0.08 },
+          ext: { width: 54, height: 54 }
+        });
+      } catch (err) {
+        row.getCell(9).value = r.cardCode || r.qrPayload;
+      }
+    }
+
+    row.height = 50;
+  }
+}
+
+export async function exportAllQrMasterToExcel(records = [], filename = '5_เอกสารรวม_QRCode_ทุกคน_ใบเดียว_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Admin Suite';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('รวม_QR_ทุกคนในใบเดียว', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  await populateAllQrMasterSheet(wb, ws, records);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, filename);
+}
+
+/**
+ * 8. Shared worksheet populator: Medicine & Field Medical Supplies Preparation Sheet
+ */
+function populateMedicalSuppliesPrepSheet(ws, prepRows = [], summaryItems = []) {
+  setupWorksheetHeader(
+    ws,
+    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
+    'เอกสารขอยา จัดเตรียมยา & ขอเวชภัณฑ์ภาคสนาม (Medical Support & Supplies Preparation)',
+    'สรุปยอดรวมยา/เวชภัณฑ์/ของใช้พิเศษที่ผู้เข้าร่วมแจ้งขอ และรายชื่อผู้มีโรคประจำตัว/แพ้ยาสำหรับฝ่ายพยาบาลและสวัสดิการ',
+    'I'
+  );
+
+  let currentRow = 5;
+
+  // Part 1 Header: Aggregated Summary
+  ws.mergeCells(`A${currentRow}:I${currentRow}`);
+  const sBanner = ws.getCell(`A${currentRow}`);
+  sBanner.value = `ส่วนที่ 1: สรุปรายการยา / เวชภัณฑ์ / ของใช้ที่ต้องจัดเตรียมทั้งหมด (${summaryItems.length} รายการหลัก)`;
+  sBanner.font = { name: 'TH Sarabun New', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  sBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047857' } };
+  sBanner.alignment = { horizontal: 'left', vertical: 'middle' };
+  ws.getRow(currentRow).height = 24;
+  currentRow++;
+
+  const sumHeaders = ['ลำดับ', 'รายการยา / เวชภัณฑ์ / อุปกรณ์ที่ต้องเตรียม', 'จำนวนผู้ขอ', 'รายชื่อ / นามเรียกขานผู้ขอ', 'เช็คจัดเตรียมครบ', '', '', '', ''];
+  ws.mergeCells(`B${currentRow}:C${currentRow}`);
+  ws.mergeCells(`E${currentRow}:G${currentRow}`);
+  ws.mergeCells(`H${currentRow}:I${currentRow}`);
+  const sumHdrRow = ws.getRow(currentRow);
+  sumHdrRow.getCell(1).value = 'ลำดับ';
+  sumHdrRow.getCell(2).value = 'รายการยา / เวชภัณฑ์ที่ขอเตรียม';
+  sumHdrRow.getCell(4).value = 'จำนวน (คน)';
+  sumHdrRow.getCell(5).value = 'รายชื่อผู้ขอเตรียม';
+  sumHdrRow.getCell(8).value = 'เช็คจัดเตรียม (Staff)';
+  for (let c = 1; c <= 9; c++) {
+    const cell = sumHdrRow.getCell(c);
+    cell.font = { name: 'TH Sarabun New', size: 11, bold: true, color: { argb: 'FF064E3B' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = thinBorder;
+  }
+  sumHdrRow.height = 24;
+  currentRow++;
+
+  if (summaryItems.length === 0) {
+    ws.mergeCells(`A${currentRow}:I${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = 'ยังไม่มีผู้กรอกคำขอเตรียมยา/เวชภัณฑ์เพิ่มเติม';
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(currentRow).height = 22;
+    currentRow++;
+  } else {
+    summaryItems.forEach((it, idx) => {
+      ws.mergeCells(`B${currentRow}:C${currentRow}`);
+      ws.mergeCells(`E${currentRow}:G${currentRow}`);
+      ws.mergeCells(`H${currentRow}:I${currentRow}`);
+      const r = ws.getRow(currentRow);
+      r.getCell(1).value = idx + 1;
+      r.getCell(2).value = it.item;
+      r.getCell(4).value = it.count;
+      r.getCell(5).value = it.requesters.join(', ');
+      r.getCell(8).value = 'มีต้องเตรียม • ☐ เตรียมแล้ว';
+      for (let c = 1; c <= 9; c++) {
+        const cell = r.getCell(c);
+        cell.font = { name: 'TH Sarabun New', size: 11, bold: c === 2 || c === 4 };
+        cell.alignment = { horizontal: c === 1 || c === 4 || c >= 8 ? 'center' : 'left', vertical: 'middle', wrapText: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 1 ? 'FFF0FDF4' : 'FFFFFFFF' } };
+        cell.border = thinBorder;
+      }
+      r.height = Math.max(24, Math.ceil(it.requesters.join(', ').length / 45) * 16);
+      currentRow++;
+    });
+  }
+
+  currentRow++;
+
+  // Part 2: Individual Person Table
+  ws.mergeCells(`A${currentRow}:I${currentRow}`);
+  const pBanner = ws.getCell(`A${currentRow}`);
+  pBanner.value = `ส่วนที่ 2: รายชื่อผู้ขอยา / เวชภัณฑ์ & ผู้มีโรคประจำตัว/แพ้ยา (จำนวน ${prepRows.length} ท่าน)`;
+  pBanner.font = { name: 'TH Sarabun New', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  pBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+  pBanner.alignment = { horizontal: 'left', vertical: 'middle' };
+  ws.getRow(currentRow).height = 24;
+  currentRow++;
+
+  const headers = [
+    { header: 'ลำดับ', width: 7, align: 'center' },
+    { header: 'ชื่อ - สกุล / นามเรียกขาน', width: 30, align: 'left' },
+    { header: 'สังกัด / ห้องพัก', width: 18, align: 'center' },
+    { header: 'เบอร์โทร / ติดต่อฉุกเฉิน', width: 24, align: 'left' },
+    { header: 'โรคประจำตัว / อาการแพ้ / หมู่เลือด', width: 26, align: 'left' },
+    { header: 'ยาที่ขอ / เวชภัณฑ์ที่ขอเตรียม', width: 28, align: 'left' },
+    { header: 'ของที่ต้องใช้ / ดูแลพิเศษ', width: 22, align: 'left' },
+    { header: 'ความยินยอมสุขภาพ', width: 18, align: 'center' },
+    { header: 'เช็คเตรียม & ลงชื่อผู้เตรียม', width: 20, align: 'center' }
+  ];
+
+  const hdrRow = ws.getRow(currentRow);
+  headers.forEach((h, i) => {
+    const c = hdrRow.getCell(i + 1);
+    c.value = h.header;
+    c.font = { name: 'TH Sarabun New', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBE123C' } };
+    c.border = thinBorder;
+    ws.getColumn(i + 1).width = h.width;
+  });
+  hdrRow.height = 28;
+  currentRow++;
+
+  prepRows.forEach((r, idx) => {
+    const row = ws.getRow(currentRow);
+    const bg = r.hasCare ? 'FFFFF1F2' : (idx % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF');
+    row.getCell(1).value = idx + 1;
+    row.getCell(2).value = `${r.name}\n(${r.nickname}) • ${r.callsign}`;
+    row.getCell(3).value = `${r.institution}\n${r.roomLabel}`;
+    row.getCell(4).value = `โทร: ${r.phone}\nฉุกเฉิน: ${r.emergencyContact}`;
+    row.getCell(5).value = r.medicalSummary;
+    row.getCell(6).value = r.medEquipment || '-';
+    row.getCell(7).value = r.specialItems || (r.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
+    row.getCell(8).value = r.consentLabel || '-';
+    row.getCell(9).value = (r.hasCare || r.medEquipment || r.specialItems)
+      ? 'มีต้องเตรียม\n☐ เตรียมแล้ว\nผู้เตรียม: ..............'
+      : 'ไม่มีต้องเตรียม';
+
+    headers.forEach((h, i) => {
+      const cell = row.getCell(i + 1);
+      cell.font = { name: 'TH Sarabun New', size: 10.5, bold: i === 1 || (i === 5 && Boolean(r.medEquipment)) };
+      cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      cell.border = thinBorder;
+    });
+    row.height = 38;
+    currentRow++;
+  });
+}
+
+export async function exportMedicalSuppliesPrepToExcel(prepRows = [], summaryItems = [], filename = '8_เอกสารขอยา_จัดเตรียมยา_เวชภัณฑ์_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Medical & Welfare Team';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('ขอยา_จัดเตรียมยา_เวชภัณฑ์', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateMedicalSuppliesPrepSheet(ws, prepRows, summaryItems);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, filename);
+}
+
+/**
+ * 9. Shared worksheet populator: Comprehensive Per-Person & Per-Case EMR Medical Log Sheet with Direct URLs
+ */
+function populateEmrRecordsSheet(ws, caseRows = [], personRows = []) {
+  setupWorksheetHeader(
+    ws,
+    'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
+    'ทะเบียนเอกสารเวชระเบียนรายคน / รายเคส (EMR Medical Records & Direct Case URLs)',
+    'บันทึกอาการ เหตุการณ์ สัญญาณชีพ การปฐมพยาบาล ยาที่กิน/จ่าย ผู้กรอก ผู้จ่าย และ URL แยกรายคน / รายเคส',
+    'V'
+  );
+
+  let currentRow = 5;
+
+  if (personRows.length > 0) {
+    ws.mergeCells(`A${currentRow}:V${currentRow}`);
+    const pBanner = ws.getCell(`A${currentRow}`);
+    pBanner.value = `ส่วนที่ 1: สรุปเวชระเบียนรายคน พร้อม URL แยกทุกท่าน (${personRows.length} ท่าน)`;
+    pBanner.font = { name: 'TH Sarabun New', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    pBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    pBanner.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(currentRow).height = 24;
+    currentRow++;
+
+    const pHdrRow = ws.getRow(currentRow);
+    const pCols = ['ที่', 'ชื่อ - สกุล (ชื่อเล่น)', 'นามเรียกขาน', 'สังกัด / ห้อง', 'โรคประจำตัว / แพ้ยา-อาหาร / หมู่เลือด', 'ยา/เวชภัณฑ์ที่ขอเตรียม', 'จำนวนเคส', 'เคสล่าสุด', 'URL รายคน (Admin)', 'URL หน้าเวชระเบียนเจ้าตัว'];
+    pCols.forEach((txt, i) => {
+      const c = pHdrRow.getCell(i + 1);
+      c.value = txt;
+      c.font = { name: 'TH Sarabun New', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = thinBorder;
+    });
+    pHdrRow.height = 26;
+    currentRow++;
+
+    personRows.forEach((p, idx) => {
+      const row = ws.getRow(currentRow);
+      row.getCell(1).value = idx + 1;
+      row.getCell(2).value = `${p.name}${p.nickname && p.nickname !== '-' ? ` (${p.nickname})` : ''}`;
+      row.getCell(3).value = p.callsign || '-';
+      row.getCell(4).value = `${p.institution || '-'} • ${p.room || '-'}`;
+      row.getCell(5).value = `โรค: ${p.medical || 'ไม่มี'}\nแพ้: ${p.allergy || 'ไม่มี'}\nเลือด: ${p.blood || '-'}`;
+      row.getCell(6).value = p.requestedEquipment || '-';
+      row.getCell(7).value = p.caseCount || 0;
+      row.getCell(8).value = p.lastCase ? `${p.lastCase.timeLabel} • ${p.lastCase.symptoms || '-'} (${p.lastCase.medicines || '-'})` : 'ยังไม่มีเคส';
+      row.getCell(9).value = p.personUrl || '-';
+      row.getCell(10).value = p.myEmrUrl || '-';
+      for (let i = 1; i <= 10; i++) {
+        const c = row.getCell(i);
+        c.font = { name: 'TH Sarabun New', size: 10.5, bold: i === 2 || i === 7 };
+        c.alignment = { horizontal: i === 1 || i === 7 ? 'center' : 'left', vertical: 'middle', wrapText: true };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: p.caseCount > 0 ? 'FFFFF1F2' : (idx % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF') } };
+        c.border = thinBorder;
+      }
+      row.height = 34;
+      currentRow++;
+    });
+
+    currentRow++;
+    ws.mergeCells(`A${currentRow}:V${currentRow}`);
+    const cBanner = ws.getCell(`A${currentRow}`);
+    cBanner.value = `ส่วนที่ 2: บันทึกเวชระเบียนรายเคส พร้อม URL แยกรายเคส (${caseRows.length} เคส)`;
+    cBanner.font = { name: 'TH Sarabun New', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    cBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF881337' } };
+    cBanner.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(currentRow).height = 24;
+    currentRow++;
+  }
+
+  const headers = [
+    { header: 'ที่', width: 6, align: 'center' },
+    { header: 'รหัสเคส (Case ID)', width: 18, align: 'center' },
+    { header: 'วันเวลาเกิดเหตุ/จ่ายยา', width: 20, align: 'center' },
+    { header: 'ชื่อ - นามสกุล (ชื่อเล่น)', width: 28, align: 'left' },
+    { header: 'นามเรียกขาน', width: 16, align: 'center' },
+    { header: 'สังกัด / กลุ่ม', width: 16, align: 'center' },
+    { header: 'ห้องพัก', width: 14, align: 'center' },
+    { header: 'หมู่เลือด', width: 10, align: 'center' },
+    { header: 'โรคประจำตัว / แพ้ยา-อาหาร', width: 26, align: 'left' },
+    { header: 'สัญญาณชีพ (V/S)', width: 18, align: 'center' },
+    { header: 'อาการสำคัญ / เป็นอะไร', width: 26, align: 'left' },
+    { header: 'เหตุการณ์ / เป็นเมื่อไหร่อย่างไร', width: 28, align: 'left' },
+    { header: 'การปฐมพยาบาล / หัตถการ', width: 28, align: 'left' },
+    { header: 'ยาที่กิน / จ่าย', width: 26, align: 'left' },
+    { header: 'ขนาดและเวลาที่รับประทาน', width: 26, align: 'left' },
+    { header: 'ผู้กรอกข้อมูล', width: 20, align: 'left' },
+    { header: 'ผู้จ่ายยา / ดูแล', width: 20, align: 'left' },
+    { header: 'หมายเหตุ / ติดตามอาการ', width: 24, align: 'left' },
+    { header: 'URL รายคน (Admin)', width: 34, align: 'left' },
+    { header: 'URL รายเคส (Admin)', width: 38, align: 'left' },
+    { header: 'URL เวชระเบียนของเจ้าตัว', width: 34, align: 'left' },
+    { header: 'URL เคสในหน้าเจ้าตัว', width: 38, align: 'left' }
+  ];
+
+  const headerRow = ws.getRow(currentRow);
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = h.header;
+    cell.font = { name: 'TH Sarabun New', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9F1239' } };
+    cell.border = thinBorder;
+    ws.getColumn(i + 1).width = h.width;
+  });
+  headerRow.height = 28;
+  currentRow++;
+
+  caseRows.forEach((r, idx) => {
+    const row = ws.getRow(currentRow + idx);
+    const bg = idx % 2 === 1 ? 'FFFFF1F2' : 'FFFFFFFF';
+    row.getCell(1).value = idx + 1;
+    row.getCell(2).value = r.caseId || '-';
+    row.getCell(3).value = r.timeLabel || '-';
+    row.getCell(4).value = `${r.personName}${r.nickname && r.nickname !== '-' ? ` (${r.nickname})` : ''}`;
+    row.getCell(5).value = r.callsign || '-';
+    row.getCell(6).value = `${r.institution || '-'} • ${r.group || '-'}`;
+    row.getCell(7).value = r.room || '-';
+    row.getCell(8).value = r.blood || '-';
+    row.getCell(9).value = `โรค: ${r.chronic || 'ไม่มี'}\nแพ้: ${r.allergy || 'ไม่มี'}`;
+    row.getCell(10).value = r.vitalSigns || '-';
+    row.getCell(11).value = r.symptoms || '-';
+    row.getCell(12).value = r.incidentDetail || '-';
+    row.getCell(13).value = r.firstAid || '-';
+    row.getCell(14).value = r.medicines || '-';
+    row.getCell(15).value = r.dosage || '-';
+    row.getCell(16).value = r.recorder || '-';
+    row.getCell(17).value = r.dispenser || '-';
+    row.getCell(18).value = r.notes || '-';
+    row.getCell(19).value = r.personUrl || '-';
+    row.getCell(20).value = r.caseUrl || '-';
+    row.getCell(21).value = r.myEmrUrl || '-';
+    row.getCell(22).value = r.myCaseUrl || '-';
+
+    headers.forEach((h, i) => {
+      const c = row.getCell(i + 1);
+      c.font = { name: 'TH Sarabun New', size: 10.5, bold: i === 3 || i === 10 || i === 13 };
+      c.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      c.border = thinBorder;
+    });
+    row.height = 36;
+  });
+}
+
+export async function exportEmrRecordsToExcel(caseRows = [], personRows = [], filename = '9_เอกสารเวชระเบียน_รายคน_รายเคส_JRE2027.xlsx') {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'JRE 2027 Field Medical Unit';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('เวชระเบียนรายคน_รายเคส', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateEmrRecordsSheet(ws, caseRows, personRows);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, filename);
+}
+
+/**
+ * 10. Master 9-in-1 Excel Workbook (All Signing Sheets [PDPA-Safe] + Admin/Staff & Medical Prep/EMR Sheets)
  */
 export async function exportAllRostersToMasterExcel({
   attendanceRecords = [],
@@ -790,8 +1244,13 @@ export async function exportAllRostersToMasterExcel({
   shirtRecords = [],
   roomList = [],
   msuList = [],
-  adminMasterRecords = []
-}, filename = 'JRE2027_ชุดเอกสารครบชุด_6in1_Master.xlsx') {
+  adminMasterRecords = [],
+  qrMasterRecords = [],
+  medicalPrepRows = [],
+  medicalSupplySummary = [],
+  emrCaseRecords = [],
+  emrPersonRecords = []
+}, filename = 'JRE2027_ชุดเอกสารครบชุด_Master_All_in_One.xlsx') {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'JRE 2027 Admin Suite';
   wb.created = new Date();
@@ -816,15 +1275,30 @@ export async function exportAllRostersToMasterExcel({
   });
   populateDormitorySignInSheet(ws4, roomList, msuList);
 
-  const ws5 = wb.addWorksheet('5_ตรวจห้อง_โรค_ยา_ของใช้_Staff', {
+  const ws5 = wb.addWorksheet('5_รวม_QRCode_ทุกคนใบเดียว', {
     pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
-  populateDormitoryStaffMedicalSheet(ws5, roomList, msuList);
+  await populateAllQrMasterSheet(wb, ws5, qrMasterRecords);
 
-  const ws6 = wb.addWorksheet('6_ทะเบียนข้อมูลละเอียด_Admin', {
+  const ws6 = wb.addWorksheet('6_ตรวจห้อง_โรค_ยา_ของใช้_Staff', {
     pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
-  populateAdminMasterSheet(ws6, adminMasterRecords);
+  populateDormitoryStaffMedicalSheet(ws6, roomList, msuList);
+
+  const ws7 = wb.addWorksheet('7_ทะเบียนข้อมูลละเอียด_Admin', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateAdminMasterSheet(ws7, adminMasterRecords);
+
+  const ws8 = wb.addWorksheet('8_ขอยา_จัดเตรียมยา_เวชภัณฑ์', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateMedicalSuppliesPrepSheet(ws8, medicalPrepRows, medicalSupplySummary);
+
+  const ws9 = wb.addWorksheet('9_เวชระเบียนรายคน_รายเคส', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  populateEmrRecordsSheet(ws9, emrCaseRecords, emrPersonRecords);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

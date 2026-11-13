@@ -1,12 +1,13 @@
 import React from 'react';
-import { ArrowLeft, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Edit, ShieldCheck } from 'lucide-react';
 import IDCardPreview from '../components/IDCardPreview';
 
 export default function IDCardView({
   user,
   registration,
   onNavigateDashboard,
-  onNavigateRegister
+  onNavigateRegister,
+  onNavigateEdit
 }) {
   if (!registration) {
     return (
@@ -45,6 +46,16 @@ export default function IDCardView({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {onNavigateEdit && (
+            <button
+              type="button"
+              onClick={onNavigateEdit}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg transition-all cursor-pointer active:scale-95"
+            >
+              <Edit className="h-4 w-4" />
+              <span>✏️ แก้ไขข้อมูล & เปลี่ยนรูปทำบัตร ID Card</span>
+            </button>
+          )}
           {onNavigateDashboard && (
             <button
               type="button"

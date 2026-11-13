@@ -187,15 +187,24 @@ export default function CateringHealthModal({
   };
 
   const handlePrint = () => {
-    window.print();
+    document.body.classList.add('shirt-print-modal-active');
+    const cleanup = () => {
+      document.body.classList.remove('shirt-print-modal-active');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 45000);
+    setTimeout(() => {
+      window.print();
+    }, 150);
   };
 
   if (!isOpen) return null;
 
   return (
     <ModalPortal isOpen={isOpen} onClose={onClose}>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-950/85 backdrop-blur-md">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl text-white overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-slate-950/85 backdrop-blur-md print-modal-root">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl text-white overflow-hidden animate-in fade-in zoom-in-95 duration-200 print:bg-white print:text-black print:max-h-none print:overflow-visible print:border-none print:rounded-none print:shadow-none">
           
           {/* Header */}
           <div className="p-5 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-amber-950/40 via-slate-900 to-rose-950/40 flex items-start justify-between gap-4 shrink-0">
@@ -221,7 +230,7 @@ export default function CateringHealthModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all cursor-pointer no-print print:hidden"
             >
               <X className="w-5 h-5" />
             </button>
@@ -289,7 +298,7 @@ export default function CateringHealthModal({
           </div>
 
           {/* Action & Filter Toolbar */}
-          <div className="p-4 border-b border-slate-800 bg-slate-900/90 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shrink-0">
+          <div className="p-4 border-b border-slate-800 bg-slate-900/90 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shrink-0 no-print print:hidden">
             {/* Filter Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
               <button
@@ -384,9 +393,67 @@ export default function CateringHealthModal({
           </div>
 
           {/* Table List View */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 print:overflow-visible print:p-0 print:bg-white">
+            {/* Official Government Style Printable Table (Print / Save PDF Only) */}
+            <div className="hidden print:block official-doc-sheet bg-white text-slate-950 text-[11px] space-y-3">
+              <div className="border-b-[3px] border-double border-slate-950 pb-2 text-center space-y-0.5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-700">
+                  แบบฟอร์มราชการ • JRE 2027 CATERING &amp; FIELD MEDICAL BRIEFING
+                </p>
+                <h2 className="text-base font-black text-slate-950">
+                  บัญชีสรุปรายชื่อผู้มีข้อจำกัดด้านอาหาร อาการแพ้ยา และโรคประจำตัว
+                </h2>
+                <p className="text-[11px] text-slate-800">
+                  โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) • จำนวนตามเงื่อนไขที่เลือก {filteredList.length} คน
+                </p>
+              </div>
+              <table className="official-table w-full border-collapse border-2 border-slate-950 text-[10px]">
+                <thead>
+                  <tr className="bg-slate-200 text-slate-950 font-black">
+                    <th className="py-1.5 px-1.5 text-center w-9">ที่</th>
+                    <th className="py-1.5 px-2 text-left w-44">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                    <th className="py-1.5 px-2 text-left w-36">สังกัด / กลุ่ม / ห้องพัก</th>
+                    <th className="py-1.5 px-2 text-left">ประวัติแพ้อาหาร / แพ้ยา / ข้อจำกัดอาหาร</th>
+                    <th className="py-1.5 px-2 text-left">โรคประจำตัว / การดูแลพิเศษ</th>
+                    <th className="py-1.5 px-1.5 text-center w-20">หมายเหตุ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-4 text-center text-slate-600">
+                        ไม่มีรายการผู้สมัครในหมวดหมู่นี้
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredList.map((reg, idx) => {
+                      const cData = getRegistrationCardData(reg);
+                      const medTxt = getApplicantMedical(reg);
+                      const allgTxt = getApplicantAllergy(reg);
+                      return (
+                        <tr key={reg.id || reg.user_id || idx} className="align-top">
+                          <td className="py-1.5 px-1.5 text-center font-mono font-bold">{idx + 1}</td>
+                          <td className="py-1.5 px-2">
+                            <div className="font-bold">{reg.first_name} {reg.last_name} {reg.nickname ? `(${reg.nickname})` : ''}</div>
+                            <div className="text-[9px] font-mono">{reg.callsign || ''} {reg.phone ? `• ${reg.phone}` : ''}</div>
+                          </td>
+                          <td className="py-1.5 px-2 text-[9.5px]">
+                            <div>{cData.affiliation || '-'}</div>
+                            <div>กลุ่ม: {reg.group_assigned || '-'} • ห้อง: {reg.room_assigned || '-'}</div>
+                          </td>
+                          <td className="py-1.5 px-2 font-semibold">{allgTxt || '-'}</td>
+                          <td className="py-1.5 px-2 font-semibold">{medTxt || '-'}</td>
+                          <td className="py-1.5 px-1.5 text-center">{reg.is_special_care ? '⭐ ดูแลพิเศษ' : ''}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
             {filteredList.length === 0 ? (
-              <div className="py-16 text-center space-y-3">
+              <div className="py-16 text-center space-y-3 no-print print:hidden">
                 <div className="w-14 h-14 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center mx-auto text-slate-500">
                   <UtensilsCrossed className="w-7 h-7" />
                 </div>
@@ -398,7 +465,7 @@ export default function CateringHealthModal({
                 </p>
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2.5 no-print print:hidden">
                 {filteredList.map((reg, index) => {
                   const cardData = getRegistrationCardData(reg);
                   const medText = getApplicantMedical(reg);
@@ -547,7 +614,7 @@ export default function CateringHealthModal({
           </div>
 
           {/* Footer Note */}
-          <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 shrink-0">
+          <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 shrink-0 no-print print:hidden">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
               <span>ข้อมูลเชื่อมต่อเรียลไทม์กับฐานข้อมูลผู้สมัคร JRE 2027</span>

@@ -74,17 +74,54 @@ body.modal-scroll-locked {
 }
 
 /* ========================================================
+   OFFICIAL DOCUMENT & TABLE GRID STYLES (Screen + PNG + Print)
+   ======================================================== */
+.official-doc-sheet {
+  font-family: 'Sarabun', 'TH Sarabun New', sans-serif;
+  background: #ffffff;
+  color: #000000;
+}
+
+.official-doc-sheet table,
+.official-table {
+  width: 100%;
+  border-collapse: collapse !important;
+  border: 2px solid #0f172a !important;
+  background: #ffffff;
+}
+
+.official-doc-sheet th,
+.official-table th {
+  border: 1.5px solid #0f172a !important;
+  font-weight: 800;
+}
+
+.official-doc-sheet td,
+.official-table td {
+  border: 1px solid #334155 !important;
+}
+
+.official-doc-sheet .official-room-end td {
+  border-bottom: 2px solid #0f172a !important;
+}
+
+.official-case-grid > div {
+  border: 1px solid #334155 !important;
+}
+
+/* ========================================================
    PRINT STYLESHEET (PDF & Paper Print Optimization)
    ======================================================== */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 6mm !important;
+    margin: 10mm 8mm !important;
   }
 
   html, body {
     background: #ffffff !important;
-    color: #0f172a !important;
+    color: #000000 !important;
+    font-family: 'Sarabun', 'TH Sarabun New', sans-serif !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
@@ -99,16 +136,19 @@ body.modal-scroll-locked {
   main,
   main > div {
     background: transparent !important;
-    color: #0f172a !important;
+    color: #000000 !important;
     overflow: visible !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 
-  /* Hide elements marked with .no-print and global non-print chrome */
+  /* Hide elements marked with .no-print, .print:hidden and global non-print web chrome */
   .no-print,
+  .print\:hidden,
   nav,
   header,
   footer,
@@ -121,26 +161,33 @@ body.modal-scroll-locked {
     visibility: hidden !important;
   }
 
-  /* Document signing hub & rooms print: full sheet activation */
+  /* Document signing hub & rooms & EMR & catering print: full official paper activation */
   #printable-rooms-roster,
-  #printable-document-sheet {
+  #printable-document-sheet,
+  #printable-emr-case-sheet,
+  #printable-catering-sheet {
     display: block !important;
     visibility: visible !important;
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
     margin: 0 auto !important;
-    padding: 3mm 2mm !important;
+    padding: 0 !important;
     background: #ffffff !important;
-    color: #0f172a !important;
+    color: #000000 !important;
+    font-family: 'Sarabun', 'TH Sarabun New', sans-serif !important;
     box-sizing: border-box !important;
     overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 
   #printable-rooms-roster *,
-  #printable-document-sheet * {
+  #printable-document-sheet *,
+  #printable-emr-case-sheet *,
+  #printable-catering-sheet * {
     visibility: visible !important;
-    color: #0f172a !important;
+    color: #000000 !important;
     box-shadow: none !important;
     text-shadow: none !important;
     -webkit-print-color-adjust: exact !important;
@@ -148,32 +195,44 @@ body.modal-scroll-locked {
   }
 
   #printable-rooms-roster table,
-  #printable-document-sheet table {
+  #printable-document-sheet table,
+  #printable-emr-case-sheet table,
+  #printable-catering-sheet table {
     width: 100% !important;
     border-collapse: collapse !important;
+    border: 2px solid #000000 !important;
     margin-bottom: 12px !important;
     background: #ffffff !important;
   }
 
   #printable-rooms-roster th,
-  #printable-document-sheet th {
-    background-color: #f1f5f9 !important;
-    color: #0f172a !important;
+  #printable-document-sheet th,
+  #printable-emr-case-sheet th,
+  #printable-catering-sheet th {
+    background-color: #e2e8f0 !important;
+    color: #000000 !important;
     font-weight: 800 !important;
-    border: 1.2px solid #475569 !important;
+    border: 1.5px solid #000000 !important;
     padding: 4px 5px !important;
     font-size: 10px !important;
     line-height: 1.25 !important;
   }
 
   #printable-rooms-roster td,
-  #printable-document-sheet td {
-    border: 1px solid #94a3b8 !important;
+  #printable-document-sheet td,
+  #printable-emr-case-sheet td,
+  #printable-catering-sheet td {
+    border: 1px solid #1e293b !important;
     padding: 4px 5px !important;
-    color: #0f172a !important;
+    color: #000000 !important;
     background: #ffffff !important;
     font-size: 10px !important;
     line-height: 1.3 !important;
+  }
+
+  #printable-document-sheet tr.border-b-2 td,
+  #printable-document-sheet tr.official-room-end td {
+    border-bottom: 2px solid #000000 !important;
   }
 
   #printable-document-sheet[data-landscape="true"] th,
@@ -184,7 +243,9 @@ body.modal-scroll-locked {
   }
 
   #printable-rooms-roster tr,
-  #printable-document-sheet tr {
+  #printable-document-sheet tr,
+  #printable-emr-case-sheet tr,
+  #printable-catering-sheet tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
@@ -192,12 +253,18 @@ body.modal-scroll-locked {
   #printable-rooms-roster .rounded-3xl,
   #printable-rooms-roster .rounded-2xl,
   #printable-rooms-roster .rounded-xl,
+  #printable-rooms-roster .rounded-lg,
   #printable-document-sheet .rounded-3xl,
   #printable-document-sheet .rounded-2xl,
-  #printable-document-sheet .rounded-xl {
-    border-radius: 6px !important;
+  #printable-document-sheet .rounded-xl,
+  #printable-document-sheet .rounded-lg,
+  #printable-emr-case-sheet .rounded-2xl,
+  #printable-emr-case-sheet .rounded-xl,
+  #printable-catering-sheet .rounded-2xl,
+  #printable-catering-sheet .rounded-xl {
+    border-radius: 0 !important;
     background: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
+    border: 1.5px solid #0f172a !important;
   }
 
   #printable-rooms-roster h1,
@@ -205,18 +272,30 @@ body.modal-scroll-locked {
   #printable-rooms-roster h3,
   #printable-document-sheet h1,
   #printable-document-sheet h2,
-  #printable-document-sheet h3 {
-    color: #0f172a !important;
+  #printable-document-sheet h3,
+  #printable-emr-case-sheet h1,
+  #printable-emr-case-sheet h2,
+  #printable-emr-case-sheet h3,
+  #printable-catering-sheet h1,
+  #printable-catering-sheet h2,
+  #printable-catering-sheet h3 {
+    color: #000000 !important;
   }
 
-  /* Roster & Document sheet: text contrast and layout fix for paper/PDF */
+  /* Roster & Document sheet: crisp official black ink on white paper */
   #printable-rooms-roster span,
   #printable-rooms-roster div,
   #printable-rooms-roster p,
   #printable-document-sheet span,
   #printable-document-sheet div,
-  #printable-document-sheet p {
-    color: #0f172a !important;
+  #printable-document-sheet p,
+  #printable-emr-case-sheet span,
+  #printable-emr-case-sheet div,
+  #printable-emr-case-sheet p,
+  #printable-catering-sheet span,
+  #printable-catering-sheet div,
+  #printable-catering-sheet p {
+    color: #000000 !important;
     text-shadow: none !important;
   }
 
