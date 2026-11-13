@@ -56,6 +56,7 @@ export function parseCurrentRoute() {
 
   // 2. Parse modern path segments (/main/sub)
   const segments = pathname.split('/').filter(Boolean);
+  const rawSegments = url.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
 
   if (segments.length === 0 || segments[0] === 'home') {
     return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
@@ -63,6 +64,9 @@ export function parseCurrentRoute() {
 
   const first = segments[0];
   const second = segments[1];
+  const third = segments[2];
+  const rawSecond = rawSegments[1];
+  const rawThird = rawSegments[2];
 
   // Incident route block: JRE 2027 does not host rescue incident reports
   if (first === 'incidents' || first === 'incident') {
@@ -147,9 +151,17 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'documents', canonicalPath: '/admin/documents' };
   }
 
-  // Standalone shortcuts for Medical Dispensary & EMR Records (/medical, /dispensary, /clinic, /admin/medical)
-  if (first === 'medical' || first === 'dispensary' || first === 'clinic' || first === 'emr' || first === 'firstaid' || first === 'first-aid' || first === 'pharmacy') {
-    return { mainTab: 'admin', subRoute: 'medical', canonicalPath: '/admin/medical' };
+  // Standalone shortcuts for Medical Dispensary & EMR Records (/medical, /all-emr, /medical-records, /medical/person/:id, /admin/medical)
+  if (first === 'medical' || first === 'dispensary' || first === 'clinic' || first === 'emr' || first === 'all-emr' || first === 'medical-records' || first === 'health-records' || first === 'firstaid' || first === 'first-aid' || first === 'pharmacy') {
+    const queryPerson = url.searchParams.get('person') || '';
+    const pathPerson = (second === 'person' || second === 'p' || second === 'member') && rawThird ? decodeURIComponent(rawThird) : ((second && second !== 'all' && second !== 'summary') ? decodeURIComponent(rawSecond) : '');
+    const personId = pathPerson || queryPerson;
+    return {
+      mainTab: 'admin',
+      subRoute: 'medical',
+      personId: personId || null,
+      canonicalPath: personId ? `/admin/medical?person=${encodeURIComponent(personId)}` : '/admin/medical'
+    };
   }
 
   // Standalone shortcuts for Staff Accommodation & Payment Filter Pages
@@ -260,6 +272,9 @@ export function parseCurrentRoute() {
       'welfare': 'catering',
 
       'medical': 'medical',
+      'medical-records': 'medical',
+      'health-records': 'medical',
+      'all-emr': 'medical',
       'dispensary': 'medical',
       'clinic': 'medical',
       'emr': 'medical',
@@ -335,13 +350,29 @@ export function parseCurrentRoute() {
     else if (targetSub === 'installment-plan') canonicalPath = '/admin/installment-plan';
     else if (targetSub === 'fully-paid') canonicalPath = '/admin/fully-paid';
     else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
+    else if (targetSub === 'medical') canonicalPath = '/admin/medical';
+    else if (targetSub === 'rooms') canonicalPath = '/admin/rooms';
     else if (targetSub === 'documents') canonicalPath = '/admin/documents';
     else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
     else canonicalPath = '/admin';
 
+    const medicalPersonId = targetSub === 'medical'
+      ? (
+          ((third === 'person' || third === 'p' || third === 'member') && rawSegments[3] ? decodeURIComponent(rawSegments[3]) : '') ||
+          (third && third !== 'all' && third !== 'summary' ? decodeURIComponent(rawThird) : '') ||
+          url.searchParams.get('person') ||
+          ''
+        )
+      : '';
+
+    if (targetSub === 'medical' && medicalPersonId) {
+      canonicalPath = `/admin/medical?person=${encodeURIComponent(medicalPersonId)}`;
+    }
+
     return { 
       mainTab: 'admin', 
       subRoute: targetSub, 
+      personId: medicalPersonId || null,
       canonicalPath 
     };
   }
@@ -487,6 +518,16 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false, options = {})
 
   if (options.postId) {
     currentParams.set('id', options.postId);
+  }
+
+  // Handle medical ?person= param
+  if (!(mainTab === 'admin' && subRoute === 'medical') && !options.keepPerson) {
+    currentParams.delete('person');
+  }
+  if (options.clearPerson) {
+    currentParams.delete('person');
+  } else if (options.personId) {
+    currentParams.set('person', options.personId);
   }
 
   const queryString = currentParams.toString();

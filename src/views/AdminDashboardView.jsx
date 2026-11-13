@@ -73,7 +73,8 @@ import {
   MapPin,
   LayoutGrid,
   Table,
-  ChevronRight
+  ChevronRight,
+  FileHeart
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl, getAttendanceConfirmationInfo } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -130,6 +131,7 @@ import AdminRoomsView from './AdminRoomsView';
 import AdminDocumentsView from './AdminDocumentsView';
 import AdminMedicalView from './AdminMedicalView';
 import AdminStaffAccountsView from './AdminStaffAccountsView';
+import PersonEmrSection from '../components/PersonEmrSection';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
@@ -156,8 +158,10 @@ import {
 
 export default function AdminDashboardView({
   initialTab = 'applicants',
+  initialMedicalPersonId = null,
   onTabChange,
   registrations,
+  onSaveRegistration,
   onUpdateAllocation,
   onDeleteRegistration,
   announcements,
@@ -288,7 +292,123 @@ export default function AdminDashboardView({
   const [isEditingPaymentSettings, setIsEditingPaymentSettings] = useState(false);
   const [isEditingForms, setIsEditingForms] = useState(false);
   const [isEditingMerchConfig, setIsEditingMerchConfig] = useState(false);
-  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(() => isDevOperator);
+  const [medicalPersonId, setMedicalPersonId] = useState(initialMedicalPersonId || '');
+  const [showCreatePersonModal, setShowCreatePersonModal] = useState(false);
+  const [isCreatingPerson, setIsCreatingPerson] = useState(false);
+  const [newPersonForm, setNewPersonForm] = useState({
+    title_th: 'นาย',
+    first_name: '',
+    last_name: '',
+    nickname: '',
+    gender: 'male',
+    institution: 'มหาวิทยาลัยมหาสารคาม (มมส)',
+    unit: 'ชมรมอาสากู้ภัย มหาวิทยาลัยมหาสารคาม (กู้ภัยราชพฤกษ์)',
+    callsign: '',
+    phone: '',
+    user_email: '',
+    role_type: 'participant',
+    shirt_size: 'L',
+    group_assigned: '',
+    room_assigned: '',
+    blood_group: 'ไม่ระบุ',
+    medical_condition: 'ไม่มี',
+    allergies: 'ไม่มี',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    payment_plan: 'full',
+    payment_status: 'unpaid'
+  });
+
+  React.useEffect(() => {
+    if (isDevOperator) {
+      setIsAdvancedMode(true);
+    }
+  }, [isDevOperator]);
+
+  React.useEffect(() => {
+    if (initialMedicalPersonId) {
+      setMedicalPersonId(initialMedicalPersonId);
+    }
+  }, [initialMedicalPersonId]);
+
+  const handleOpenMedicalPersonPage = (targetPersonId = '') => {
+    setMedicalPersonId(targetPersonId || '');
+    setActiveTab('medical');
+    if (onTabChange) {
+      onTabChange('medical', targetPersonId ? { personId: targetPersonId } : { clearPerson: true });
+    }
+  };
+
+  const handleCreateNewPerson = async (e) => {
+    e.preventDefault();
+    if (isCreatingPerson) return;
+    if (!newPersonForm.first_name.trim()) {
+      triggerToast('กรุณาระบุชื่อจริงของผู้สมัคร / สมาชิกใหม่', 'error');
+      return;
+    }
+    setIsCreatingPerson(true);
+    try {
+      const uid = `admin_added_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const isStaffRole = newPersonForm.role_type !== 'participant';
+      const payload = {
+        id: uid,
+        user_id: uid,
+        title_th: newPersonForm.title_th,
+        first_name: newPersonForm.first_name.trim(),
+        last_name: newPersonForm.last_name.trim(),
+        nickname: newPersonForm.nickname.trim(),
+        gender: newPersonForm.gender,
+        institution: newPersonForm.institution.trim(),
+        unit: newPersonForm.unit.trim(),
+        callsign: newPersonForm.callsign.trim(),
+        phone: newPersonForm.phone.trim(),
+        user_email: newPersonForm.user_email.trim(),
+        role_type: newPersonForm.role_type,
+        is_staff: isStaffRole,
+        shirt_size: newPersonForm.shirt_size,
+        group_assigned: newPersonForm.group_assigned.trim(),
+        room_assigned: newPersonForm.room_assigned.trim(),
+        blood_group: newPersonForm.blood_group,
+        medical_condition: newPersonForm.medical_condition.trim() || 'ไม่มี',
+        allergies: newPersonForm.allergies.trim() || 'ไม่มี',
+        emergency_contact_name: newPersonForm.emergency_contact_name.trim(),
+        emergency_contact_phone: newPersonForm.emergency_contact_phone.trim(),
+        payment_plan: newPersonForm.payment_plan,
+        payment_status: newPersonForm.payment_status,
+        admin_added: true,
+        added_by: user?.email || 'admin',
+        created_at: new Date().toISOString()
+      };
+
+      if (onSaveRegistration) {
+        await onSaveRegistration(payload);
+      } else {
+        await DataService.saveRegistration(payload);
+        if (onRefreshRegistrations) await onRefreshRegistrations();
+      }
+      triggerToast(`✓ เพิ่มรายชื่อ "${payload.title_th}${payload.first_name} ${payload.last_name}" เข้าระบบเรียบร้อยแล้ว`);
+      setShowCreatePersonModal(false);
+      setNewPersonForm(prev => ({
+        ...prev,
+        first_name: '',
+        last_name: '',
+        nickname: '',
+        callsign: '',
+        phone: '',
+        user_email: '',
+        group_assigned: '',
+        room_assigned: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: ''
+      }));
+    } catch (err) {
+      console.error(err);
+      triggerToast(err?.message || 'เกิดข้อผิดพลาดในการเพิ่มรายชื่อใหม่', 'error');
+    } finally {
+      setIsCreatingPerson(false);
+    }
+  };
   const [pendingRoleDrafts, setPendingRoleDrafts] = useState({});
   const [pendingSpeakerCatDrafts, setPendingSpeakerCatDrafts] = useState({});
   const [isRefreshingData, setIsRefreshingData] = useState(false);
@@ -4571,7 +4691,7 @@ export default function AdminDashboardView({
       (reg.installment_2_status && reg.installment_2_status !== 'unpaid')
     );
 
-    if (hasTransferred && !isAdvancedMode) {
+    if (hasTransferred && !isAdvancedMode && !isDevOperator) {
       triggerToast('🔒 ผู้สมัครท่านนี้มีประวัติการโอนเงิน/ส่งสลิปแล้ว การลบข้อมูลจำเป็นต้องเปิด "โหมดแก้ไขขั้นสูง" ก่อน เพื่อความปลอดภัยทางบัญชี', 'error');
       return;
     }
@@ -8833,6 +8953,18 @@ export default function AdminDashboardView({
                   <ShieldAlert className="w-3.5 h-3.5" />
                   <span>{isAdvancedMode ? '🛡️ โหมดขั้นสูง (เปิดอยู่)' : '🛡️ โหมดแก้ไขขั้นสูง'}</span>
                 </button>
+
+                {(isDevOperator || isAdvancedMode) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePersonModal(true)}
+                    className="px-3.5 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-900/30 transition-all cursor-pointer shrink-0"
+                    title="เพิ่มรายชื่อผู้สมัครหรือทีมงานเข้าสู่ระบบโดยตรง (DEV / Admin)"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>+ เพิ่มรายชื่อใหม่</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -9727,6 +9859,15 @@ export default function AdminDashboardView({
                               </button>
 
                               <button
+                                onClick={() => handleOpenProfileModal(reg, 'emr')}
+                                className="px-2 py-1.5 bg-rose-900/50 hover:bg-rose-800/70 text-rose-200 border border-rose-500/40 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                title="เปิดดู / บันทึกเวชระเบียน ปฐมพยาบาล จ่ายยา ของคนนี้"
+                              >
+                                <Stethoscope className="w-3.5 h-3.5 text-rose-300" />
+                                <span className="hidden 2xl:inline">เวชระเบียน</span>
+                              </button>
+
+                              <button
                                 onClick={() => handleStartEditAllocation(reg)}
                                 className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors cursor-pointer"
                                 title="จัดกลุ่ม & ห้องนอนด่วน"
@@ -9748,7 +9889,7 @@ export default function AdminDashboardView({
                                   (reg.installment_1_status && reg.installment_1_status !== 'unpaid') ||
                                   (reg.installment_2_status && reg.installment_2_status !== 'unpaid')
                                 );
-                                const isDeleteBlocked = hasTransferredThis && !isAdvancedMode;
+                                const isDeleteBlocked = hasTransferredThis && !isAdvancedMode && !isDevOperator;
 
                                 return (
                                   <button
@@ -10317,6 +10458,18 @@ export default function AdminDashboardView({
                 >
                   <FileCheck className="w-3.5 h-3.5" />
                   <span>ขอ & ตรวจเอกสาร ({Array.isArray(profileModalReg.requested_docs) ? profileModalReg.requested_docs.length : 0})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileModalTab('emr')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    profileModalTab === 'emr'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white bg-slate-950'
+                  }`}
+                >
+                  <FileHeart className="w-3.5 h-3.5" />
+                  <span>🩺 เวชระเบียน</span>
                 </button>
               </div>
 
@@ -14045,6 +14198,21 @@ export default function AdminDashboardView({
                     <p className="text-slate-500 italic">ยังไม่มีการขอเอกสารเพิ่มเติมจากผู้สมัครท่านนี้ (สามารถกดปุ่ม "+ กดขอเอกสาร" ด้านบนได้เลย)</p>
                   )}
                 </div>
+              </div>
+            )}
+
+            {profileModalTab === 'emr' && (
+              <div className="p-6 space-y-4">
+                <PersonEmrSection
+                  person={profileModalReg}
+                  currentUser={user}
+                  isDevOperator={isDevOperator}
+                  triggerToast={triggerToast}
+                  onOpenFullEmrPage={(pid) => {
+                    setProfileModalReg(null);
+                    handleOpenMedicalPersonPage(pid);
+                  }}
+                />
               </div>
             )}
 
@@ -18924,6 +19092,14 @@ export default function AdminDashboardView({
         <AdminMedicalView
           registrations={registrations}
           currentUser={user}
+          isDevOperator={isDevOperator}
+          initialPersonId={medicalPersonId}
+          onPersonChange={(nextPersonId) => {
+            setMedicalPersonId(nextPersonId || '');
+            if (onTabChange) {
+              onTabChange('medical', nextPersonId ? { personId: nextPersonId } : { clearPerson: true });
+            }
+          }}
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
           onUpdateAllocation={onUpdateAllocation}
           triggerToast={triggerToast}
@@ -20387,16 +20563,301 @@ export default function AdminDashboardView({
         </ModalPortal>
       )}
 
+      {/* CREATE NEW PARTICIPANT / STAFF MODAL (DEV / ADMIN) */}
+      {showCreatePersonModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+            <div className="w-full max-w-2xl bg-slate-900 border border-emerald-500/40 rounded-3xl shadow-2xl overflow-hidden my-auto">
+              <div className="p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-white">
+                      ➕ เพิ่มรายชื่อผู้สมัคร / สมาชิกใหม่เข้าสู่ระบบ
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      เพิ่มข้อมูลรายบุคคลโดยตรงสำหรับ Admin / DEV (แก้ไขเพิ่มเติมภายหลังได้ทุกช่อง)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePersonModal(false)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateNewPerson} className="p-5 space-y-4 text-xs max-h-[80vh] overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">คำนำหน้า</label>
+                    <select
+                      value={newPersonForm.title_th}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, title_th: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    >
+                      {TITLE_THAI_OPTIONS.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">ชื่อจริง <span className="text-rose-400">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      value={newPersonForm.first_name}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, first_name: e.target.value }))}
+                      placeholder="เช่น สมชาย"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">นามสกุล</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.last_name}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, last_name: e.target.value }))}
+                      placeholder="เช่น ใจดี"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">ชื่อเล่น</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.nickname}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, nickname: e.target.value }))}
+                      placeholder="เช่น ก้อง"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">บทบาท (Role)</label>
+                    <select
+                      value={newPersonForm.role_type}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, role_type: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    >
+                      <option value="participant">ผู้เข้าอบรม (Participant)</option>
+                      {STAFF_ROLE_OPTIONS.map(r => (
+                        <option key={r.id || r.value || r} value={r.id || r.value || r}>
+                          {r.label || r.name || r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">สถาบัน / มหาวิทยาลัย</label>
+                    <input
+                      type="text"
+                      list="create-person-uni-list"
+                      value={newPersonForm.institution}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, institution: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                    <datalist id="create-person-uni-list">
+                      {OFFICIAL_NETWORK_INSTITUTIONS.map(inst => (
+                        <option key={inst.name || inst} value={inst.name || inst} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">เพศ</label>
+                    <select
+                      value={newPersonForm.gender}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, gender: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    >
+                      <option value="male">ชาย (Male)</option>
+                      <option value="female">หญิง (Female)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">นามเรียกขาน (Callsign)</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.callsign}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, callsign: e.target.value }))}
+                      placeholder="เช่น RCP 17-01"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">เบอร์โทร</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.phone}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="08X-XXX-XXXX"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">อีเมล (ถ้ามี)</label>
+                    <input
+                      type="email"
+                      value={newPersonForm.user_email}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, user_email: e.target.value }))}
+                      placeholder="example@email.com"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">ไซส์เสื้อ</label>
+                    <select
+                      value={newPersonForm.shirt_size}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, shirt_size: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    >
+                      {['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'ไม่รับเสื้อ'].map(sz => (
+                        <option key={sz} value={sz}>{sz}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">กรุ๊ปเลือด</label>
+                    <select
+                      value={newPersonForm.blood_group}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, blood_group: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    >
+                      {['ไม่ระบุ', 'A', 'B', 'AB', 'O'].map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">กลุ่มฝึก</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.group_assigned}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, group_assigned: e.target.value }))}
+                      placeholder="เช่น กลุ่ม 1"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">ห้องพัก</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.room_assigned}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, room_assigned: e.target.value }))}
+                      placeholder="เช่น ห้อง 101"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">โรคประจำตัว</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.medical_condition}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, medical_condition: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">ประวัติแพ้ยา / แพ้อาหาร</label>
+                    <input
+                      type="text"
+                      value={newPersonForm.allergies}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, allergies: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">สถานะการชำระเงิน</label>
+                    <select
+                      value={newPersonForm.payment_status}
+                      onChange={e => setNewPersonForm(prev => ({ ...prev, payment_status: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    >
+                      <option value="unpaid">ยังไม่ชำระ</option>
+                      <option value="paid">ชำระแล้ว</option>
+                      <option value="verified">ตรวจสอบอนุมัติแล้ว</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">ผู้ติดต่อฉุกเฉิน & เบอร์โทร</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={newPersonForm.emergency_contact_name}
+                        onChange={e => setNewPersonForm(prev => ({ ...prev, emergency_contact_name: e.target.value }))}
+                        placeholder="ชื่อผู้ติดต่อฉุกเฉิน"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                      />
+                      <input
+                        type="text"
+                        value={newPersonForm.emergency_contact_phone}
+                        onChange={e => setNewPersonForm(prev => ({ ...prev, emergency_contact_phone: e.target.value }))}
+                        placeholder="เบอร์ฉุกเฉิน"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePersonModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingPerson}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isCreatingPerson ? 'กำลังเพิ่ม...' : 'บันทึกรายชื่อใหม่เข้าระบบ'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
       {/* UNIVERSAL QR & BARCODE SCANNER MODAL (STANDARDIZED ALL-IN-ONE SCANNER) */}
       {(showUniversalScanner || showQRScanner || showIDCardScanner) && (
         <UniversalScannerModal
           isAdmin={true}
+          currentUser={user}
+          isDevOperator={isDevOperator}
           orders={merchandiseOrders}
           registrations={registrations}
           onClose={() => {
             setShowUniversalScanner(false);
             setShowQRScanner(false);
             setShowIDCardScanner(false);
+          }}
+          onOpenMedicalPerson={(personId) => {
+            setShowUniversalScanner(false);
+            setShowQRScanner(false);
+            setShowIDCardScanner(false);
+            handleOpenMedicalPersonPage(personId);
           }}
           onMarkOrderReceived={onMarkOrderReceived}
           onMarkRegistrationShirtReceived={async (userId, received) => {

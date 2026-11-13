@@ -1125,7 +1125,9 @@ export default function App() {
       ? await DataService.getRegistrations({ admin: true })
       : await DataService.getRegistrations({ userId: payload.user_id, email: payload.user_email });
     setRegistrations(updated);
-    setMyRegistration(saved);
+    if (!user || payload.user_id === user.id || (user.email && payload.user_email === user.email)) {
+      setMyRegistration(saved);
+    }
     return saved;
   };
 
@@ -1462,10 +1464,12 @@ export default function App() {
             user={user}
             isAdmin={isAdmin}
             initialTab={currentSubRoute || 'applicants'}
-            onTabChange={(tab) => {
-              setCurrentTab('admin', tab);
+            initialMedicalPersonId={route?.personId || null}
+            onTabChange={(tab, opts = {}) => {
+              setCurrentTab('admin', tab, opts);
             }}
             registrations={registrations}
+            onSaveRegistration={handleSaveRegistration}
             onUpdateAllocation={handleUpdateAllocation}
             onDeleteRegistration={handleDeleteRegistration}
             announcements={announcements}
@@ -1611,9 +1615,20 @@ export default function App() {
       {publicScannerOpen && (
         <UniversalScannerModal
           isAdmin={Boolean(isAdmin || isGoogleDevIdentity(user))}
+          currentUser={user}
+          isDevOperator={isGoogleDevIdentity(user)}
           initialQuery={publicScannerInitialQuery}
           orders={merchandiseOrders}
           registrations={registrations}
+          onOpenMedicalPerson={(personId) => {
+            if (!(isAdmin || isGoogleDevIdentity(user))) return;
+            setPublicScannerOpen(false);
+            setCurrentTab('admin', 'medical', { personId });
+            if (typeof window !== 'undefined' && personId) {
+              window.history.pushState({ mainTab: 'admin', subRoute: 'medical' }, '', `/admin/medical?person=${encodeURIComponent(personId)}`);
+              setRoute(parseCurrentRoute());
+            }
+          }}
           onClose={() => {
             setPublicScannerOpen(false);
             setPublicScannerInitialQuery('');

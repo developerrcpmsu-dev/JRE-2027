@@ -32,10 +32,23 @@ import {
 import ModalPortal from './ModalPortal';
 import IDCardPreview from './IDCardPreview';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import PersonEmrSection from './PersonEmrSection';
 import { DataService } from '../supabase';
 import { findRegistrationByIdCard, getRegistrationCardData, getIdCardCode, parseIdCardPayload } from '../utils/idCard';
 import { resolveFullAgeDetail } from '../utils/ageCalculator';
-import { getApplicantMedical, getApplicantAllergy, hasMedicalCondition, hasFoodOrDrugAllergy, getCleanSpecialNotes, hasSpecialCareCondition, resolvePersonFullNameWithTitle, resolveUniversityInfo } from '../data/defaultData';
+import {
+  getApplicantMedical,
+  getApplicantAllergy,
+  hasMedicalCondition,
+  hasFoodOrDrugAllergy,
+  getCleanSpecialNotes,
+  hasSpecialCareCondition,
+  getMedicalEquipmentNeeded,
+  getHealthConsentInfo,
+  getRegistrationPaymentResolution,
+  resolvePersonFullNameWithTitle,
+  resolveUniversityInfo
+} from '../data/defaultData';
 
 /**
  * Web Audio API synthesizer for crisp scan confirmation chime
@@ -95,15 +108,19 @@ export default function UniversalScannerModal({
   orders = [],
   registrations = [],
   isAdmin = true,
+  currentUser = null,
+  isDevOperator = false,
   initialQuery = '',
   onClose,
   onOpenAdminLogin,
+  onOpenMedicalPerson,
   onMarkOrderReceived,
   onMarkRegistrationShirtReceived,
   onVerifyPayment,
   onRefreshRegistrations,
   onUpdateAllocation
 }) {
+  const canManageAdminOrEmr = Boolean(isAdmin || isDevOperator);
   const [activeTab, setActiveTab] = useState('camera'); // 'camera' | 'manual'
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState('');
@@ -1515,11 +1532,31 @@ export default function UniversalScannerModal({
 
                               <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                  🏕️ กลุ่มฝึกปฏิบัติ & ห้องพัก
+                                  🏕️ กลุ่มฝึกปฏิบัติ & ห้องพัก / กุญแจ
                                 </span>
                                 <span className="font-bold text-slate-200 mt-0.5 block">
-                                  กลุ่มฝึก: <strong className="text-emerald-300">{p.group_assigned || 'รอกำหนด'}</strong> • ห้องพัก: <strong className="text-sky-300">{p.room_assigned || 'รอกำหนด'}</strong>
+                                  กลุ่มฝึก: <strong className="text-emerald-300">{p.group_assigned || 'รอกำหนด'}</strong> • ห้องพัก:{' '}
+                                  <strong className="text-sky-300">
+                                    {p.room_opt_out ? 'ไม่ประสงค์พักหอ' : (p.room_assigned || 'รอกำหนด')}
+                                  </strong>
                                 </span>
+                                {canManageAdminOrEmr && (
+                                  <div className="mt-1 space-y-0.5 text-[11px] text-slate-300">
+                                    {p.previous_room && (
+                                      <div>ย้ายมาจากห้อง: <strong className="text-amber-300">{p.previous_room}</strong></div>
+                                    )}
+                                    {(p.room_key_holder || p.room_key_returned !== undefined) && !p.room_opt_out && (
+                                      <div>
+                                        🔑 กุญแจ: <strong>{p.room_key_holder || 'ยังไม่บันทึก'}</strong> •{' '}
+                                        {p.room_key_returned ? (
+                                          <span className="text-emerald-300 font-bold">คืนกุญแจแล้ว</span>
+                                        ) : (
+                                          <span className="text-amber-300">ยังไม่คืนกุญแจ</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
@@ -1528,7 +1565,7 @@ export default function UniversalScannerModal({
                                 </span>
                                 <span className="font-bold text-slate-200 mt-0.5 block">
                                   เสื้อไซส์ <strong className="text-orange-300">{p.shirt_size || 'L'}</strong>
-                                  {isAdmin && p.phone ? (
+                                  {canManageAdminOrEmr && p.phone ? (
                                     <>
                                       {' • โทร: '}
                                       <a href={`tel:${p.phone}`} className="text-orange-400 hover:underline font-mono">
@@ -1537,13 +1574,77 @@ export default function UniversalScannerModal({
                                     </>
                                   ) : null}
                                 </span>
+                                {canManageAdminOrEmr && p.user_email && (
+                                  <span className="text-[11px] text-slate-400 block mt-0.5 truncate">
+                                    ✉️ {p.user_email}
+                                  </span>
+                                )}
                               </div>
+
+                              {canManageAdminOrEmr && (() => {
+                                const payRes = getRegistrationPaymentResolution(p);
+                                const ageInfo = p.dob ? resolveFullAgeDetail(p.dob) : null;
+                                const healthConsent = getHealthConsentInfo(p);
+                                const medEquip = getMedicalEquipmentNeeded(p);
+                                const emergName = p.emergency_contact_name || p.emergency_contact || '';
+                                const emergPhone = p.emergency_contact_phone || '';
+                                return (
+                                  <>
+                                    <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                        💳 สถานะการชำระเงิน & บัญชี
+                                      </span>
+                                      <div className="text-[11px] text-slate-200 mt-0.5 space-y-0.5">
+                                        <div>
+                                          แผน: <strong className="text-sky-300">{payRes?.planLabel || p.payment_plan || '-'}</strong> • สถานะ:{' '}
+                                          <strong className={payRes?.isFullyPaid ? 'text-emerald-300' : 'text-amber-300'}>
+                                            {payRes?.statusLabel || p.payment_status || 'รอตรวจสอบ'}
+                                          </strong>
+                                        </div>
+                                        {p.dob && (
+                                          <div className="text-slate-400">
+                                            🎂 วันเกิด: {p.dob} {ageInfo?.ageYears ? `(${ageInfo.ageYears} ปี)` : ''}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-slate-950/75 p-2.5 border border-slate-800">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                        🆘 ฉุกเฉิน • ความเป็นส่วนตัวสุขภาพ • อุปกรณ์
+                                      </span>
+                                      <div className="text-[11px] text-slate-200 mt-0.5 space-y-0.5">
+                                        <div>
+                                          📞 ฉุกเฉิน:{' '}
+                                          <strong className="text-amber-300">
+                                            {emergName || '-'} {emergPhone ? `(${emergPhone})` : ''}
+                                          </strong>
+                                        </div>
+                                        <div>
+                                          🛡️ เปิดเผยสุขภาพ:{' '}
+                                          <strong className={healthConsent?.isConsented ? 'text-emerald-300' : 'text-rose-300'}>
+                                            {healthConsent?.statusLabel || '-'}
+                                          </strong>
+                                        </div>
+                                        {medEquip && (
+                                          <div className="text-purple-300">
+                                            💊 ขอเตรียม: <strong>{medEquip}</strong>
+                                          </div>
+                                        )}
+                                        {p.previous_training && (
+                                          <div className="text-slate-400">🎓 เคยอบรม: {p.previous_training}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
 
                         {/* Medical & Food Allergy Alert Banner (Admin Only for privacy protection) */}
-                        {isAdmin && (() => {
+                        {canManageAdminOrEmr && (() => {
                           const med = getApplicantMedical(p);
                           const allergy = getApplicantAllergy(p);
                           const hasMed = hasMedicalCondition(p);
@@ -1828,8 +1929,25 @@ export default function UniversalScannerModal({
                         </div>
                       )}
 
+                      {/* ADMIN / MED FIELD EMR INSPECT & RECORD SECTION */}
+                      {canManageAdminOrEmr && (
+                        <PersonEmrSection
+                          person={p}
+                          currentUser={currentUser}
+                          isDevOperator={isDevOperator}
+                          onOpenFullEmrPage={
+                            onOpenMedicalPerson
+                              ? (personId) => {
+                                  if (onClose) onClose();
+                                  onOpenMedicalPerson(personId);
+                                }
+                              : null
+                          }
+                        />
+                      )}
+
                       {/* ACTION 4: ADMIN NOTES & IN-APP ALERT MESSAGE (Admin Only) */}
-                      {isAdmin && (
+                      {canManageAdminOrEmr && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {/* Internal Note */}
                           <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">

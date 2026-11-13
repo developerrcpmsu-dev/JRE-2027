@@ -1952,10 +1952,12 @@ export const DataService = {
 
   async saveMedicalDispenseLog(log) {
     const existing = await this.getMedicalDispenseLogs();
+    const nowIso = new Date().toISOString();
     const newEntry = {
       ...log,
       id: log.id || `dispense_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-      created_at: log.created_at || new Date().toISOString()
+      created_at: log.created_at || nowIso,
+      updated_at: nowIso
     };
     const updated = [
       newEntry,
@@ -1966,6 +1968,32 @@ export const DataService = {
     safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(updated));
     broadcastRealtimeChange('medical_dispense_logs', { action: 'save', logId: newEntry.id });
     return newEntry;
+  },
+
+  async updateMedicalDispenseLog(id, updates) {
+    const existing = await this.getMedicalDispenseLogs();
+    const nowIso = new Date().toISOString();
+    let updatedEntry = null;
+    const updated = existing.map(item => {
+      if (item.id === id) {
+        updatedEntry = {
+          ...item,
+          ...updates,
+          id: item.id,
+          created_at: item.created_at || nowIso,
+          updated_at: nowIso
+        };
+        return updatedEntry;
+      }
+      return item;
+    });
+    if (!updatedEntry) {
+      throw new Error(`ไม่พบข้อมูลเวชระเบียน ID: ${id}`);
+    }
+    await upsertProjectSettingStrict('medical_dispense_logs', updated);
+    safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(updated));
+    broadcastRealtimeChange('medical_dispense_logs', { action: 'update', logId: id });
+    return updatedEntry;
   },
 
   async deleteMedicalDispenseLog(id) {
