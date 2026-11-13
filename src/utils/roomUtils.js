@@ -17,16 +17,31 @@ import {
 } from '../data/defaultData.js';
 
 export const DORMITORY_ROOM_CONFIGS = [
-  { room: '101', roomLabel: 'ห้อง 101', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '102', roomLabel: 'ห้อง 102', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '103', roomLabel: 'ห้อง 103', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '104', roomLabel: 'ห้อง 104', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '105', roomLabel: 'ห้อง 105', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '106', roomLabel: 'ห้อง 106', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '107', roomLabel: 'ห้อง 107', gender: 'ชาย', floor: 1, capacity: 2 },
-  { room: '108', roomLabel: 'ห้อง 108', gender: 'หญิง', floor: 1, capacity: 2 },
-  { room: '109', roomLabel: 'ห้อง 109', gender: 'หญิง', floor: 1, capacity: 2 },
-  { room: '110', roomLabel: 'ห้อง 110', gender: 'หญิง', floor: 1, capacity: 2 }
+  { room: '307', roomLabel: 'ห้อง 307', gender: 'หญิง', floor: 3, capacity: 2 },
+  { room: '309', roomLabel: 'ห้อง 309', gender: 'หญิง', floor: 3, capacity: 2 },
+  { room: '315', roomLabel: 'ห้อง 315', gender: 'หญิง', floor: 3, capacity: 2 },
+  { room: '319', roomLabel: 'ห้อง 319', gender: 'ชาย', floor: 3, capacity: 2 },
+  { room: '320', roomLabel: 'ห้อง 320', gender: 'ชาย', floor: 3, capacity: 2 },
+  { room: '322', roomLabel: 'ห้อง 322', gender: 'ชาย', floor: 3, capacity: 2 },
+  { room: '323', roomLabel: 'ห้อง 323', gender: 'ชาย', floor: 3, capacity: 2 },
+  { room: '324', roomLabel: 'ห้อง 324', gender: 'ชาย', floor: 3, capacity: 2 },
+  { room: '331', roomLabel: 'ห้อง 331', gender: 'ชาย', floor: 3, capacity: 2 },
+  { room: '333', roomLabel: 'ห้อง 333', gender: 'ชาย', floor: 3, capacity: 2 }
+];
+
+export const OFFICIAL_FLOOR3_ROOM_ASSIGNMENTS = [
+  // หญิง (3 ห้อง — ชั้น 3: 307, 309, 315)
+  { room: '307', gender: 'หญิง', floor: 3, members: ['TSI 2002', 'อาสาว่านหอม'] },
+  { room: '309', gender: 'หญิง', floor: 3, members: ['TSI 2101', 'อาสาข้าวหอม'] },
+  { room: '315', gender: 'หญิง', floor: 3, members: ['อาสาชิงชิง', 'อาสาเนย'] },
+  // ชาย (7 ห้อง — ชั้น 3: 319, 320, 322, 323, 324, 331, 333)
+  { room: '319', gender: 'ชาย', floor: 3, members: ['TSI 1805', 'TSI 1905'] },
+  { room: '320', gender: 'ชาย', floor: 3, members: ['TSI 2114', 'อาสาจำลอง'] },
+  { room: '322', gender: 'ชาย', floor: 3, members: ['TSI 2115', 'อาสาน้ำมนต์'] },
+  { room: '323', gender: 'ชาย', floor: 3, members: ['TSI 2119', 'อาสานินจา'] },
+  { room: '324', gender: 'ชาย', floor: 3, members: ['TSI 2121', 'อาสาจ้าบ'] },
+  { room: '331', gender: 'ชาย', floor: 3, members: ['TSI 2125', 'อาสาแช้มเปี้ยน'] },
+  { room: '333', gender: 'ชาย', floor: 3, members: ['TSI 2126', 'อาสาคิมล็อก'] }
 ];
 
 const EMPTY_ROOM_VALUES = new Set(['', '-', '--', 'ไม่มี', 'รอจัดห้อง', 'ยังไม่จัดห้อง', 'ยังไม่ระบุห้อง', 'รอจัดสรร']);
@@ -236,8 +251,8 @@ export function normalizeDormPerson(reg) {
     rawRoom,
     roomNumber: parsedCurrentRoom.roomKey,
     roomLabel: parsedCurrentRoom.roomLabel || rawRoom,
-    roomFloor: parsedCurrentRoom.floorNumber || 1,
-    roomFloorLabel: parsedCurrentRoom.floorLabel || 'ชั้น 1',
+    roomFloor: parsedCurrentRoom.floorNumber || 3,
+    roomFloorLabel: parsedCurrentRoom.floorLabel || 'ชั้น 3',
     previousRoomRaw,
     previousRoom: parsedPreviousRoom.roomKey || (previousRoomRaw || null),
     previousRoomFloor: parsedPreviousRoom.floorNumber || null,
@@ -314,7 +329,7 @@ export function compareRoomOccupants(a, b) {
 }
 
 /**
- * Build room map (101-110), sorted occupants (#1 condition, #2 healthy),
+ * Build room map (Floor 3: 307-333), sorted occupants (#1 condition, #2 healthy),
  * plus diagnostics on whether rooms need rebalancing.
  */
 export function buildDormitoryRoomData(registrations = []) {
@@ -343,7 +358,7 @@ export function buildDormitoryRoomData(registrations = []) {
 
     if (person.roomNumber) {
       if (!map[person.roomNumber]) {
-        const floorNum = person.roomFloor || 1;
+        const floorNum = person.roomFloor || 3;
         map[person.roomNumber] = {
           room: person.roomNumber,
           roomLabel: person.roomLabel || `ห้อง ${person.roomNumber}`,
@@ -398,15 +413,15 @@ export function buildDormitoryRoomData(registrations = []) {
   });
 
   const rooms = Object.values(map).sort((a, b) => {
-    if ((a.floor || 1) !== (b.floor || 1)) return (a.floor || 1) - (b.floor || 1);
+    if ((a.floor || 3) !== (b.floor || 3)) return (a.floor || 3) - (b.floor || 3);
     return String(a.room).localeCompare(String(b.room), 'th', { numeric: true });
   });
   const maleRooms = rooms.filter(r => r.gender === 'ชาย');
   const femaleRooms = rooms.filter(r => r.gender === 'หญิง');
-  const activeFloors = [...new Set(rooms.filter(r => r.occupants.length > 0 || !r.isDynamic).map(r => r.floor || 1))].sort((a, b) => a - b);
+  const activeFloors = [...new Set(rooms.filter(r => r.occupants.length > 0 || !r.isDynamic).map(r => r.floor || 3))].sort((a, b) => a - b);
   const activeFloorSummary = activeFloors.length > 1
     ? `ชั้น ${activeFloors.join(', ')}`
-    : `ชั้น ${activeFloors[0] || 1}`;
+    : `ชั้น ${activeFloors[0] || 3}`;
 
   const analyzeZone = (zoneRooms) => {
     const doubleCareRooms = [];
@@ -466,7 +481,7 @@ export function buildDormitoryRoomData(registrations = []) {
 /**
  * Compute optimal room assignments per gender:
  * 1. Pair each person who has a chronic disease / allergy with a healthy roommate (1:1).
- * 2. Place care rooms at the front of each gender block (101.. for male, 108.. for female).
+ * 2. Place care rooms at the front of each gender block (319.. for male, 307.. for female on Floor 3).
  * 3. Order occupants in every room: #1 = condition holder, #2 = healthy roommate.
  * 4. Preserve existing healthy-only pairs and existing care+healthy pairs where possible.
  */
@@ -615,5 +630,93 @@ export function computeSmartRoomPlan(registrations = []) {
     plannedMaleRooms,
     plannedFemaleRooms,
     changes
+  };
+}
+
+/**
+ * Match a person to their official Floor 3 assignment from OFFICIAL_FLOOR3_ROOM_ASSIGNMENTS.
+ */
+export function findOfficialFloor3Assignment(personOrReg) {
+  if (!personOrReg) return null;
+  const callsign = String(personOrReg.callsign || '').replace(/\s+/g, '').toLowerCase();
+  const nickname = String(personOrReg.nickname || '').replace(/\s+/g, '').toLowerCase();
+  const name = String(personOrReg.name || `${personOrReg.first_name || ''}${personOrReg.last_name || ''}`).replace(/\s+/g, '').toLowerCase();
+
+  for (const spec of OFFICIAL_FLOOR3_ROOM_ASSIGNMENTS) {
+    for (const token of spec.members) {
+      const cleanToken = String(token).replace(/\s+/g, '').toLowerCase();
+      if (cleanToken.startsWith('tsi')) {
+        if (callsign.includes(cleanToken)) {
+          return { ...spec, matchedToken: token };
+        }
+      } else {
+        const nickPart = cleanToken.replace(/^อาสา/, '');
+        if (
+          callsign.includes(cleanToken) ||
+          (nickPart && (nickname.includes(nickPart) || callsign.includes(nickPart) || name.includes(nickPart)))
+        ) {
+          return { ...spec, matchedToken: token };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Build a preset plan applying OFFICIAL_FLOOR3_ROOM_ASSIGNMENTS (ชั้น 3: หญิง 307, 309, 315 | ชาย 319, 320, 322, 323, 324, 331, 333).
+ */
+export function computeOfficialFloor3Plan(registrations = []) {
+  const current = buildDormitoryRoomData(registrations);
+  const allExternal = [
+    ...current.rooms.flatMap(r => r.occupants),
+    ...current.unassignedExternal
+  ];
+
+  const byRoom = new Map();
+  OFFICIAL_FLOOR3_ROOM_ASSIGNMENTS.forEach(spec => {
+    byRoom.set(spec.room, {
+      room: spec.room,
+      roomLabel: `ห้อง ${spec.room}`,
+      gender: spec.gender,
+      floor: spec.floor,
+      floorLabel: `ชั้น ${spec.floor}`,
+      capacity: 2,
+      occupants: []
+    });
+  });
+
+  const changes = [];
+  allExternal.forEach(person => {
+    const match = findOfficialFloor3Assignment(person);
+    if (!match) return;
+    const roomObj = byRoom.get(match.room);
+    if (roomObj) roomObj.occupants.push(person);
+    const oldRoom = person.roomNumber || 'ยังไม่จัดห้อง';
+    const oldFloor = person.roomFloor || 1;
+    if (oldRoom !== match.room || oldFloor !== match.floor) {
+      changes.push({
+        person,
+        oldRoom,
+        newRoom: match.room,
+        newRoomValue: `ห้อง ${match.room}`,
+        floor: match.floor,
+        reason: `จัดตามผังหอพักกุดรัง ชั้น 3 (${match.matchedToken} • ${match.gender})`
+      });
+    }
+  });
+
+  const plannedRooms = Array.from(byRoom.values()).map(rm => ({
+    ...rm,
+    occupants: [...rm.occupants].sort(compareRoomOccupants)
+  }));
+
+  return {
+    current,
+    plannedRooms,
+    plannedMaleRooms: plannedRooms.filter(r => r.gender === 'ชาย'),
+    plannedFemaleRooms: plannedRooms.filter(r => r.gender === 'หญิง'),
+    changes,
+    isOfficialPreset: true
   };
 }

@@ -141,7 +141,7 @@ export function parseCurrentRoute() {
     return { mainTab: 'admin', subRoute: 'shirt-roster', canonicalPath: '/admin/shirt-roster' };
   }
 
-  // Standalone shortcuts for Rooms & Accommodation Lookup (หอพักกุดรัง ชั้น 1 ห้อง 101 - 110)
+  // Standalone shortcuts for Rooms & Accommodation Lookup (หอพักกุดรัง ชั้น 3 ห้อง 307 - 333)
   if (first === 'rooms' || first === 'room' || first === 'accommodation' || first === 'dorm' || first === 'dormitory') {
     return { mainTab: 'admin', subRoute: 'rooms', canonicalPath: '/admin/rooms' };
   }

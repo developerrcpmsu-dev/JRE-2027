@@ -6561,7 +6561,7 @@ export default function AdminDashboardView({
                       ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30'
                       : 'bg-slate-950/50 border-slate-800 hover:border-amber-700/60'
                   }`}
-                  title={`จัดห้องพักหอพักกุดรัง ชั้น 1 แล้ว ${assignedExternal.length}/${externalRegs.length} คน • สังกัด มมส ${msuRegs.length} คน เดินทางไป-กลับเอง`}
+                  title={`จัดห้องพักหอพักกุดรัง ชั้น 3 แล้ว ${assignedExternal.length}/${externalRegs.length} คน • สังกัด มมส ${msuRegs.length} คน เดินทางไป-กลับเอง`}
                 >
                   <div className="flex items-center gap-1.5 truncate">
                     <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -6758,7 +6758,7 @@ export default function AdminDashboardView({
               <option value="sub_unpaid">🔴 ค้างชำระ ({regMetrics.totalOutstandingCount} คน)</option>
               <option value="catering">🍽️ ศูนย์ข้อมูลอาหาร & สุขภาวะ ({regMetrics.allergyCount + regMetrics.medicalCount} คน)</option>
               <option value="medical">🩺 หน่วยพยาบาลสนาม & เบิกจ่ายยา/เวชระเบียน</option>
-              <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 1 (ห้อง 101 - 110)</option>
+              <option value="rooms">🏨 จัดห้องพักหอกุดรัง ชั้น 3 (ห้อง 307 - 333)</option>
               <option value="documents">📑 ศูนย์รวมเอกสาร & ใบตรวจยา Staff (6 ใบ)</option>
               <option value="merchandise">👕 จัดการเสื้อ/กางเกง & สแกน QR ({sizeStats.totalShirts} ตัว)</option>
               <option value="payment_settings">⏱️ วันเวลาเปิด-ปิดรับสมัคร & ค่าลงทะเบียน 2 งวด</option>
@@ -6892,7 +6892,7 @@ export default function AdminDashboardView({
             }`}
           >
             <Building className="w-4 h-4 text-sky-400 shrink-0" />
-            <span>🏨 ห้องพักหอกุดรัง (101-110)</span>
+            <span>🏨 ห้องพักหอกุดรัง (ชั้น 3 • 307-333)</span>
           </button>
 
           <button
@@ -20761,7 +20761,7 @@ export default function AdminDashboardView({
                       type="text"
                       value={newPersonForm.room_assigned}
                       onChange={e => setNewPersonForm(prev => ({ ...prev, room_assigned: e.target.value }))}
-                      placeholder="เช่น ห้อง 101"
+                      placeholder="เช่น ห้อง 307"
                       className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
                     />
                   </div>

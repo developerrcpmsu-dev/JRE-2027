@@ -574,7 +574,7 @@ export default function AdminDocumentsView({
     };
   }, [shirtData]);
 
-  // 4. Prepare Dormitory Rooms Data (Rooms 101 - 110, sorted #1 care, #2 healthy)
+  // 4. Prepare Dormitory Rooms Data (Floor 3: 307-333, sorted #1 care, #2 healthy)
   const roomData = useMemo(() => {
     const parsed = buildDormitoryRoomData(registrations);
     const msuNeedsCare = parsed.localMsu.filter(
@@ -632,7 +632,7 @@ export default function AdminDocumentsView({
         ? 'แจ้งไม่พักหอพักมหาลัย'
         : uniInfo.isMsu
           ? 'มมส (ไป-กลับเอง)'
-          : `${matchedRoom ? `${parsedRoom.floorLabel || roomPerson?.roomFloorLabel || 'ชั้น 1'} ห้อง ${matchedRoom}` : 'รอจัดห้อง'} • ${roomPerson?.keyStatusLabel || 'ยังไม่ได้จ่ายกุญแจ'}`;
+          : `${matchedRoom ? `${parsedRoom.floorLabel || roomPerson?.roomFloorLabel || 'ชั้น 3'} ห้อง ${matchedRoom}` : 'รอจัดห้อง'} • ${roomPerson?.keyStatusLabel || 'ยังไม่ได้จ่ายกุญแจ'}`;
 
       // Shirt & ID Card
       const isCardOnly = Boolean(extra.staff_id_card_only || reg.staff_id_card_only);
@@ -1074,7 +1074,7 @@ export default function AdminDocumentsView({
                 <span>5. ใบตรวจห้อง & โรคประจำตัว / ยา / ของใช้</span>
                 <Stethoscope className="w-4 h-4 text-rose-400" />
               </div>
-              <div className="text-sm font-black text-white">สำหรับ Staff พยาบาล & หอพัก ({roomData.activeFloorSummary || 'ชั้น 1 ห้อง 101-110'} + มมส)</div>
+              <div className="text-sm font-black text-white">สำหรับ Staff พยาบาล & หอพัก ({roomData.activeFloorSummary || 'ชั้น 3 ห้อง 307-333'} + มมส)</div>
               <span className="text-[10px] text-rose-300">ระบุห้องพัก/ไม่พัก, กุญแจ, โรค, แพ้, ยา, ของที่ต้องใช้, ผู้ติดต่อฉุกเฉิน, ความยินยอม</span>
             </button>
 
@@ -1238,7 +1238,7 @@ export default function AdminDocumentsView({
                 {activeDoc === 'attendance' && `ยอดรวม ${attendanceData.length} คน`}
                 {activeDoc === 'id-cards' && `บัตรทั้งหมด ${idCardData.length} ใบ (คุ้มครองข้อมูลสุขภาพ PDPA)`}
                 {activeDoc === 'shirts' && `ยอดผลิตรวม ${shirtData.length} ตัว`}
-                {activeDoc === 'rooms' && `${roomData.activeFloorSummary || 'ชั้น 1 ห้อง 101 - 110'} • คุ้มครองข้อมูลสุขภาพ (PDPA)`}
+                {activeDoc === 'rooms' && `${roomData.activeFloorSummary || 'ชั้น 3 ห้อง 307 - 333'} • คุ้มครองข้อมูลสุขภาพ (PDPA)`}
                 {activeDoc === 'rooms-staff' && 'ไม่ต้องลงลายมือชื่อ • สำหรับฝ่ายพยาบาล/สวัสดิการเตรียมความพร้อม'}
                 {activeDoc === 'admin-master' && `แสดงผล ${displayedAdminMasterData.length} / ${adminMasterData.length} ท่าน (ข้อมูลภายใน Admin)`}
               </span>
@@ -1426,7 +1426,7 @@ export default function AdminDocumentsView({
             <div className="space-y-6">
               <div className="p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-[11px] text-sky-900 font-semibold flex flex-wrap items-center justify-between gap-2">
                 <span>🔒 ใบเซ็นชื่อเข้าห้องพักฉบับนี้ปิดข้อมูลสุขภาพ/โรคประจำตัวทั้งหมด เพื่อคุ้มครองข้อมูลส่วนบุคคล (PDPA) ณ จุดลงทะเบียน</span>
-                <span className="font-mono font-bold">เรียงลำดับตามห้อง 101 - 110</span>
+                <span className="font-mono font-bold">เรียงลำดับตามห้อง {roomData.rooms.map(r => r.room).join(', ')}</span>
               </div>
 
               <div className="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-[11px] text-slate-800 font-semibold flex flex-wrap items-center justify-between gap-2">
@@ -1440,7 +1440,7 @@ export default function AdminDocumentsView({
               </div>
 
               <DormSignInZoneTable
-                title={`🚪 1. ห้องพักชาย (${roomData.maleRooms.length} ห้อง — หอพักกุดรัง ${roomData.activeFloorSummary || 'ชั้น 1'})`}
+                title={`🚪 1. ห้องพักชาย (${roomData.maleRooms.length} ห้อง — หอพักกุดรัง ${roomData.activeFloorSummary || 'ชั้น 3'})`}
                 subtitle="ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
                 rooms={roomData.maleRooms}
                 altBgClass="bg-blue-50/40"
@@ -1449,7 +1449,7 @@ export default function AdminDocumentsView({
 
               <div className="pt-2">
                 <DormSignInZoneTable
-                  title={`🚪 2. ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง — หอพักกุดรัง ${roomData.activeFloorSummary || 'ชั้น 1'})`}
+                  title={`🚪 2. ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง — หอพักกุดรัง ${roomData.activeFloorSummary || 'ชั้น 3'})`}
                   subtitle="ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
                   rooms={roomData.femaleRooms}
                   altBgClass="bg-pink-50/40"

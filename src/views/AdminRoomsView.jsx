@@ -38,6 +38,7 @@ import {
   DORMITORY_ROOM_CONFIGS,
   buildDormitoryRoomData,
   computeSmartRoomPlan,
+  computeOfficialFloor3Plan,
   buildRoomMovePayload,
   parseRoomInfo
 } from '../utils/roomUtils';
@@ -832,7 +833,13 @@ export default function AdminRoomsView({
     setSmartPlanModal(plan);
   };
 
-  // Apply Smart Room Plan to database
+  // Open Official Floor 3 Room Plan Preview Modal
+  const handleOpenOfficialFloor3Plan = () => {
+    const plan = computeOfficialFloor3Plan(registrations);
+    setSmartPlanModal(plan);
+  };
+
+  // Apply Smart / Official Room Plan to database
   const handleApplySmartPlan = async () => {
     if (!smartPlanModal || !onUpdateAllocation) return;
     if (smartPlanModal.changes.length === 0) {
@@ -841,15 +848,22 @@ export default function AdminRoomsView({
       return;
     }
 
+    const isOfficial = Boolean(smartPlanModal.isOfficialPreset);
     setIsApplyingPlan(true);
     try {
       for (const ch of smartPlanModal.changes) {
-        const payload = buildRoomMovePayload(ch.person, ch.newRoom, 'จัดห้องอัตโนมัติ (Smart Arrange)', 'admin');
+        const noteText = isOfficial ? (ch.reason || 'จัดห้องตามผังหอพักกุดรัง ชั้น 3 (307-333)') : 'จัดห้องอัตโนมัติ (Smart Arrange)';
+        const payload = buildRoomMovePayload(ch.person, ch.newRoom, noteText, 'admin', ch.floor || '');
         await onUpdateAllocation(ch.person.targetUpdateId, payload);
       }
       setSmartPlanModal(null);
       if (triggerToast) {
-        triggerToast(`✓ จัดห้องอัตโนมัติเรียบร้อย (${smartPlanModal.changes.length} รายการ) — คนปกติคู่คนมีโรค & ห้องมีโรคอยู่ต้นๆ แล้ว`, 'success');
+        triggerToast(
+          isOfficial
+            ? `✓ ย้ายห้องตามผังชั้น 3 (307-333) เรียบร้อย (${smartPlanModal.changes.length} รายการ)`
+            : `✓ จัดห้องอัตโนมัติเรียบร้อย (${smartPlanModal.changes.length} รายการ) — คนปกติคู่คนมีโรค & ห้องมีโรคอยู่ต้นๆ แล้ว`,
+          'success'
+        );
       }
     } catch (err) {
       console.error('Failed to apply smart room plan:', err);
@@ -861,11 +875,12 @@ export default function AdminRoomsView({
 
   // Copy full room assignment roster to clipboard
   const handleCopyRoster = () => {
-    let text = `🏨 ผังการจัดห้องพัก หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (ชั้น 1 ห้อง 101 - 110)\n`;
+    const floorText = roomData.activeFloorSummary || 'ชั้น 3';
+    let text = `🏨 ผังการจัดห้องพัก หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (${floorText})\n`;
     text += `โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)\n`;
     text += `------------------------------------------------------------\n\n`;
 
-    text += `🚪 ห้องพักชาย (7 ห้อง / 14 คน — ชั้น 1):\n`;
+    text += `🚪 ห้องพักชาย (${roomData.maleRooms.length} ห้อง / ${totalMaleOccupants} คน — ${floorText}):\n`;
     roomData.maleRooms.forEach(r => {
       text += `  • ห้อง ${r.room} [${r.keySummaryLabel}]: `;
       if (r.occupants.length === 0) {
@@ -876,7 +891,7 @@ export default function AdminRoomsView({
       }
     });
 
-    text += `\n🚪 ห้องพักหญิง (3 ห้อง / 6 คน — ชั้น 1):\n`;
+    text += `\n🚪 ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง / ${totalFemaleOccupants} คน — ${floorText}):\n`;
     roomData.femaleRooms.forEach(r => {
       text += `  • ห้อง ${r.room} [${r.keySummaryLabel}]: `;
       if (r.occupants.length === 0) {
@@ -891,7 +906,7 @@ export default function AdminRoomsView({
     navigator.clipboard.writeText(text);
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2500);
-    if (triggerToast) triggerToast('📋 คัดลอกผังห้องพัก 101-110 ลงคลิปบอร์ดเรียบร้อยแล้ว');
+    if (triggerToast) triggerToast(`📋 คัดลอกผังห้องพัก (${floorText}) ลงคลิปบอร์ดเรียบร้อยแล้ว`);
   };
 
   const [isExporting, setIsExporting] = useState(false);
@@ -995,7 +1010,7 @@ export default function AdminRoomsView({
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center gap-1.5 shadow-sm">
                 <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{roomData.activeFloorSummary || 'ชั้น 1'} • {roomData.rooms.length} ห้อง (ปรับห้อง/ชั้นอื่นได้)</span>
+                <span>{roomData.activeFloorSummary || 'ชั้น 3'} • {roomData.rooms.length} ห้อง (ปรับห้อง/ชั้นอื่นได้)</span>
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 URL: /admin/rooms
@@ -1006,7 +1021,7 @@ export default function AdminRoomsView({
               🏨 ตารางจัดสรรห้องพัก &amp; ระบบโปรไฟล์ผู้เข้าพัก
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-4xl leading-relaxed">
-              ผังเข้าพักหอพักกุดรัง ชั้น 1 ชาย (101-107) และหญิง (108-110) <strong>จัดลำดับในห้อง: 1. คนมีโรคประจำตัว/แพ้ • 2. คนปกติช่วยดูแล</strong> จัดห้องแล้ว {totalOccupants}/{totalExternalNeedRoom || 20} คน • สถานะ &ldquo;ไม่พักหอ&rdquo; กดปรับได้เฉพาะ Admin เท่านั้น
+              ผังเข้าพักหอพักกุดรัง ชั้น 3 หญิง (307, 309, 315) และชาย (319, 320, 322, 323, 324, 331, 333) <strong>จัดลำดับในห้อง: 1. คนมีโรคประจำตัว/แพ้ • 2. คนปกติช่วยดูแล</strong> จัดห้องแล้ว {totalOccupants}/{totalExternalNeedRoom || 20} คน • สถานะ &ldquo;ไม่พักหอ&rdquo; กดปรับได้เฉพาะ Admin เท่านั้น
             </p>
           </div>
 
@@ -1054,17 +1069,28 @@ export default function AdminRoomsView({
               </button>
             </div>
 
-            {/* Smart Auto-Arrange Button */}
+            {/* Official Floor 3 Preset & Smart Auto-Arrange Buttons */}
             {onUpdateAllocation && (
-              <button
-                type="button"
-                onClick={handleOpenSmartPlan}
-                className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-black text-xs shadow-lg shadow-rose-900/30 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                title="จัดคนมีโรคประจำตัวไว้ห้องต้นๆ คู่กับคนปกติที่ไม่มีโรค และเรียงคนที่ 1 = มีโรค, คนที่ 2 = ไม่มี"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>✨ จัดห้องอัตโนมัติ (โรคไว้ต้นๆ คู่คนปกติ)</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenOfficialFloor3Plan}
+                  className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-sky-900/30 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  title="จับคู่ห้องพักชั้น 3 (หญิง 307, 309, 315 • ชาย 319, 320, 322, 323, 324, 331, 333)"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>🏨 ใช้ผังห้องพักชั้น 3 (307-333)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenSmartPlan}
+                  className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-black text-xs shadow-lg shadow-rose-900/30 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  title="จัดคนมีโรคประจำตัวไว้ห้องต้นๆ คู่กับคนปกติที่ไม่มีโรค และเรียงคนที่ 1 = มีโรค, คนที่ 2 = ไม่มี"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>✨ จัดห้องอัตโนมัติ (โรคไว้ต้นๆ คู่คนปกติ)</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1142,7 +1168,7 @@ export default function AdminRoomsView({
               type="button"
               onClick={handleCopyRoster}
               className="px-3.5 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              title="คัดลอกรายชื่อแยกตามห้อง 101-110"
+              title="คัดลอกรายชื่อแยกตามห้องพักชั้น 3 (307-333)"
             >
               {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedAll ? 'คัดลอกแล้ว ✓' : 'คัดลอกผัง'}</span>
@@ -1167,8 +1193,8 @@ export default function AdminRoomsView({
               <span>ห้องพักทั้งหมด</span>
               <DoorClosed className="w-4 h-4 text-sky-400" />
             </div>
-            <div className="text-xl font-black text-white font-mono">10 ห้อง</div>
-            <span className="text-[10px] text-slate-400">ห้อง 101 ถึง 110 (ชั้น 1)</span>
+            <div className="text-xl font-black text-white font-mono">{roomData.rooms.length} ห้อง</div>
+            <span className="text-[10px] text-slate-400">ชั้น 3 • หญิง 307-315 / ชาย 319-333</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
@@ -1192,9 +1218,9 @@ export default function AdminRoomsView({
               <BedDouble className="w-4 h-4 text-sky-400" />
             </div>
             <div className="text-xl font-black text-sky-300 font-mono">
-              7 ห้อง <span className="text-xs text-slate-400 font-sans">({totalMaleOccupants} คน)</span>
+              {roomData.maleRooms.length} ห้อง <span className="text-xs text-slate-400 font-sans">({totalMaleOccupants} คน)</span>
             </div>
-            <span className="text-[10px] text-sky-400">ห้อง 101 - 107 (ห้องละ 2 คน)</span>
+            <span className="text-[10px] text-sky-400">ห้อง {roomData.maleRooms.map(r => r.room).join(', ')} (ห้องละ 2 คน)</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
@@ -1203,9 +1229,9 @@ export default function AdminRoomsView({
               <BedDouble className="w-4 h-4 text-pink-400" />
             </div>
             <div className="text-xl font-black text-pink-300 font-mono">
-              3 ห้อง <span className="text-xs text-slate-400 font-sans">({totalFemaleOccupants} คน)</span>
+              {roomData.femaleRooms.length} ห้อง <span className="text-xs text-slate-400 font-sans">({totalFemaleOccupants} คน)</span>
             </div>
-            <span className="text-[10px] text-pink-400">ห้อง 108 - 110 (ห้องละ 2 คน)</span>
+            <span className="text-[10px] text-pink-400">ห้อง {roomData.femaleRooms.map(r => r.room).join(', ')} (ห้องละ 2 คน)</span>
           </div>
         </div>
 
@@ -1357,13 +1383,13 @@ export default function AdminRoomsView({
       {viewMode === 'table' && (
         <div id="printable-rooms-roster" className="space-y-8 print:p-4 print:bg-white print:text-slate-900">
           <div className="hidden print:block text-center pb-4 mb-4 border-b-2 border-slate-900">
-            <h1 className="text-xl font-black text-slate-950">หอพักกุดรัง มหาวิทยาลัยมหาสารคาม ({roomData.activeFloorSummary || 'ชั้น 1'})</h1>
+            <h1 className="text-xl font-black text-slate-950">หอพักกุดรัง มหาวิทยาลัยมหาสารคาม ({roomData.activeFloorSummary || 'ชั้น 3'})</h1>
             <p className="text-xs font-bold text-slate-700">โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) • ผังจัดสรรห้องพัก {roomData.rooms.length} ห้อง</p>
           </div>
 
           {(genderFilter === 'all' || genderFilter === 'ชาย') && filteredMaleRooms.length > 0 && (
             <RoomZoneTable
-              title={`🚪 ห้องพักชาย (${roomData.maleRooms.length} ห้อง — ${roomData.activeFloorSummary || 'ชั้น 1'})`}
+              title={`🚪 ห้องพักชาย (${roomData.maleRooms.length} ห้อง — ${roomData.activeFloorSummary || 'ชั้น 3'})`}
               subtitle="หอพักกุดรัง มมส • ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
               rooms={filteredMaleRooms}
               occupiedCount={totalMaleOccupants}
@@ -1381,7 +1407,7 @@ export default function AdminRoomsView({
 
           {(genderFilter === 'all' || genderFilter === 'หญิง') && filteredFemaleRooms.length > 0 && (
             <RoomZoneTable
-              title={`🚪 ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง — ${roomData.activeFloorSummary || 'ชั้น 1'})`}
+              title={`🚪 ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง — ${roomData.activeFloorSummary || 'ชั้น 3'})`}
               subtitle="หอพักกุดรัง มมส • ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
               rooms={filteredFemaleRooms}
               occupiedCount={totalFemaleOccupants}
@@ -1827,7 +1853,7 @@ export default function AdminRoomsView({
 
                             {person.roomNumber && (
                               <div className="text-[10px] text-sky-300/90 font-semibold">
-                                📍 {person.roomFloorLabel || `ชั้น ${person.roomFloor || 1}`} • ห้อง {person.roomNumber}
+                                📍 {person.roomFloorLabel || `ชั้น ${person.roomFloor || 3}`} • ห้อง {person.roomNumber}
                               </div>
                             )}
                             {person.roomChangeNote && (
@@ -1838,7 +1864,7 @@ export default function AdminRoomsView({
                           </div>
                         ) : (
                           <span className="font-mono font-bold text-sky-300">
-                            {person.roomNumber ? `${person.roomFloorLabel || 'ชั้น 1'} ห้อง ${person.roomNumber}` : 'รอจัดห้อง'}
+                            {person.roomNumber ? `${person.roomFloorLabel || 'ชั้น 3'} ห้อง ${person.roomNumber}` : 'รอจัดห้อง'}
                           </span>
                         )}
                       </td>
@@ -1979,10 +2005,16 @@ export default function AdminRoomsView({
             <div className="space-y-1 pr-8">
               <h3 className="text-lg font-black text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400" />
-                <span>แผนจัดสรรห้องพักอัตโนมัติ (คนปกติคู่คนมีโรค • โรคไว้ห้องต้นๆ)</span>
+                <span>
+                  {smartPlanModal.isOfficialPreset
+                    ? 'ผังการจัดห้องพัก หอพักกุดรัง ชั้น 3 (หญิง 307-315 • ชาย 319-333)'
+                    : 'แผนจัดสรรห้องพักอัตโนมัติ (คนปกติคู่คนมีโรค • โรคไว้ห้องต้นๆ)'}
+                </span>
               </h3>
               <p className="text-xs text-slate-300">
-                1) จับคู่คนมีโรคประจำตัว/แพ้ อยู่กับคนปกติ (1:1) เพื่อช่วยดูแลกัน • 2) นำห้องที่มีผู้เฝ้าระวังไว้ห้องต้นๆ (ชายเริ่ม 101, หญิงเริ่ม 108) • 3) เรียงชื่อในห้อง: 1. คนมีโรค/แพ้ 2. คนปกติ
+                {smartPlanModal.isOfficialPreset
+                  ? 'จับคู่ชาย-หญิงตามรายชื่อล่าสุด ชั้น 3 หญิง (307, 309, 315) และชาย (319, 320, 322, 323, 324, 331, 333) พร้อมบันทึกประวัติห้องเดิมอัตโนมัติ'
+                  : '1) จับคู่คนมีโรคประจำตัว/แพ้ อยู่กับคนปกติ (1:1) เพื่อช่วยดูแลกัน • 2) นำห้องที่มีผู้เฝ้าระวังไว้ห้องต้นๆ (ชายเริ่ม 319, หญิงเริ่ม 307) • 3) เรียงชื่อในห้อง: 1. คนมีโรค/แพ้ 2. คนปกติ'}
               </p>
             </div>
 
@@ -2010,7 +2042,7 @@ export default function AdminRoomsView({
                         <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">{ch.oldRoom}</span>
                         <ArrowRight className="w-3 h-3 text-amber-400" />
                         <span className="px-2 py-0.5 rounded bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-black">
-                          {ch.newRoom} (#{ch.bedNumber})
+                          {ch.newRoom}{ch.bedNumber ? ` (#${ch.bedNumber})` : ' (ชั้น 3)'}
                         </span>
                       </div>
                     </div>
