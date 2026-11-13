@@ -149,7 +149,7 @@ export default function MerchandiseView({
       pickup_method: 'pickup',
       pickup_location: pickupSettings?.location || 'อาคารพลศึกษา มหาวิทยาลัยมหาสารคาม (มมส)',
       pickup_short_location: pickupSettings?.short_location || 'อาคารพลศึกษา มมส',
-      pickup_schedule: pickupSettings?.schedule || 'วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570 (เวลา 08:30 - 16:30 น.)',
+      pickup_schedule: pickupSettings?.schedule || 'วันรายงานตัวเปิดโครงการ วันที่ 14 พ.ย. 2569 (เวลา 08:30 - 16:30 น.)',
       pickup_contact_phone: pickupSettings?.contact_phone || '098-329-6762',
       pickup_note: pickupSettings?.note || 'แสดงบัตรนี้หรือบัตรประจำตัวประชาชนต่อเจ้าหน้าที่ ณ จุดลงทะเบียนรับเสื้อ',
       payment_status: isFullyPaid ? 'paid_verified' : (isRound1Paid ? 'paid_verified' : 'pending_verification'),

@@ -1680,7 +1680,7 @@ export default function AdminMedicalView({
               ทะเบียนบันทึกเวชระเบียน การปฐมพยาบาล และการจ่ายยา ({filteredLogs.length} รายการ)
             </h2>
             <p className="text-xs font-bold text-center text-slate-900">
-              โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) ระหว่าง มหาวิทยาลัยขอนแก่น และ มหาวิทยาลัยมหาสารคาม
+              โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) ระหว่าง มหาวิทยาลัยขอนแก่น และ มหาวิทยาลัยมหาสารคาม • วันที่ 14 - 15 พฤศจิกายน พ.ศ. 2569
             </p>
           </div>
 
@@ -2695,12 +2695,12 @@ export default function AdminMedicalView({
                       <div>
                         <span className="text-[10px] text-slate-700 block mb-5">ลงชื่อผู้กรอกข้อมูล / ผู้บันทึกเวชระเบียน</span>
                         <p className="font-bold text-black">( {c.recorder_name || c.dispenser_name || '.....................................................'} )</p>
-                        <p className="text-[10px] text-slate-700 mt-0.5">วันที่ ............ / ........................ / 2570</p>
+                        <p className="text-[10px] text-slate-700 mt-0.5">วันที่ ............ / ........................ / 2569</p>
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-700 block mb-5">ลงชื่อผู้จ่ายยา / ผู้ทำการปฐมพยาบาล</span>
                         <p className="font-bold text-black">( {c.dispenser_name || '.....................................................'} )</p>
-                        <p className="text-[10px] text-slate-700 mt-0.5">วันที่ ............ / ........................ / 2570</p>
+                        <p className="text-[10px] text-slate-700 mt-0.5">วันที่ ............ / ........................ / 2569</p>
                       </div>
                     </div>
                   </div>

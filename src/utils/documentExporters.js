@@ -303,7 +303,7 @@ function populateAttendanceSheet(ws, records = []) {
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงเวลาและลงลายมือชื่อเข้าร่วมการฝึกอบรม (Attendance & Sign-in Roster)',
-    'วันที่ 13 - 15 กุมภาพันธ์ 2570 • ณ ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม (มมส)',
+    'วันที่ 14 - 15 พฤศจิกายน พ.ศ. 2569 • ณ ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม (มมส)',
     'I'
   );
 
@@ -429,7 +429,7 @@ function populateIdCardSheet(ws, records = []) {
     row.getCell(6).value = r.role || '-';
     row.getCell(7).value = r.idCardStatus || 'รอรับบัตร';
     row.getCell(8).value = '';
-    row.getCell(9).value = r.idCardReceivedAt || '13 ก.พ. 70';
+    row.getCell(9).value = r.idCardReceivedAt || '14 พ.ย. 69';
 
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);
@@ -517,7 +517,7 @@ async function populateShirtSheet(wb, ws, records = []) {
     row.getCell(8).value = r.pickupStatusLabel ? `${r.payment || 'ชำระแล้ว'}\n${r.pickupStatusLabel}` : (r.payment || 'ชำระแล้ว');
     row.getCell(9).value = '';
     row.getCell(10).value = '';
-    row.getCell(11).value = '13 ก.พ. 70';
+    row.getCell(11).value = '14 พ.ย. 69';
 
     headers.forEach((h, i) => {
       const cell = row.getCell(i + 1);

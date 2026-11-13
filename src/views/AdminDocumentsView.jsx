@@ -87,8 +87,8 @@ function getInitialDocTab() {
 }
 
 /**
- * Classify a participant into roster tiers requested for official rosters:
- * 1: Staff -> 2: RCP -> 3: TSI -> 4: นิสิตอาสา
+ * Classify a participant into role + university groups for official rosters:
+ * 1: Staff (มมส -> มข) -> 2: มมส RCP -> 3: มข (TSI -> นิสิตอาสา)
  */
 function resolveRosterRoleGroup(item) {
   const callsignRaw = String(item?.callsign || '').trim();
@@ -102,18 +102,28 @@ function resolveRosterRoleGroup(item) {
     roleStr.includes('คณะกรรมการ')
   );
   if (isStaffMember) {
-    return { rank: 1, label: 'Staff', subOrder: callsignUpper.includes('TSI') ? 2 : 1 };
+    return {
+      rank: 1,
+      sectionGroup: 'staff',
+      label: 'Staff',
+      subOrder: item?.isMsu ? 1 : 2
+    };
   }
-  if (/^อาสา/.test(callsignRaw)) {
-    return { rank: 4, label: 'นิสิตอาสา', subOrder: 4 };
+  if (item?.isMsu) {
+    return {
+      rank: 2,
+      sectionGroup: 'msu',
+      label: 'RCP',
+      subOrder: 1
+    };
   }
-  if (/^TSI\b/i.test(callsignUpper)) {
-    return { rank: 3, label: 'TSI', subOrder: 3 };
-  }
-  if (/\bRCP\b/i.test(callsignUpper) || /^\d{2}-\d{2}/.test(callsignRaw) || item?.isMsu) {
-    return { rank: 2, label: 'RCP', subOrder: 2 };
-  }
-  return { rank: 4, label: 'นิสิตอาสา', subOrder: 4 };
+  const isTsi = /^TSI\b/i.test(callsignUpper);
+  return {
+    rank: 3,
+    sectionGroup: 'kku',
+    label: isTsi ? 'TSI' : 'นิสิตอาสา',
+    subOrder: isTsi ? 1 : 2
+  };
 }
 
 function getCallsignSortKey(item) {
@@ -122,18 +132,80 @@ function getCallsignSortKey(item) {
 }
 
 function compareOfficialRosterPerson(a, b) {
+  const grpA = resolveRosterRoleGroup(a);
+  const grpB = resolveRosterRoleGroup(b);
+  if (grpA.rank !== grpB.rank) return grpA.rank - grpB.rank;
+
   const gRank = (g) => (g === 'ชาย' ? 1 : g === 'หญิง' ? 2 : 3);
   const gDiff = gRank(a.gender) - gRank(b.gender);
   if (gDiff !== 0) return gDiff;
 
-  const grpA = resolveRosterRoleGroup(a);
-  const grpB = resolveRosterRoleGroup(b);
-  if (grpA.rank !== grpB.rank) return grpA.rank - grpB.rank;
   if (grpA.subOrder !== grpB.subOrder) return grpA.subOrder - grpB.subOrder;
 
   const csDiff = getCallsignSortKey(a).localeCompare(getCallsignSortKey(b), 'th', { numeric: true });
   if (csDiff !== 0) return csDiff;
   return String(a.name || '').localeCompare(String(b.name || ''), 'th');
+}
+
+function buildOfficialRoleUniversitySections(rows = []) {
+  const buckets = [
+    {
+      key: 'staff-male',
+      title: '1.1 คณะทำงาน / Staff — ชาย',
+      subtitle: 'เรียงตามสังกัด: มมส ➔ มข',
+      match: (r) => resolveRosterRoleGroup(r).sectionGroup === 'staff' && r.gender === 'ชาย'
+    },
+    {
+      key: 'staff-female',
+      title: '1.2 คณะทำงาน / Staff — หญิง',
+      subtitle: 'เรียงตามสังกัด: มมส ➔ มข',
+      match: (r) => resolveRosterRoleGroup(r).sectionGroup === 'staff' && r.gender === 'หญิง'
+    },
+    {
+      key: 'msu-male',
+      title: '2.1 มหาวิทยาลัยมหาสารคาม (มมส) — RCP ชาย',
+      subtitle: 'ผู้เข้าร่วมสังกัด มมส (RCP)',
+      match: (r) => resolveRosterRoleGroup(r).sectionGroup === 'msu' && r.gender === 'ชาย'
+    },
+    {
+      key: 'msu-female',
+      title: '2.2 มหาวิทยาลัยมหาสารคาม (มมส) — RCP หญิง',
+      subtitle: 'ผู้เข้าร่วมสังกัด มมส (RCP)',
+      match: (r) => resolveRosterRoleGroup(r).sectionGroup === 'msu' && r.gender === 'หญิง'
+    },
+    {
+      key: 'kku-male',
+      title: '3.1 มหาวิทยาลัยขอนแก่น (มข) — TSI ➔ นิสิตอาสา ชาย',
+      subtitle: 'เรียงตามลำดับ: TSI ➔ นิสิตอาสา',
+      match: (r) => resolveRosterRoleGroup(r).sectionGroup === 'kku' && r.gender === 'ชาย'
+    },
+    {
+      key: 'kku-female',
+      title: '3.2 มหาวิทยาลัยขอนแก่น (มข) — TSI ➔ นิสิตอาสา หญิง',
+      subtitle: 'เรียงตามลำดับ: TSI ➔ นิสิตอาสา',
+      match: (r) => resolveRosterRoleGroup(r).sectionGroup === 'kku' && r.gender === 'หญิง'
+    }
+  ];
+
+  const assignedIds = new Set();
+  const sections = buckets
+    .map((b) => {
+      const matched = (rows || []).filter((r) => b.match(r));
+      matched.forEach((r) => assignedIds.add(r));
+      return { key: b.key, title: b.title, subtitle: b.subtitle, rows: matched };
+    })
+    .filter((s) => s.rows.length > 0);
+
+  const remaining = (rows || []).filter((r) => !assignedIds.has(r));
+  if (remaining.length > 0) {
+    sections.push({
+      key: 'other',
+      title: 'กลุ่มอื่นๆ / ไม่ระบุเพศ',
+      subtitle: 'รายการเพิ่มเติม',
+      rows: remaining
+    });
+  }
+  return sections;
 }
 
 function getRosterGroupBadgeClasses(label) {
@@ -143,13 +215,13 @@ function getRosterGroupBadgeClasses(label) {
   return 'bg-amber-50 text-amber-950 border-amber-800';
 }
 
-function AttendanceGenderTable({ title, rows }) {
+function AttendanceGenderTable({ title, subtitle = 'เรียงตามลำดับ: Staff (มมส➔มข) • มมส (RCP) • มข (TSI➔อาสา)', rows }) {
   if (!rows || rows.length === 0) return null;
   return (
     <div className="space-y-1.5">
       <h3 className="text-sm font-black text-slate-950 flex flex-wrap items-center justify-between gap-2">
         <span>{title} ({rows.length} คน)</span>
-        <span className="text-[11px] font-semibold text-slate-700">เรียงตามลำดับ: Staff ➔ RCP ➔ TSI ➔ นิสิตอาสา</span>
+        <span className="text-[11px] font-semibold text-slate-700">{subtitle}</span>
       </h3>
       <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
         <thead>
@@ -201,13 +273,13 @@ function AttendanceGenderTable({ title, rows }) {
   );
 }
 
-function IdCardGenderTable({ title, rows }) {
+function IdCardGenderTable({ title, subtitle = 'เรียงตามลำดับ: Staff (มมส➔มข) • มมส (RCP) • มข (TSI➔อาสา)', rows }) {
   if (!rows || rows.length === 0) return null;
   return (
     <div className="space-y-1.5">
       <h3 className="text-sm font-black text-slate-950 flex flex-wrap items-center justify-between gap-2">
         <span>{title} ({rows.length} ใบ)</span>
-        <span className="text-[11px] font-semibold text-slate-700">เรียงตามลำดับ: Staff ➔ RCP ➔ TSI ➔ นิสิตอาสา</span>
+        <span className="text-[11px] font-semibold text-slate-700">{subtitle}</span>
       </h3>
       <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
         <thead>
@@ -246,6 +318,72 @@ function IdCardGenderTable({ title, rows }) {
                 <span className="block border-b border-dotted border-slate-700 h-5 w-full"></span>
               </td>
               <td className="py-2 px-2 border border-slate-700 text-center font-mono text-[11px]">{c.idCardReceivedAt}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ShirtSectionTable({ title, subtitle, rows, shirtQrMap }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <h3 className="text-sm font-black text-slate-950 flex flex-wrap items-center justify-between gap-2">
+        <span>{title} ({rows.length} ตัว)</span>
+        {subtitle && <span className="text-[11px] font-semibold text-slate-700">{subtitle}</span>}
+      </h3>
+      <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
+        <thead>
+          <tr className="bg-slate-200 text-slate-950 font-bold text-center">
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-10">ลำดับ</th>
+            <th className="py-2.5 px-3 border-[1.5px] border-slate-950 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล ผู้รับมอบ</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-24 whitespace-nowrap">นามเรียกขาน</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-14 whitespace-nowrap">สังกัด</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-20 whitespace-nowrap">อกขวา</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-16 whitespace-nowrap">ไซส์เสื้อ</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-12">จำนวน</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-32">สถานะค่าเสื้อ / รับมอบ</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-20 whitespace-nowrap">QR รับเสื้อ</th>
+            <th className="py-2.5 px-3 border-[1.5px] border-slate-950 w-32">ลายมือชื่อผู้รับมอบ</th>
+            <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-20 whitespace-nowrap">วันที่รับ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s, idx) => (
+            <tr key={s.id} className={s.isShirtReceived ? 'bg-emerald-50/40' : (idx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-bold">{idx + 1}</td>
+              <td className="py-1.5 px-3 border border-slate-700 font-bold text-slate-950 whitespace-nowrap">{s.name}</td>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-semibold whitespace-nowrap">{s.callsign}</td>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-bold whitespace-nowrap">{s.uni}</td>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-black whitespace-nowrap">{s.chest}</td>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-black text-sm bg-slate-100 whitespace-nowrap">{s.size}</td>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-mono">1</td>
+              <td className="py-1.5 px-2 border border-slate-700 text-[10px] text-center">
+                <div>{s.payment}</div>
+                <div className={`mt-0.5 font-bold ${s.isShirtReceived ? 'text-emerald-800' : 'text-amber-800'}`}>
+                  {s.isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ'}
+                </div>
+              </td>
+              <td className="py-1 px-1.5 border border-slate-700 text-center bg-white">
+                {shirtQrMap[s.id] ? (
+                  <div className="flex flex-col items-center justify-center">
+                    <img
+                      src={shirtQrMap[s.id]}
+                      alt={`QR ${s.name}`}
+                      className="w-12 h-12 block bg-white p-0.5 border border-slate-800"
+                    />
+                    <span className="text-[8px] font-mono text-slate-700 mt-0.5 leading-none">สแกนรับ</span>
+                  </div>
+                ) : (
+                  <span className="text-[9px] text-slate-500">กำลังสร้าง QR...</span>
+                )}
+              </td>
+              <td className="py-1.5 px-3 border border-slate-700 text-center">
+                <span className="block border-b border-dotted border-slate-700 h-5 w-full"></span>
+              </td>
+              <td className="py-1.5 px-2 border border-slate-700 text-center font-mono text-[11px] whitespace-nowrap">14 พ.ย. 69</td>
             </tr>
           ))}
         </tbody>
@@ -635,7 +773,7 @@ export default function AdminDocumentsView({
         idCardStatus,
         idCardReceivedAt: isReceived && (reg.id_card_received_date || extra.id_card_received_date)
           ? String(reg.id_card_received_date || extra.id_card_received_date).slice(0, 10)
-          : '13 ก.พ. 70'
+          : '14 พ.ย. 69'
       };
     });
   }, [attendanceData, registrations]);
@@ -656,13 +794,20 @@ export default function AdminDocumentsView({
 
       const nameData = resolvePersonFullNameWithTitle(reg);
       const uniInfo = resolveUniversityInfo(reg);
+      const gender = resolveGender(reg);
       const normSize = normalizeShirtSize(rawSize);
       const isKku = !uniInfo.isMsu;
       const chest = isKku ? 'TSIKKU' : 'RCPMSU';
-      const callsign = normalizeCallsignSpacing(extra.callsign || reg.callsign || '-');
+      const rawCallsign = extra.callsign || reg.callsign || '-';
+      const callsign = normalizeCallsignSpacing(rawCallsign);
+      const isStaff = Boolean(extra.is_staff || reg.is_staff || rawCallsign.toUpperCase().includes('STAFF'));
+      const isCommittee = Boolean(extra.staff_role_type === 'committee' || isStaff);
+      let role = 'ผู้เข้าร่วมการฝึกอบรม (Trainee)';
+      if (extra.staff_role_type === 'committee') role = 'คณะกรรมการดำเนินงาน';
+      else if (isStaff) role = 'Staff คณะทำงาน';
 
       let payment = 'รวมในค่าธรรมเนียม';
-      if (extra.is_staff || reg.is_staff) {
+      if (isStaff) {
         payment = 'Staff (280 บ.) ชำระแล้ว';
       }
       const isShirtReceived = Boolean(
@@ -686,41 +831,52 @@ export default function AdminDocumentsView({
         payment,
         isShirtReceived,
         pickupStatusLabel: isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ',
-        isKku
+        isKku,
+        isMsu: uniInfo.isMsu,
+        gender,
+        isStaff,
+        isCommittee,
+        role
       });
     });
 
     // Also include Newton (นายจินณวัตร ทิพย์รักษ์ RCP 16-02) and store extra orders
     (merchandiseOrders || []).forEach(ord => {
       const isNewton = ord.order_number === 'JRE27-NEWTON-SHIRT-32' || (ord.customer_name || '').includes('จินณวัตร');
+      const ordGender = resolveGender(ord);
 
       (ord.items || []).forEach((it, idx) => {
         const chest = ord.institution?.includes('ขอนแก่น') ? 'TSIKKU' : 'RCPMSU';
+        const isKku = chest === 'TSIKKU';
         const isShirtReceived = Boolean(ord.shirt_received || ord.shirt_pickup_status === 'received');
         const qrPayload = String(ord.order_number || ord.id || idx).trim().toUpperCase();
+        const callsign = ord.callsign || (isNewton ? 'RCP 16-02' : '(กองกลาง)');
+        const isStaff = Boolean(ord.is_staff || String(callsign).toUpperCase().includes('STAFF'));
         rows.push({
           id: `${ord.order_number}-${idx}`,
           qrPayload,
           name: ord.customer_name || 'ลูกค้าสั่งเพิ่ม',
           nickname: ord.nickname || (isNewton ? 'นิวตั้น' : '-'),
-          callsign: ord.callsign || (isNewton ? 'RCP 16-02' : '(กองกลาง)'),
-          uni: ord.affiliation || (chest === 'TSIKKU' ? 'มข' : 'มมส'),
+          callsign,
+          uni: ord.affiliation || (isKku ? 'มข' : 'มมส'),
           chest,
           size: normalizeShirtSize(it.size || 'XL'),
           qty: 1,
           payment: 'ชำระแล้ว (280 บ.)',
           isShirtReceived,
           pickupStatusLabel: isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ',
-          isKku: chest === 'TSIKKU'
+          isKku,
+          isMsu: !isKku,
+          gender: ordGender,
+          isStaff,
+          isCommittee: isStaff,
+          role: ord.role_label || 'สั่งเสื้อเพิ่ม'
         });
       });
     });
 
-    // Sort order: KKU TSIKKU (19 shirts) first, then MSU RCPMSU (13 shirts)
-    return rows.sort((a, b) => {
-      if (a.chest !== b.chest) return a.chest === 'TSIKKU' ? -1 : 1;
-      return a.name.localeCompare(b.name, 'th');
-    });
+    // Sort strictly by role group (Staff มมส->มข, มมส RCP, มข TSI->นิสิตอาสา), then gender (ชาย->หญิง)
+    return rows.sort(compareOfficialRosterPerson);
   }, [registrations, merchandiseOrders]);
 
   // Generate QR codes per shirt recipient row so Admin can scan directly off the sheet/screen
@@ -1359,7 +1515,7 @@ export default function AdminDocumentsView({
     } else if (activeDoc === 'shirts') {
       csv = makeRow(['ลำดับ', 'ชื่อ - นามสกุล ผู้รับมอบ', 'นามเรียกขาน', 'สังกัด', 'ข้อความอกขวา', 'ขนาดไซส์', 'จำนวน', 'สถานะค่าเสื้อ/รับเสื้อ', 'รหัส QR สแกนรับเสื้อ', 'ลายมือชื่อผู้รับมอบ', 'วันที่รับมอบ']);
       shirtData.forEach((r, idx) => {
-        csv += makeRow([idx + 1, r.name, r.callsign, r.uni, r.chest, r.size, 1, `${r.payment} • ${r.pickupStatusLabel}`, r.qrPayload || '-', '', '13 ก.พ. 70']);
+        csv += makeRow([idx + 1, r.name, r.callsign, r.uni, r.chest, r.size, 1, `${r.payment} • ${r.pickupStatusLabel}`, r.qrPayload || '-', '', '14 พ.ย. 69']);
       });
       filename = '3_ใบเซ็นชื่อ_รับมอบเสื้อฝึก32ตัว_JRE2027.csv';
     } else if (activeDoc === 'rooms') {
@@ -1815,7 +1971,7 @@ export default function AdminDocumentsView({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-400 text-[11px] text-slate-900">
               <div>
-                <span className="font-bold">กำหนดการฝึกอบรม:</span> 13 - 15 กุมภาพันธ์ พ.ศ. 2570
+                <span className="font-bold">กำหนดการฝึกอบรม:</span> 14 - 15 พฤศจิกายน พ.ศ. 2569
               </div>
               <div className="sm:text-center">
                 <span className="font-bold">สถานที่:</span> ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มหาวิทยาลัยมหาสารคาม
@@ -1838,23 +1994,19 @@ export default function AdminDocumentsView({
           {activeDoc === 'attendance' && (
             <div className="space-y-6">
               <div className="p-2.5 bg-slate-50 border-[1.5px] border-slate-900 rounded-none text-[11px] text-slate-950 font-semibold flex flex-wrap items-center justify-between gap-2">
-                <span>แบ่งรายชื่อตามเพศ (ชาย / หญิง) และเรียงตามลำดับ: Staff ➔ RCP ➔ TSI ➔ นิสิตอาสา</span>
+                <span>แยกตามกลุ่มบทบาท &amp; มหาวิทยาลัย (Staff มมส➔มข • มมส RCP • มข TSI➔นิสิตอาสา) และแยกเพศ (ชาย / หญิง)</span>
                 <span className="font-mono font-bold">
                   ชาย {attendanceData.filter(p => p.gender === 'ชาย').length} คน • หญิง {attendanceData.filter(p => p.gender === 'หญิง').length} คน • รวม {attendanceData.length} คน
                 </span>
               </div>
-              <AttendanceGenderTable
-                title="1. บัญชีลงชื่อผู้เข้าร่วม — ชาย"
-                rows={attendanceData.filter(p => p.gender === 'ชาย')}
-              />
-              <AttendanceGenderTable
-                title="2. บัญชีลงชื่อผู้เข้าร่วม — หญิง"
-                rows={attendanceData.filter(p => p.gender === 'หญิง')}
-              />
-              <AttendanceGenderTable
-                title="3. บัญชีลงชื่อผู้เข้าร่วม — ไม่ระบุเพศ"
-                rows={attendanceData.filter(p => p.gender !== 'ชาย' && p.gender !== 'หญิง')}
-              />
+              {buildOfficialRoleUniversitySections(attendanceData).map((sec) => (
+                <AttendanceGenderTable
+                  key={sec.key}
+                  title={sec.title}
+                  subtitle={sec.subtitle}
+                  rows={sec.rows}
+                />
+              ))}
             </div>
           )}
 
@@ -1862,29 +2014,25 @@ export default function AdminDocumentsView({
           {activeDoc === 'id-cards' && (
             <div className="space-y-6">
               <div className="p-2.5 bg-slate-50 border-[1.5px] border-slate-900 rounded-none text-[11px] text-slate-950 font-semibold flex flex-wrap items-center justify-between gap-2">
-                <span>ใบเซ็นชื่อรับบัตรประจำตัวผู้เข้าร่วม / Staff (PDPA-Safe • แยกชาย/หญิง เรียง Staff ➔ RCP ➔ TSI ➔ นิสิตอาสา)</span>
+                <span>ใบเซ็นชื่อรับบัตรประจำตัวผู้เข้าร่วม / Staff (PDPA-Safe • แยก Staff มมส➔มข • มมส RCP • มข TSI➔นิสิตอาสา และแยกชาย/หญิง)</span>
                 <span className="font-mono font-bold">
                   พร้อมจ่าย {idCardData.filter(d => d.hasPhoto).length}/{idCardData.length} • รับบัตรแล้ว {idCardData.filter(d => d.isReceived).length} ใบ
                 </span>
               </div>
-              <IdCardGenderTable
-                title="1. บัญชีเซ็นรับบัตร ID Card — ชาย"
-                rows={idCardData.filter(c => c.gender === 'ชาย')}
-              />
-              <IdCardGenderTable
-                title="2. บัญชีเซ็นรับบัตร ID Card — หญิง"
-                rows={idCardData.filter(c => c.gender === 'หญิง')}
-              />
-              <IdCardGenderTable
-                title="3. บัญชีเซ็นรับบัตร ID Card — ไม่ระบุเพศ"
-                rows={idCardData.filter(c => c.gender !== 'ชาย' && c.gender !== 'หญิง')}
-              />
+              {buildOfficialRoleUniversitySections(idCardData).map((sec) => (
+                <IdCardGenderTable
+                  key={sec.key}
+                  title={sec.title}
+                  subtitle={sec.subtitle}
+                  rows={sec.rows}
+                />
+              ))}
             </div>
           )}
 
           {/* TABLE CONTENT 3: SHIRT DISTRIBUTION ROSTER (32 PRODUCTION SHIRTS) */}
           {activeDoc === 'shirts' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-900 bg-slate-50 p-2.5 rounded-none border-[1.5px] border-slate-900">
                 <span>มข. (อกขวา TSIKKU): {shirtStatsSummary.kkuTotal} ตัว ({shirtStatsSummary.kkuBreakdown})</span>
                 <span>มมส. (อกขวา RCPMSU): {shirtStatsSummary.msuTotal} ตัว ({shirtStatsSummary.msuBreakdown})</span>
@@ -1896,65 +2044,20 @@ export default function AdminDocumentsView({
               <div className="p-2.5 bg-slate-50 border border-slate-900 rounded-none text-[11px] text-slate-900 font-semibold flex flex-wrap items-center justify-between gap-2 no-print">
                 <span className="inline-flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-slate-800 shrink-0" />
-                  <span>มี QR Code สแกนรับเสื้อท้ายรายชื่อทุกท่าน — ใช้ปุ่ม &quot;สแกน QR อเนกประสงค์&quot; ด้านบนเพื่อสแกนจากกระดาษหรือหน้าจอ และกดบันทึกรับเสื้อแล้วได้ทันที</span>
+                  <span>แยกกลุ่มเหมือนใบลงทะเบียน (Staff มมส➔มข • มมส RCP • มข TSI➔นิสิตอาสา แยกชาย/หญิง) พร้อม QR สแกนรับเสื้อทุกท่าน</span>
                 </span>
                 <span className="font-mono text-[10px] text-slate-700">พร้อมสแกน (Print/PNG/Excel)</span>
               </div>
 
-              <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
-                <thead>
-                  <tr className="bg-slate-200 text-slate-950 font-bold text-center">
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-10">ลำดับ</th>
-                    <th className="py-2.5 px-3 border-[1.5px] border-slate-950 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล ผู้รับมอบ</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-24 whitespace-nowrap">นามเรียกขาน</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-14 whitespace-nowrap">สังกัด</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-20 whitespace-nowrap">อกขวา</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-16 whitespace-nowrap">ไซส์เสื้อ</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-12">จำนวน</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-32">สถานะค่าเสื้อ / รับมอบ</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-20 whitespace-nowrap">QR รับเสื้อ</th>
-                    <th className="py-2.5 px-3 border-[1.5px] border-slate-950 w-32">ลายมือชื่อผู้รับมอบ</th>
-                    <th className="py-2.5 px-2 border-[1.5px] border-slate-950 w-20 whitespace-nowrap">วันที่รับ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shirtData.map((s, idx) => (
-                    <tr key={s.id} className={s.isShirtReceived ? 'bg-emerald-50/40' : (idx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-bold">{idx + 1}</td>
-                      <td className="py-1.5 px-3 border border-slate-700 font-bold text-slate-950 whitespace-nowrap">{s.name}</td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-semibold whitespace-nowrap">{s.callsign}</td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-bold whitespace-nowrap">{s.uni}</td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-black whitespace-nowrap">{s.chest}</td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-mono font-black text-sm bg-slate-100 whitespace-nowrap">{s.size}</td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-mono">1</td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-[10px] text-center">
-                        <div>{s.payment}</div>
-                        <div className={`mt-0.5 font-bold ${s.isShirtReceived ? 'text-emerald-800' : 'text-amber-800'}`}>
-                          {s.isShirtReceived ? 'รับเสื้อแล้ว' : 'รอรับเสื้อ'}
-                        </div>
-                      </td>
-                      <td className="py-1 px-1.5 border border-slate-700 text-center bg-white">
-                        {shirtQrMap[s.id] ? (
-                          <div className="flex flex-col items-center justify-center">
-                            <img
-                              src={shirtQrMap[s.id]}
-                              alt={`QR ${s.name}`}
-                              className="w-12 h-12 block bg-white p-0.5 border border-slate-800"
-                            />
-                            <span className="text-[8px] font-mono text-slate-700 mt-0.5 leading-none">สแกนรับ</span>
-                          </div>
-                        ) : (
-                          <span className="text-[9px] text-slate-500">กำลังสร้าง QR...</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-3 border border-slate-700 text-center">
-                        <span className="block border-b border-dotted border-slate-700 h-5 w-full"></span>
-                      </td>
-                      <td className="py-1.5 px-2 border border-slate-700 text-center font-mono text-[11px] whitespace-nowrap">13 ก.พ. 70</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {buildOfficialRoleUniversitySections(shirtData).map((sec) => (
+                <ShirtSectionTable
+                  key={sec.key}
+                  title={sec.title}
+                  subtitle={sec.subtitle}
+                  rows={sec.rows}
+                  shirtQrMap={shirtQrMap}
+                />
+              ))}
 
               <div className="p-3 bg-slate-50 rounded-none border border-slate-900 text-[11px] text-slate-800">
                 หมายเหตุ: บุคลากร/Staff มมส ที่ถือบัตร Staff อย่างเดียว (0 บาท ไม่รับเสื้อ) จะไม่ปรากฏในยอดผลิตข้างต้น
@@ -2207,7 +2310,12 @@ export default function AdminDocumentsView({
 
           {/* TABLE CONTENT 5: ALL PARTICIPANTS QR MASTER IN ONE SHEET */}
           {activeDoc === 'qr-master' && (
-            <QrMasterSheet records={qrMasterData} qrMap={qrMasterMap} layout={qrLayout} />
+            <QrMasterSheet
+              records={qrMasterData}
+              sections={buildOfficialRoleUniversitySections(qrMasterData)}
+              qrMap={qrMasterMap}
+              layout={qrLayout}
+            />
           )}
 
           {/* TABLE CONTENT 8: MEDICINE & MEDICAL SUPPLIES PREPARATION SHEET */}
@@ -2239,7 +2347,7 @@ export default function AdminDocumentsView({
           {isInternalAdminDoc ? (
             <div className="pt-5 mt-6 border-t-2 border-slate-950 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-900" style={{ breakInside: 'avoid' }}>
               <span>หมายเหตุ: เอกสารข้อมูลภายในสำหรับคณะทำงาน / Staff / ฝ่ายแพทย์สนามเท่านั้น (ข้อมูลเชื่อมตรงกับระบบแบบ Real-time)</span>
-              <span className="font-bold">ลงชื่อผู้ตรวจสอบ (Staff/แพทย์): .................................................... วันที่ ........ / ............ / 2570</span>
+              <span className="font-bold">ลงชื่อผู้ตรวจสอบ (Staff/แพทย์): .................................................... วันที่ ........ / ............ / 2569</span>
             </div>
           ) : (
             <div className="pt-8 mt-8 border-t-2 border-slate-950 grid grid-cols-2 gap-8 text-center text-xs text-slate-950" style={{ breakInside: 'avoid' }}>
@@ -2247,14 +2355,14 @@ export default function AdminDocumentsView({
                 <p className="mb-7">ลงชื่อ ..................................................................... เจ้าหน้าที่ฝ่ายทะเบียน / ผู้ตรวจสอบ</p>
                 <p className="font-bold">( ..................................................................... )</p>
                 <p className="text-[11px]">ตำแหน่ง เจ้าหน้าที่ฝ่ายทะเบียนและประเมินผล โครงการ JRE 2027</p>
-                <p className="text-[11px]">วันที่ ............ / ........................ / พ.ศ. 2570</p>
+                <p className="text-[11px]">วันที่ ............ / ........................ / พ.ศ. 2569</p>
               </div>
 
               <div className="space-y-1.5">
                 <p className="mb-7">ลงชื่อ ..................................................................... ประธาน / ผู้รับผิดชอบโครงการ</p>
                 <p className="font-bold">( ..................................................................... )</p>
                 <p className="text-[11px]">ตำแหน่ง ประธานคณะกรรมการดำเนินงาน โครงการ JRE 2027</p>
-                <p className="text-[11px]">วันที่ ............ / ........................ / พ.ศ. 2570</p>
+                <p className="text-[11px]">วันที่ ............ / ........................ / พ.ศ. 2569</p>
               </div>
             </div>
           )}

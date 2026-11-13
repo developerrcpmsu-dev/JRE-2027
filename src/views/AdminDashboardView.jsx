@@ -16746,7 +16746,7 @@ export default function AdminDashboardView({
                             {new Date(item.created_at).toLocaleDateString('th-TH')} • {new Date(item.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <span className="text-[10px] px-2 py-0.5 bg-slate-800 rounded text-slate-300 font-bold">
-                            {item.pickup_method === 'shipping' ? 'จัดส่งพัสดุ' : 'รับหน้างาน 13 ก.พ. 2570'}
+                            {item.pickup_method === 'shipping' ? 'จัดส่งพัสดุ' : 'รับหน้างาน 14 พ.ย. 2569'}
                           </span>
                         </div>
 
@@ -17451,11 +17451,11 @@ export default function AdminDashboardView({
                         }
                       });
                     }}
-                    placeholder="วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570 (เวลา 08:30 - 16:30 น.)"
+                    placeholder="วันรายงานตัวเปิดโครงการ วันที่ 14 พ.ย. 2569 (เวลา 08:30 - 16:30 น.)"
                     className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rescue-500 disabled:opacity-50 disabled:bg-slate-950 font-medium"
                   />
                   <span className="text-[10px] text-slate-400 mt-1 block">
-                    ตัวอย่าง: วันรายงานตัวเปิดโครงการ วันที่ 13 ก.พ. 2570 (เวลา 08:30 - 16:30 น.)
+                    ตัวอย่าง: วันรายงานตัวเปิดโครงการ วันที่ 14 พ.ย. 2569 (เวลา 08:30 - 16:30 น.)
                   </span>
                 </div>
 

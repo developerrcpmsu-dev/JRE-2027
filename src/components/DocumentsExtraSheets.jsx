@@ -1,12 +1,50 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { Copy, ExternalLink, FileHeart, Link2 } from 'lucide-react';
 
 /**
  * เอกสารเพิ่มเติมในศูนย์เอกสาร /admin/documents
  *  - QrMasterSheet       : เอกสารรวม QR Code ของทุกคนในใบเดียว (PDPA-Safe)
  *  - MedicalSuppliesSheet: เอกสารขอยา / จัดเตรียมยา / ขอเวชภัณฑ์ / จัดเตรียมเวชภัณฑ์
- *  - EmrRecordsSheet     : เอกสารเวชระเบียนรายคน + รายเคส พร้อม URL แยกรายคน / รายเคส
+ *  - EmrRecordsSheet     : เอกสารเวชระเบียนรายคน + รายเคส พร้อม QR / URL แยกรายคน / รายเคส
  */
+
+const urlQrCache = new Map();
+
+function useUrlQrDataUrl(url) {
+  const [dataUrl, setDataUrl] = useState(() => (url ? (urlQrCache.get(url) || '') : ''));
+
+  useEffect(() => {
+    if (!url) {
+      setDataUrl('');
+      return;
+    }
+    const cached = urlQrCache.get(url);
+    if (cached) {
+      setDataUrl(cached);
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(url, {
+      width: 140,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0f172a', light: '#ffffff' }
+    })
+      .then((generated) => {
+        urlQrCache.set(url, generated);
+        if (!cancelled) setDataUrl(generated);
+      })
+      .catch((err) => {
+        console.error('URL QR generation failed:', url, err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  return dataUrl;
+}
 
 const copyText = async (text, triggerToast, label = 'URL') => {
   try {
@@ -17,23 +55,36 @@ const copyText = async (text, triggerToast, label = 'URL') => {
   }
 };
 
-function UrlActions({ url, label, onOpen, triggerToast }) {
+function UrlActions({ url, label, scanLabel = 'สแกนเปิด', onOpen, triggerToast }) {
+  const qrSrc = useUrlQrDataUrl(url);
   if (!url) return <span className="text-slate-400">-</span>;
   return (
-    <div className="space-y-1">
-      <a
-        href={url}
-        onClick={(e) => {
-          if (onOpen) {
-            e.preventDefault();
-            onOpen();
-          }
-        }}
-        className="block font-mono text-[9px] text-sky-800 underline break-all leading-tight"
-      >
-        {url.replace(/^https?:\/\//, '')}
-      </a>
-      <div className="flex items-center gap-1 no-print">
+    <div className="flex flex-col items-center justify-center gap-1 py-0.5 text-center">
+      {qrSrc ? (
+        <a
+          href={url}
+          title={url}
+          onClick={(e) => {
+            if (onOpen) {
+              e.preventDefault();
+              onOpen();
+            }
+          }}
+          className="inline-block bg-white p-0.5 border border-slate-800"
+        >
+          <img
+            src={qrSrc}
+            alt={`QR ${label || scanLabel}`}
+            className="w-16 h-16 block bg-white"
+          />
+        </a>
+      ) : (
+        <div className="w-16 h-16 flex items-center justify-center border border-slate-400 bg-white text-[8.5px] text-slate-600">
+          สร้าง QR...
+        </div>
+      )}
+      <span className="text-[8.5px] font-bold text-slate-800 leading-none">{scanLabel}</span>
+      <div className="flex items-center justify-center gap-1 no-print">
         <button
           type="button"
           onClick={() => copyText(url, triggerToast, label)}
@@ -54,92 +105,112 @@ function UrlActions({ url, label, onOpen, triggerToast }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 7. QR MASTER — ทุกคนทุกชื่อในใบเดียว                                */
+/* 5. QR MASTER — ทุกคนทุกชื่อในใบเดียว                                */
 /* ------------------------------------------------------------------ */
-export function QrMasterSheet({ records = [], qrMap = {}, layout = 'grid' }) {
+export function QrMasterSheet({ records = [], sections = null, qrMap = {}, layout = 'grid' }) {
+  const effectiveSections = (sections && sections.length > 0)
+    ? sections
+    : [{ key: 'all', title: 'QR Code ประจำตัวทุกคน', subtitle: 'เรียงตามบทบาทและมหาวิทยาลัย', rows: records }];
+
   if (layout === 'table') {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="p-2.5 bg-slate-50 border-[1.5px] border-slate-900 rounded-none text-[11px] text-slate-950 font-semibold flex flex-wrap items-center justify-between gap-2">
           <span>QR Code ประจำตัวทุกคน ({records.length} คน) — สแกนได้ทุกจุด: เช็คชื่อ • รับบัตร • รับเสื้อ • เปิดเวชระเบียน (PDPA-Safe ไม่แสดงข้อมูลสุขภาพ)</span>
-          <span className="font-mono font-bold">ทะเบียนรวมทุกคน</span>
+          <span className="font-mono font-bold">แยกกลุ่ม: Staff ➔ มมส (RCP) ➔ มข (TSI / อาสา)</span>
         </div>
-        <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
-          <thead>
-            <tr className="bg-slate-200 text-slate-950 font-bold text-center">
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-10">ที่</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-20">QR Code</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">รหัสบัตร</th>
-              <th className="py-2 px-3 border-[1.5px] border-slate-950 text-left min-w-[200px]">ชื่อ - นามสกุล</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-20">ชื่อเล่น</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">นามเรียกขาน</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-14">สังกัด</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-32">บทบาท</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-32">กลุ่ม / ห้องพัก</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">ลายมือชื่อ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((r, idx) => (
-              <tr key={r.id || idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'} style={{ breakInside: 'avoid' }}>
-                <td className="py-1 px-2 border border-slate-700 text-center font-mono font-bold">{idx + 1}</td>
-                <td className="py-1 px-1 border border-slate-700 text-center">
-                  {qrMap[r.id] ? (
-                    <img src={qrMap[r.id]} alt={`QR ${r.name}`} className="w-14 h-14 mx-auto block border border-slate-800 p-0.5 bg-white" />
-                  ) : (
-                    <span className="text-[9px] text-slate-500">กำลังสร้าง...</span>
-                  )}
-                </td>
-                <td className="py-1 px-2 border border-slate-700 text-center font-mono font-bold text-[10px]">{r.cardCode}</td>
-                <td className="py-1 px-3 border border-slate-700 font-bold text-slate-950 whitespace-nowrap">{r.name}</td>
-                <td className="py-1 px-2 border border-slate-700 text-center">{r.nickname}</td>
-                <td className="py-1 px-2 border border-slate-700 text-center font-mono font-semibold">{r.callsign}</td>
-                <td className="py-1 px-2 border border-slate-700 text-center font-bold">{r.institution}</td>
-                <td className="py-1 px-2 border border-slate-700 text-[10px]">{r.role}</td>
-                <td className="py-1 px-2 border border-slate-700 text-[10px] text-center">
-                  <div>{r.groupAssigned || 'รอจัดกลุ่ม'}</div>
-                  <div className="text-slate-700">{r.roomNote}</div>
-                </td>
-                <td className="py-1 px-2 border border-slate-700"><span className="block border-b border-dotted border-slate-700 h-5 w-full" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {effectiveSections.map((sec) => (
+          <div key={sec.key} className="space-y-1.5">
+            <h3 className="text-sm font-black text-slate-950 flex flex-wrap items-center justify-between gap-2">
+              <span>{sec.title} ({sec.rows.length} คน)</span>
+              {sec.subtitle && <span className="text-[11px] font-semibold text-slate-700">{sec.subtitle}</span>}
+            </h3>
+            <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
+              <thead>
+                <tr className="bg-slate-200 text-slate-950 font-bold text-center">
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-10">ที่</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-20">QR Code</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">รหัสบัตร</th>
+                  <th className="py-2 px-3 border-[1.5px] border-slate-950 text-left min-w-[200px]">ชื่อ - นามสกุล</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-20">ชื่อเล่น</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">นามเรียกขาน</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-14">สังกัด</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-32">บทบาท</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-32">กลุ่ม / ห้องพัก</th>
+                  <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">ลายมือชื่อ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sec.rows.map((r, idx) => (
+                  <tr key={r.id || idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'} style={{ breakInside: 'avoid' }}>
+                    <td className="py-1 px-2 border border-slate-700 text-center font-mono font-bold">{idx + 1}</td>
+                    <td className="py-1 px-1 border border-slate-700 text-center">
+                      {qrMap[r.id] ? (
+                        <img src={qrMap[r.id]} alt={`QR ${r.name}`} className="w-14 h-14 mx-auto block border border-slate-800 p-0.5 bg-white" />
+                      ) : (
+                        <span className="text-[9px] text-slate-500">กำลังสร้าง...</span>
+                      )}
+                    </td>
+                    <td className="py-1 px-2 border border-slate-700 text-center font-mono font-bold text-[10px]">{r.cardCode}</td>
+                    <td className="py-1 px-3 border border-slate-700 font-bold text-slate-950 whitespace-nowrap">{r.name}</td>
+                    <td className="py-1 px-2 border border-slate-700 text-center">{r.nickname}</td>
+                    <td className="py-1 px-2 border border-slate-700 text-center font-mono font-semibold">{r.callsign}</td>
+                    <td className="py-1 px-2 border border-slate-700 text-center font-bold">{r.institution}</td>
+                    <td className="py-1 px-2 border border-slate-700 text-[10px]">{r.role}</td>
+                    <td className="py-1 px-2 border border-slate-700 text-[10px] text-center">
+                      <div>{r.groupAssigned || 'รอจัดกลุ่ม'}</div>
+                      <div className="text-slate-700">{r.roomNote}</div>
+                    </td>
+                    <td className="py-1 px-2 border border-slate-700"><span className="block border-b border-dotted border-slate-700 h-5 w-full" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
       </div>
     );
   }
 
-  // GRID: การ์ด QR ทุกคนในหน้าเดียว (ตัดแจก/ติดบอร์ดได้)
+  // GRID: การ์ด QR แยกตามบทบาทและมหาวิทยาลัย (ตัดแจก/ติดบอร์ดได้)
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="p-2.5 bg-slate-50 border-[1.5px] border-slate-900 rounded-none text-[11px] text-slate-950 font-semibold flex flex-wrap items-center justify-between gap-2">
         <span>QR Code ประจำตัวทุกคนทุกชื่อในแผ่นเดียว ({records.length} คน) — สแกนด้วยกล้องมือถือหรือระบบสแกน QR ได้ทันที</span>
-        <span className="font-mono font-bold">PDPA-Safe • ปิดข้อมูลสุขภาพ</span>
+        <span className="font-mono font-bold">PDPA-Safe • Staff ➔ มมส (RCP) ➔ มข (TSI / อาสา)</span>
       </div>
-      <div className="grid grid-cols-6 gap-0 border-t-[1.5px] border-l-[1.5px] border-slate-950">
-        {records.map((r, idx) => (
-          <div
-            key={r.id || idx}
-            className="border-r-[1.5px] border-b-[1.5px] border-slate-950 p-2 text-center bg-white"
-            style={{ breakInside: 'avoid' }}
-          >
-            <div className="flex items-center justify-between text-[8.5px] font-mono text-slate-800 pb-1 mb-1 border-b border-slate-400">
-              <span className="font-bold">#{idx + 1}</span>
-              <span className="font-black text-slate-950">{r.institution}</span>
-            </div>
-            {qrMap[r.id] ? (
-              <img src={qrMap[r.id]} alt={`QR ${r.name}`} className="w-24 h-24 mx-auto block border border-slate-400 p-0.5 bg-white" />
-            ) : (
-              <div className="w-24 h-24 mx-auto flex items-center justify-center text-[9px] text-slate-500 border border-slate-300">กำลังสร้าง...</div>
-            )}
-            <div className="text-[10px] font-black text-slate-950 leading-tight mt-1">{r.name}</div>
-            <div className="text-[9px] text-slate-800 font-mono leading-tight">
-              {r.nickname !== '-' ? `(${r.nickname}) ` : ''}{r.callsign}
-            </div>
-            <div className="text-[8px] font-mono font-bold text-slate-900 mt-0.5 pt-0.5 border-t border-slate-300">{r.cardCode}</div>
+      {effectiveSections.map((sec) => (
+        <div key={sec.key} className="space-y-1.5">
+          <h3 className="text-xs font-black text-slate-950 flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-slate-900">
+            <span>{sec.title} ({sec.rows.length} คน)</span>
+            {sec.subtitle && <span className="text-[10.5px] font-semibold text-slate-700">{sec.subtitle}</span>}
+          </h3>
+          <div className="grid grid-cols-6 gap-0 border-t-[1.5px] border-l-[1.5px] border-slate-950">
+            {sec.rows.map((r, idx) => (
+              <div
+                key={r.id || idx}
+                className="border-r-[1.5px] border-b-[1.5px] border-slate-950 p-2 text-center bg-white"
+                style={{ breakInside: 'avoid' }}
+              >
+                <div className="flex items-center justify-between text-[8.5px] font-mono text-slate-800 pb-1 mb-1 border-b border-slate-400">
+                  <span className="font-bold">#{idx + 1}</span>
+                  <span className="font-black text-slate-950">{r.institution}</span>
+                </div>
+                {qrMap[r.id] ? (
+                  <img src={qrMap[r.id]} alt={`QR ${r.name}`} className="w-24 h-24 mx-auto block border border-slate-400 p-0.5 bg-white" />
+                ) : (
+                  <div className="w-24 h-24 mx-auto flex items-center justify-center text-[9px] text-slate-500 border border-slate-300">กำลังสร้าง...</div>
+                )}
+                <div className="text-[10px] font-black text-slate-950 leading-snug mt-1.5">{r.name}</div>
+                <div className="text-[9px] text-slate-800 font-mono leading-snug mt-0.5">
+                  {r.nickname !== '-' ? `(${r.nickname}) ` : ''}{r.callsign}
+                </div>
+                <div className="text-[8.5px] font-mono font-bold text-slate-900 mt-1.5 pt-1 border-t border-slate-300 leading-snug">{r.cardCode}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -211,7 +282,7 @@ export function MedicalSuppliesSheet({ prepRows = [], summaryItems = [], request
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-40 text-left">ยา / เวชภัณฑ์ที่ขอ</th>
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-32 text-left">ของใช้ / ดูแลพิเศษ</th>
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-24">ความยินยอม</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-40 no-print">URL คำขอรายคน</th>
+              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-24">QR คำขอรายคน</th>
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">เช็คเตรียม (Staff)</th>
             </tr>
           </thead>
@@ -244,8 +315,8 @@ export function MedicalSuppliesSheet({ prepRows = [], summaryItems = [], request
                     {r.specialItems || (r.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-')}
                   </td>
                   <td className="py-1.5 px-2 border border-slate-700 text-center text-[9.5px]">{r.consentLabel}</td>
-                  <td className="py-1.5 px-2 border border-slate-700 no-print">
-                    <UrlActions url={url} label="URL คำขอยา" triggerToast={triggerToast} />
+                  <td className="py-1.5 px-2 border border-slate-700 text-center">
+                    <UrlActions url={url} label="URL คำขอยา" scanLabel="สแกนขอยา" triggerToast={triggerToast} />
                   </td>
                   <td className="py-1.5 px-2 border border-slate-700 text-center text-[10px]">
                     {r.hasCare || r.medEquipment || r.specialItems ? (
@@ -327,8 +398,8 @@ export function EmrRecordsSheet({
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-36 text-left">ยาที่ขอเตรียม</th>
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-16">จำนวนเคส</th>
               <th className="py-2 px-2 border-[1.5px] border-slate-950 w-40 text-left">เคสล่าสุด</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-44">URL รายคน (Admin)</th>
-              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-44">URL หน้าเวชระเบียนของเจ้าตัว</th>
+              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-24">QR รายคน (Admin)</th>
+              <th className="py-2 px-2 border-[1.5px] border-slate-950 w-24">QR หน้าเจ้าตัว</th>
             </tr>
           </thead>
           <tbody>
@@ -366,12 +437,13 @@ export function EmrRecordsSheet({
                   <UrlActions
                     url={p.personUrl}
                     label="URL เวชระเบียนรายคน"
+                    scanLabel="QR Admin"
                     triggerToast={triggerToast}
                     onOpen={onOpenPerson ? () => onOpenPerson(p.id) : null}
                   />
                 </td>
                 <td className="py-1.5 px-2 border border-slate-700">
-                  <UrlActions url={p.myEmrUrl} label="URL หน้าเจ้าตัว" triggerToast={triggerToast} />
+                  <UrlActions url={p.myEmrUrl} label="URL หน้าเจ้าตัว" scanLabel="QR เจ้าตัว" triggerToast={triggerToast} />
                 </td>
               </tr>
             ))}
@@ -441,17 +513,18 @@ export function EmrRecordsSheet({
                     <div>{c.notes || '-'}</div>
                   </div>
                   <div className="p-2 border-r border-slate-700">
-                    <div className="text-slate-700 font-bold mb-0.5">URL รายเคส (Admin)</div>
+                    <div className="text-slate-700 font-bold mb-0.5 text-center">QR รายเคส (Admin)</div>
                     <UrlActions
                       url={c.caseUrl}
                       label="URL รายเคส"
+                      scanLabel="สแกนเปิดเคส (Admin)"
                       triggerToast={triggerToast}
                       onOpen={onOpenCase ? () => onOpenCase(c.caseId, c.personId) : null}
                     />
                   </div>
                   <div className="p-2">
-                    <div className="text-slate-700 font-bold mb-0.5">URL เคสนี้ในหน้าเจ้าตัว</div>
-                    <UrlActions url={c.myCaseUrl} label="URL เคส (เจ้าตัว)" triggerToast={triggerToast} />
+                    <div className="text-slate-700 font-bold mb-0.5 text-center">QR เคสในหน้าเจ้าตัว</div>
+                    <UrlActions url={c.myCaseUrl} label="URL เคส (เจ้าตัว)" scanLabel="สแกนเปิดเคส (เจ้าตัว)" triggerToast={triggerToast} />
                   </div>
                 </div>
               </div>

@@ -125,7 +125,7 @@ export default function HomeView({
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                 <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-emergency-500/20 text-emergency-400 border border-emergency-500/30 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                   <Activity className="w-3.5 h-3.5" />
-                  การฝึกซ้อมร่วมประจำปี 2570
+                  โครงการฝึกซ้อมร่วมประจำปี JRE 2027
                 </span>
                 <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-full text-[11px] sm:text-xs font-bold flex items-center gap-1">
                   <Building2 className="w-3.5 h-3.5" />
