@@ -14,11 +14,16 @@ import {
   ExternalLink,
   Paperclip,
   FileText,
-  Eye
+  Eye,
+  Upload,
+  Loader2,
+  CheckCircle2,
+  CreditCard
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import UniversalImageModal from './UniversalImageModal';
 import { ADMIN_MESSAGE_SENDERS, resolveMessageSenderInfo, OFFICIAL_GROUP_CHAT_URL } from '../data/defaultData';
+import { getUnpaidSlipTarget, uploadRemainingSlipFile } from '../utils/slipUploadHelper';
 
 /**
  * UserNotificationsModal
@@ -36,8 +41,63 @@ export default function UserNotificationsModal({
   const [deletingId, setDeletingId] = useState(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [isUploadingSlip, setIsUploadingSlip] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState(null);
 
   if (!isOpen) return null;
+
+  const unpaidTarget = getUnpaidSlipTarget(myRegistration);
+
+  const isPaymentNotificationMessage = (msg) => {
+    if (!msg) return false;
+    if (msg.request_payment) return true;
+    if (['staff_accommodation', 'round_2_payment', 'urgent_round2_deadline', 'payment_reminder', 'installment'].includes(msg.msg_type)) {
+      return true;
+    }
+    const content = `${msg.title || ''} ${msg.text || ''}`;
+    return /ค้างชำระ|งวดที่\s*2|งวด\s*2|ค่าที่พัก|ส่งสลิป|โอนชำระ|แนบสลิป/.test(content);
+  };
+
+  const handleQuickSlipUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !myRegistration || !unpaidTarget || unpaidTarget.isPaid) return;
+    setIsUploadingSlip(true);
+    setUploadNotice(null);
+    try {
+      const { ocrInfo, verified } = await uploadRemainingSlipFile({
+        file,
+        regTarget: myRegistration,
+        expectedAmount: unpaidTarget.expectedAmount,
+        isInstallmentRound2: unpaidTarget.isInstallmentRound2,
+        installmentRound: unpaidTarget.installmentRound,
+        onUpdateRegistration
+      });
+      if (verified) {
+        setUploadNotice({
+          type: 'success',
+          text: `✓ ส่งสลิป ${unpaidTarget.expectedAmount} บาทสำเร็จ และตรวจยืนยันยอดอัตโนมัติเรียบร้อยแล้ว!`
+        });
+      } else if (ocrInfo?.isDuplicate) {
+        setUploadNotice({
+          type: 'error',
+          text: `🚨 ${ocrInfo.duplicateMessage || 'พบสลิปซ้ำ'} — ส่งเข้าระบบรอเจ้าหน้าที่ตรวจสอบแล้ว`
+        });
+      } else {
+        setUploadNotice({
+          type: 'warning',
+          text: `📤 อัปโหลดสลิป ${unpaidTarget.expectedAmount} บาทเรียบร้อยแล้ว (รอเจ้าหน้าที่ตรวจสอบยืนยัน)`
+        });
+      }
+    } catch (err) {
+      setUploadNotice({
+        type: 'error',
+        text: err?.message || 'เกิดข้อผิดพลาดในการอัปโหลดสลิป กรุณาลองใหม่อีกครั้ง'
+      });
+    } finally {
+      setIsUploadingSlip(false);
+      e.target.value = '';
+    }
+  };
 
   const messages = Array.isArray(myRegistration?.admin_messages) ? myRegistration.admin_messages : [];
   const unreadCount = messages.filter(m => !m.read).length;
@@ -306,6 +366,56 @@ export default function UserNotificationsModal({
 
           {/* MESSAGES LIST (SCROLLABLE BODY) */}
           <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3.5 max-h-[60vh]">
+            {uploadNotice && (
+              <div className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between gap-2 ${
+                uploadNotice.type === 'success'
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+                  : uploadNotice.type === 'error'
+                  ? 'bg-rose-950/80 border-rose-500/50 text-rose-200'
+                  : 'bg-amber-950/80 border-amber-500/50 text-amber-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{uploadNotice.text}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadNotice(null)}
+                  className="p-1 hover:bg-white/10 rounded-lg cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {unpaidTarget && !unpaidTarget.isPaid && unpaidTarget.expectedAmount > 0 && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/85 via-orange-950/75 to-rose-950/80 border-2 border-amber-500/60 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black uppercase">
+                      💳 แนบสลิปชำระยอดค้างได้ทันที
+                    </span>
+                    <span className="text-xs font-black text-amber-200">
+                      {unpaidTarget.label}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-100/90 leading-relaxed">
+                    โอนเข้าบัญชี SCB <span className="font-mono font-bold text-white">594-264865-5</span> (นางสาวมัญชุพร ยังเหล็ก) แล้วอัปโหลดสลิปตรงนี้ ระบบตรวจสลิปและอัปเดตสถานะให้อัตโนมัติ
+                  </p>
+                </div>
+                <label className={`px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center justify-center gap-1.5 shrink-0 transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isUploadingSlip ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  <span>📤 ส่งสลิปยอดค้าง ({unpaidTarget.expectedAmount} บ.)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleQuickSlipUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            )}
+
             {/* Pinned Official Group Chat Banner */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/90 via-indigo-950/90 to-purple-950/90 border border-blue-500/50 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
@@ -438,6 +548,28 @@ export default function UserNotificationsModal({
                           <Eye className="w-3 h-3 text-cyan-400" />
                           <span>ดูรูป/ไฟล์ (Popup)</span>
                         </button>
+                      </div>
+                    )}
+
+                    {/* Direct Payment Slip Upload inside Payment-Related Notifications */}
+                    {unpaidTarget && !unpaidTarget.isPaid && unpaidTarget.expectedAmount > 0 && isPaymentNotificationMessage(msg) && (
+                      <div className="p-3 bg-gradient-to-r from-amber-950/60 via-slate-900 to-orange-950/50 border border-amber-500/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                        <div className="flex items-center gap-2 min-w-0 text-amber-200 font-bold">
+                          <CreditCard className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span className="truncate">
+                            ชำระยอดค้าง: {unpaidTarget.label} • SCB 594-264865-5
+                          </span>
+                        </div>
+                        <label className={`px-3.5 py-2 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow cursor-pointer transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {isUploadingSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          <span>📤 ส่งสลิป {unpaidTarget.expectedAmount} บาท</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleQuickSlipUpload}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
                     )}
 

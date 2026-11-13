@@ -115,7 +115,8 @@ import {
   ADMIN_MESSAGE_SENDERS,
   STANDARD_REQUESTABLE_DOCS,
   resolveMessageSenderInfo,
-  resolvePersonFullNameWithTitle
+  resolvePersonFullNameWithTitle,
+  isAuthorizedStaffOrAdminEmail
 } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import UniversalScannerModal from '../components/UniversalScannerModal';
@@ -175,12 +176,24 @@ export default function AdminDashboardView({
   onVerifyOrderPayment,
   onMarkOrderReceived,
   userAccounts: propUserAccounts = [],
+  staffAdminWhitelist = [],
   onRefreshUserAccounts,
   onRefreshRegistrations,
   onAdminLogout,
   user = null,
   isAdmin = true
 }) {
+  const effectiveWhitelist = (staffAdminWhitelist && staffAdminWhitelist.length > 0) ? staffAdminWhitelist : propUserAccounts;
+  const operatorAuthAccount = isAuthorizedStaffOrAdminEmail(user?.email, effectiveWhitelist);
+  const operatorEmail = String(user?.email || '').trim().toLowerCase();
+  const operatorRole = String(user?.role || '').trim().toLowerCase();
+  const isDevOperator = Boolean(
+    operatorRole === 'dev' ||
+    operatorRole === 'developer' ||
+    operatorAuthAccount?.role === 'dev' ||
+    operatorEmail === 'developer.rcpmsu@gmail.com' ||
+    operatorEmail === 'admin@admin.com'
+  );
   const resolveDedicatedSubpage = (tab) => {
     if (tab === 'id-cards' || tab === 'id-card' || tab === 'idcards' || tab === 'badges' || tab === 'badge' || tab === 'all-badges') return 'id-cards';
     if (tab === 'staff-accommodation' || tab === 'staff_accommodation' || tab === 'staff-hotel' || tab === 'staff-refund') return 'staff-accommodation';
@@ -2674,33 +2687,295 @@ export default function AdminDashboardView({
     }
   };
 
-  // Upload payment slip inside Admin Profile Modal
-  const handleUploadModalPaymentSlip = async (e, targetType = 'full') => {
-    const file = e.target.files?.[0];
-    if (!file || !profileModalReg) return;
-    setIsUploadingModalSlip(true);
-    try {
-      const uploaded = await DataService.uploadFile(file, 'slips');
-      if (uploaded?.url) {
-        if (targetType === 'r1') {
-          setModalInstallment1SlipUrl(uploaded.url);
-          if (modalInstallment1Status === 'unpaid') setModalInstallment1Status('paid');
-        } else if (targetType === 'r2') {
-          setModalInstallment2SlipUrl(uploaded.url);
-          if (modalInstallment2Status === 'unpaid') setModalInstallment2Status('paid');
-        } else {
-          setModalPaymentSlipUrl(uploaded.url);
-          setModalInstallment1SlipUrl(uploaded.url);
-          if (modalPaymentStatus === 'unpaid') setModalPaymentStatus('paid');
-        }
-        triggerToast('อัปโหลดสลิปใหม่แล้ว (กด "บันทึกข้อมูล" เพื่อยืนยัน)');
+  // Prompt / enforce Advanced Edit Mode before sensitive financial slip actions
+  const promptUnlockAdvancedMode = (actionLabel = 'จัดการข้อมูลสำคัญ / อัปโหลดสลิป') => {
+    askConfirm({
+      title: '🛡️ ต้องเปิดโหมดแก้ไขขั้นสูงก่อนดำเนินการ',
+      message: `เพื่อป้องกันการแก้ไขหรือเปลี่ยนแปลงสลิปโดยไม่ตั้งใจ กรุณาเปิด "โหมดแก้ไขขั้นสูง" ก่อน${actionLabel} ต้องการเปิดโหมดแก้ไขขั้นสูงตอนนี้ใช่หรือไม่?`,
+      confirmText: '🔓 เปิดโหมดแก้ไขขั้นสูง',
+      cancelText: 'ยกเลิก',
+      variant: 'warning',
+      onConfirm: () => {
+        setIsAdvancedMode(true);
+        setIsEditingProfileModal(true);
+        triggerToast('🔓 เปิดโหมดแก้ไขขั้นสูงและปลดล็อกการแก้ไขแล้ว');
       }
-    } catch (err) {
-      triggerToast('อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง');
-    } finally {
-      setIsUploadingModalSlip(false);
-    }
+    });
   };
+
+  // Upload payment slip inside Admin Profile Modal (Strict: requires isAdvancedMode + confirmation + persists to Supabase)
+  const handleUploadModalPaymentSlip = (e, targetType = 'full') => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !profileModalReg) return;
+    if (!isAdvancedMode) {
+      promptUnlockAdvancedMode('อัปโหลดรูปสลิปให้ผู้สมัคร');
+      return;
+    }
+
+    const slotLabel = targetType === 'r1'
+      ? 'สลิปงวดที่ 1 / ค่าเสื้อ Staff'
+      : targetType === 'r2'
+      ? (isMsuInstitution(profileModalReg.institution) ? 'สลิปงวดที่ 2' : (isStaffRegistration(profileModalReg) ? 'สลิปค่าที่พัก Staff ต่างมหาลัย' : 'สลิปงวดที่ 2'))
+      : 'สลิปชำระเต็มจำนวน / หลักฐานหลัก';
+
+    askConfirm({
+      title: `📤 ยืนยันอัปโหลด${slotLabel}`,
+      message: `ต้องการอัปโหลดไฟล์ "${file.name}" เป็น${slotLabel} ของคุณ ${profileModalReg.first_name} และบันทึกลงระบบทันทีใช่หรือไม่?`,
+      confirmText: '✓ อัปโหลดและบันทึกทันที',
+      cancelText: 'ยกเลิก',
+      variant: 'info',
+      onConfirm: async () => {
+        setIsUploadingModalSlip(true);
+        try {
+          const uploaded = await DataService.uploadFile(file, 'slips');
+          if (!uploaded?.url) throw new Error('อัปโหลดไฟล์สลิปไม่สำเร็จ');
+
+          const targetKey = profileModalReg.user_id || profileModalReg.id;
+          const nowIso = new Date().toISOString();
+          const isModalStaffReg = isStaffRegistration(profileModalReg);
+          const isModalMsuReg = isMsuInstitution(profileModalReg.institution);
+          const round2Fee = isModalMsuReg
+            ? (paymentConfig?.installment_round2_amount_msu || 250)
+            : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+
+          let updates = {};
+          if (targetType === 'r1') {
+            const nextR1Status = profileModalReg.installment_1_status === 'paid' ? 'paid' : 'paid';
+            const isR2AlreadyPaid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+            updates = {
+              installment_1_slip_url: uploaded.url,
+              installment_1_slip_date: nowIso,
+              installment_1_status: nextR1Status,
+              payment_slip_url: profileModalReg.payment_slip_url || uploaded.url,
+              ...(!isModalStaffReg && profileModalReg.payment_plan === 'installment' && !isR2AlreadyPaid
+                ? {
+                    payment_status: 'unpaid',
+                    payment_amount: round2Fee,
+                    payment_notes: `Admin อัปโหลดและยืนยันสลิปงวด 1 แล้ว (ค้างงวด 2: ${round2Fee} บ.)`
+                  }
+                : isModalStaffReg && isModalMsuReg
+                ? { payment_status: 'paid', payment_amount: 0, payment_notes: 'Admin อัปโหลดสลิปค่าเสื้อ Staff 280 บ. แล้ว' }
+                : isR2AlreadyPaid
+                ? { payment_status: 'paid', payment_amount: 0 }
+                : {})
+            };
+          } else if (targetType === 'r2') {
+            const isR1AlreadyPaid = profileModalReg.installment_1_status === 'paid' || profileModalReg.payment_status === 'paid' || isModalStaffReg;
+            updates = {
+              installment_2_slip_url: uploaded.url,
+              installment_2_slip_date: nowIso,
+              installment_2_status: 'paid',
+              ...(isModalStaffReg ? { staff_accommodation_paid: true } : {}),
+              ...(isR1AlreadyPaid
+                ? {
+                    payment_status: 'paid',
+                    payment_amount: 0,
+                    payment_notes: isModalStaffReg ? 'Admin อัปโหลดและยืนยันสลิปค่าที่พัก Staff แล้ว' : 'Admin อัปโหลดและยืนยันสลิปงวดที่ 2 แล้ว (ชำระครบ 2 งวด)'
+                  }
+                : {})
+            };
+          } else {
+            updates = {
+              payment_slip_url: uploaded.url,
+              payment_slip_date: nowIso,
+              installment_1_slip_url: uploaded.url,
+              installment_1_slip_date: nowIso,
+              payment_status: 'paid',
+              installment_1_status: 'paid',
+              payment_amount: 0,
+              payment_notes: 'Admin อัปโหลดและยืนยันสลิปในระบบแล้ว'
+            };
+          }
+
+          await onUpdateAllocation(targetKey, updates);
+
+          if (targetType === 'r1') {
+            setModalInstallment1SlipUrl(uploaded.url);
+            setModalInstallment1Status(updates.installment_1_status);
+            if (!modalPaymentSlipUrl) setModalPaymentSlipUrl(uploaded.url);
+          } else if (targetType === 'r2') {
+            setModalInstallment2SlipUrl(uploaded.url);
+            setModalInstallment2Status('paid');
+          } else {
+            setModalPaymentSlipUrl(uploaded.url);
+            setModalInstallment1SlipUrl(uploaded.url);
+            setModalPaymentStatus('paid');
+            setModalInstallment1Status('paid');
+            setModalPaymentAmount(0);
+          }
+          if (updates.payment_status) setModalPaymentStatus(updates.payment_status);
+          if (updates.payment_amount !== undefined) setModalPaymentAmount(updates.payment_amount);
+          if (updates.payment_notes) setModalPaymentNotes(updates.payment_notes);
+
+          setProfileModalReg(prev => (prev ? { ...prev, ...updates } : prev));
+          triggerToast(`อัปโหลดและบันทึก${slotLabel}ลงระบบเรียบร้อยแล้ว`);
+        } catch (err) {
+          console.error('Failed to upload modal slip:', err);
+          triggerToast(err?.message || 'อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง', 'error');
+        } finally {
+          setIsUploadingModalSlip(false);
+        }
+      }
+    });
+  };
+
+  // Delete slip image inside Admin Profile Modal (STRICT: DEV role ONLY + Advanced Edit Mode + confirmation)
+  const handleDeleteModalPaymentSlip = (targetType = 'full') => {
+    if (!profileModalReg) return;
+    if (!isDevOperator) {
+      triggerToast('สงวนสิทธิ์การลบรูปสลิปเฉพาะบัญชี DEV เท่านั้น', 'error');
+      return;
+    }
+    if (!isAdvancedMode) {
+      promptUnlockAdvancedMode('ลบรูปสลิปออกจากระบบ');
+      return;
+    }
+
+    const slotLabel = targetType === 'r1'
+      ? 'รูปสลิปงวดที่ 1 / ค่าเสื้อ Staff'
+      : targetType === 'r2'
+      ? 'รูปสลิปงวดที่ 2 / ค่าที่พัก Staff'
+      : 'รูปสลิปโอนเงินหลัก';
+
+    askConfirm({
+      title: `🗑️ ยืนยันการลบ${slotLabel} (DEV เท่านั้น)`,
+      message: `ต้องการลบ${slotLabel} ของคุณ ${profileModalReg.first_name} ออกจากฐานข้อมูลถาวรใช่หรือไม่? สถานะการชำระเงินของรายการนี้จะถูกปรับกลับเป็นค้างชำระเพื่อให้ส่งใหม่`,
+      confirmText: '🗑️ ยืนยันลบรูปสลิปถาวร',
+      cancelText: 'ยกเลิก',
+      variant: 'danger',
+      onConfirm: async () => {
+        setIsUploadingModalSlip(true);
+        try {
+          const targetKey = profileModalReg.user_id || profileModalReg.id;
+          const isModalStaffReg = isStaffRegistration(profileModalReg);
+          const isModalMsuReg = isMsuInstitution(profileModalReg.institution);
+          const staffSum = isModalStaffReg ? getStaffPaymentSummary(profileModalReg) : null;
+          const totalFee = isModalStaffReg
+            ? (staffSum?.totalStaffFee || STAFF_SHIRT_FEE)
+            : (isModalMsuReg ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
+          const round2Fee = isModalStaffReg
+            ? (staffSum?.isMsu ? 0 : (staffSum?.accommodationNetRequiredAfterOffset || STAFF_ACCOMMODATION_FEE))
+            : (isModalMsuReg ? (paymentConfig?.installment_round2_amount_msu || 250) : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450));
+
+          let updates = {};
+          if (targetType === 'r1') {
+            updates = {
+              installment_1_slip_url: '',
+              installment_1_slip_date: null,
+              slip_ocr_round1: null,
+              installment_1_status: 'unpaid',
+              ...(profileModalReg.payment_slip_url === profileModalReg.installment_1_slip_url ? { payment_slip_url: '', payment_slip_date: null, slip_ocr_full: null } : {}),
+              payment_status: 'unpaid',
+              payment_amount: totalFee,
+              payment_notes: 'DEV ลบรูปสลิปงวดที่ 1 ออกจากระบบแล้ว'
+            };
+          } else if (targetType === 'r2') {
+            updates = {
+              installment_2_slip_url: '',
+              installment_2_slip_date: null,
+              slip_ocr_round2: null,
+              installment_2_status: 'unpaid',
+              ...(isModalStaffReg ? { staff_accommodation_paid: false } : {}),
+              payment_status: 'unpaid',
+              payment_amount: round2Fee,
+              payment_notes: 'DEV ลบรูปสลิปงวดที่ 2 / ค่าที่พัก ออกจากระบบแล้ว'
+            };
+          } else {
+            updates = {
+              payment_slip_url: '',
+              payment_slip_date: null,
+              slip_ocr_full: null,
+              installment_1_slip_url: '',
+              installment_1_slip_date: null,
+              slip_ocr_round1: null,
+              payment_status: 'unpaid',
+              installment_1_status: 'unpaid',
+              payment_amount: totalFee,
+              payment_notes: 'DEV ลบรูปสลิปหลักออกจากระบบแล้ว'
+            };
+          }
+
+          await onUpdateAllocation(targetKey, updates);
+
+          if (targetType === 'r1') {
+            setModalInstallment1SlipUrl('');
+            setModalInstallment1Status('unpaid');
+            if (updates.payment_slip_url === '') setModalPaymentSlipUrl('');
+          } else if (targetType === 'r2') {
+            setModalInstallment2SlipUrl('');
+            setModalInstallment2Status('unpaid');
+          } else {
+            setModalPaymentSlipUrl('');
+            setModalInstallment1SlipUrl('');
+            setModalPaymentStatus('unpaid');
+            setModalInstallment1Status('unpaid');
+          }
+          setModalPaymentStatus(updates.payment_status);
+          setModalPaymentAmount(updates.payment_amount);
+          setModalPaymentNotes(updates.payment_notes);
+          setProfileModalReg(prev => (prev ? { ...prev, ...updates } : prev));
+          triggerToast(`🗑️ ลบ${slotLabel}ออกจากระบบเรียบร้อยแล้ว`);
+        } catch (err) {
+          console.error('Failed to delete slip:', err);
+          triggerToast(err?.message || 'ลบรูปสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
+        } finally {
+          setIsUploadingModalSlip(false);
+        }
+      }
+    });
+  };
+
+  // Shared Upload (All Admins in Advanced Edit Mode) + Delete (DEV ONLY in Advanced Edit Mode) action bar
+  const renderAdminSlipActionControls = (targetType, hasExistingSlip = false) => (
+    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
+      {isAdvancedMode ? (
+        <label className={`px-3 py-1.5 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/50 text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all ${isUploadingModalSlip ? 'opacity-50 pointer-events-none' : ''}`}>
+          {isUploadingModalSlip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+          <span>{hasExistingSlip ? '📤 อัปโหลดสลิปใหม่แทนที่' : '📤 อัปโหลดรูปสลิปแทนผู้สมัคร'}</span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleUploadModalPaymentSlip(e, targetType)}
+            className="hidden"
+          />
+        </label>
+      ) : (
+        <button
+          type="button"
+          onClick={() => promptUnlockAdvancedMode('อัปโหลดรูปสลิปแทนผู้สมัคร')}
+          className="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all"
+          title="ต้องเปิดโหมดแก้ไขขั้นสูงก่อนจึงจะอัปโหลดรูปสลิปได้"
+        >
+          <Lock className="w-3 h-3" />
+          <span>{hasExistingSlip ? '🔒 เปลี่ยนรูปสลิป (ต้องเปิดโหมดแก้ไขขั้นสูง)' : '🔒 อัปโหลดสลิป (ต้องเปิดโหมดแก้ไขขั้นสูง)'}</span>
+        </button>
+      )}
+
+      {hasExistingSlip && (
+        isDevOperator ? (
+          <button
+            type="button"
+            disabled={isUploadingModalSlip}
+            onClick={() => handleDeleteModalPaymentSlip(targetType)}
+            className="px-3 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-500/50 text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+            title="ลบรูปสลิปนี้ถาวร (เฉพาะ DEV และต้องเปิดโหมดแก้ไขขั้นสูง)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{isAdvancedMode ? '🗑️ ลบรูปสลิป (DEV)' : '🔒 ลบรูปสลิป (DEV • เปิดขั้นสูงก่อน)'}</span>
+          </button>
+        ) : (
+          <span
+            className="px-2.5 py-1 rounded-lg bg-slate-950 text-slate-500 border border-slate-800 text-[10px] font-semibold inline-flex items-center gap-1"
+            title="ปุ่มลบรูปสลิปสงวนสิทธิ์เฉพาะ DEV เท่านั้น"
+          >
+            <Lock className="w-3 h-3" />
+            <span>ลบรูปสลิป (เฉพาะ DEV เท่านั้น)</span>
+          </span>
+        )
+      )}
+    </div>
+  );
 
   // Save Full Profile & Special Care Remarks (All Applicant Fields Editable by Admin / Developer)
   const handleSaveProfileModal = async (e) => {
@@ -11953,7 +12228,7 @@ export default function AdminDashboardView({
                               !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
                             }`}
                           />
-                          {isEditingProfileModal && (
+                          {(isEditingProfileModal && isAdvancedMode) && (
                             <label className="px-2.5 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 text-[11px] font-bold cursor-pointer shrink-0">
                               อัปโหลด
                               <input type="file" accept="image/*" onChange={e => handleUploadModalPaymentSlip(e, 'r1')} className="hidden" />
@@ -12011,7 +12286,7 @@ export default function AdminDashboardView({
                                 !isEditingProfileModal ? 'bg-slate-950/70 border border-slate-800 opacity-80' : 'bg-slate-950 border border-slate-700'
                               }`}
                             />
-                            {isEditingProfileModal && (
+                            {(isEditingProfileModal && isAdvancedMode) && (
                               <label className="px-2.5 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-[11px] font-bold cursor-pointer shrink-0">
                                 อัปโหลด
                                 <input type="file" accept="image/*" onChange={e => handleUploadModalPaymentSlip(e, 'r2')} className="hidden" />
@@ -12027,7 +12302,13 @@ export default function AdminDashboardView({
                     {!isEditingProfileModal ? (
                       <button
                         type="button"
-                        onClick={() => setIsEditingProfileModal(true)}
+                        onClick={() => {
+                          if (!isAdvancedMode) {
+                            promptUnlockAdvancedMode('แก้ไขข้อมูลการเงินและสลิป');
+                            return;
+                          }
+                          setIsEditingProfileModal(true);
+                        }}
                         className="px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -12338,11 +12619,13 @@ export default function AdminDashboardView({
                                     </button>
                                   </div>
                                 )}
+                                {renderAdminSlipActionControls('r1', true)}
                               </div>
                             ) : (
-                              <div className="h-44 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
-                                <Clock className="w-6 h-6 mb-2 opacity-50" />
+                              <div className="h-44 flex flex-col items-center justify-center gap-2 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs p-3">
+                                <Clock className="w-6 h-6 mb-1 opacity-50" />
                                 <span>ยังไม่มีการส่งสลิปงวดที่ 1</span>
+                                {renderAdminSlipActionControls('r1', false)}
                               </div>
                             )}
                           </div>
@@ -12647,6 +12930,7 @@ export default function AdminDashboardView({
                                     </button>
                                   </div>
                                 )}
+                                {renderAdminSlipActionControls('r2', true)}
                               </div>
                             ) : (
                               <div className="h-44 flex flex-col items-center justify-center gap-2 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-400 text-xs p-3 text-center">
@@ -12669,6 +12953,7 @@ export default function AdminDashboardView({
                                     🔔 ส่งแจ้งเตือนให้จ่ายค่าที่พัก ({staffModalSummary?.accommodationRemaining || 200} บ.)
                                   </button>
                                 )}
+                                {renderAdminSlipActionControls('r2', false)}
                               </div>
                             )}
                           </div>
@@ -12942,12 +13227,16 @@ export default function AdminDashboardView({
                                 </button>
                               </div>
                             )}
+                            {renderAdminSlipActionControls('full', true)}
                           </div>
                         </div>
                       ) : (
-                        <p className="text-slate-500 italic py-2">
-                          ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน ({isModalStaff ? `ค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บาท` : 'ชำระเต็มจำนวน 1 รอบ'})
-                        </p>
+                        <div className="space-y-3 py-2">
+                          <p className="text-slate-500 italic">
+                            ผู้สมัครยังไม่ได้อัปโหลดสลิปการโอนเงิน ({isModalStaff ? `ค่าเสื้อ Staff ${STAFF_SHIRT_FEE} บาท` : 'ชำระเต็มจำนวน 1 รอบ'})
+                          </p>
+                          {renderAdminSlipActionControls('full', false)}
+                        </div>
                       )}
                     </div>
                   );

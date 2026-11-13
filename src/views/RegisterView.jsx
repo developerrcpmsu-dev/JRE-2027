@@ -70,6 +70,7 @@ import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
 import { scanSlipImage } from '../utils/slipOcr';
+import { getUnpaidSlipTarget } from '../utils/slipUploadHelper';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   OFFICIAL_NETWORK_INSTITUTIONS,
@@ -1672,7 +1673,7 @@ export default function RegisterView({
       is_staff: true,
       registration_type: 'staff',
       staff_id_card_only: myRegistration ? Boolean(myRegistration.staff_id_card_only) : true,
-      staff_accommodation_paid: true,
+      staff_accommodation_paid: myRegistration ? Boolean(myRegistration.staff_accommodation_paid) : staffFeeInfo.isMsu,
       shirt_size: myRegistration?.shirt_size || '-',
       custom_shirt_note: customShirtNote.trim(),
       id_card_photo: idCardPhoto || myRegistration?.id_card_photo || user.avatar || '',
@@ -2726,40 +2727,62 @@ export default function RegisterView({
           <RegistrationCountdown paymentConfig={effectivePaymentConfig} variant="banner" />
         )}
 
-        {/* Urgent Final Deadline Notification for Pending Round 2 / Accommodation */}
+        {/* Urgent Final Deadline / Deferred Quick-Pay Banner for Pending Round 2 / Accommodation */}
         {(() => {
-          const isStaff = isStaffRegistration(myRegistration);
-          let owesMoney = false;
-          let remAmount = 0;
-          let label = '';
+          const unpaidTarget = getUnpaidSlipTarget(myRegistration);
           const isCancelledAbsent = Boolean(myRegistration.round2_cancelled_absent);
           const isDeferredPost = Boolean(myRegistration.payment_deferred_post_project);
-          if (isCancelledAbsent || isDeferredPost) {
+          if (isCancelledAbsent || !unpaidTarget || unpaidTarget.isPaid || !unpaidTarget.expectedAmount) {
             return null;
           }
-          if (isStaff) {
-            const s = getStaffPaymentSummary(myRegistration);
-            if (!s.isMsu && s.accommodationRemaining > 0) {
-              owesMoney = true;
-              remAmount = s.accommodationRemaining;
-              label = `ค่าที่พัก Staff ต่างมหาวิทยาลัย (${remAmount} บาท)`;
-            }
-          } else {
-            const isInstallment = myRegistration.payment_plan === 'installment' || Boolean(myRegistration.installment_1_slip_url || myRegistration.installment_2_slip_url);
-            if (isInstallment && myRegistration.installment_2_status !== 'paid') {
-              owesMoney = true;
-              const isMsu = isMsuInstitution(myRegistration.institution);
-              remAmount = isMsu ? 250 : 450;
-              label = `เงินงวดที่ 2 (งวดสุดท้าย: ${remAmount} บาท)`;
-            } else if (myRegistration.payment_status === 'unpaid') {
-              owesMoney = true;
-              const isMsu = isMsuInstitution(myRegistration.institution);
-              remAmount = isMsu ? 650 : 850;
-              label = `ยอดค้างชำระค่าลงทะเบียน (${remAmount} บาท)`;
-            }
-          }
 
-          if (!owesMoney) return null;
+          const remAmount = unpaidTarget.expectedAmount;
+          const label = unpaidTarget.label;
+          const handleQuickFileChange = (e) => (
+            unpaidTarget.isInstallmentRound2
+              ? handleUploadInstallmentSlip(e, 2)
+              : unpaidTarget.installmentRound === 1
+                ? handleUploadInstallmentSlip(e, 1)
+                : handleUploadPaymentSlip(e)
+          );
+
+          if (isDeferredPost) {
+            return (
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-sky-950/90 via-indigo-950/85 to-slate-900 border-2 border-sky-500/60 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-sky-600/30 border border-sky-400/40 flex items-center justify-center text-sky-200 shrink-0 shadow">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-full bg-sky-500/25 border border-sky-400/50 text-sky-200 text-[10px] font-black uppercase">
+                        ☑️ สถานะ: แจ้งชำระหลังจบโครงการ
+                      </span>
+                      <span className="text-xs font-bold text-amber-300">
+                        ยอดคงค้าง {remAmount} บาท
+                      </span>
+                    </div>
+                    <h3 className="text-sm sm:text-base font-black text-white mt-0.5">
+                      หากพร้อมโอนชำระ{label}แล้ว สามารถแนบสลิปได้ทันที
+                    </h3>
+                    <p className="text-xs text-sky-100/85 mt-0.5">
+                      บัญชี SCB <span className="font-mono font-bold text-white">594-264865-5</span> (นางสาวมัญชุพร ยังเหล็ก) — ระบบสแกนตรวจสอบยอด {remAmount} บาท และอัปเดตสถานะเป็นชำระครบอัตโนมัติ
+                    </p>
+                  </div>
+                </div>
+                <label className={`px-4 py-2.5 bg-gradient-to-r from-sky-400 via-cyan-400 to-teal-400 hover:from-sky-300 hover:to-teal-300 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-center transition-all active:scale-95 ${(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  <span>📤 ส่งสลิปยอดค้าง ({remAmount} บาท)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleQuickFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            );
+          }
 
           return (
             <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-950/90 via-red-950/85 to-amber-950/80 border-2 border-rose-500/70 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse">
@@ -2784,13 +2807,13 @@ export default function RegisterView({
                   </p>
                 </div>
               </div>
-              <label className={`px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-center transition-all active:scale-95 ${(isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
-                {(isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              <label className={`px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-center transition-all active:scale-95 ${(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
+                {(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 <span>📤 ส่งสลิปชำระยอดค้าง ({remAmount} บาท)</span>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => (isStaff || myRegistration.payment_plan === 'installment' || Boolean(myRegistration.installment_1_slip_url)) ? handleUploadInstallmentSlip(e, 2) : handleUploadPaymentSlip(e)}
+                  onChange={handleQuickFileChange}
                   className="hidden"
                 />
               </label>
@@ -3221,7 +3244,7 @@ export default function RegisterView({
           })()}
 
           {/* STAFF ID CARD ONLY CONFIRMATION OR OVERALL PAYMENT STATUS HERO BANNER */}
-          {(isStaffPortal || myRegistration.staff_id_card_only || ((!myRegistration.shirt_size || myRegistration.shirt_size === '-') && Number(myRegistration.payment_amount || 0) === 0 && !myRegistration.payment_slip_url && !myRegistration.installment_1_slip_url)) ? (
+          {(isStaffPortal || ((myRegistration.staff_id_card_only || ((!myRegistration.shirt_size || myRegistration.shirt_size === '-') && Number(myRegistration.payment_amount || 0) === 0 && !myRegistration.payment_slip_url && !myRegistration.installment_1_slip_url)) && !((getUnpaidSlipTarget(myRegistration)?.expectedAmount || 0) > 0))) ? (
             <div className="mt-8 p-5 sm:p-6 bg-gradient-to-r from-amber-950/70 via-slate-900 to-emerald-950/60 border-2 border-amber-400/60 rounded-3xl shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 shadow-lg">
@@ -4771,8 +4794,8 @@ export default function RegisterView({
             </div>
           )}
 
-          {/* SECTION: สถานะการชำระเงิน & ระบบแบ่งจ่าย 2 งวด (Hidden on /staff-register or ID-card-only Staff) */}
-          {!(isStaffPortal || myRegistration.staff_id_card_only || ((!myRegistration.shirt_size || myRegistration.shirt_size === '-') && Number(myRegistration.payment_amount || 0) === 0 && !myRegistration.payment_slip_url && !myRegistration.installment_1_slip_url)) && (
+          {/* SECTION: สถานะการชำระเงิน & ระบบแบ่งจ่าย 2 งวด (Hidden on /staff-register or ID-card-only Staff unless unpaid balance exists) */}
+          {!(isStaffPortal || ((myRegistration.staff_id_card_only || ((!myRegistration.shirt_size || myRegistration.shirt_size === '-') && Number(myRegistration.payment_amount || 0) === 0 && !myRegistration.payment_slip_url && !myRegistration.installment_1_slip_url)) && !((getUnpaidSlipTarget(myRegistration)?.expectedAmount || 0) > 0))) && (
           <div className="mt-8 p-5 sm:p-6 rounded-3xl border bg-slate-950/80 border-slate-800 space-y-5 shadow-xl">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
               <div className="flex items-center gap-2.5">
@@ -5223,7 +5246,7 @@ export default function RegisterView({
                         ) : (
                           <>
                             <Upload className="w-4 h-4" />
-                            <span>อัปโหลดสลิปโอนเงินเต็มจำนวน ({effectivePaymentConfig.fee_total} บ.)</span>
+                            <span>อัปโหลดสลิปโอนเงินเต็มจำนวน ({dashboardPaymentConfig.fee_total} บ.)</span>
                           </>
                         )}
                         <input
@@ -5380,6 +5403,42 @@ export default function RegisterView({
                           </button>
                         </div>
                       )}
+
+                      {(() => {
+                        const msgUnpaid = getUnpaidSlipTarget(myRegistration);
+                        const isPaymentMsg = Boolean(
+                          msg.request_payment ||
+                          ['staff_accommodation', 'round_2_payment', 'urgent_round2_deadline', 'payment_reminder', 'installment'].includes(msg.msg_type) ||
+                          /ค้างชำระ|งวดที่\s*2|งวด\s*2|ค่าที่พัก|ส่งสลิป|โอนชำระ|แนบสลิป/.test(`${msg.title || ''} ${msg.text || ''}`)
+                        );
+                        if (!msgUnpaid || msgUnpaid.isPaid || !msgUnpaid.expectedAmount || !isPaymentMsg) return null;
+                        return (
+                          <div className="p-3 bg-gradient-to-r from-amber-950/60 via-slate-900 to-orange-950/50 border border-amber-500/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                            <div className="flex items-center gap-2 min-w-0 text-amber-200 font-bold">
+                              <CreditCard className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span className="truncate">
+                                แนบสลิปยอดค้าง: {msgUnpaid.label} • SCB 594-264865-5
+                              </span>
+                            </div>
+                            <label className={`px-3.5 py-2 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow cursor-pointer transition-all active:scale-95 ${(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
+                              {(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                              <span>📤 ส่งสลิป {msgUnpaid.expectedAmount} บาท</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => (
+                                  msgUnpaid.isInstallmentRound2
+                                    ? handleUploadInstallmentSlip(e, 2)
+                                    : msgUnpaid.installmentRound === 1
+                                      ? handleUploadInstallmentSlip(e, 1)
+                                      : handleUploadPaymentSlip(e)
+                                )}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        );
+                      })()}
 
                       <div className="flex items-center justify-between pt-1">
                         <button
@@ -6403,6 +6462,57 @@ export default function RegisterView({
           </button>
         </div>
       )}
+
+      {/* Quick Slip Upload Bar inside Edit Form so Staff / Installment users opening /register always see how to submit remaining slips */}
+      {myRegistration && !isStaffPortal && (() => {
+        const editUnpaid = getUnpaidSlipTarget(myRegistration);
+        if (!editUnpaid || editUnpaid.isPaid || !editUnpaid.expectedAmount) return null;
+        return (
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950/85 via-orange-950/75 to-slate-900 border-2 border-amber-500/60 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black uppercase">
+                  💳 ส่งสลิปยอดค้างได้ทันที
+                </span>
+                <span className="text-xs font-black text-amber-200">
+                  {editUnpaid.label}
+                </span>
+              </div>
+              <p className="text-xs text-amber-100/90 leading-relaxed">
+                โอนชำระเข้าบัญชี SCB <span className="font-mono font-bold text-white">594-264865-5</span> (นางสาวมัญชุพร ยังเหล็ก) และอัปโหลดสลิปตรงนี้ได้ทันทีโดยไม่ต้องกดหลายขั้นตอน
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <label className={`px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all active:scale-95 ${(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
+                {(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span>📤 ส่งสลิป {editUnpaid.expectedAmount} บ.</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => (
+                    editUnpaid.isInstallmentRound2
+                      ? handleUploadInstallmentSlip(e, 2)
+                      : editUnpaid.installmentRound === 1
+                        ? handleUploadInstallmentSlip(e, 1)
+                        : handleUploadPaymentSlip(e)
+                  )}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  if (onSubRouteChange) onSubRouteChange('dashboard');
+                }}
+                className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+              >
+                ไปหน้าแดชบอร์ดของฉัน
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Edit Mode Warning & Action Safeguard Banner */}
       {isEditing && (

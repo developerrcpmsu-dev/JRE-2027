@@ -1167,9 +1167,17 @@ export default function App() {
       if (!isOwner) {
         throw new Error('การเข้าถึงถูกปฏิเสธ: ท่านไม่มีสิทธิ์แก้ไขข้อมูลของผู้สมัครท่านอื่น');
       }
-      // If registration has already paid or partial paid, protect financial & institution fields!
+      // If registration has already paid or partial paid, protect institution & fee config,
+      // but still allow slip upload payloads to update payment_status -> pending_review / paid!
       if (myRegistration?.payment_status === 'full' || myRegistration?.payment_status === 'installment_1_paid') {
-        delete updates.payment_status;
+        const isSlipUploadUpdate = Boolean(
+          updates.payment_slip_url ||
+          updates.installment_1_slip_url ||
+          updates.installment_2_slip_url
+        );
+        if (!isSlipUploadUpdate) {
+          delete updates.payment_status;
+        }
         delete updates.institution;
         delete updates.fee_total;
         delete updates.payment_type;
@@ -1471,6 +1479,7 @@ export default function App() {
             onVerifyOrderPayment={handleVerifyOrderPayment}
             onMarkOrderReceived={handleMarkOrderReceived}
             userAccounts={userAccounts}
+            staffAdminWhitelist={staffAdminWhitelist}
             onRefreshUserAccounts={refreshUserAccounts}
             onRefreshRegistrations={refreshRegistrations}
             onAdminLogout={handleAdminLogout}
