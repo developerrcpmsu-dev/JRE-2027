@@ -288,20 +288,21 @@ function populateDormitorySignInSheet(ws, roomList, msuList = []) {
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงลายมือชื่อเข้าห้องพักและรับกุญแจ หอพักกุดรัง มมส (ฉบับปิดข้อมูลสุขภาพ PDPA)',
-    'ชั้น 1 ห้อง 101 - 110 • ห้องพักชาย (101 - 107 • 14 คน) / ห้องพักหญิง (108 - 110 • 6 คน) • เอกสารสำหรับจุดลงทะเบียนรับกุญแจ',
-    'I'
+    'ชั้น 1 ห้อง 101 - 110 • ห้องพักชาย (101 - 107 • 14 คน) / ห้องพักหญิง (108 - 110 • 6 คน) • เอกสารสำหรับจุดลงทะเบียนรับ/คืนกุญแจ',
+    'J'
   );
 
   const headers = [
-    { header: 'เลขห้อง', width: 13, align: 'center' },
-    { header: 'โซน/เพศ', width: 12, align: 'center' },
+    { header: 'เลขห้อง', width: 12, align: 'center' },
+    { header: 'โซน/เพศ', width: 11, align: 'center' },
     { header: 'ลำดับ / เตียง', width: 12, align: 'center' },
-    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', width: 26, align: 'left' },
-    { header: 'ชื่อเล่น', width: 13, align: 'center' },
-    { header: 'นามเรียกขาน', width: 16, align: 'center' },
-    { header: 'เบอร์โทร', width: 15, align: 'center' },
-    { header: 'ลายมือชื่อรับกุญแจ (Check-in)', width: 24, align: 'center' },
-    { header: 'ลายมือชื่อคืนกุญแจ (Check-out)', width: 24, align: 'center' }
+    { header: 'ชื่อ - นามสกุล ผู้เข้าพัก', width: 25, align: 'left' },
+    { header: 'ชื่อเล่น', width: 12, align: 'center' },
+    { header: 'นามเรียกขาน', width: 15, align: 'center' },
+    { header: 'เบอร์โทร', width: 14, align: 'center' },
+    { header: 'สถานะเข้าพัก & กุญแจ', width: 22, align: 'center' },
+    { header: 'ลายมือชื่อรับกุญแจ (Check-in)', width: 22, align: 'center' },
+    { header: 'ลายมือชื่อคืนกุญแจ (Check-out)', width: 22, align: 'center' }
   ];
 
   const headerRow = ws.getRow(5);
@@ -318,28 +319,32 @@ function populateDormitorySignInSheet(ws, roomList, msuList = []) {
   headerRow.height = 28;
 
   let currentRow = 6;
+  const optedOutList = [];
   roomList.forEach((rm) => {
     const isMale = rm.gender === 'ชาย';
     const occupants = rm.occupants || [];
 
     for (let b = 0; b < 2; b++) {
       const p = occupants[b];
+      if (p?.dormOptOut) optedOutList.push(`${p.name} (ห้อง ${rm.room})`);
       const row = ws.getRow(currentRow);
-      const bg = isMale ? (currentRow % 2 === 0 ? 'FFF0F9FF' : 'FFFFFFFF') : (currentRow % 2 === 0 ? 'FFFDF2F8' : 'FFFFFFFF');
+      const isOptOut = Boolean(p?.dormOptOut);
+      const bg = isOptOut ? 'FFFEF3C7' : (isMale ? (currentRow % 2 === 0 ? 'FFF0F9FF' : 'FFFFFFFF') : (currentRow % 2 === 0 ? 'FFFDF2F8' : 'FFFFFFFF'));
 
       row.getCell(1).value = `ห้อง ${rm.room}`;
       row.getCell(2).value = isMale ? 'ชาย 👨' : 'หญิง 👩';
       row.getCell(3).value = `คนที่ ${b + 1} (เตียง ${b + 1})`;
-      row.getCell(4).value = p ? p.name : '(ว่าง)';
+      row.getCell(4).value = p ? `${p.name}${isOptOut ? ' [ไม่พักหอ]' : ''}` : '(ว่าง)';
       row.getCell(5).value = p ? p.nickname : '-';
       row.getCell(6).value = p ? p.callsign : '-';
       row.getCell(7).value = p ? p.phone : '-';
-      row.getCell(8).value = '';
-      row.getCell(9).value = '';
+      row.getCell(8).value = p ? `${p.stayStatusLabel} | ${p.keyStatusLabel}` : '-';
+      row.getCell(9).value = isOptOut ? '(ไม่เข้าพัก)' : '';
+      row.getCell(10).value = isOptOut ? '(ไม่เข้าพัก)' : '';
 
       headers.forEach((h, i) => {
         const cell = row.getCell(i + 1);
-        cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 0 };
+        cell.font = { name: 'TH Sarabun New', size: 11, bold: i === 0 || isOptOut };
         cell.alignment = { horizontal: h.align, vertical: 'middle' };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
         cell.border = thinBorder;
@@ -350,9 +355,18 @@ function populateDormitorySignInSheet(ws, roomList, msuList = []) {
     }
   });
 
+  if (optedOutList.length > 0) {
+    currentRow++;
+    ws.mergeCells(`A${currentRow}:J${currentRow}`);
+    const optCell = ws.getCell(`A${currentRow}`);
+    optCell.value = `🚫 รายชื่อผู้แจ้งไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้ (${optedOutList.length} คน): ${optedOutList.join(', ')}`;
+    optCell.font = { name: 'TH Sarabun New', size: 11, bold: true, color: { argb: 'FF92400E' } };
+    optCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  }
+
   if (msuList.length > 0) {
     currentRow++;
-    ws.mergeCells(`A${currentRow}:I${currentRow}`);
+    ws.mergeCells(`A${currentRow}:J${currentRow}`);
     const noteCell = ws.getCell(`A${currentRow}`);
     noteCell.value = `🏠 รายชื่อนิสิต / คณะกรรมการ มมส (${msuList.length} คน) — เดินทางไป-กลับเอง ไม่พักหอพัก: ${msuList.map(m => m.name).join(', ')}`;
     noteCell.font = { name: 'TH Sarabun New', size: 11, italic: true, color: { argb: 'FF64748B' } };
@@ -367,20 +381,22 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
   setupWorksheetHeader(
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) — เอกสารเฉพาะ Staff',
-    'ใบตรวจสอบห้องพัก โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับฝ่ายพยาบาล/สวัสดิการเตรียมความพร้อม)',
-    'เรียงลำดับห้องที่มีผู้เฝ้าระวังสุขภาพไว้ห้องต้นๆ • ลำดับในห้อง: คนที่ 1 มีโรค/แพ้, คนที่ 2 ปกติช่วยดูแล • (ไม่ต้องลงลายมือชื่อ)',
-    'H'
+    'ใบตรวจสอบห้องพัก เข้าพัก/ไม่พัก กุญแจ โรคประจำตัว ยาที่ต้องการ และของที่ต้องใช้ (สำหรับ Staff)',
+    'เรียงลำดับห้องที่มีผู้เฝ้าระวังสุขภาพไว้ห้องต้นๆ • แสดงสถานะกุญแจ ผู้ติดต่อฉุกเฉิน และความยินยอมเปิดเผยสุขภาพ (เจ้าตัว vs Admin) • (ไม่ต้องลงลายมือชื่อ)',
+    'J'
   );
 
   const headers = [
-    { header: 'เลขห้อง', width: 12, align: 'center' },
-    { header: 'โซน/เพศ', width: 11, align: 'center' },
+    { header: 'เลขห้อง', width: 11, align: 'center' },
+    { header: 'โซน/เพศ', width: 10, align: 'center' },
     { header: 'ลำดับ', width: 10, align: 'center' },
-    { header: 'ชื่อ - นามสกุล (ชื่อเล่น / นามเรียกขาน / โทร)', width: 32, align: 'left' },
-    { header: 'โรคประจำตัว / อาการแพ้ / หมู่เลือด', width: 28, align: 'left' },
-    { header: 'ยาที่ต้องการ / เวชภัณฑ์', width: 26, align: 'left' },
-    { header: 'ของที่ต้องใช้ / การดูแลพิเศษ', width: 26, align: 'left' },
-    { header: 'เช็คเตรียมของ (Staff)', width: 22, align: 'center' }
+    { header: 'ชื่อ - นามสกุล (ชื่อเล่น / นามเรียกขาน / โทร)', width: 30, align: 'left' },
+    { header: 'สถานะเข้าพัก & กุญแจห้อง', width: 22, align: 'left' },
+    { header: 'โรคประจำตัว / อาการแพ้ / หมู่เลือด', width: 26, align: 'left' },
+    { header: 'ยาที่ต้องการ / เวชภัณฑ์', width: 22, align: 'left' },
+    { header: 'ของที่ต้องใช้ / การดูแลพิเศษ', width: 22, align: 'left' },
+    { header: 'เปิดเผยสุขภาพ (ผู้กด)', width: 22, align: 'center' },
+    { header: 'ติดต่อฉุกเฉิน / เช็คเตรียม (Staff)', width: 26, align: 'left' }
   ];
 
   const headerRow = ws.getRow(5);
@@ -405,7 +421,13 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
       const p = occupants[b];
       const row = ws.getRow(currentRow);
       const hasCare = Boolean(p && (p.needsBuddyCare || p.hasMedicalHistory || p.hasFoodAllergy || p.hasMed || p.hasAlg || p.medicalEquipmentNeeded || p.specialItemsNeeded));
-      const bg = hasCare ? 'FFFFF1F2' : (isMale ? 'FFF8FAFC' : 'FFFDF2F8');
+      const bg = p?.dormOptOut ? 'FFFEF3C7' : (hasCare ? 'FFFFF1F2' : (isMale ? 'FFF8FAFC' : 'FFFDF2F8'));
+      const consentTxt = p
+        ? `${p.healthConsent?.statusLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')} (${p.healthConsent?.actorLabel || '-'})`
+        : '-';
+      const emerTxt = p && p.emergencyName && p.emergencyName !== '-'
+        ? `ฉุกเฉิน: ${p.emergencyName} (${p.emergencyPhone})`
+        : 'ฉุกเฉิน: -';
 
       row.getCell(1).value = `ห้อง ${rm.room}`;
       row.getCell(2).value = isMale ? 'ชาย' : 'หญิง';
@@ -413,11 +435,13 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
       row.getCell(4).value = p
         ? `${p.name}${p.nickname && p.nickname !== '-' ? ` (${p.nickname})` : ''}\n${p.callsign} • โทร: ${p.phone}`
         : '(ว่าง)';
-      row.getCell(5).value = p ? formatPersonMedicalSummary(p) : '-';
-      row.getCell(6).value = p?.medicalEquipmentNeeded || '-';
-      row.getCell(7).value = p?.specialItemsNeeded || (p?.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
-      row.getCell(8).value = p
-        ? (hasCare ? `☐ เตรียมแล้ว (${p.isHealthShared ? 'เมทเห็น' : 'เฉพาะ Staff'})` : '✓ ปกติ (ผู้ช่วยดูแล)')
+      row.getCell(5).value = p ? `${p.stayStatusLabel}\n🔑 ${p.keyStatusLabel}` : '-';
+      row.getCell(6).value = p ? formatPersonMedicalSummary(p) : '-';
+      row.getCell(7).value = p?.medicalEquipmentNeeded || '-';
+      row.getCell(8).value = p?.specialItemsNeeded || (p?.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
+      row.getCell(9).value = consentTxt;
+      row.getCell(10).value = p
+        ? `${emerTxt}\n${hasCare ? '☐ เตรียมยา/ของใช้แล้ว' : '✓ ปกติ (ผู้ช่วยดูแล)'}`
         : '-';
 
       headers.forEach((h, i) => {
@@ -425,15 +449,15 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
         cell.font = {
           name: 'TH Sarabun New',
           size: 11,
-          bold: i === 0 || (hasCare && (i === 4 || i === 5 || i === 6)),
-          color: { argb: hasCare && i === 4 ? 'FF9F1239' : 'FF0F172A' }
+          bold: i === 0 || (hasCare && (i === 5 || i === 6 || i === 7)),
+          color: { argb: hasCare && i === 5 ? 'FF9F1239' : 'FF0F172A' }
         };
         cell.alignment = { horizontal: h.align, vertical: 'middle', wrapText: true };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
         cell.border = thinBorder;
       });
 
-      row.height = 32;
+      row.height = 34;
       currentRow++;
     }
   });
@@ -444,7 +468,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
   );
   if (msuNeedsCare.length > 0) {
     currentRow++;
-    ws.mergeCells(`A${currentRow}:H${currentRow}`);
+    ws.mergeCells(`A${currentRow}:J${currentRow}`);
     const titleCell = ws.getCell(`A${currentRow}`);
     titleCell.value = `🏠 ข้อมูลโรคประจำตัว / ยา / ของที่ต้องใช้ ของผู้เข้าร่วม มมส (ไป-กลับ ไม่พักหอพัก — ${msuNeedsCare.length} ท่าน)`;
     titleCell.font = { name: 'TH Sarabun New', size: 12, bold: true, color: { argb: 'FF92400E' } };
@@ -455,14 +479,21 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
 
     msuNeedsCare.forEach((p, idx) => {
       const row = ws.getRow(currentRow);
+      const consentTxt = `${p.healthConsent?.statusLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')} (${p.healthConsent?.actorLabel || '-'})`;
+      const emerTxt = p.emergencyName && p.emergencyName !== '-'
+        ? `ฉุกเฉิน: ${p.emergencyName} (${p.emergencyPhone})`
+        : 'ฉุกเฉิน: -';
+
       row.getCell(1).value = 'ไป-กลับ (มมส)';
       row.getCell(2).value = p.gender || '-';
       row.getCell(3).value = `มมส #${idx + 1}`;
       row.getCell(4).value = `${p.name}${p.nickname && p.nickname !== '-' ? ` (${p.nickname})` : ''}\n${p.callsign} • โทร: ${p.phone}`;
-      row.getCell(5).value = formatPersonMedicalSummary(p);
-      row.getCell(6).value = p.medicalEquipmentNeeded || '-';
-      row.getCell(7).value = p.specialItemsNeeded || (p.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
-      row.getCell(8).value = '☐ เตรียมแล้ว (นอกหอ)';
+      row.getCell(5).value = 'ไป-กลับเอง (ไม่พักหอ)';
+      row.getCell(6).value = formatPersonMedicalSummary(p);
+      row.getCell(7).value = p.medicalEquipmentNeeded || '-';
+      row.getCell(8).value = p.specialItemsNeeded || (p.isSpecialCare ? 'ต้องดูแลเป็นพิเศษ' : '-');
+      row.getCell(9).value = consentTxt;
+      row.getCell(10).value = `${emerTxt}\n☐ เตรียมแล้ว (นอกหอ)`;
 
       headers.forEach((h, i) => {
         const cell = row.getCell(i + 1);
@@ -471,7 +502,7 @@ function populateDormitoryStaffMedicalSheet(ws, roomList, msuList = []) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
         cell.border = thinBorder;
       });
-      row.height = 32;
+      row.height = 34;
       currentRow++;
     });
   }

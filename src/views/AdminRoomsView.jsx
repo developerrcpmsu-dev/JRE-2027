@@ -27,8 +27,10 @@ import {
   FileText,
   Image as ImageIcon,
   ShieldCheck,
-  PackageCheck
+  PackageCheck,
+  Key
 } from 'lucide-react';
+import { getHealthConsentInfo } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import {
   DORMITORY_ROOM_CONFIGS,
@@ -42,7 +44,18 @@ import {
   downloadCsv
 } from '../utils/documentExporters';
 
-function RoomOccupantCell({ person, slotIndex, room, accentColor, onSelectPerson, onPreviewAvatar }) {
+function RoomOccupantCell({
+  person,
+  slotIndex,
+  room,
+  accentColor,
+  onSelectPerson,
+  onPreviewAvatar,
+  onTogglePersonOptOut,
+  onTogglePersonKeyHeld,
+  onTogglePersonKeyReturned,
+  busyKeyId
+}) {
   if (!person) {
     return <span className="text-slate-500 italic text-xs">- ห้องว่าง -</span>;
   }
@@ -54,14 +67,18 @@ function RoomOccupantCell({ person, slotIndex, room, accentColor, onSelectPerson
   const avatarBorder = isBlue ? 'border-sky-400/50' : 'border-pink-400/50';
   const badgeHover = isBlue ? 'group-hover:bg-sky-900/40 group-hover:text-sky-200' : 'group-hover:bg-pink-900/40 group-hover:text-pink-200';
   const hasAlert = person.hasMedicalHistory || person.hasFoodAllergy || person.isSpecialCare;
+  const isBusy = busyKeyId === person.targetUpdateId;
+  const consentInfo = person.healthConsent || getHealthConsentInfo(person.raw);
 
   return (
     <div
       onClick={() => onSelectPerson(person, room)}
       className={`group p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
-        hasAlert
-          ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-400'
-          : `bg-slate-900/80 border-slate-800 ${hoverBorder}`
+        person.dormOptOut
+          ? 'bg-amber-950/20 border-amber-500/45 hover:border-amber-400'
+          : hasAlert
+            ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-400'
+            : `bg-slate-900/80 border-slate-800 ${hoverBorder}`
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -155,12 +172,90 @@ function RoomOccupantCell({ person, slotIndex, room, accentColor, onSelectPerson
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                 : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
             }`}
-            title={person.isHealthShared ? 'เปิดเผยให้เพื่อนร่วมห้องเห็น' : 'เมทมองไม่เห็น (ผู้พักขอซ่อนข้อมูลสุขภาพ)'}
+            title={`${consentInfo.fullLabel} (${consentInfo.statusLabel})`}
           >
-            {person.isHealthShared ? '👁️ เมทเห็น' : '🔒 เมทไม่เห็น'}
+            {consentInfo.fullLabel}
           </span>
         </div>
       )}
+
+      {/* Room Stay & Key Control Strip */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="mt-2 pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1.5 no-print"
+      >
+        <div className="flex flex-wrap items-center gap-1">
+          {person.dormOptOut ? (
+            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black">
+              🚫 ไม่พักหอ ({person.dormOptOutBy === 'admin' ? 'Admin ติ๊ก' : 'เจ้าตัวแจ้ง'})
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+              🛏️ พักหอ
+            </span>
+          )}
+          {!hasAlert && (
+            <span
+              className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                person.isHealthShared
+                  ? 'bg-slate-800/90 text-slate-300 border-slate-700'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+              }`}
+              title={consentInfo.fullLabel}
+            >
+              {consentInfo.fullLabel}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1">
+          {onTogglePersonKeyHeld && (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onTogglePersonKeyHeld(person, !person.roomKeyHeld)}
+              className={`px-2 py-0.5 rounded-md text-[10px] font-black border transition-all cursor-pointer disabled:opacity-50 ${
+                person.roomKeyHeld
+                  ? 'bg-sky-500/25 text-sky-200 border-sky-400/60 shadow-sm'
+                  : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white hover:border-slate-500'
+              }`}
+              title="ติ๊ก/ยกเลิกการถือหรือรับกุญแจห้องพัก"
+            >
+              {person.roomKeyHeld ? '🔑 ถือกุญแจ ✓' : '🔑 รับกุญแจ'}
+            </button>
+          )}
+          {onTogglePersonKeyReturned && (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onTogglePersonKeyReturned(person, !person.roomKeyReturned)}
+              className={`px-2 py-0.5 rounded-md text-[10px] font-black border transition-all cursor-pointer disabled:opacity-50 ${
+                person.roomKeyReturned
+                  ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60 shadow-sm'
+                  : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-emerald-200 hover:border-emerald-500/40'
+              }`}
+              title="ติ๊ก/ยกเลิกการคืนกุญแจห้องพัก"
+            >
+              {person.roomKeyReturned ? '✅ คืนแล้ว' : '📦 คืนกุญแจ'}
+            </button>
+          )}
+          {onTogglePersonOptOut && (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onTogglePersonOptOut(person, !person.dormOptOut)}
+              className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold border transition-all cursor-pointer disabled:opacity-50 ${
+                person.dormOptOut
+                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
+                  : 'bg-amber-600/15 text-amber-300 border-amber-500/30 hover:bg-amber-600/25'
+              }`}
+              title={person.dormOptOut ? 'สลับกลับมาเข้าพักหอพัก' : 'ติ๊กว่าไม่ประสงค์พักหอพัก'}
+            >
+              {person.dormOptOut ? 'กลับมาพัก' : 'ไม่พักหอ'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -173,7 +268,12 @@ function RoomZoneTable({
   targetCount,
   accentColor,
   onSelectPerson,
-  onPreviewAvatar
+  onPreviewAvatar,
+  onTogglePersonOptOut,
+  onTogglePersonKeyHeld,
+  onTogglePersonKeyReturned,
+  onBulkRoomKeyAction,
+  busyKeyId
 }) {
   const isBlue = accentColor === 'blue';
   return (
@@ -261,6 +361,10 @@ function RoomZoneTable({
                       accentColor={accentColor}
                       onSelectPerson={onSelectPerson}
                       onPreviewAvatar={onPreviewAvatar}
+                      onTogglePersonOptOut={onTogglePersonOptOut}
+                      onTogglePersonKeyHeld={onTogglePersonKeyHeld}
+                      onTogglePersonKeyReturned={onTogglePersonKeyReturned}
+                      busyKeyId={busyKeyId}
                     />
                   </td>
 
@@ -272,25 +376,71 @@ function RoomZoneTable({
                       accentColor={accentColor}
                       onSelectPerson={onSelectPerson}
                       onPreviewAvatar={onPreviewAvatar}
+                      onTogglePersonOptOut={onTogglePersonOptOut}
+                      onTogglePersonKeyHeld={onTogglePersonKeyHeld}
+                      onTogglePersonKeyReturned={onTogglePersonKeyReturned}
+                      busyKeyId={busyKeyId}
                     />
                   </td>
 
-                  <td className="py-3.5 px-4 text-center">
+                  <td className="py-3.5 px-4 text-center space-y-1.5">
                     <span
                       className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-black border inline-block ${
-                        room.occupants.length >= (room.capacity || 2)
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : room.occupants.length > 0
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        room.stayingCount === 0 && room.optedOutCount > 0
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : room.occupants.length >= (room.capacity || 2)
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : room.occupants.length > 0
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
                       }`}
                     >
-                      {room.occupants.length >= (room.capacity || 2)
-                        ? `ครบ ${room.occupants.length}/${room.capacity || 2} คน ✓`
-                        : `${room.occupants.length}/${room.capacity || 2} คน`}
+                      {room.optedOutCount > 0
+                        ? `พัก ${room.stayingCount} • ไม่พัก ${room.optedOutCount}`
+                        : room.occupants.length >= (room.capacity || 2)
+                          ? `ครบ ${room.occupants.length}/${room.capacity || 2} คน ✓`
+                          : `${room.occupants.length}/${room.capacity || 2} คน`}
                     </span>
+
+                    <div
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                        room.allKeysReturned
+                          ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                          : room.keysIssuedCount > 0
+                            ? 'bg-sky-950/60 text-sky-300 border-sky-500/40'
+                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      🔑 {room.keySummaryLabel}
+                    </div>
+
+                    {onBulkRoomKeyAction && room.stayingCount > 0 && (
+                      <div className="flex flex-col gap-1 pt-0.5 no-print">
+                        {room.activeKeyHolders.length < room.stayingCount && !room.allKeysReturned && (
+                          <button
+                            type="button"
+                            disabled={busyKeyId === `room-${room.room}`}
+                            onClick={() => onBulkRoomKeyAction(room, 'issue_all')}
+                            className="px-2 py-0.5 rounded bg-sky-600/25 hover:bg-sky-600/40 text-sky-200 border border-sky-500/40 text-[9px] font-black cursor-pointer disabled:opacity-50"
+                          >
+                            🔑 จ่ายครบทั้งห้อง
+                          </button>
+                        )}
+                        {room.keysIssuedCount > 0 && !room.allKeysReturned && (
+                          <button
+                            type="button"
+                            disabled={busyKeyId === `room-${room.room}`}
+                            onClick={() => onBulkRoomKeyAction(room, 'return_all')}
+                            className="px-2 py-0.5 rounded bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 text-[9px] font-black cursor-pointer disabled:opacity-50"
+                          >
+                            ✅ คืนครบทั้งห้อง
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {hasRoomMedicalAlert && (
-                      <span className="block mt-1 text-[9px] font-bold text-rose-300/90">
+                      <span className="block text-[9px] font-bold text-rose-300/90">
                         🩺 เตรียมยา/อุปกรณ์
                       </span>
                     )}
@@ -323,6 +473,185 @@ export default function AdminRoomsView({
   const [smartPlanModal, setSmartPlanModal] = useState(null);
   const [isApplyingPlan, setIsApplyingPlan] = useState(false);
   const [isMovingSingle, setIsMovingSingle] = useState(false);
+  const [busyKeyId, setBusyKeyId] = useState('');
+
+  const syncSelectedPerson = (person, updates) => {
+    setSelectedPerson(prev => {
+      if (!prev || prev.targetUpdateId !== person.targetUpdateId) return prev;
+      const mergedRaw = { ...(prev.raw || {}), ...updates };
+      const consent = getHealthConsentInfo(mergedRaw);
+      return {
+        ...prev,
+        ...updates,
+        dormOptOut: Boolean(mergedRaw.dorm_opt_out),
+        dormOptOutBy: mergedRaw.dorm_opt_out_by || '',
+        dormOptOutAt: mergedRaw.dorm_opt_out_at || '',
+        roomKeyHeld: Boolean(mergedRaw.room_key_held),
+        roomKeyIssuedAt: mergedRaw.room_key_issued_at || '',
+        roomKeyIssuedBy: mergedRaw.room_key_issued_by || '',
+        roomKeyReturned: Boolean(mergedRaw.room_key_returned),
+        roomKeyReturnedAt: mergedRaw.room_key_returned_at || '',
+        roomKeyReturnedBy: mergedRaw.room_key_returned_by || '',
+        isHealthShared: consent.isShared,
+        healthConsent: consent,
+        raw: mergedRaw
+      };
+    });
+  };
+
+  const handleTogglePersonOptOut = async (person, nextOptOut) => {
+    if (!onUpdateAllocation || busyKeyId) return;
+    const confirmed = await confirmAction({
+      title: nextOptOut ? 'ยืนยันแจ้งไม่ประสงค์พักหอพัก' : 'ยืนยันเปลี่ยนกลับมาเข้าพักหอพัก',
+      message: nextOptOut
+        ? `ต้องการบันทึกว่า "${person.name}" ไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้ ใช่หรือไม่? (ข้อมูลจะซิงค์กับหน้าผู้สมัครและใบเซ็นชื่ออัตโนมัติ)`
+        : `ต้องการเปลี่ยนสถานะ "${person.name}" กลับมาเข้าพักหอพักที่มหาลัยจัดเตรียมให้ ใช่หรือไม่?`,
+      confirmText: nextOptOut ? '🚫 ยืนยันไม่พักหอพัก' : '🛏️ ยืนยันเข้าพักหอพัก',
+      variant: nextOptOut ? 'warning' : 'success'
+    });
+    if (!confirmed) return;
+
+    setBusyKeyId(person.targetUpdateId);
+    try {
+      const now = new Date().toISOString();
+      const payload = {
+        dorm_opt_out: nextOptOut,
+        dorm_opt_out_by: 'admin',
+        dorm_opt_out_at: now,
+        attendance_need_accommodation: !nextOptOut && !person.isMsu
+      };
+      await onUpdateAllocation(person.targetUpdateId, payload);
+      syncSelectedPerson(person, payload);
+      if (triggerToast) {
+        triggerToast(
+          nextOptOut
+            ? `🚫 บันทึกแล้ว: ${person.name} ไม่ประสงค์พักหอพัก`
+            : `🛏️ บันทึกแล้ว: ${person.name} เข้าพักหอพักปกติ`,
+          'info'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update dorm_opt_out:', err);
+      if (triggerToast) triggerToast(err?.message || 'อัปเดตสถานะการพักหอพักไม่สำเร็จ กรุณาลองใหม่', 'error');
+    } finally {
+      setBusyKeyId('');
+    }
+  };
+
+  const handleTogglePersonKeyHeld = async (person, nextHeld) => {
+    if (!onUpdateAllocation || busyKeyId) return;
+    setBusyKeyId(person.targetUpdateId);
+    try {
+      const now = new Date().toISOString();
+      const payload = {
+        room_key_held: nextHeld,
+        room_key_issued_at: nextHeld ? now : '',
+        room_key_issued_by: nextHeld ? 'admin' : '',
+        room_key_returned: nextHeld ? Boolean(person.roomKeyReturned) : false,
+        room_key_returned_at: nextHeld ? (person.roomKeyReturnedAt || '') : '',
+        room_key_returned_by: nextHeld ? (person.roomKeyReturnedBy || '') : ''
+      };
+      await onUpdateAllocation(person.targetUpdateId, payload);
+      syncSelectedPerson(person, payload);
+      if (triggerToast) {
+        triggerToast(
+          nextHeld
+            ? `🔑 บันทึกแล้ว: กุญแจห้องอยู่ที่ ${person.name}`
+            : `ยกเลิกสถานะถือ/รับกุญแจของ ${person.name} แล้ว`,
+          nextHeld ? 'success' : 'info'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update room_key_held:', err);
+      if (triggerToast) triggerToast(err?.message || 'อัปเดตสถานะกุญแจไม่สำเร็จ กรุณาลองใหม่', 'error');
+    } finally {
+      setBusyKeyId('');
+    }
+  };
+
+  const handleTogglePersonKeyReturned = async (person, nextReturned) => {
+    if (!onUpdateAllocation || busyKeyId) return;
+    setBusyKeyId(person.targetUpdateId);
+    try {
+      const now = new Date().toISOString();
+      const payload = {
+        room_key_held: nextReturned ? true : Boolean(person.roomKeyHeld),
+        room_key_issued_at: person.roomKeyIssuedAt || (nextReturned ? now : ''),
+        room_key_issued_by: person.roomKeyIssuedBy || (nextReturned ? 'admin' : ''),
+        room_key_returned: nextReturned,
+        room_key_returned_at: nextReturned ? now : '',
+        room_key_returned_by: nextReturned ? 'admin' : ''
+      };
+      await onUpdateAllocation(person.targetUpdateId, payload);
+      syncSelectedPerson(person, payload);
+      if (triggerToast) {
+        triggerToast(
+          nextReturned
+            ? `✅ เช็คคืนกุญแจห้องจาก ${person.name} เรียบร้อยแล้ว`
+            : `ยกเลิกสถานะคืนกุญแจของ ${person.name} แล้ว`,
+          nextReturned ? 'success' : 'info'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update room_key_returned:', err);
+      if (triggerToast) triggerToast(err?.message || 'อัปเดตสถานะการคืนกุญแจไม่สำเร็จ กรุณาลองใหม่', 'error');
+    } finally {
+      setBusyKeyId('');
+    }
+  };
+
+  const handleBulkRoomKeyAction = async (room, mode) => {
+    if (!onUpdateAllocation || busyKeyId) return;
+    const targets = room.occupants.filter(o => !o.dormOptOut);
+    if (targets.length === 0) return;
+
+    const isIssue = mode === 'issue_all';
+    const confirmed = await confirmAction({
+      title: isIssue ? `จ่ายกุญแจ ${room.roomLabel} ทั้งห้อง` : `เช็คคืนกุญแจ ${room.roomLabel} ครบทั้งห้อง`,
+      message: isIssue
+        ? `ต้องการติ๊กว่าผู้เข้าพักใน${room.roomLabel} ทั้ง ${targets.length} คนได้รับกุญแจห้องพักแล้ว ใช่หรือไม่?`
+        : `ต้องการเช็คคืนกุญแจ${room.roomLabel} ของผู้เข้าพักทั้ง ${targets.length} คน ใช่หรือไม่?`,
+      confirmText: isIssue ? '🔑 จ่ายกุญแจทั้งห้อง' : '✅ ยืนยันคืนกุญแจทั้งห้อง',
+      variant: isIssue ? 'info' : 'success'
+    });
+    if (!confirmed) return;
+
+    setBusyKeyId(`room-${room.room}`);
+    try {
+      const now = new Date().toISOString();
+      for (const p of targets) {
+        const payload = isIssue
+          ? {
+              room_key_held: true,
+              room_key_issued_at: p.roomKeyIssuedAt || now,
+              room_key_issued_by: p.roomKeyIssuedBy || 'admin'
+            }
+          : {
+              room_key_held: true,
+              room_key_issued_at: p.roomKeyIssuedAt || now,
+              room_key_issued_by: p.roomKeyIssuedBy || 'admin',
+              room_key_returned: true,
+              room_key_returned_at: now,
+              room_key_returned_by: 'admin'
+            };
+        await onUpdateAllocation(p.targetUpdateId, payload);
+        syncSelectedPerson(p, payload);
+      }
+      if (triggerToast) {
+        triggerToast(
+          isIssue
+            ? `🔑 บันทึกจ่ายกุญแจ${room.roomLabel} ครบทั้ง ${targets.length} คนเรียบร้อย`
+            : `✅ เช็คคืนกุญแจ${room.roomLabel} ครบทั้งห้องเรียบร้อย`,
+          'success'
+        );
+      }
+    } catch (err) {
+      console.error('Failed bulk room key action:', err);
+      if (triggerToast) triggerToast(err?.message || 'อัปเดตสถานะกุญแจทั้งห้องไม่สำเร็จ กรุณาลองใหม่', 'error');
+    } finally {
+      setBusyKeyId('');
+    }
+  };
 
   const roomData = useMemo(() => buildDormitoryRoomData(registrations), [registrations]);
 
@@ -403,22 +732,22 @@ export default function AdminRoomsView({
 
     text += `🚪 ห้องพักชาย (7 ห้อง / 14 คน — ชั้น 1):\n`;
     roomData.maleRooms.forEach(r => {
-      text += `  • ห้อง ${r.room}: `;
+      text += `  • ห้อง ${r.room} [${r.keySummaryLabel}]: `;
       if (r.occupants.length === 0) {
         text += `(ว่าง)\n`;
       } else {
-        const names = r.occupants.map((p, idx) => `${idx + 1}. ${p.name} (${p.nickname} / ${p.callsign})`).join('  |  ');
+        const names = r.occupants.map((p, idx) => `${idx + 1}. ${p.name} (${p.nickname} / ${p.callsign})${p.dormOptOut ? ' [ไม่พักหอ]' : ''} [${p.keyStatusLabel}]`).join('  |  ');
         text += `${names}\n`;
       }
     });
 
     text += `\n🚪 ห้องพักหญิง (3 ห้อง / 6 คน — ชั้น 1):\n`;
     roomData.femaleRooms.forEach(r => {
-      text += `  • ห้อง ${r.room}: `;
+      text += `  • ห้อง ${r.room} [${r.keySummaryLabel}]: `;
       if (r.occupants.length === 0) {
         text += `(ว่าง)\n`;
       } else {
-        const names = r.occupants.map((p, idx) => `${idx + 1}. ${p.name} (${p.nickname} / ${p.callsign})`).join('  |  ');
+        const names = r.occupants.map((p, idx) => `${idx + 1}. ${p.name} (${p.nickname} / ${p.callsign})${p.dormOptOut ? ' [ไม่พักหอ]' : ''} [${p.keyStatusLabel}]`).join('  |  ');
         text += `${names}\n`;
       }
     });
@@ -463,11 +792,12 @@ export default function AdminRoomsView({
   // Export to CSV (Staff Room + Health + Medicines + Items)
   const handleExportCsv = () => {
     try {
-      let csv = 'ห้อง,เพศ,ลำดับ/เตียง,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,โรคประจำตัว,แพ้อาหาร/ยา,หมู่เลือด,ยาที่ต้องการ,ของที่ต้องใช้/ดูแลพิเศษ\n';
+      let csv = 'ห้อง,เพศ,ลำดับ/เตียง,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,สถานะเข้าพัก,สถานะกุญแจห้อง,โรคประจำตัว,แพ้อาหาร/ยา,หมู่เลือด,เปิดเผยข้อมูลสุขภาพ (ผู้กด),ยาที่ต้องการ,ของที่ต้องใช้/ดูแลพิเศษ,ผู้ติดต่อฉุกเฉิน\n';
       roomData.rooms.forEach(r => {
         for (let i = 0; i < 2; i++) {
           const p = r.occupants[i];
-          csv += `"${r.roomLabel}","${r.gender}","${i + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.medicalHistory : '-'}","${p ? p.foodAllergy : '-'}","${p ? p.bloodGroup : '-'}","${p?.medicalEquipmentNeeded || '-'}","${p?.specialItemsNeeded || '-'}"\n`;
+          const consent = p ? (p.healthConsent || getHealthConsentInfo(p.raw)) : null;
+          csv += `"${r.roomLabel}","${r.gender}","${i + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.stayStatusLabel : '-'}","${p ? p.keyStatusLabel : '-'}","${p ? p.medicalHistory : '-'}","${p ? p.foodAllergy : '-'}","${p ? p.bloodGroup : '-'}","${consent ? `${consent.statusLabel} (${consent.actorLabel})` : '-'}","${p?.medicalEquipmentNeeded || '-'}","${p?.specialItemsNeeded || '-'}","${p && p.emergencyName !== '-' ? `${p.emergencyName} (${p.emergencyPhone})` : '-'}"\n`;
         }
       });
       downloadCsv(csv, '4_ใบเตรียมยา_ของใช้_โรคประจำตัวตามห้อง_Staff_JRE2027.csv');
@@ -730,6 +1060,30 @@ export default function AdminRoomsView({
             <span className="text-[10px] text-pink-400">ห้อง 108 - 110 (ห้องละ 2 คน)</span>
           </div>
         </div>
+
+        {/* LINKED STAY & KEY TRACKER SUMMARY */}
+        <div className="mt-3 p-3 rounded-2xl bg-slate-900/75 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+              🛏️ เข้าพักหอจริง: {roomData.totalStaying} คน
+            </span>
+            <span className={`px-2.5 py-1 rounded-lg font-bold border ${
+              roomData.totalOptedOut > 0
+                ? 'bg-amber-500/20 text-amber-200 border-amber-400/50'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}>
+              🚫 ไม่ประสงค์พักหอ: {roomData.totalOptedOut} คน
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30 font-bold">
+              🔑 จ่ายกุญแจแล้ว: {roomData.totalKeysIssued} คน (อยู่ที่ผู้เข้าพักตอนนี้ {roomData.totalKeysUnreturned} ดอก)
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+              📦 คืนกุญแจแล้ว: {roomData.totalKeysReturned}/{roomData.totalKeysIssued}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* DIAGNOSTIC ALERT BANNER WHEN REBALANCE IS NEEDED */}
@@ -854,6 +1208,11 @@ export default function AdminRoomsView({
               accentColor="blue"
               onSelectPerson={handleOpenPersonProfile}
               onPreviewAvatar={setPreviewDocModal}
+              onTogglePersonOptOut={handleTogglePersonOptOut}
+              onTogglePersonKeyHeld={handleTogglePersonKeyHeld}
+              onTogglePersonKeyReturned={handleTogglePersonKeyReturned}
+              onBulkRoomKeyAction={handleBulkRoomKeyAction}
+              busyKeyId={busyKeyId}
             />
           )}
 
@@ -867,6 +1226,11 @@ export default function AdminRoomsView({
               accentColor="pink"
               onSelectPerson={handleOpenPersonProfile}
               onPreviewAvatar={setPreviewDocModal}
+              onTogglePersonOptOut={handleTogglePersonOptOut}
+              onTogglePersonKeyHeld={handleTogglePersonKeyHeld}
+              onTogglePersonKeyReturned={handleTogglePersonKeyReturned}
+              onBulkRoomKeyAction={handleBulkRoomKeyAction}
+              busyKeyId={busyKeyId}
             />
           )}
         </div>
@@ -915,16 +1279,44 @@ export default function AdminRoomsView({
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right space-y-1">
                     <span
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-black border ${
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-black border inline-block ${
                         isFull ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       }`}
                     >
-                      🛏️ {room.occupants.length} / {room.capacity} เตียง
+                      🛏️ พัก {room.stayingCount}/{room.capacity}{room.optedOutCount > 0 ? ` (ไม่พัก ${room.optedOutCount})` : ''}
                     </span>
+                    <div className="text-[10px] font-bold text-sky-300">
+                      🔑 {room.keySummaryLabel}
+                    </div>
                   </div>
                 </div>
+
+                {onUpdateAllocation && room.stayingCount > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 pb-1">
+                    {room.activeKeyHolders.length < room.stayingCount && !room.allKeysReturned && (
+                      <button
+                        type="button"
+                        disabled={busyKeyId === `room-${room.room}`}
+                        onClick={() => handleBulkRoomKeyAction(room, 'issue_all')}
+                        className="px-2.5 py-1 rounded-lg bg-sky-600/25 hover:bg-sky-600/40 text-sky-200 border border-sky-500/40 text-[10px] font-black cursor-pointer disabled:opacity-50"
+                      >
+                        🔑 จ่ายกุญแจครบทั้งห้อง
+                      </button>
+                    )}
+                    {room.keysIssuedCount > 0 && !room.allKeysReturned && (
+                      <button
+                        type="button"
+                        disabled={busyKeyId === `room-${room.room}`}
+                        onClick={() => handleBulkRoomKeyAction(room, 'return_all')}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 text-[10px] font-black cursor-pointer disabled:opacity-50"
+                      >
+                        ✅ เช็คคืนครบทั้งห้อง
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2.5">
                   {room.occupants.length === 0 ? (
@@ -1003,6 +1395,68 @@ export default function AdminRoomsView({
                               <span className="text-emerald-400 font-mono text-[10px]">เตียงคู่ ✓</span>
                             </div>
                           )}
+
+                          {/* Stay Opt-Out, Key Control & Health Consent Actor in Card View */}
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1.5"
+                          >
+                            <div className="flex flex-wrap items-center gap-1">
+                              {person.dormOptOut ? (
+                                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black">
+                                  🚫 ไม่ประสงค์พักหอ ({person.dormOptOutBy === 'admin' ? 'Admin' : 'เจ้าตัว'})
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                                  🛏️ เข้าพักหอ
+                                </span>
+                              )}
+                              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">
+                                {(person.healthConsent || getHealthConsentInfo(person.raw)).fullLabel}
+                              </span>
+                            </div>
+
+                            {onUpdateAllocation && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={busyKeyId === person.targetUpdateId}
+                                  onClick={() => handleTogglePersonKeyHeld(person, !person.roomKeyHeld)}
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-black border cursor-pointer disabled:opacity-50 ${
+                                    person.roomKeyHeld
+                                      ? 'bg-sky-500/25 text-sky-200 border-sky-400/60'
+                                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                                  }`}
+                                >
+                                  {person.roomKeyHeld ? '🔑 ถือกุญแจ ✓' : '🔑 รับกุญแจ'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busyKeyId === person.targetUpdateId}
+                                  onClick={() => handleTogglePersonKeyReturned(person, !person.roomKeyReturned)}
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-black border cursor-pointer disabled:opacity-50 ${
+                                    person.roomKeyReturned
+                                      ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60'
+                                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-emerald-200'
+                                  }`}
+                                >
+                                  {person.roomKeyReturned ? '✅ คืนแล้ว' : '📦 คืนกุญแจ'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busyKeyId === person.targetUpdateId}
+                                  onClick={() => handleTogglePersonOptOut(person, !person.dormOptOut)}
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer disabled:opacity-50 ${
+                                    person.dormOptOut
+                                      ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                                      : 'bg-amber-600/15 text-amber-300 border-amber-500/30'
+                                  }`}
+                                >
+                                  {person.dormOptOut ? 'กลับมาพัก' : 'ไม่พักหอ'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })
@@ -1315,6 +1769,77 @@ export default function AdminRoomsView({
                   🏠 นิสิต/บุคลากร มมส พักอาศัยในพื้นที่ เดินทางไป-กลับเอง
                 </div>
               ) : null}
+
+              {/* Dorm Opt-Out & Room Key Management in Modal */}
+              {!selectedPerson.isMsu && (
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-300 font-bold">🛏️ การเข้าพัก & 🔑 กุญแจห้องพัก:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                        selectedPerson.dormOptOut
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      }`}>
+                        {selectedPerson.dormOptOut ? '🚫 ไม่ประสงค์พักหอพัก' : '✅ เข้าพักหอพัก'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                        selectedPerson.roomKeyReturned
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : selectedPerson.roomKeyHeld
+                            ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}>
+                        {selectedPerson.roomKeyReturned
+                          ? '✅ คืนกุญแจแล้ว'
+                          : selectedPerson.roomKeyHeld
+                            ? '🔑 ถือกุญแจห้องอยู่'
+                            : '⏳ ยังไม่รับกุญแจ'}
+                      </span>
+                    </div>
+                  </div>
+                  {onUpdateAllocation && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={busyKeyId === selectedPerson.targetUpdateId}
+                        onClick={() => handleTogglePersonKeyHeld(selectedPerson, !selectedPerson.roomKeyHeld)}
+                        className={`px-3 py-1 rounded-lg text-[11px] font-black border cursor-pointer disabled:opacity-50 ${
+                          selectedPerson.roomKeyHeld
+                            ? 'bg-sky-500/25 text-sky-200 border-sky-400/60'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {selectedPerson.roomKeyHeld ? '🔑 ยกเลิกสถานะถือกุญแจ' : '🔑 ติ๊ก: กุญแจอยู่ที่คนนี้'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyKeyId === selectedPerson.targetUpdateId}
+                        onClick={() => handleTogglePersonKeyReturned(selectedPerson, !selectedPerson.roomKeyReturned)}
+                        className={`px-3 py-1 rounded-lg text-[11px] font-black border cursor-pointer disabled:opacity-50 ${
+                          selectedPerson.roomKeyReturned
+                            ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-emerald-200'
+                        }`}
+                      >
+                        {selectedPerson.roomKeyReturned ? '✅ คืนกุญแจแล้ว (กดเพื่อยกเลิก)' : '📦 เช็ค: คืนกุญแจแล้ว'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyKeyId === selectedPerson.targetUpdateId}
+                        onClick={() => handleTogglePersonOptOut(selectedPerson, !selectedPerson.dormOptOut)}
+                        className={`px-3 py-1 rounded-lg text-[11px] font-black border cursor-pointer disabled:opacity-50 ${
+                          selectedPerson.dormOptOut
+                            ? 'bg-emerald-600/25 text-emerald-200 border-emerald-500/40'
+                            : 'bg-amber-600/20 text-amber-200 border-amber-500/40'
+                        }`}
+                      >
+                        {selectedPerson.dormOptOut ? '🛏️ สลับกลับมาเข้าพักหอ' : '🚫 ติ๊ก: ไม่ประสงค์พักหอพัก'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* General Info Grid */}
@@ -1415,70 +1940,82 @@ export default function AdminRoomsView({
             </div>
 
             {/* Roommate Health Privacy Setting */}
-            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/40 text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-indigo-300 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>การเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้อง:</span>
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
-                    selectedPerson.isHealthShared
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                  }`}
-                >
-                  {selectedPerson.isHealthShared ? '👁️ เปิดเผยให้เมททราบ' : '🔒 ซ่อนจากเมท (ปิดเป็นความลับ)'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                {selectedPerson.isHealthShared
-                  ? 'ผู้เข้าพักยินยอมให้เพื่อนร่วมห้องเห็นข้อมูลโรคประจำตัวและอาการแพ้ เพื่อความปลอดภัยในการปฐมพยาบาล'
-                  : 'ผู้เข้าพักเลือกไม่เปิดเผยข้อมูลสุขภาพให้เมททราบ (เฉพาะ Admin และทีมแพทย์สนามเท่านั้นที่มองเห็น)'}
-              </p>
-              {onUpdateAllocation && (
-                <div className="pt-1 flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isMovingSingle}
-                    onClick={async () => {
-                      const nextVal = !selectedPerson.isHealthShared;
-                      const targetId = selectedPerson.targetUpdateId;
-                      const confirmed = await confirmAction({
-                        title: nextVal ? 'ยืนยันเปิดเผยข้อมูลสุขภาพให้เมททราบ' : 'ยืนยันซ่อนข้อมูลสุขภาพจากเพื่อนร่วมห้อง',
-                        message: nextVal
-                          ? `ต้องการอนุญาตให้เพื่อนร่วมห้องเห็นข้อมูลสุขภาพของ ${selectedPerson.name} เพื่อช่วยดูแลกรณีฉุกเฉิน ใช่หรือไม่?`
-                          : `ต้องการซ่อนข้อมูลสุขภาพของ ${selectedPerson.name} จากเพื่อนร่วมห้อง (เห็นเฉพาะ Admin และทีมแพทย์) ใช่หรือไม่?`,
-                        confirmText: nextVal ? '👁️ ยืนยันเปิดเผย' : '🔒 ยืนยันซ่อนจากเมท',
-                        variant: nextVal ? 'info' : 'warning'
-                      });
-                      if (!confirmed) return;
-                      setIsMovingSingle(true);
-                      try {
-                        await onUpdateAllocation(targetId, { share_health_with_roommate: nextVal });
-                        setSelectedPerson(prev => ({
-                          ...prev,
-                          isHealthShared: nextVal,
-                          raw: { ...(prev.raw || {}), share_health_with_roommate: nextVal }
-                        }));
-                        if (triggerToast) {
-                          triggerToast(nextVal ? '✓ บันทึก: เปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบแล้ว' : '✓ บันทึก: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะแพทย์/Admin มองเห็น)', 'info');
-                        }
-                      } catch (err) {
-                        console.error('Failed to toggle health privacy in room modal:', err);
-                        if (triggerToast) triggerToast(err?.message || 'บันทึกการตั้งค่าข้อมูลสุขภาพไม่สำเร็จ กรุณาลองใหม่', 'error');
-                      } finally {
-                        setIsMovingSingle(false);
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1.5 shadow"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>สลับเป็น: {selectedPerson.isHealthShared ? '🔒 ซ่อนจากเมท' : '👁️ เปิดเผยให้เมททราบ'}</span>
-                  </button>
+            {(() => {
+              const modalConsent = selectedPerson.healthConsent || getHealthConsentInfo(selectedPerson.raw);
+              return (
+                <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/40 text-xs space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>การเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้อง:</span>
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                          selectedPerson.isHealthShared
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        }`}
+                      >
+                        {selectedPerson.isHealthShared ? '👁️ เปิดเผยให้เมททราบ' : '🔒 ซ่อนจากเมท (ปิดเป็นความลับ)'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-slate-200 border border-slate-700">
+                        {modalConsent.fullLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    {selectedPerson.isHealthShared
+                      ? `สถานะ: ยินยอมเปิดเผยให้เพื่อนร่วมห้องเห็นข้อมูลโรคประจำตัวและอาการแพ้ (${modalConsent.actorLabel})`
+                      : `สถานะ: ไม่ยินยอมเปิดเผยข้อมูลสุขภาพให้เมททราบ (${modalConsent.actorLabel}) — เฉพาะ Admin และทีมแพทย์สนามเท่านั้นที่มองเห็น`}
+                  </p>
+                  {onUpdateAllocation && (
+                    <div className="pt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isMovingSingle}
+                        onClick={async () => {
+                          const nextVal = !selectedPerson.isHealthShared;
+                          const targetId = selectedPerson.targetUpdateId;
+                          const confirmed = await confirmAction({
+                            title: nextVal ? 'ยืนยันเปิดเผยข้อมูลสุขภาพให้เมททราบ' : 'ยืนยันซ่อนข้อมูลสุขภาพจากเพื่อนร่วมห้อง',
+                            message: nextVal
+                              ? `ต้องการอนุญาตให้เพื่อนร่วมห้องเห็นข้อมูลสุขภาพของ ${selectedPerson.name} เพื่อช่วยดูแลกรณีฉุกเฉิน ใช่หรือไม่? (บันทึกว่า Admin กดให้)`
+                              : `ต้องการซ่อนข้อมูลสุขภาพของ ${selectedPerson.name} จากเพื่อนร่วมห้อง (เห็นเฉพาะ Admin และทีมแพทย์) ใช่หรือไม่? (บันทึกว่า Admin กดให้)`,
+                            confirmText: nextVal ? '👁️ ยืนยันเปิดเผย (Admin)' : '🔒 ยืนยันซ่อนจากเมท (Admin)',
+                            variant: nextVal ? 'info' : 'warning'
+                          });
+                          if (!confirmed) return;
+                          setIsMovingSingle(true);
+                          try {
+                            const now = new Date().toISOString();
+                            const payload = {
+                              share_health_with_roommate: nextVal,
+                              health_consent_by: 'admin',
+                              health_consent_at: now
+                            };
+                            await onUpdateAllocation(targetId, payload);
+                            syncSelectedPerson(selectedPerson, payload);
+                            if (triggerToast) {
+                              triggerToast(nextVal ? '✓ บันทึก (Admin): เปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบแล้ว' : '✓ บันทึก (Admin): ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย', 'info');
+                            }
+                          } catch (err) {
+                            console.error('Failed to toggle health privacy in room modal:', err);
+                            if (triggerToast) triggerToast(err?.message || 'บันทึกการตั้งค่าข้อมูลสุขภาพไม่สำเร็จ กรุณาลองใหม่', 'error');
+                          } finally {
+                            setIsMovingSingle(false);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1.5 shadow"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>สลับเป็น: {selectedPerson.isHealthShared ? '🔒 ซ่อนจากเมท (Admin)' : '👁️ เปิดเผยให้เมททราบ (Admin)'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
 
             {/* Bottom Actions */}
             <div className="flex items-center justify-end gap-2 pt-2">

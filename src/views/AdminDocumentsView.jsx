@@ -54,9 +54,9 @@ function DormSignInZoneTable({ title, subtitle, rooms, altBgClass, zoneLabel }) 
             <th className="py-2.5 px-2 border-r border-slate-900 w-20">ชื่อเล่น</th>
             <th className="py-2.5 px-2 border-r border-slate-900 w-28">นามเรียกขาน</th>
             <th className="py-2.5 px-2 border-r border-slate-900 w-24">เบอร์โทร</th>
-            <th className="py-2.5 px-2 border-r border-slate-900 w-16">กุญแจ #</th>
-            <th className="py-2.5 px-4 border-r border-slate-900 w-32">ลายมือชื่อรับกุญแจ</th>
-            <th className="py-2.5 px-4 w-32">ลายมือชื่อคืนกุญแจ</th>
+            <th className="py-2.5 px-2 border-r border-slate-900 w-28">เข้าพัก & กุญแจ</th>
+            <th className="py-2.5 px-4 border-r border-slate-900 w-28">ลายมือชื่อรับกุญแจ</th>
+            <th className="py-2.5 px-4 w-28">ลายมือชื่อคืนกุญแจ</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-400">
@@ -64,27 +64,64 @@ function DormSignInZoneTable({ title, subtitle, rooms, altBgClass, zoneLabel }) 
             <React.Fragment key={rm.room}>
               {[0, 1].map((b) => {
                 const p = rm.occupants[b];
+                const isOptOut = Boolean(p?.dormOptOut);
                 return (
-                  <tr key={`${rm.room}-${b}`} className={b === 1 ? `border-b-2 border-slate-900 ${altBgClass}` : 'bg-white'}>
+                  <tr
+                    key={`${rm.room}-${b}`}
+                    className={`${b === 1 ? 'border-b-2 border-slate-900 ' : ''}${isOptOut ? 'bg-amber-50/70' : (b === 1 ? altBgClass : 'bg-white')}`}
+                  >
                     {b === 0 && (
                       <td rowSpan={2} className="py-2 px-2 border-r border-slate-900 text-center font-mono font-black text-sm bg-slate-100 align-middle">
                         {rm.roomLabel}
                         <span className="block text-[10px] font-normal text-slate-500">{zoneLabel}</span>
+                        <span className="block text-[9px] font-sans font-bold text-sky-800 mt-0.5">
+                          🔑 {rm.keySummaryLabel}
+                        </span>
                       </td>
                     )}
                     <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[11px]">เตียง {b + 1}</td>
                     <td className="py-2 px-3 border-r border-slate-400 font-bold text-slate-950">
-                      {p ? p.name : '(ว่าง)'}
+                      {p ? (
+                        <div>
+                          <span>{p.name}</span>
+                          {isOptOut && (
+                            <span className="ml-1.5 inline-block px-1.5 py-0.2 bg-amber-200 text-amber-950 rounded text-[9px] font-black">
+                              ไม่พักหอ
+                            </span>
+                          )}
+                        </div>
+                      ) : '(ว่าง)'}
                     </td>
                     <td className="py-2 px-2 border-r border-slate-400 text-center">{p ? p.nickname : '-'}</td>
                     <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.callsign : '-'}</td>
                     <td className="py-2 px-2 border-r border-slate-400 text-center font-mono">{p ? p.phone : '-'}</td>
-                    <td className="py-2 px-2 border-r border-slate-400 text-center font-mono text-[10px] text-slate-500">K-{rm.room}</td>
+                    <td className="py-2 px-2 border-r border-slate-400 text-center text-[10px]">
+                      <div className="font-mono font-bold text-slate-700">K-{rm.room}</div>
+                      {p ? (
+                        isOptOut ? (
+                          <span className="text-amber-800 font-bold">🚫 ไม่พักหอ</span>
+                        ) : p.roomKeyReturned ? (
+                          <span className="text-emerald-800 font-bold">✅ คืนกุญแจแล้ว</span>
+                        ) : p.roomKeyHeld ? (
+                          <span className="text-sky-800 font-bold">🔑 ถือกุญแจ ✓</span>
+                        ) : (
+                          <span className="text-slate-500">☐ รอรับกุญแจ</span>
+                        )
+                      ) : '-'}
+                    </td>
                     <td className="py-2 px-4 border-r border-slate-400 text-center">
-                      <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                      {isOptOut ? (
+                        <span className="text-[10px] font-bold text-amber-800">(ไม่เข้าพัก)</span>
+                      ) : (
+                        <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                      )}
                     </td>
                     <td className="py-2 px-4 text-center">
-                      <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                      {isOptOut ? (
+                        <span className="text-[10px] font-bold text-amber-800">(ไม่เข้าพัก)</span>
+                      ) : (
+                        <span className="block border-b border-dashed border-slate-400 h-5 w-full"></span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -140,6 +177,9 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                         >
                           {rm.roomLabel}
                           <span className="block text-[10px] font-normal text-slate-600">{zoneLabel}</span>
+                          <span className="block text-[9px] font-sans font-bold text-sky-900 mt-0.5">
+                            🔑 {rm.keySummaryLabel}
+                          </span>
                           {roomHasAlert && (
                             <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-sans font-bold">
                               เฝ้าระวัง
@@ -153,7 +193,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                       </td>
                       <td className="py-2 px-2.5 border-r border-slate-400">
                         {p ? (
-                          <div>
+                          <div className="space-y-0.5">
                             <div className="font-bold text-slate-950">
                               {p.name}{' '}
                               {p.nickname !== '-' && <span className="font-normal text-slate-600">({p.nickname})</span>}
@@ -161,6 +201,18 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                             <div className="text-[10px] text-slate-600 font-mono">
                               {p.callsign} • โทร: {p.phone}
                             </div>
+                            <div className="text-[9.5px] font-bold flex flex-wrap gap-1">
+                              <span className={p.dormOptOut ? 'text-amber-800' : 'text-emerald-800'}>
+                                {p.dormOptOut ? '🚫 ไม่ประสงค์พักหอ' : '🛏️ พักหอ'}
+                              </span>
+                              <span>•</span>
+                              <span className="text-sky-900">🔑 {p.keyStatusLabel}</span>
+                            </div>
+                            {p.emergencyName && p.emergencyName !== '-' && (
+                              <div className="text-[9.5px] text-rose-800 font-semibold">
+                                🚨 ฉุกเฉิน: {p.emergencyName} ({p.emergencyPhone})
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span className="text-slate-400 italic">(ว่าง)</span>
@@ -177,13 +229,21 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                                 <div className="font-bold text-amber-800">⚠️ แพ้: {p.foodAllergy}</div>
                               )}
                               <div className="text-[10px] font-mono text-slate-700">
-                                🩸 หมู่เลือด: {p.bloodGroup} • {p.isHealthShared ? 'เมทเห็น' : 'ปิดจากเมท'}
+                                🩸 หมู่เลือด: {p.bloodGroup}
+                              </div>
+                              <div className={`text-[10px] font-bold ${p.isHealthShared ? 'text-emerald-800' : 'text-amber-900'}`}>
+                                {p.healthConsent?.fullLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')}
                               </div>
                             </div>
                           ) : (
-                            <span className="text-[11px] text-emerald-700 font-semibold">
-                              ✓ ปกติ (ไม่มีโรค/ไม่แพ้){p.bloodGroup && p.bloodGroup !== '-' ? ` • เลือด ${p.bloodGroup}` : ''}
-                            </span>
+                            <div className="space-y-0.5">
+                              <span className="text-[11px] text-emerald-700 font-semibold block">
+                                ✓ ปกติ (ไม่มีโรค/ไม่แพ้){p.bloodGroup && p.bloodGroup !== '-' ? ` • เลือด ${p.bloodGroup}` : ''}
+                              </span>
+                              <span className="text-[9.5px] text-slate-600 block">
+                                {p.healthConsent?.fullLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')}
+                              </span>
+                            </div>
                           )
                         ) : '-'}
                       </td>
@@ -487,22 +547,24 @@ export default function AdminDocumentsView({
       });
       filename = '2_ใบรายชื่อรับมอบเสื้อฝึก_JRE2027.csv';
     } else if (activeDoc === 'rooms') {
-      csv = 'เลขห้อง,โซน/เพศ,เตียง,ชื่อ - นามสกุล ผู้เข้าพัก,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,ลายมือชื่อรับกุญแจ,ลายมือชื่อคืนกุญแจ\n';
+      csv = 'เลขห้อง,โซน/เพศ,เตียง,ชื่อ - นามสกุล ผู้เข้าพัก,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,สถานะเข้าพัก,สถานะกุญแจห้อง,ลายมือชื่อรับกุญแจ,ลายมือชื่อคืนกุญแจ\n';
       roomData.rooms.forEach(rm => {
         const isMale = rm.gender === 'ชาย';
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
-          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","",""\n`;
+          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.stayStatusLabel : '-'}","${p ? p.keyStatusLabel : '-'}","",""\n`;
         }
       });
       filename = '3_ใบเซ็นชื่อเข้าห้องพัก_ปิดข้อมูลสุขภาพ_JRE2027.csv';
     } else {
-      csv = 'เลขห้อง,โซน/เพศ,ลำดับ/เตียง,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,โรคประจำตัว,แพ้อาหาร/ยา,หมู่เลือด,ยาที่ต้องการ/เวชภัณฑ์,ของที่ต้องใช้/ดูแลพิเศษ,เปิดเผยเมท\n';
+      csv = 'เลขห้อง,โซน/เพศ,ลำดับ/เตียง,ชื่อ - นามสกุล,ชื่อเล่น,นามเรียกขาน,เบอร์โทร,สถานะเข้าพัก,สถานะกุญแจห้อง,โรคประจำตัว,แพ้อาหาร/ยา,หมู่เลือด,ยาที่ต้องการ/เวชภัณฑ์,ของที่ต้องใช้/ดูแลพิเศษ,เปิดเผยสุขภาพ (ผู้กด),ติดต่อฉุกเฉิน\n';
       roomData.rooms.forEach(rm => {
         const isMale = rm.gender === 'ชาย';
         for (let b = 0; b < 2; b++) {
           const p = rm.occupants[b];
-          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.medicalHistory : '-'}","${p ? p.foodAllergy : '-'}","${p ? p.bloodGroup : '-'}","${p?.medicalEquipmentNeeded || '-'}","${p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-')}","${p ? (p.isHealthShared ? 'เมทเห็น' : 'เฉพาะ Staff') : '-'}"\n`;
+          const consentLabel = p ? `${p.healthConsent?.statusLabel || (p.isHealthShared ? 'ยินยอม' : 'ไม่ยินยอม')} (${p.healthConsent?.actorLabel || '-'})` : '-';
+          const emer = p && p.emergencyName !== '-' ? `${p.emergencyName} (${p.emergencyPhone})` : '-';
+          csv += `"${rm.room}","${isMale ? 'ชาย' : 'หญิง'}","${b + 1}","${p ? p.name : '(ว่าง)'}","${p ? p.nickname : '-'}","${p ? p.callsign : '-'}","${p ? p.phone : '-'}","${p ? p.stayStatusLabel : '-'}","${p ? p.keyStatusLabel : '-'}","${p ? p.medicalHistory : '-'}","${p ? p.foodAllergy : '-'}","${p ? p.bloodGroup : '-'}","${p?.medicalEquipmentNeeded || '-'}","${p?.specialItemsNeeded || (p?.isSpecialCare ? 'ดูแลพิเศษ' : '-')}","${consentLabel}","${emer}"\n`;
         }
       });
       filename = '4_ใบเตรียมยา_ของใช้_โรคประจำตัวตามห้อง_Staff_JRE2027.csv';
@@ -826,9 +888,19 @@ export default function AdminDocumentsView({
           {/* TABLE CONTENT 3: DORMITORY SIGN-IN ROSTER (PDPA-SAFE: NO HEALTH INFO) */}
           {activeDoc === 'rooms' && (
             <div className="space-y-6">
-              <div className="p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-[11px] text-sky-900 font-semibold flex items-center justify-between">
+              <div className="p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-[11px] text-sky-900 font-semibold flex flex-wrap items-center justify-between gap-2">
                 <span>🔒 ใบเซ็นชื่อเข้าห้องพักฉบับนี้ปิดข้อมูลสุขภาพ/โรคประจำตัวทั้งหมด เพื่อคุ้มครองข้อมูลส่วนบุคคล (PDPA) ณ จุดลงทะเบียน</span>
                 <span className="font-mono font-bold">เรียงลำดับตามห้อง 101 - 110</span>
+              </div>
+
+              <div className="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-[11px] text-slate-800 font-semibold flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  🛏️ สถานะห้องพักจริง: เข้าพักหอ <strong>{roomData.totalStaying}</strong> คน •
+                  ไม่ประสงค์พักหอ <strong className="text-amber-800">{roomData.totalOptedOut}</strong> คน •
+                  จ่ายกุญแจแล้ว <strong>{roomData.totalKeysIssued}</strong> ดอก •
+                  คืนกุญแจแล้ว <strong>{roomData.totalKeysReturned}/{roomData.totalKeysIssued}</strong> ดอก
+                </span>
+                <span className="font-mono text-sky-900">เชื่อมต่อข้อมูลห้องพักอัตโนมัติ</span>
               </div>
 
               <DormSignInZoneTable
@@ -849,6 +921,13 @@ export default function AdminDocumentsView({
                 />
               </div>
 
+              {roomData.optedOutPeople.length > 0 && (
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-300 text-[11px] text-amber-950">
+                  <span className="font-bold">🚫 รายชื่อผู้แจ้งไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้ ({roomData.optedOutPeople.length} ท่าน):</span>{' '}
+                  {roomData.optedOutPeople.map(o => `${o.name}${o.roomNumber ? ` (เดิมห้อง ${o.roomNumber})` : ''}`).join(', ')}
+                </div>
+              )}
+
               <div className="p-3 bg-slate-100 rounded-lg border border-slate-300 text-[11px] text-slate-700">
                 <span className="font-bold">🏠 นิสิต / คณะกรรมการ มมส ({roomData.msuList.length} ท่าน) — ไม่พักหอพัก (ไป-กลับเอง):</span>{' '}
                 {roomData.msuList.map(m => m.name).join(', ')}
@@ -859,8 +938,10 @@ export default function AdminDocumentsView({
           {/* TABLE CONTENT 4: STAFF MEDICAL & SUPPLIES ROOM CHECKLIST (NO SIGNATURE COLUMN) */}
           {activeDoc === 'rooms-staff' && (
             <div className="space-y-6">
-              <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-[11px] text-rose-950 font-semibold flex items-center justify-between">
-                <span>🩺 เอกสารสำหรับ Staff ฝ่ายพยาบาล/สวัสดิการเท่านั้น (ไม่ต้องให้ผู้เข้าร่วมเซ็น) — ใช้ตรวจสอบว่าใครอยู่ห้องไหน มีโรค/แพ้/ยา/ของใช้อะไรบ้าง</span>
+              <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-[11px] text-rose-950 font-semibold flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  🩺 เอกสาร Staff (ไม่ต้องเซ็น): แสดงห้องพัก, สถานะเข้าพัก/ไม่พัก, กุญแจ, โรค/แพ้, ยา, ของที่ต้องใช้, ผู้ติดต่อฉุกเฉิน และความยินยอมเปิดเผยสุขภาพ ({roomData.totalStaying} พักหอ / {roomData.totalOptedOut} ไม่พักหอ • กุญแจจ่าย {roomData.totalKeysIssued} / คืน {roomData.totalKeysReturned})
+                </span>
                 <span className="font-mono font-bold">เฉพาะ Staff</span>
               </div>
 
@@ -899,11 +980,19 @@ export default function AdminDocumentsView({
                           <td className="py-2 px-2.5 border-r border-slate-400">
                             <div className="font-bold text-slate-950">{p.name}</div>
                             <div className="text-[10px] text-slate-600 font-mono">{p.callsign} • โทร: {p.phone}</div>
+                            {p.emergencyName && p.emergencyName !== '-' && (
+                              <div className="text-[9.5px] text-rose-800 font-semibold">
+                                🚨 ฉุกเฉิน: {p.emergencyName} ({p.emergencyPhone})
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-2.5 border-r border-slate-400 text-[11px]">
                             {p.hasMedicalHistory && <div className="font-bold text-rose-800">🩺 โรค: {p.medicalHistory}</div>}
                             {p.hasFoodAllergy && <div className="font-bold text-amber-800">⚠️ แพ้: {p.foodAllergy}</div>}
                             {!p.hasMedicalHistory && !p.hasFoodAllergy && <span className="text-emerald-700">✓ ปกติ</span>}
+                            <div className="text-[9.5px] text-slate-600 mt-0.5">
+                              {p.healthConsent?.fullLabel || (p.isHealthShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย')}
+                            </div>
                           </td>
                           <td className="py-2 px-2.5 border-r border-slate-400 text-[11px] font-semibold text-emerald-900">
                             {p.medicalEquipmentNeeded || '-'}

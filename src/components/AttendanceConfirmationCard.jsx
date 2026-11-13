@@ -96,11 +96,13 @@ export default function AttendanceConfirmationCard({
   const [statusChoice, setStatusChoice] = useState(
     confirmInfo.status === 'pending' ? 'confirmed' : confirmInfo.status
   );
+  const [dormOptOutChoice, setDormOptOutChoice] = useState(Boolean(myRegistration?.dorm_opt_out));
   const [arrivalDate, setArrivalDate] = useState(
     confirmInfo.arrivalDate || (isMsu ? 'นิสิต/บุคลากร มมส (อยู่ในพื้นที่)' : 'เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)')
   );
   const [confirmNote, setConfirmNote] = useState(confirmInfo.note || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingDormOptOut, setIsSavingDormOptOut] = useState(false);
   const [isExpandedForm, setIsExpandedForm] = useState(!confirmInfo.isConfirmed && !confirmInfo.isDeclined);
 
   useEffect(() => {
@@ -110,6 +112,7 @@ export default function AttendanceConfirmationCard({
     const msuFlag = Boolean(uInfo?.isMsu);
 
     setStatusChoice(info.status === 'pending' ? 'confirmed' : info.status);
+    setDormOptOutChoice(Boolean(myRegistration?.dorm_opt_out));
     setArrivalDate(info.arrivalDate || (msuFlag ? 'นิสิต/บุคลากร มมส (อยู่ในพื้นที่)' : 'เช้าวันที่ 14 พ.ย. 2569 (ทันลงทะเบียนหน้างาน)'));
     setConfirmNote(info.note || '');
     setIsExpandedForm(info.isPending);
@@ -117,7 +120,8 @@ export default function AttendanceConfirmationCard({
     myRegistration?.id,
     myRegistration?.attendance_confirmed_status,
     myRegistration?.attendance_need_accommodation,
-    myRegistration?.attendance_meal_confirmed
+    myRegistration?.attendance_meal_confirmed,
+    myRegistration?.dorm_opt_out
   ]);
 
   if (!myRegistration) {
@@ -163,8 +167,9 @@ export default function AttendanceConfirmationCard({
     try {
       const now = new Date().toISOString();
       const targetId = myRegistration.user_id || myRegistration.id;
-      // มมส ไป-กลับเองอยู่แล้ว (false) / มออื่นๆ จัดหาหอพักให้อยู่แล้ว (true)
-      const finalAccom = finalStatus === 'declined' ? false : (isMsu ? false : true);
+      const isOptedOut = !isMsu && Boolean(dormOptOutChoice);
+      // มมส ไป-กลับเองอยู่แล้ว (false) / มออื่นๆ จัดหาหอพักให้อยู่แล้ว เว้นแต่แจ้งไม่ประสงค์พัก (dorm_opt_out)
+      const finalAccom = finalStatus === 'declined' || isMsu || isOptedOut ? false : true;
       const finalMeals = finalStatus === 'declined' ? false : true;
 
       const updates = {
@@ -174,7 +179,10 @@ export default function AttendanceConfirmationCard({
         attendance_need_accommodation: finalAccom,
         attendance_meal_confirmed: finalMeals,
         attendance_arrival_date: arrivalDate.trim(),
-        attendance_confirm_note: confirmNote.trim()
+        attendance_confirm_note: confirmNote.trim(),
+        dorm_opt_out: isOptedOut,
+        dorm_opt_out_by: isOptedOut ? (myRegistration.dorm_opt_out_by || 'user') : '',
+        dorm_opt_out_at: isOptedOut ? (myRegistration.dorm_opt_out_at || now) : ''
       };
 
       await onUpdateRegistration(targetId, updates);
@@ -194,6 +202,36 @@ export default function AttendanceConfirmationCard({
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleToggleDormOptOut = async (nextOptOut) => {
+    if (!onUpdateRegistration || isSavingDormOptOut) return;
+    setIsSavingDormOptOut(true);
+    try {
+      const now = new Date().toISOString();
+      const targetId = myRegistration.user_id || myRegistration.id;
+      await onUpdateRegistration(targetId, {
+        dorm_opt_out: nextOptOut,
+        dorm_opt_out_by: 'user',
+        dorm_opt_out_at: now,
+        attendance_need_accommodation: !nextOptOut && !isMsu
+      });
+      setDormOptOutChoice(nextOptOut);
+      if (onToast) {
+        onToast(
+          nextOptOut
+            ? 'บันทึกแจ้ง "ไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้" เรียบร้อยแล้ว'
+            : 'เปลี่ยนสถานะกลับมา "ประสงค์เข้าพักหอพักที่โครงการจัดเตรียม" เรียบร้อยแล้ว',
+          nextOptOut ? 'info' : 'success'
+        );
+      }
+    } catch (err) {
+      if (onToast) {
+        onToast('ไม่สามารถอัปเดตสถานะการเข้าพักหอพักได้ กรุณาลองใหม่อีกครั้ง', 'error');
+      }
+    } finally {
+      setIsSavingDormOptOut(false);
     }
   };
 
@@ -316,9 +354,33 @@ export default function AttendanceConfirmationCard({
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black">
-                  ✓ ยืนยันสิทธิ์ห้องพักเรียบร้อย
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {myRegistration?.dorm_opt_out ? (
+                    <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black">
+                      🚫 ไม่ประสงค์พักหอพัก มมส
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black">
+                      ✓ ยืนยันสิทธิ์ห้องพักเรียบร้อย
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={isSavingDormOptOut}
+                    onClick={() => handleToggleDormOptOut(!myRegistration?.dorm_opt_out)}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-black border transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
+                      myRegistration?.dorm_opt_out
+                        ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
+                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-400/50'
+                    }`}
+                  >
+                    {isSavingDormOptOut
+                      ? 'กำลังบันทึก...'
+                      : myRegistration?.dorm_opt_out
+                        ? '🛏️ เปลี่ยนกลับมาขอเข้าพักหอพัก'
+                        : '🚫 แจ้งไม่ประสงค์พักหอพักที่มหาลัยจัดเตรียมให้'}
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
@@ -342,10 +404,19 @@ export default function AttendanceConfirmationCard({
 
                 <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-0.5">
                   <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                    <Key className="w-3.5 h-3.5 text-emerald-400" /> เลขห้องพัก
+                    <Key className="w-3.5 h-3.5 text-emerald-400" /> เลขห้องพัก & สถานะกุญแจ
                   </span>
                   <span className="text-xs sm:text-sm font-black text-sky-300 block">
                     {dormInfo.roomNumber}
+                  </span>
+                  <span className="text-[10px] font-bold block text-slate-300">
+                    {myRegistration?.room_key_returned
+                      ? '✅ คืนกุญแจห้องแล้ว'
+                      : myRegistration?.room_key_held
+                        ? '🔑 ได้รับกุญแจห้องพักแล้ว (อยู่ที่ตัว)'
+                        : myRegistration?.dorm_opt_out
+                          ? 'ไม่ต้องรับกุญแจ (ไม่พักหอ)'
+                          : '⏳ ยังไม่ได้รับกุญแจ (ติดต่อจุดลงทะเบียน)'}
                   </span>
                 </div>
               </div>
@@ -371,7 +442,11 @@ export default function AttendanceConfirmationCard({
               <div>
                 <span className="text-[10px] text-slate-400 block">การจัดเตรียมที่พัก & อาหาร</span>
                 <span className="font-bold text-white">
-                  {isMsu ? '🏠 มมส: เดินทางไป-กลับเอง' : `🏨 ${dormInfo.dormName} (${dormInfo.roomNumber})`} • {confirmInfo.needMeals ? '🍱 อาหารครบมื้อ' : 'ไม่รับอาหาร'}
+                  {isMsu
+                    ? '🏠 มมส: เดินทางไป-กลับเอง'
+                    : myRegistration?.dorm_opt_out
+                      ? '🚫 ไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้'
+                      : `🏨 ${dormInfo.dormName} (${dormInfo.roomNumber})`} • {confirmInfo.needMeals ? '🍱 อาหารครบมื้อ' : 'ไม่รับอาหาร'}
                 </span>
               </div>
             </div>
@@ -472,6 +547,36 @@ export default function AttendanceConfirmationCard({
                     <span>•</span>
                     <span>🛏️ เตียงและเครื่องนอนพร้อม</span>
                   </p>
+
+                  <div className="pt-2 border-t border-sky-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-slate-200">
+                      ความประสงค์เข้าพักหอพัก (สำหรับผู้มีสิทธิ์ห้องพัก):
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDormOptOutChoice(false)}
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all cursor-pointer ${
+                          !dormOptOutChoice
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow'
+                            : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        🛏️ ประสงค์เข้าพักหอพัก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDormOptOutChoice(true)}
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all cursor-pointer ${
+                          dormOptOutChoice
+                            ? 'bg-amber-400 text-slate-950 border-amber-300 shadow'
+                            : 'bg-slate-900 text-amber-200 border-amber-500/40 hover:bg-amber-500/15'
+                        }`}
+                      >
+                        🚫 ไม่ประสงค์พักหอพักที่มหาลัยจัดเตรียมให้
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 flex items-center justify-between">

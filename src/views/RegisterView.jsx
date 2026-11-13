@@ -88,6 +88,7 @@ import {
   resolvePersonFullNameWithTitle,
   normalizeCallsignSpacing,
   isHealthSharedWithRoommate,
+  getHealthConsentInfo,
   hasHealthCondition,
   getCleanSpecialNotes,
   getMedicalEquipmentNeeded,
@@ -444,6 +445,7 @@ export default function RegisterView({
   // Health privacy consent for roommate
   const [consentHealthShare, setConsentHealthShare] = useState(() => isHealthSharedWithRoommate(myRegistration));
   const [isSavingHealthConsent, setIsSavingHealthConsent] = useState(false);
+  const [isSavingDormOptOut, setIsSavingDormOptOut] = useState(false);
 
   useEffect(() => {
     setConsentHealthShare(isHealthSharedWithRoommate(myRegistration));
@@ -4255,6 +4257,52 @@ export default function RegisterView({
                 const roomMatch = rawRoom.match(/(\d{3})/);
                 const roomNum = roomMatch ? roomMatch[1] : null;
                 const hasRoom = Boolean(roomNum && rawRoom !== '-' && rawRoom !== 'ไม่มี');
+                const myDormOptOut = Boolean(myRegistration?.dorm_opt_out);
+                const myKeyHeld = Boolean(myRegistration?.room_key_held);
+                const myKeyReturned = Boolean(myRegistration?.room_key_returned);
+                const healthConsentInfo = getHealthConsentInfo(myRegistration);
+
+                const handleToggleMyDormOptOut = async () => {
+                  if (!myRegistration || isSavingDormOptOut) return;
+                  const nextOptOut = !myDormOptOut;
+                  const confirmed = await askConfirm({
+                    title: nextOptOut ? 'ยืนยันแจ้งไม่ประสงค์เข้าพักหอพัก?' : 'เปลี่ยนกลับมาประสงค์เข้าพักหอพัก?',
+                    message: nextOptOut
+                      ? 'ระบบจะแจ้งฝ่ายสถานที่และ Admin ห้องพักว่าท่านไม่ประสงค์เข้าพักหอพักที่มหาวิทยาลัยจัดเตรียมให้ เพื่อจัดเตรียมกุญแจและเอกสารเข้าพักให้ถูกต้อง'
+                      : 'ระบบจะอัปเดตสถานะกลับมาเป็นประสงค์เข้าพักหอพักที่โครงการจัดเตรียมให้',
+                    confirmText: nextOptOut ? 'ยืนยัน ไม่พักหอพัก' : 'ยืนยัน เข้าพักหอพัก',
+                    cancelText: 'ยกเลิก',
+                    variant: nextOptOut ? 'warning' : 'success'
+                  });
+                  if (!confirmed) return;
+
+                  setIsSavingDormOptOut(true);
+                  try {
+                    const targetId = myRegistration.user_id || myRegistration.id;
+                    const payload = {
+                      dorm_opt_out: nextOptOut,
+                      dorm_opt_out_by: 'user',
+                      dorm_opt_out_at: new Date().toISOString(),
+                      attendance_need_accommodation: !nextOptOut && !isMsuUser
+                    };
+                    if (onUpdateRegistration) {
+                      await onUpdateRegistration(targetId, payload);
+                    } else {
+                      await DataService.updateRegistrationDetails(targetId, payload);
+                    }
+                    triggerToast(
+                      nextOptOut
+                        ? 'บันทึกแจ้ง "ไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้" เรียบร้อยแล้ว'
+                        : 'เปลี่ยนสถานะกลับมา "เข้าพักหอพักที่มหาลัยจัดเตรียมให้" เรียบร้อยแล้ว',
+                      nextOptOut ? 'info' : 'success'
+                    );
+                  } catch (err) {
+                    console.error(err);
+                    triggerToast('ไม่สามารถอัปเดตสถานะการพักหอพักได้ กรุณาลองใหม่อีกครั้ง', 'error');
+                  } finally {
+                    setIsSavingDormOptOut(false);
+                  }
+                };
 
                 // Find Roommate from allRegistrations
                 const roommate = (() => {
@@ -4285,6 +4333,9 @@ export default function RegisterView({
                   return {
                     raw: match,
                     isHealthShared: isHealthSharedWithRoommate(match),
+                    dormOptOut: Boolean(match.dorm_opt_out ?? extra.dorm_opt_out ?? false),
+                    roomKeyHeld: Boolean(match.room_key_held ?? extra.room_key_held ?? false),
+                    roomKeyReturned: Boolean(match.room_key_returned ?? extra.room_key_returned ?? false),
                     name: nameData.fullName,
                     nickname: extra.nickname || match.nickname || '-',
                     callsign: normalizeCallsignSpacing(extra.callsign || match.callsign || '-'),
@@ -4303,13 +4354,39 @@ export default function RegisterView({
                   <div className="space-y-4">
                     {!hasRoom ? (
                       <div className="bg-slate-900/90 border border-slate-700/60 p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
                           <span>🏠</span> ข้อมูลที่พักค้างแรม (Accommodation Status)
                         </p>
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-slate-800 text-slate-300 border border-slate-700">
-                          {isMsuUser ? 'มมส (ไป-กลับเอง)' : 'รอจัดสรร'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
+                            isMsuUser
+                              ? 'bg-slate-800 text-slate-300 border-slate-700'
+                              : myDormOptOut
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}>
+                            {isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่ประสงค์พักหอพัก' : 'รอจัดสรร'}
+                          </span>
+                          {!isMsuUser && (
+                            <button
+                              type="button"
+                              disabled={isSavingDormOptOut}
+                              onClick={handleToggleMyDormOptOut}
+                              className={`px-3 py-1 rounded-xl text-[11px] font-black border transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
+                                myDormOptOut
+                                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
+                                  : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-400/50'
+                              }`}
+                            >
+                              {isSavingDormOptOut
+                                ? 'กำลังบันทึก...'
+                                : myDormOptOut
+                                  ? '🛏️ เปลี่ยนกลับมาขอเข้าพักหอพัก'
+                                  : '🚫 ไม่ประสงค์พักหอพักที่มหาลัยจัดเตรียมให้'}
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {isMsuUser ? (
@@ -4319,6 +4396,15 @@ export default function RegisterView({
                           </div>
                           <p className="text-xs text-amber-100/90 leading-relaxed">
                             ท่านสังกัดมหาวิทยาลัยมหาสารคาม (มมส) พักอาศัยในพื้นที่ จึงไม่ได้จัดสรรห้องพักหอพักกุดรัง โดยท่านสามารถเดินทางมาเข้าร่วมการฝึกตามกำหนดการในแต่ละวันได้ตามปกติครับ
+                          </p>
+                        </div>
+                      ) : myDormOptOut ? (
+                        <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/40 space-y-1">
+                          <div className="text-amber-300 font-bold text-sm">
+                            🚫 ท่านแจ้ง &ldquo;ไม่ประสงค์เข้าพักหอพักที่มหาวิทยาลัยจัดเตรียมให้&rdquo; แล้ว
+                          </div>
+                          <p className="text-xs text-amber-100/80 leading-relaxed">
+                            ข้อมูลนี้ถูกเชื่อมกับตารางห้องพักและใบรายชื่อ Admin เรียบร้อยแล้ว (หากเปลี่ยนใจสามารถกดปุ่มด้านบนได้ทุกเมื่อ)
                           </p>
                         </div>
                       ) : (
@@ -4334,13 +4420,13 @@ export default function RegisterView({
                       )}
                     </div>
                     ) : (
-                      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/40 border border-sky-500/40 p-5 sm:p-6 rounded-3xl relative overflow-hidden shadow-2xl space-y-4">
+                      <div className={`bg-gradient-to-br from-slate-900 via-slate-900 ${myDormOptOut ? 'to-amber-950/35 border-amber-500/50' : 'to-sky-950/40 border-sky-500/40'} border p-5 sm:p-6 rounded-3xl relative overflow-hidden shadow-2xl space-y-4`}>
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
                       <div>
                         <span className="text-[10px] uppercase font-black text-sky-400 tracking-wider flex items-center gap-1.5">
                           <Building className="w-3.5 h-3.5" /> หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)
                         </span>
-                        <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex items-center gap-2">
+                        <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex flex-wrap items-center gap-2">
                           <span>ห้อง {roomNum}</span>
                           <span className="text-xs font-normal text-sky-300 bg-sky-950/60 px-2.5 py-0.5 rounded-full border border-sky-500/30">
                             ชั้น 1 • ห้องละ 2 คน
@@ -4348,10 +4434,63 @@ export default function RegisterView({
                         </h3>
                       </div>
 
-                      <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>จัดสรรห้องแล้ว ✓</span>
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {myDormOptOut ? (
+                          <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                            <span>🚫 แจ้งไม่ประสงค์พักหอพักแล้ว</span>
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>จัดสรรห้องแล้ว ✓</span>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={isSavingDormOptOut}
+                          onClick={handleToggleMyDormOptOut}
+                          className={`px-3 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
+                            myDormOptOut
+                              ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
+                              : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-400/50'
+                          }`}
+                        >
+                          {isSavingDormOptOut
+                            ? 'กำลังบันทึก...'
+                            : myDormOptOut
+                              ? '🛏️ เปลี่ยนกลับมาขอเข้าพักหอพัก'
+                              : '🚫 ไม่ประสงค์พักหอพักที่มหาลัยจัดเตรียมให้'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Key Status & Opt-Out Banner */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-950/75 p-3 rounded-2xl border border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-300">🔑 สถานะกุญแจห้องพักของคุณ:</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
+                          myKeyReturned
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : myKeyHeld
+                              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                              : myDormOptOut
+                                ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        }`}>
+                          {myKeyReturned
+                            ? '✅ คืนกุญแจห้องแล้ว'
+                            : myKeyHeld
+                              ? '🔑 ได้รับกุญแจห้องแล้ว (อยู่ที่คุณ)'
+                              : myDormOptOut
+                                ? 'ไม่ต้องรับกุญแจ (ไม่พักหอ)'
+                                : '⏳ ยังไม่ได้รับกุญแจ'}
+                        </span>
+                      </div>
+                      {myDormOptOut && (
+                        <span className="text-[11px] text-amber-300 font-semibold">
+                          * ท่านแจ้งไม่ประสงค์พักหอพักแล้ว ข้อมูลเชื่อมต่อไปยัง Admin และใบเซ็นชื่อเข้าพักอัตโนมัติ
+                        </span>
+                      )}
                     </div>
 
                     {/* Facilities row */}
@@ -4367,14 +4506,31 @@ export default function RegisterView({
 
                     {/* ROOMMATE CARD SECTION */}
                     <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-xs font-black text-white flex items-center gap-2">
                           <span>🤝 เพื่อนร่วมห้องของคุณ (Your Roommate):</span>
                         </span>
                         {roommate && (
-                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-                            พักห้องเดียวกัน 2/2 คน
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {roommate.dormOptOut ? (
+                              <span className="text-[10px] font-bold text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-500/40">
+                                🚫 เมทแจ้งไม่ประสงค์พักหอพัก
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+                                พักห้องเดียวกัน 2/2 คน
+                              </span>
+                            )}
+                            {roommate.roomKeyHeld && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                roommate.roomKeyReturned
+                                  ? 'text-emerald-300 bg-emerald-950/40 border-emerald-500/30'
+                                  : 'text-sky-300 bg-sky-950/40 border-sky-500/30'
+                              }`}>
+                                {roommate.roomKeyReturned ? '✅ เมทคืนกุญแจแล้ว' : '🔑 เมทถือกุญแจอยู่'}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -4498,13 +4654,18 @@ export default function RegisterView({
                           </div>
                         </div>
 
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
-                          consentHealthShare 
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                        }`}>
-                          {consentHealthShare ? '👁️ ยินยอมเปิดเผยให้เมททราบ' : '🔒 ปิดเป็นความลับ (ซ่อนจากเมท)'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                            consentHealthShare 
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                              : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          }`}>
+                            {consentHealthShare ? '👁️ ยินยอมเปิดเผยให้เมททราบ' : '🔒 ปิดเป็นความลับ (ซ่อนจากเมท)'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-slate-300 border border-slate-700">
+                            {healthConsentInfo.fullLabel}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Official explanation text requested by user */}

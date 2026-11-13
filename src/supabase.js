@@ -295,6 +295,18 @@ const unpackRegistration = (row) => {
     share_health_with_roommate: shareConsent,
     health_consent_by: healthConsentBy,
     health_consent_at: healthConsentAt,
+    dorm_opt_out: Boolean(extra.dorm_opt_out ?? row.dorm_opt_out ?? false),
+    dorm_opt_out_by: extra.dorm_opt_out_by || row.dorm_opt_out_by || '',
+    dorm_opt_out_at: extra.dorm_opt_out_at || row.dorm_opt_out_at || '',
+    dorm_opt_out_note: extra.dorm_opt_out_note || row.dorm_opt_out_note || '',
+    room_key_held: Boolean(extra.room_key_held ?? row.room_key_held ?? false),
+    room_key_label: extra.room_key_label || row.room_key_label || '',
+    room_key_issued_at: extra.room_key_issued_at || row.room_key_issued_at || '',
+    room_key_issued_by: extra.room_key_issued_by || row.room_key_issued_by || '',
+    room_key_returned: Boolean(extra.room_key_returned ?? row.room_key_returned ?? false),
+    room_key_returned_at: extra.room_key_returned_at || row.room_key_returned_at || '',
+    room_key_returned_by: extra.room_key_returned_by || row.room_key_returned_by || '',
+    room_key_note: extra.room_key_note || row.room_key_note || '',
     medical_equipment_needed: extra.medical_equipment_needed || row.medical_equipment_needed || '',
     special_notes: cleanSpecialNotes,
     raw_special_notes: row.special_notes
@@ -548,7 +560,19 @@ const packRegistrationForSupabase = (fullData) => {
     payment_deferred_post_project: Boolean(fullData.payment_deferred_post_project),
     payment_deferred_at: fullData.payment_deferred_at || '',
     payment_deferred_by: fullData.payment_deferred_by || '',
-    payment_deferred_note: fullData.payment_deferred_note || ''
+    payment_deferred_note: fullData.payment_deferred_note || '',
+    dorm_opt_out: Boolean(fullData.dorm_opt_out),
+    dorm_opt_out_by: fullData.dorm_opt_out_by || '',
+    dorm_opt_out_at: fullData.dorm_opt_out_at || '',
+    dorm_opt_out_note: fullData.dorm_opt_out_note || '',
+    room_key_held: Boolean(fullData.room_key_held),
+    room_key_label: fullData.room_key_label || '',
+    room_key_issued_at: fullData.room_key_issued_at || '',
+    room_key_issued_by: fullData.room_key_issued_by || '',
+    room_key_returned: Boolean(fullData.room_key_returned),
+    room_key_returned_at: fullData.room_key_returned_at || '',
+    room_key_returned_by: fullData.room_key_returned_by || '',
+    room_key_note: fullData.room_key_note || ''
   };
 
   const payload = {};

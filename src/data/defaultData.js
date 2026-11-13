@@ -2706,6 +2706,51 @@ export const isHealthSharedWithRoommate = (reg) => {
 };
 
 /**
+ * สรุปสถานะการเปิดเผยข้อมูลสุขภาพและผู้กดบันทึกล่าสุด (เจ้าตัว vs Admin)
+ */
+export const getHealthConsentInfo = (reg) => {
+  const isShared = isHealthSharedWithRoommate(reg);
+  let extra = {};
+  if (reg?.special_notes) {
+    if (typeof reg.special_notes === 'string' && reg.special_notes.trim().startsWith('{')) {
+      try { extra = JSON.parse(reg.special_notes); } catch (e) {}
+    } else if (typeof reg.special_notes === 'object') {
+      extra = reg.special_notes;
+    }
+  }
+
+  const hasExplicitConsent =
+    reg?.share_health_with_roommate !== undefined ||
+    extra.share_health_with_roommate !== undefined;
+  const rawActor = reg?.health_consent_by || extra.health_consent_by || '';
+  const actor = (rawActor === 'user' || rawActor === 'admin')
+    ? rawActor
+    : (hasExplicitConsent ? 'user' : 'admin');
+  const consentAt = reg?.health_consent_at || extra.health_consent_at || '';
+
+  const statusLabel = isShared ? 'ยินยอมเปิดเผย' : 'ไม่ยินยอมเปิดเผย';
+  const shortStatusLabel = isShared ? 'ยินยอม' : 'ไม่ยินยอม';
+  const actorLabel = actor === 'admin' ? 'Admin กดให้' : 'เจ้าตัวกดเอง';
+
+  let fullLabel = '';
+  if (isShared && actor === 'user') fullLabel = '👤 เจ้าตัวยินยอมเอง';
+  else if (isShared && actor === 'admin') fullLabel = '🛡️ Admin กดยินยอมให้';
+  else if (!isShared && actor === 'user') fullLabel = '👤 เจ้าตัวกดไม่ยินยอมเอง';
+  else fullLabel = '🛡️ Admin กดไม่ยินยอมให้';
+
+  return {
+    isShared,
+    actor,
+    hasExplicitConsent,
+    consentAt,
+    statusLabel,
+    shortStatusLabel,
+    actorLabel,
+    fullLabel
+  };
+};
+
+/**
  * ดึงภาพถ่ายประจำตัวของผู้เข้าร่วม โดยให้ความสำคัญสูงสุดกับรูปถ่ายที่อัปโหลดจริง (ID Card Portrait)
  * แทนรูปโปรไฟล์อีเมล Google เพื่อให้ภาพตรงกับตัวตนจริงในทุกจุดของระบบ
  */

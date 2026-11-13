@@ -106,6 +106,7 @@ import {
   getCleanSpecialNotes,
   hasSpecialCareCondition,
   isHealthSharedWithRoommate,
+  getHealthConsentInfo,
   getParticipantPhoto,
   getMedicalEquipmentNeeded,
   hasHealthCondition,
@@ -1295,6 +1296,9 @@ export default function AdminDashboardView({
   const [modalShirtPickupStatus, setModalShirtPickupStatus] = useState('pending');
   const [modalGroup, setModalGroup] = useState('');
   const [modalRoom, setModalRoom] = useState('');
+  const [modalDormOptOut, setModalDormOptOut] = useState(false);
+  const [modalRoomKeyHeld, setModalRoomKeyHeld] = useState(false);
+  const [modalRoomKeyReturned, setModalRoomKeyReturned] = useState(false);
   const [modalShirtSize, setModalShirtSize] = useState('L');
   const [modalCustomShirtNote, setModalCustomShirtNote] = useState('');
   const [modalSpecialCare, setModalSpecialCare] = useState(false);
@@ -2535,6 +2539,9 @@ export default function AdminDashboardView({
 
     setModalGroup(reg.group_assigned || '');
     setModalRoom(reg.room_assigned || '');
+    setModalDormOptOut(Boolean(reg.dorm_opt_out));
+    setModalRoomKeyHeld(Boolean(reg.room_key_held));
+    setModalRoomKeyReturned(Boolean(reg.room_key_returned));
     setModalShirtSize(reg.shirt_size || 'L');
     setModalCustomShirtNote(reg.custom_shirt_note || '');
     setModalSpecialCare(hasSpecialCareCondition(reg));
@@ -3062,6 +3069,28 @@ export default function AdminDashboardView({
         shirt_pickup_status: modalShirtPickupStatus || 'pending',
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
+        dorm_opt_out: Boolean(modalDormOptOut),
+        dorm_opt_out_by: Boolean(modalDormOptOut) !== Boolean(profileModalReg.dorm_opt_out)
+          ? 'admin'
+          : (profileModalReg.dorm_opt_out_by || ''),
+        dorm_opt_out_at: Boolean(modalDormOptOut) !== Boolean(profileModalReg.dorm_opt_out)
+          ? new Date().toISOString()
+          : (profileModalReg.dorm_opt_out_at || ''),
+        attendance_need_accommodation: modalDormOptOut ? false : (isMsuInstitution(cleanInstitution) ? false : true),
+        room_key_held: Boolean(modalRoomKeyHeld || modalRoomKeyReturned),
+        room_key_issued_at: (modalRoomKeyHeld || modalRoomKeyReturned)
+          ? (profileModalReg.room_key_issued_at || new Date().toISOString())
+          : '',
+        room_key_issued_by: (modalRoomKeyHeld || modalRoomKeyReturned)
+          ? (profileModalReg.room_key_issued_by || 'admin')
+          : '',
+        room_key_returned: Boolean(modalRoomKeyReturned),
+        room_key_returned_at: modalRoomKeyReturned
+          ? (profileModalReg.room_key_returned_at || new Date().toISOString())
+          : '',
+        room_key_returned_by: modalRoomKeyReturned
+          ? (profileModalReg.room_key_returned_by || 'admin')
+          : '',
         shirt_size: cleanModalSize,
         custom_shirt_note: trimmedCustomNote,
         is_special_care: modalSpecialCare,
@@ -9261,8 +9290,8 @@ export default function AdminDashboardView({
                                   </span>
                                 )}
                                 {(() => {
-                                  const isHealthShared = isHealthSharedWithRoommate(reg);
-                                  const consentBy = reg.health_consent_by === 'user' ? '👤 เจ้าตัวยินยอมเอง' : '🛡️ แอดมินบันทึก';
+                                  const consentInfo = getHealthConsentInfo(reg);
+                                  const isHealthShared = consentInfo.isShared;
                                   return (
                                     <div className="flex flex-col items-start gap-0.5">
                                       <button
@@ -9295,12 +9324,12 @@ export default function AdminDashboardView({
                                         ) : (
                                           <>
                                             <Lock className="w-2.5 h-2.5 text-amber-400" />
-                                            <span>ปิดสุขภาพ (ปฏิเสธ)</span>
+                                            <span>ปิดสุขภาพ (ไม่ยินยอม)</span>
                                           </>
                                         )}
                                       </button>
                                       <span className="text-[8.5px] text-slate-400 font-medium">
-                                        {consentBy}
+                                        {consentInfo.fullLabel}
                                       </span>
                                     </div>
                                   );
@@ -10394,10 +10423,10 @@ export default function AdminDashboardView({
                           ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                           : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       }`}>
-                        {isHealthSharedWithRoommate(profileModalReg) ? '👁️ ยินยอมเปิดเผยข้อมูลสุขภาพ' : '🔒 ปิดเป็นความลับ (ปฏิเสธ)'}
+                        {isHealthSharedWithRoommate(profileModalReg) ? '👁️ ยินยอมเปิดเผยข้อมูลสุขภาพ' : '🔒 ไม่ยินยอมเปิดเผย (ปิดเป็นความลับ)'}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                        {profileModalReg?.health_consent_by === 'user' ? '👤 เจ้าตัวยินยอมเอง' : '🛡️ แอดมินบันทึก'}
+                        {getHealthConsentInfo(profileModalReg).fullLabel}
                       </span>
                     </div>
                   </div>
@@ -11338,6 +11367,52 @@ export default function AdminDashboardView({
                         }`}
                       />
                     </div>
+                  </div>
+
+                  {/* Dorm Opt-Out & Room Key Controls linked with Room Management */}
+                  <div className="pt-3 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs transition-all ${
+                      modalDormOptOut ? 'bg-amber-500/15 border-amber-500/50 text-amber-200' : 'bg-slate-900/70 border-slate-800 text-slate-300'
+                    } ${!isEditingProfileModal ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        disabled={!isEditingProfileModal}
+                        checked={modalDormOptOut}
+                        onChange={e => setModalDormOptOut(e.target.checked)}
+                        className="accent-amber-500"
+                      />
+                      <span className="font-bold">🚫 ไม่ประสงค์พักหอพัก มมส</span>
+                    </label>
+
+                    <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs transition-all ${
+                      modalRoomKeyHeld ? 'bg-sky-500/15 border-sky-500/50 text-sky-200' : 'bg-slate-900/70 border-slate-800 text-slate-300'
+                    } ${!isEditingProfileModal ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        disabled={!isEditingProfileModal}
+                        checked={modalRoomKeyHeld}
+                        onChange={e => setModalRoomKeyHeld(e.target.checked)}
+                        className="accent-sky-500"
+                      />
+                      <span className="font-bold">🔑 ได้รับ/ถือกุญแจห้องพักแล้ว</span>
+                    </label>
+
+                    <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs transition-all ${
+                      modalRoomKeyReturned ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200' : 'bg-slate-900/70 border-slate-800 text-slate-300'
+                    } ${!isEditingProfileModal ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        disabled={!isEditingProfileModal}
+                        checked={modalRoomKeyReturned}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setModalRoomKeyReturned(checked);
+                          if (checked) setModalRoomKeyHeld(true);
+                        }}
+                        className="accent-emerald-500"
+                      />
+                      <span className="font-bold">✅ คืนกุญแจห้องพักแล้ว</span>
+                    </label>
                   </div>
                 </div>
 

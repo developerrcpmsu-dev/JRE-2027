@@ -4,6 +4,7 @@ import {
   resolvePersonFullNameWithTitle,
   normalizeCallsignSpacing,
   isHealthSharedWithRoommate,
+  getHealthConsentInfo,
   getCleanSpecialNotes,
   getParticipantPhoto,
   getMedicalEquipmentNeeded,
@@ -110,6 +111,26 @@ export function normalizeDormPerson(reg) {
   }
 
   const roomMatch = rawRoom.match(/(\d{3})/);
+  const healthConsent = getHealthConsentInfo(reg);
+  const dormOptOut = Boolean(reg.dorm_opt_out ?? extra.dorm_opt_out ?? false);
+  const dormOptOutBy = reg.dorm_opt_out_by || extra.dorm_opt_out_by || '';
+  const dormOptOutAt = reg.dorm_opt_out_at || extra.dorm_opt_out_at || '';
+  const dormOptOutNote = reg.dorm_opt_out_note || extra.dorm_opt_out_note || '';
+  const roomKeyHeld = Boolean(reg.room_key_held ?? extra.room_key_held ?? false);
+  const roomKeyLabel = reg.room_key_label || extra.room_key_label || '';
+  const roomKeyIssuedAt = reg.room_key_issued_at || extra.room_key_issued_at || '';
+  const roomKeyIssuedBy = reg.room_key_issued_by || extra.room_key_issued_by || '';
+  const roomKeyReturned = Boolean(reg.room_key_returned ?? extra.room_key_returned ?? false);
+  const roomKeyReturnedAt = reg.room_key_returned_at || extra.room_key_returned_at || '';
+  const roomKeyReturnedBy = reg.room_key_returned_by || extra.room_key_returned_by || '';
+  const roomKeyNote = reg.room_key_note || extra.room_key_note || '';
+
+  let keyStatusLabel = dormOptOut ? 'ไม่ต้องใช้กุญแจ (ไม่พัก)' : 'ยังไม่ได้รับกุญแจ';
+  if (roomKeyReturned) {
+    keyStatusLabel = 'คืนกุญแจแล้ว';
+  } else if (roomKeyHeld) {
+    keyStatusLabel = 'ได้รับกุญแจแล้ว';
+  }
 
   return {
     raw: reg,
@@ -149,7 +170,22 @@ export function normalizeDormPerson(reg) {
     emergencyName: reg.emergency_name || extra.emergency_name || '-',
     emergencyPhone: reg.emergency_phone || extra.emergency_phone || '-',
     isMsu,
-    isHealthShared: isHealthSharedWithRoommate(reg),
+    isHealthShared: healthConsent.isShared,
+    healthConsent,
+    dormOptOut,
+    dormOptOutBy,
+    dormOptOutAt,
+    dormOptOutNote,
+    stayStatusLabel: isMsu ? 'มมส (ไป-กลับเอง)' : (dormOptOut ? 'ไม่ประสงค์พักหอพัก' : 'เข้าพักหอพัก'),
+    roomKeyHeld,
+    roomKeyLabel,
+    roomKeyIssuedAt,
+    roomKeyIssuedBy,
+    roomKeyReturned,
+    roomKeyReturnedAt,
+    roomKeyReturnedBy,
+    roomKeyNote,
+    keyStatusLabel,
     rawRoom,
     roomNumber: roomMatch ? roomMatch[1] : null
   };
@@ -181,10 +217,14 @@ export function buildDormitoryRoomData(registrations = []) {
   });
 
   const unassignedExternal = [];
+  const optedOutPeople = [];
   const localMsu = [];
 
   (registrations || []).forEach(reg => {
     const person = normalizeDormPerson(reg);
+    if (person.dormOptOut) {
+      optedOutPeople.push(person);
+    }
     if (person.isMsu) {
       localMsu.push(person);
       return;
@@ -192,14 +232,45 @@ export function buildDormitoryRoomData(registrations = []) {
 
     if (person.roomNumber && map[person.roomNumber]) {
       map[person.roomNumber].occupants.push(person);
-    } else {
+    } else if (!person.dormOptOut) {
       unassignedExternal.push(person);
     }
   });
 
-  // Sort occupants in every room so #1 = medical/allergy, #2 = healthy
+  // Sort occupants in every room so #1 = medical/allergy, #2 = healthy, opted-out last, and compute key summaries
   Object.values(map).forEach(room => {
-    room.occupants.sort(compareRoomOccupants);
+    room.occupants.sort((a, b) => {
+      if (a.dormOptOut !== b.dormOptOut) return a.dormOptOut ? 1 : -1;
+      return compareRoomOccupants(a, b);
+    });
+    const stayingOccupants = room.occupants.filter(o => !o.dormOptOut);
+    const optedOutOccupants = room.occupants.filter(o => o.dormOptOut);
+    const keyHolders = room.occupants.filter(o => o.roomKeyHeld);
+    const activeKeyHolders = keyHolders.filter(o => !o.roomKeyReturned);
+    const returnedKeys = room.occupants.filter(o => o.roomKeyReturned);
+
+    room.stayingCount = stayingOccupants.length;
+    room.optedOutCount = optedOutOccupants.length;
+    room.keyHolders = keyHolders;
+    room.activeKeyHolders = activeKeyHolders;
+    room.keysIssuedCount = keyHolders.length;
+    room.keysReturnedCount = returnedKeys.length;
+    room.allKeysReturned = keyHolders.length > 0 && keyHolders.every(o => o.roomKeyReturned);
+
+    if (stayingOccupants.length === 0 && optedOutOccupants.length > 0) {
+      room.keySummaryLabel = 'ไม่ประสงค์เข้าพักทั้งห้อง';
+    } else if (keyHolders.length === 0) {
+      room.keySummaryLabel = 'ยังไม่จ่ายกุญแจ';
+    } else if (room.allKeysReturned) {
+      room.keySummaryLabel = `คืนกุญแจครบแล้ว (${returnedKeys.length}/${keyHolders.length})`;
+    } else if (activeKeyHolders.length >= 2) {
+      room.keySummaryLabel = `อยู่ที่ทั้ง 2 คน (${activeKeyHolders.map(o => o.nickname && o.nickname !== '-' ? o.nickname : o.firstName).join(', ')})`;
+    } else if (activeKeyHolders.length === 1) {
+      const h = activeKeyHolders[0];
+      room.keySummaryLabel = `อยู่ที่: ${h.nickname && h.nickname !== '-' ? h.nickname : h.firstName}${returnedKeys.length > 0 ? ` (อีก ${returnedKeys.length} คืนแล้ว)` : ''}`;
+    } else {
+      room.keySummaryLabel = `คืนแล้ว ${returnedKeys.length}/${keyHolders.length}`;
+    }
   });
 
   const rooms = Object.values(map);
@@ -232,12 +303,25 @@ export function buildDormitoryRoomData(registrations = []) {
   const doubleCareRooms = [...maleDiag.doubleCareRooms, ...femaleDiag.doubleCareRooms];
   const misplacedCareRooms = [...maleDiag.misplacedCareRooms, ...femaleDiag.misplacedCareRooms];
 
+  const allRoomOccupants = rooms.flatMap(r => r.occupants);
+  const totalStaying = allRoomOccupants.filter(o => !o.dormOptOut).length;
+  const totalOptedOut = optedOutPeople.length;
+  const totalKeysIssued = allRoomOccupants.filter(o => o.roomKeyHeld).length;
+  const totalKeysReturned = allRoomOccupants.filter(o => o.roomKeyReturned).length;
+  const totalKeysUnreturned = allRoomOccupants.filter(o => o.roomKeyHeld && !o.roomKeyReturned).length;
+
   return {
     rooms,
     maleRooms,
     femaleRooms,
     unassignedExternal,
+    optedOutPeople,
     localMsu,
+    totalStaying,
+    totalOptedOut,
+    totalKeysIssued,
+    totalKeysReturned,
+    totalKeysUnreturned,
     diagnostics: {
       doubleCareRooms,
       misplacedCareRooms,
