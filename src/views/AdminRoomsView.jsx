@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { confirmWithModal } from '../utils/confirmHelper';
 import { 
   Building, 
   DoorClosed, 
@@ -308,8 +309,10 @@ export default function AdminRoomsView({
   registrations = [],
   onUpdateAllocation,
   onOpenProfileModal,
-  triggerToast
+  triggerToast,
+  askConfirm = null
 }) {
+  const confirmAction = (opts) => confirmWithModal(askConfirm, opts);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState('all'); // 'all', 'ชาย', 'หญิง'
@@ -1247,10 +1250,17 @@ export default function AdminRoomsView({
                     value={selectedPerson.roomNumber || ''}
                     onChange={async (e) => {
                       const nextRoom = e.target.value;
-                      if (!nextRoom) return;
+                      if (!nextRoom || nextRoom === selectedPerson.roomNumber) return;
+                      const roomVal = `ห้อง ${nextRoom}`;
+                      const confirmed = await confirmAction({
+                        title: 'ยืนยันการย้ายห้องพัก',
+                        message: `ต้องการย้าย ${selectedPerson.name} ไปยัง ${roomVal} ใช่หรือไม่?`,
+                        confirmText: '✓ ยืนยันย้ายห้อง',
+                        variant: 'info'
+                      });
+                      if (!confirmed) return;
                       setIsMovingSingle(true);
                       try {
-                        const roomVal = `ห้อง ${nextRoom}`;
                         await onUpdateAllocation(selectedPerson.targetUpdateId, { room_assigned: roomVal });
                         setSelectedPerson(prev => ({
                           ...prev,
@@ -1259,11 +1269,14 @@ export default function AdminRoomsView({
                           assignedRoom: roomVal
                         }));
                         if (triggerToast) triggerToast(`✓ ย้าย ${selectedPerson.name} ไปยัง${roomVal} เรียบร้อยแล้ว`, 'success');
+                      } catch (err) {
+                        console.error('Failed to move room:', err);
+                        if (triggerToast) triggerToast(err?.message || 'ย้ายห้องพักไม่สำเร็จ กรุณาลองใหม่', 'error');
                       } finally {
                         setIsMovingSingle(false);
                       }
                     }}
-                    className="font-mono font-black text-sky-300 px-2.5 py-1 rounded-lg bg-sky-900/60 border border-sky-500/40 text-xs cursor-pointer"
+                    className="font-mono font-black text-sky-300 px-2.5 py-1 rounded-lg bg-sky-900/60 border border-sky-500/40 text-xs cursor-pointer disabled:opacity-50"
                   >
                     <option value="">ยังไม่ระบุห้อง</option>
                     {DORMITORY_ROOM_CONFIGS.filter(c => c.gender === selectedPerson.gender).map(c => (
@@ -1427,20 +1440,38 @@ export default function AdminRoomsView({
                 <div className="pt-1 flex items-center gap-2">
                   <button
                     type="button"
+                    disabled={isMovingSingle}
                     onClick={async () => {
                       const nextVal = !selectedPerson.isHealthShared;
                       const targetId = selectedPerson.targetUpdateId;
-                      await onUpdateAllocation(targetId, { share_health_with_roommate: nextVal });
-                      setSelectedPerson(prev => ({
-                        ...prev,
-                        isHealthShared: nextVal,
-                        raw: { ...(prev.raw || {}), share_health_with_roommate: nextVal }
-                      }));
-                      if (triggerToast) {
-                        triggerToast(nextVal ? '✓ บันทึก: เปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบแล้ว' : '✓ บันทึก: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะแพทย์/Admin มองเห็น)', 'info');
+                      const confirmed = await confirmAction({
+                        title: nextVal ? 'ยืนยันเปิดเผยข้อมูลสุขภาพให้เมททราบ' : 'ยืนยันซ่อนข้อมูลสุขภาพจากเพื่อนร่วมห้อง',
+                        message: nextVal
+                          ? `ต้องการอนุญาตให้เพื่อนร่วมห้องเห็นข้อมูลสุขภาพของ ${selectedPerson.name} เพื่อช่วยดูแลกรณีฉุกเฉิน ใช่หรือไม่?`
+                          : `ต้องการซ่อนข้อมูลสุขภาพของ ${selectedPerson.name} จากเพื่อนร่วมห้อง (เห็นเฉพาะ Admin และทีมแพทย์) ใช่หรือไม่?`,
+                        confirmText: nextVal ? '👁️ ยืนยันเปิดเผย' : '🔒 ยืนยันซ่อนจากเมท',
+                        variant: nextVal ? 'info' : 'warning'
+                      });
+                      if (!confirmed) return;
+                      setIsMovingSingle(true);
+                      try {
+                        await onUpdateAllocation(targetId, { share_health_with_roommate: nextVal });
+                        setSelectedPerson(prev => ({
+                          ...prev,
+                          isHealthShared: nextVal,
+                          raw: { ...(prev.raw || {}), share_health_with_roommate: nextVal }
+                        }));
+                        if (triggerToast) {
+                          triggerToast(nextVal ? '✓ บันทึก: เปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบแล้ว' : '✓ บันทึก: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะแพทย์/Admin มองเห็น)', 'info');
+                        }
+                      } catch (err) {
+                        console.error('Failed to toggle health privacy in room modal:', err);
+                        if (triggerToast) triggerToast(err?.message || 'บันทึกการตั้งค่าข้อมูลสุขภาพไม่สำเร็จ กรุณาลองใหม่', 'error');
+                      } finally {
+                        setIsMovingSingle(false);
                       }
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1.5 shadow"
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1.5 shadow"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>สลับเป็น: {selectedPerson.isHealthShared ? '🔒 ซ่อนจากเมท' : '👁️ เปิดเผยให้เมททราบ'}</span>

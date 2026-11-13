@@ -19,11 +19,13 @@ import {
 } from 'lucide-react';
 import { INITIAL_STAFF_ADMIN_ACCOUNTS } from '../data/defaultData';
 import { DataService } from '../supabase';
+import { confirmWithModal } from '../utils/confirmHelper';
 
 export default function AdminStaffAccountsView({ 
   user = null, 
   triggerToast = null,
-  onRefreshUserAccounts = null
+  onRefreshUserAccounts = null,
+  askConfirm = null
 }) {
   const [accounts, setAccounts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,17 +61,20 @@ export default function AdminStaffAccountsView({
     loadAccounts();
   }, []);
 
-  // Save changes to backend
+  // Save changes to backend strictly (update UI only after persistence succeeds)
   const persistAccounts = async (newList) => {
-    setAccounts(newList);
+    const previousList = accounts;
     try {
       await DataService.saveStaffAdminAccounts(newList);
+      setAccounts(newList);
       if (typeof onRefreshUserAccounts === 'function') {
         onRefreshUserAccounts();
       }
     } catch (err) {
+      setAccounts(previousList);
       console.error('Error saving staff accounts:', err);
-      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+      if (triggerToast) triggerToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูลลงฐานข้อมูล', 'error');
+      throw err;
     }
   };
 
@@ -100,11 +105,29 @@ export default function AdminStaffAccountsView({
   // Submit Add/Edit form
   const handleSubmitForm = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!formEmail.trim()) {
       if (triggerToast) triggerToast('กรุณากรอกอีเมล Google ให้ครบถ้วน', 'warning');
       return;
     }
     const cleanEmail = formEmail.trim().toLowerCase();
+    const isEdit = editingIndex !== null;
+    if (!isEdit && accounts.some(a => (a.email || '').toLowerCase() === cleanEmail)) {
+      if (triggerToast) triggerToast(`อีเมล ${cleanEmail} มีอยู่ในระบบแล้ว`, 'warning');
+      return;
+    }
+
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: isEdit ? 'ยืนยันการแก้ไขสิทธิ์บัญชี Staff/Admin' : 'ยืนยันการเพิ่มบัญชี Staff/Admin ใหม่',
+      message: isEdit
+        ? `ต้องการบันทึกการแก้ไขสิทธิ์ของ "${cleanEmail}" (${formRole.toUpperCase()}) ใช่หรือไม่?`
+        : `ต้องการเพิ่มสิทธิ์ "${cleanEmail}" (${formRole.toUpperCase()}) เข้าสู่ระบบ Staff/Admin ใช่หรือไม่?`,
+      confirmText: isEdit ? '💾 ยืนยันบันทึกการแก้ไข' : '✓ ยืนยันเพิ่มบัญชี',
+      cancelText: 'ยกเลิก',
+      variant: 'info'
+    });
+    if (!confirmed) return;
+
     setIsSubmitting(true);
     try {
       let nextList = [...accounts];
@@ -118,26 +141,25 @@ export default function AdminStaffAccountsView({
         updated_at: new Date().toISOString()
       };
 
-      if (editingIndex !== null) {
+      if (isEdit) {
         nextList[editingIndex] = { ...nextList[editingIndex], ...entry };
-        if (triggerToast) triggerToast(`✓ แก้ไขสิทธิ์บัญชี ${cleanEmail} เรียบร้อยแล้ว`, 'success');
       } else {
-        // Check duplicate
-        if (nextList.some(a => (a.email || '').toLowerCase() === cleanEmail)) {
-          if (triggerToast) triggerToast(`อีเมล ${cleanEmail} มีอยู่ในระบบแล้ว`, 'warning');
-          setIsSubmitting(false);
-          return;
-        }
         entry.created_at = new Date().toISOString();
         nextList.unshift(entry);
-        if (triggerToast) triggerToast(`✓ เพิ่มบัญชี Staff/Admin ${cleanEmail} สำเร็จ! เข้าสู่ระบบด้วย Google ได้ทันที`, 'success');
       }
 
       await persistAccounts(nextList);
       setModalOpen(false);
+      if (triggerToast) {
+        triggerToast(
+          isEdit
+            ? `✓ แก้ไขสิทธิ์บัญชี ${cleanEmail} เรียบร้อยแล้ว`
+            : `✓ เพิ่มบัญชี Staff/Admin ${cleanEmail} สำเร็จ! เข้าสู่ระบบด้วย Google ได้ทันที`,
+          'success'
+        );
+      }
     } catch (err) {
       console.error(err);
-      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการบันทึกบัญชี', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -145,38 +167,85 @@ export default function AdminStaffAccountsView({
 
   // Toggle active status
   const handleToggleActive = async (idx) => {
-    const nextList = [...accounts];
-    const cur = nextList[idx];
-    cur.active = !cur.active;
-    cur.updated_at = new Date().toISOString();
-    await persistAccounts(nextList);
-    if (triggerToast) {
-      triggerToast(`${cur.active ? '✓ เปิดใช้งาน' : '🚫 ระงับสิทธิ์'} บัญชี ${cur.email} เรียบร้อยแล้ว`, cur.active ? 'success' : 'info');
+    if (isSubmitting) return;
+    const target = accounts[idx];
+    if (!target) return;
+    const nextActive = target.active === false;
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: nextActive ? 'ยืนยันการเปิดใช้งานบัญชี' : 'ยืนยันการระงับสิทธิ์บัญชี',
+      message: nextActive
+        ? `ต้องการเปิดใช้งานสิทธิ์ Staff/Admin ของ "${target.email}" ใช่หรือไม่?`
+        : `ต้องการระงับสิทธิ์การใช้งานของ "${target.email}" ชั่วคราวใช่หรือไม่?`,
+      confirmText: nextActive ? '✓ เปิดใช้งานบัญชี' : '🚫 ยืนยันระงับสิทธิ์',
+      cancelText: 'ยกเลิก',
+      variant: nextActive ? 'info' : 'warning'
+    });
+    if (!confirmed) return;
+    setIsSubmitting(true);
+    try {
+      const nextList = accounts.map((acc, i) =>
+        i === idx ? { ...acc, active: nextActive, updated_at: new Date().toISOString() } : acc
+      );
+      await persistAccounts(nextList);
+      if (triggerToast) {
+        triggerToast(`${nextActive ? '✓ เปิดใช้งาน' : '🚫 ระงับสิทธิ์'} บัญชี ${target.email} เรียบร้อยแล้ว`, nextActive ? 'success' : 'info');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Delete account
   const handleDelete = async (idx) => {
+    if (isSubmitting) return;
     const target = accounts[idx];
+    if (!target) return;
     if (target.email === 'developer.rcpmsu@gmail.com') {
       if (triggerToast) triggerToast('ไม่อนุญาตให้ลบบัญชีหลักของ Dev สูงสุด', 'error');
       return;
     }
-    if (!window.confirm(`ยืนยันการลบบัญชี "${target.name || target.email}" ออกจากสิทธิ์ Staff/Admin หรือไม่?`)) {
-      return;
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: '🗑️ ยืนยันการลบบัญชีออกจากสิทธิ์ Staff/Admin',
+      message: `ยืนยันการลบบัญชี "${target.name || target.email}" (${target.email}) ออกจากสิทธิ์ Staff/Admin หรือไม่?`,
+      confirmText: '🗑️ ยืนยันลบบัญชี',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
+    setIsSubmitting(true);
+    try {
+      const nextList = accounts.filter((_, i) => i !== idx);
+      await persistAccounts(nextList);
+      if (triggerToast) triggerToast(`✓ ลบบัญชี ${target.email} ออกจากสิทธิ์เรียบร้อยแล้ว`, 'success');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
-    const nextList = accounts.filter((_, i) => i !== idx);
-    await persistAccounts(nextList);
-    if (triggerToast) triggerToast(`✓ ลบบัญชี ${target.email} ออกจากสิทธิ์เรียบร้อยแล้ว`, 'success');
   };
 
   // Reset to default seed
   const handleResetToDefault = async () => {
-    if (!window.confirm('ท่านต้องการรีเซ็ตรายชื่อ Staff & Admin กลับเป็นค่ามาตรฐาน 12 ท่านแรกเริ่มหรือไม่?')) {
-      return;
+    if (isSubmitting) return;
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: 'ยืนยันการรีเซ็ตรายชื่อ Staff & Admin',
+      message: 'ท่านต้องการรีเซ็ตรายชื่อ Staff & Admin กลับเป็นค่ามาตรฐาน 12 ท่านแรกเริ่มหรือไม่? (บัญชีที่เพิ่มเองจะถูกแทนที่)',
+      confirmText: '↩️ ยืนยันรีเซ็ตค่ามาตรฐาน',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
+    setIsSubmitting(true);
+    try {
+      await persistAccounts(INITIAL_STAFF_ADMIN_ACCOUNTS);
+      if (triggerToast) triggerToast('✓ รีเซ็ตรายชื่อ Staff & Admin กลับสู่ค่ามาตรฐานเรียบร้อยแล้ว', 'success');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
-    await persistAccounts(INITIAL_STAFF_ADMIN_ACCOUNTS);
-    if (triggerToast) triggerToast('✓ รีเซ็ตรายชื่อ Staff & Admin กลับสู่ค่ามาตรฐานเรียบร้อยแล้ว', 'success');
   };
 
   // Filtered accounts

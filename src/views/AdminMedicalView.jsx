@@ -42,6 +42,7 @@ import {
 } from '../data/defaultData';
 import { DataService } from '../supabase';
 import { downloadCsv } from '../utils/documentExporters';
+import { confirmWithModal } from '../utils/confirmHelper';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 
 const PRESET_SYMPTOMS = [
@@ -74,7 +75,8 @@ export default function AdminMedicalView({
   currentUser = null,
   onSelectApplicant,
   onUpdateAllocation,
-  triggerToast
+  triggerToast,
+  askConfirm = null
 }) {
   // Medical dispense logs state
   const [logs, setLogs] = useState([]);
@@ -256,6 +258,16 @@ export default function AdminMedicalView({
       if (triggerToast) triggerToast('กรุณาระบุชื่อ-นามสกุล หรือ นามเรียกขาน ของผู้เบิกจ่ายยา', 'warning');
       return;
     }
+    if (isSaving) return;
+
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: '💊 ยืนยันการบันทึกเวชระเบียนจ่ายยา',
+      message: `ต้องการบันทึกการเบิกจ่ายยาให้ "${selectedRecipient.name}" (${medicineText.trim()}) โดย "${dispenserName.trim()}" ใช่หรือไม่?`,
+      confirmText: '✓ ยืนยันบันทึกจ่ายยา',
+      cancelText: 'ยกเลิก',
+      variant: 'info'
+    });
+    if (!confirmed) return;
 
     setIsSaving(true);
     try {
@@ -294,7 +306,7 @@ export default function AdminMedicalView({
       }
     } catch (err) {
       console.error(err);
-      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการบันทึกเวชระเบียน', 'error');
+      if (triggerToast) triggerToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึกเวชระเบียน', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -302,14 +314,21 @@ export default function AdminMedicalView({
 
   // Delete Log
   const handleDeleteLog = async (id, name) => {
-    if (!window.confirm(`ต้องการลบบันทึกเวชระเบียนของ "${name}" ใช่หรือไม่?`)) return;
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: '🗑️ ยืนยันการลบประวัติเวชระเบียน',
+      message: `ต้องการลบบันทึกเวชระเบียนของ "${name}" ใช่หรือไม่? การกระทำนี้ไม่สามารถกู้คืนได้`,
+      confirmText: '🗑️ ยืนยันลบบันทึก',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await DataService.deleteMedicalDispenseLog(id);
       await fetchLogs();
       if (triggerToast) triggerToast('ลบบันทึกเวชระเบียนเรียบร้อยแล้ว', 'info');
     } catch (err) {
       console.error(err);
-      if (triggerToast) triggerToast('เกิดข้อผิดพลาดในการลบบันทึก', 'error');
+      if (triggerToast) triggerToast(err?.message || 'เกิดข้อผิดพลาดในการลบบันทึก', 'error');
     }
   };
 

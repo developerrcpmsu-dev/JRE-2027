@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { confirmWithModal } from '../utils/confirmHelper';
 import {
   Users,
   CheckCircle2,
@@ -831,9 +832,24 @@ export default function AdminExecutiveSummaryView({
     confirmFilter !== 'all' ||
     Boolean(searchQuery.trim());
 
+  const confirmExecAction = (opts) => confirmWithModal(askConfirm, opts);
+
   // Handlers for 1-click Attendance Confirmation & Accommodation Toggle
   const handleQuickUpdateConfirmation = async (item, nextStatus) => {
     if (!onUpdateAllocation) return;
+    const statusLabel =
+      nextStatus === 'confirmed'
+        ? '✅ ยืนยันมาแน่นอน'
+        : nextStatus === 'declined'
+        ? '❌ ไม่สะดวกเข้าร่วม'
+        : '⏳ รอยืนยัน';
+    const ok = await confirmExecAction({
+      title: 'ยืนยันการเปลี่ยนสถานะเข้าร่วมกิจกรรม',
+      message: `ต้องการเปลี่ยนสถานะของ "${item.fullName}" เป็น "${statusLabel}" ใช่หรือไม่?`,
+      confirmText: `ยืนยัน: ${statusLabel}`,
+      variant: nextStatus === 'declined' ? 'warning' : 'info'
+    });
+    if (!ok) return;
     setUpdatingId(item.id);
     try {
       const now = new Date().toISOString();
@@ -856,15 +872,12 @@ export default function AdminExecutiveSummaryView({
             : true
       };
       await onUpdateAllocation(item.id, patch);
-      const statusLabel =
-        nextStatus === 'confirmed'
-          ? '✅ ยืนยันมาแน่นอน'
-          : nextStatus === 'declined'
-          ? '❌ ไม่สะดวกเข้าร่วม'
-          : '⏳ รอยืนยัน';
       if (triggerToast) {
         triggerToast(`อัปเดตสถานะคุณ ${item.fullName} เป็น "${statusLabel}" เรียบร้อยแล้ว`);
       }
+    } catch (err) {
+      console.error('Failed to update attendance status:', err);
+      if (triggerToast) triggerToast(err?.message || 'อัปเดตสถานะการเข้าร่วมไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -872,17 +885,26 @@ export default function AdminExecutiveSummaryView({
 
   const handleQuickToggleAccommodation = async (item) => {
     if (!onUpdateAllocation) return;
+    const nextNeed = !item.confirmInfo.needAccommodation;
+    const label = nextNeed ? '🏨 ต้องการพักหอพักโครงการ' : '🏠 ไม่เข้าพักหอพัก (ไป-กลับเอง)';
+    const ok = await confirmExecAction({
+      title: 'ยืนยันการเปลี่ยนสถานะที่พักหอพัก',
+      message: `ต้องการปรับสถานะที่พักของ "${item.fullName}" เป็น "${label}" ใช่หรือไม่?`,
+      confirmText: '✓ ยืนยันปรับสถานะที่พัก',
+      variant: 'info'
+    });
+    if (!ok) return;
     setUpdatingId(item.id);
     try {
-      const nextNeed = !item.confirmInfo.needAccommodation;
       await onUpdateAllocation(item.id, {
         attendance_need_accommodation: nextNeed
       });
       if (triggerToast) {
-        triggerToast(
-          `อัปเดตที่พักของคุณ ${item.fullName}: ${nextNeed ? '🏨 ต้องการพักหอพักโครงการ' : '🏠 ไม่เข้าพักหอพัก (ไป-กลับเอง)'}`
-        );
+        triggerToast(`อัปเดตที่พักของคุณ ${item.fullName}: ${label}`);
       }
+    } catch (err) {
+      console.error('Failed to update accommodation toggle:', err);
+      if (triggerToast) triggerToast(err?.message || 'อัปเดตสถานะที่พักไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -891,11 +913,18 @@ export default function AdminExecutiveSummaryView({
   // Inline University Dropdown change handler (for any person in the table or committee roster)
   const handleChangePersonUniversity = async (item, nextUniShort) => {
     if (!onUpdateAllocation || !item) return;
+    const uniObj = OFFICIAL_NETWORK_INSTITUTIONS.find((u) => u.shortTag === nextUniShort);
+    const nextAbbrTh = uniObj ? uniObj.shortTag : nextUniShort;
+    const ok = await confirmExecAction({
+      title: 'ยืนยันการเปลี่ยนสังกัดมหาวิทยาลัย',
+      message: `ต้องการเปลี่ยนมหาวิทยาลัยของ "${item.fullName}" จาก "${item.uniInfo?.shortTag || '-'}" เป็น "${nextAbbrTh}" ใช่หรือไม่?`,
+      confirmText: `✓ เปลี่ยนเป็น ${nextAbbrTh}`,
+      variant: 'warning'
+    });
+    if (!ok) return;
     setUpdatingId(item.id);
     try {
-      const uniObj = OFFICIAL_NETWORK_INSTITUTIONS.find((u) => u.shortTag === nextUniShort);
       const nextInstitution = uniObj ? uniObj.label : nextUniShort;
-      const nextAbbrTh = uniObj ? uniObj.shortTag : nextUniShort;
       const cleanName = `${item.reg.title_th || ''}${item.reg.first_name || ''}${item.reg.last_name ? ' ' + item.reg.last_name : ''}`.trim();
       const nextFullNameAff = `${cleanName} (${nextAbbrTh})`.trim();
 
@@ -908,6 +937,9 @@ export default function AdminExecutiveSummaryView({
       if (triggerToast) {
         triggerToast(`🏛️ เปลี่ยนมหาวิทยาลัยของ "${item.fullName}" เป็น "${nextAbbrTh}" เรียบร้อยแล้ว`);
       }
+    } catch (err) {
+      console.error('Failed to change person university:', err);
+      if (triggerToast) triggerToast(err?.message || 'เปลี่ยนมหาวิทยาลัยไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -916,6 +948,15 @@ export default function AdminExecutiveSummaryView({
   // Inline Role Type change handler (Participant vs Committee / MC / Photographer / Dev / Staff / Club / Volunteer)
   const handleChangePersonRoleType = async (item, nextRoleType) => {
     if (!onUpdateAllocation || !item) return;
+    const opt = STAFF_ROLE_OPTIONS.find((o) => o.value === nextRoleType);
+    const nextRoleLabel = opt ? opt.badge || opt.label : nextRoleType;
+    const ok = await confirmExecAction({
+      title: 'ยืนยันการเปลี่ยนบทบาทในโครงการ',
+      message: `ต้องการเปลี่ยนบทบาทของ "${item.fullName}" เป็น "${nextRoleLabel}" ใช่หรือไม่? (มีผลต่ออัตราค่าลงทะเบียนและการออกบัตร ID Card)`,
+      confirmText: '✓ ยืนยันเปลี่ยนบทบาท',
+      variant: 'warning'
+    });
+    if (!ok) return;
     setUpdatingId(item.id);
     try {
       const isNextStaff = ['committee', 'staff', 'mc', 'photographer', 'dev'].includes(nextRoleType);
@@ -933,9 +974,11 @@ export default function AdminExecutiveSummaryView({
       }
       await onUpdateAllocation(item.id, patch);
       if (triggerToast) {
-        const opt = STAFF_ROLE_OPTIONS.find((o) => o.value === nextRoleType);
-        triggerToast(`🛠️ เปลี่ยนบทบาทของ "${item.fullName}" เป็น "${opt ? opt.badge || opt.label : nextRoleType}" เรียบร้อยแล้ว`);
+        triggerToast(`🛠️ เปลี่ยนบทบาทของ "${item.fullName}" เป็น "${nextRoleLabel}" เรียบร้อยแล้ว`);
       }
+    } catch (err) {
+      console.error('Failed to change person role:', err);
+      if (triggerToast) triggerToast(err?.message || 'เปลี่ยนบทบาทไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -959,6 +1002,9 @@ export default function AdminExecutiveSummaryView({
       if (triggerToast) {
         triggerToast(`📝 บันทึกหมายเหตุหน้าที่ของ "${item.fullName}" เรียบร้อยแล้ว`);
       }
+    } catch (err) {
+      console.error('Failed to save duty note:', err);
+      if (triggerToast) triggerToast(err?.message || 'บันทึกหมายเหตุหน้าที่ไม่สำเร็จ กรุณาลองใหม่', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -3020,6 +3066,15 @@ export default function AdminExecutiveSummaryView({
                                     }
                                     const nextVal = !isHealthShared;
                                     if (!onUpdateAllocation) return;
+                                    const ok = await confirmExecAction({
+                                      title: nextVal ? 'ยืนยันเปิดเผยข้อมูลสุขภาพให้เมททราบ' : 'ยืนยันปิดการเปิดเผยข้อมูลสุขภาพ',
+                                      message: nextVal
+                                        ? `ต้องการปรับให้ "${item.fullName}" ยินยอมเปิดเผยข้อมูลสุขภาพกับเพื่อนร่วมห้อง ใช่หรือไม่?`
+                                        : `ต้องการปรับให้ "${item.fullName}" ปิดการเปิดเผยข้อมูลสุขภาพกับเพื่อนร่วมห้อง ใช่หรือไม่?`,
+                                      confirmText: nextVal ? '👁️ ยืนยันเปิดเผย' : '🔒 ยืนยันปิดข้อมูล',
+                                      variant: nextVal ? 'info' : 'warning'
+                                    });
+                                    if (!ok) return;
                                     const targetUserId = reg.user_id || reg.id || item.id;
                                     try {
                                       await onUpdateAllocation(targetUserId, {

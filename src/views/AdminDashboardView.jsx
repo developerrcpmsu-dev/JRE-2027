@@ -1618,11 +1618,49 @@ export default function AdminDashboardView({
   // In-App Document Preview Modal State
   const [previewDoc, setPreviewDoc] = useState(null);
 
-  // Notification Toast
+  // Notification Toast & Action Mutation Lock
   const [alertToast, setAlertToast] = useState(null);
-  const triggerToast = (msg) => {
-    setAlertToast(msg);
-    setTimeout(() => setAlertToast(null), 3500);
+  const toastTimerRef = React.useRef(null);
+  const triggerToast = (msg, type = 'success') => {
+    if (!msg) return;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    const inferredType =
+      type !== 'success'
+        ? type
+        : (String(msg).startsWith('❌') || String(msg).includes('ผิดพลาด') || String(msg).includes('ไม่สำเร็จ') || String(msg).includes('ไม่อนุญาต'))
+        ? 'error'
+        : (String(msg).startsWith('🔒') || String(msg).startsWith('⚠️') || String(msg).startsWith('⏳'))
+        ? 'warning'
+        : 'success';
+    setAlertToast({ msg, type: inferredType });
+    toastTimerRef.current = setTimeout(() => setAlertToast(null), inferredType === 'error' ? 5500 : 3800);
+  };
+
+  // Global mutation lock + confirm guard to prevent accidental single-clicks and double-submissions
+  const [busyActionKey, setBusyActionKey] = useState(null);
+  const busyLockRef = React.useRef(false);
+  const runSafeAdminMutation = async (actionKey, confirmConfig, taskFn, errorPrefix = 'บันทึกไม่สำเร็จ') => {
+    if (busyLockRef.current) {
+      triggerToast('⏳ ระบบกำลังบันทึกคำสั่งก่อนหน้าอยู่ กรุณารอสักครู่แล้วลองใหม่', 'warning');
+      return false;
+    }
+    if (confirmConfig) {
+      const confirmed = await askConfirm(confirmConfig);
+      if (!confirmed) return false;
+    }
+    busyLockRef.current = true;
+    setBusyActionKey(actionKey || 'busy');
+    try {
+      await taskFn();
+      return true;
+    } catch (err) {
+      console.error(`Admin mutation failed [${actionKey}]:`, err);
+      triggerToast(`❌ ${errorPrefix}: ${err?.message || 'กรุณาตรวจสอบการเชื่อมต่อหรือสิทธิ์ Admin แล้วลองใหม่'}`, 'error');
+      return false;
+    } finally {
+      busyLockRef.current = false;
+      setBusyActionKey(null);
+    }
   };
 
   // Excel Export Progress State
@@ -2335,12 +2373,25 @@ export default function AdminDashboardView({
   };
 
   const handleSaveAllocation = async (userId) => {
-    await onUpdateAllocation(userId, {
-      group_assigned: allocGroup.trim(),
-      room_assigned: allocRoom.trim()
-    });
-    setEditingUserId(null);
-    triggerToast('บันทึกการจัดสรรกลุ่มและห้องพักเรียบร้อย');
+    await runSafeAdminMutation(
+      `alloc_${userId}`,
+      {
+        title: 'ยืนยันการบันทึกกลุ่มและห้องพัก',
+        message: `ต้องการบันทึกกลุ่ม "${allocGroup.trim() || '-'}" และห้องพัก "${allocRoom.trim() || '-'}" ใช่หรือไม่?`,
+        confirmText: '✓ ยืนยันบันทึก',
+        cancelText: 'ยกเลิก',
+        variant: 'info'
+      },
+      async () => {
+        await onUpdateAllocation(userId, {
+          group_assigned: allocGroup.trim(),
+          room_assigned: allocRoom.trim()
+        });
+        setEditingUserId(null);
+        triggerToast('✓ บันทึกการจัดสรรกลุ่มและห้องพักเรียบร้อย', 'success');
+      },
+      'ไม่สามารถบันทึกกลุ่ม/ห้องพักได้'
+    );
   };
 
   // Direct handler for Admin to specify/update a person's shirt size (locked behind edit/save UI)
@@ -2790,15 +2841,15 @@ export default function AdminDashboardView({
       // Update local modal state copy
       setProfileModalReg(prev => ({ ...prev, ...updates }));
       setIsEditingProfileModal(false);
-      triggerToast(`บันทึกข้อมูลของ ${cleanFirstName} ${cleanLastName} เรียบร้อยแล้ว`);
+      triggerToast(`✓ บันทึกข้อมูลของ ${cleanFirstName} ${cleanLastName} เรียบร้อยแล้ว`, 'success');
     } catch (err) {
-      triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      triggerToast(`❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${err?.message || 'กรุณาตรวจสอบสิทธิ์และการเชื่อมต่อแล้วลองใหม่'}`, 'error');
     } finally {
       setIsSavingProfile(false);
     }
   };
 
-  // Quick 1-click toggle or Dropdown Role Selector to mark/unmark any applicant as (STAFF) (supports MSU 280 THB & Non-MSU 480 THB with automatic accommodation offset)
+  // Quick toggle or Dropdown Role Selector to mark/unmark any applicant as (STAFF) (with Confirm safeguard)
   const handleQuickToggleStaff = async (reg, forcedState, roleTypeOverride = null) => {
     if (!reg) return;
     const currentlyStaff = isStaffRegistration(reg);
@@ -2809,6 +2860,16 @@ export default function AdminDashboardView({
       ? (roleTypeOverride && roleTypeOverride !== 'participant' ? roleTypeOverride : (resolveStaffRoleType(reg) !== 'participant' ? resolveStaffRoleType(reg) : 'committee'))
       : 'participant';
     const roleLabelObj = STAFF_ROLE_OPTIONS.find(o => o.value === nextRoleType) || STAFF_ROLE_OPTIONS[1];
+    const previewName = resolvePersonFullNameWithTitle(reg).fullName || 'ผู้สมัคร';
+
+    const confirmed = await askConfirm({
+      title: '🛠️ ยืนยันการเปลี่ยนบทบาท / สถานะ STAFF',
+      message: `ต้องการเปลี่ยนบทบาทของ "${previewName}" เป็น "${nextStaff ? (roleLabelObj.badge || roleLabelObj.label) : 'ผู้เข้าอบรมทั่วไป (Participant)'}" ใช่หรือไม่?\n\nระบบจะคำนวณเกณฑ์ค่าสมัคร / ค่าเสื้อ / ค่าที่พัก และบันทึกลงฐานข้อมูลทันที`,
+      confirmText: 'ยืนยันเปลี่ยนบทบาท',
+      cancelText: 'ยกเลิก',
+      variant: 'warning'
+    });
+    if (!confirmed) return;
 
     const rawCurrentCallsign = (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id))
       ? (modalCallsign || reg.callsign || '')
@@ -2939,7 +3000,12 @@ export default function AdminDashboardView({
     }
 
     const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, updates);
+    try {
+      await onUpdateAllocation(targetKey, updates);
+    } catch (err) {
+      triggerToast(`❌ เปลี่ยนบทบาทไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`, 'error');
+      return;
+    }
 
     if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
       setModalIsStaff(nextStaff);
@@ -2963,58 +3029,68 @@ export default function AdminDashboardView({
     }
   };
 
-  // Request Overpayment Refund Bank Info & Citizen ID from Applicant (1-click)
+  // Request Overpayment Refund Bank Info & Citizen ID from Applicant (with Confirm safeguard)
   const handleRequestOverpaidRefundDocs = async (reg) => {
     if (!reg) return;
     const paySummary = getStaffPaymentSummary(reg);
     const overpaid = paySummary.overpaidAmount || 120;
     const slipAmt = paySummary.actualSlipAmount || (STAFF_SHIRT_FEE + overpaid);
-    const currentDocs = Array.isArray(reg.requested_docs) ? [...reg.requested_docs] : [];
-    const hasRefundDoc = currentDocs.some(d => d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')));
+    const personName = resolvePersonFullNameWithTitle(reg).fullName || reg.first_name || 'ผู้สมัคร';
+    await runSafeAdminMutation(
+      `req_refund_${reg.id || reg.user_id}`,
+      {
+        title: `📨 ยืนยันส่งคำขอเลขบัญชีคืนเงิน (+${overpaid} บ.)`,
+        message: `ต้องการส่งคำขอ "ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน" ไปยังกล่องข้อความและหน้าตรวจสอบสถานะของ "${personName}" ใช่หรือไม่?`,
+        confirmText: 'ส่งคำขอคืนเงิน',
+        cancelText: 'ยกเลิก',
+        variant: 'info'
+      },
+      async () => {
+        const currentDocs = Array.isArray(reg.requested_docs) ? [...reg.requested_docs] : [];
+        const hasRefundDoc = currentDocs.some(d => d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน')));
 
-    const updatedDocs = hasRefundDoc
-      ? currentDocs.map(d => (d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน'))) ? { ...d, status: 'pending', requested_at: new Date().toISOString() } : d)
-      : [
-          ...currentDocs,
+        const updatedDocs = hasRefundDoc
+          ? currentDocs.map(d => (d.id === 'req_staff_overpaid_refund' || (d.doc_type && d.doc_type.includes('คืนเงินส่วนเกิน'))) ? { ...d, status: 'pending', requested_at: new Date().toISOString() } : d)
+          : [
+              ...currentDocs,
+              {
+                id: 'req_staff_overpaid_refund',
+                doc_type: `ข้อมูลรับเงินคืนส่วนเกิน (+${overpaid} บ.): ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน`,
+                description: `เนื่องจากท่านเป็นคณะกรรมการดำเนินงาน (STAFF) ชำระเฉพาะค่าเสื้อ 280 บาท แต่ได้โอนเงินมา ${slipAmt} บาท จึงมียอดชำระเกิน +${overpaid} บาท กรุณาระบุชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก (หรือแนบภาพหน้าสมุดบัญชี) เพื่อให้ฝ่ายการเงินโอนเงินส่วนเกินคืนให้ครับ`,
+                status: 'pending',
+                requested_at: new Date().toISOString()
+              }
+            ];
+
+        const targetKey = reg.user_id || reg.id || reg.user_email;
+        const updates = {
+          requested_docs: updatedDocs,
+          overpaid_amount: overpaid,
+          refund_amount: overpaid,
+          refund_status: reg.refund_status === 'refunded' ? 'refunded' : 'pending_refund'
+        };
+        await onUpdateAllocation(targetKey, updates);
+
+        await DataService.sendAdminMessage(
+          reg.user_id,
+          `แจ้งเรื่องการโอนเงินคืนส่วนเกิน (+${overpaid} บาท): เนื่องจากท่านมีรายชื่อเป็นคณะกรรมการดำเนินงาน (STAFF) ซึ่งชำระเฉพาะค่าเสื้อโครงการ 280 บาท (จากยอดที่ท่านโอนมา ${slipAmt} บาท) ขอความกรุณากรอก "ชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก" ในหน้าระบบตรวจสอบสถานะ เพื่อให้ฝ่ายการเงินดำเนินการโอนเงินส่วนเกินคืนให้ครับ`,
           {
-            id: 'req_staff_overpaid_refund',
-            doc_type: `ข้อมูลรับเงินคืนส่วนเกิน (+${overpaid} บ.): ชื่อธนาคาร, เลขที่บัญชี และเลขบัตรประชาชน`,
-            description: `เนื่องจากท่านเป็นคณะกรรมการดำเนินงาน (STAFF) ชำระเฉพาะค่าเสื้อ 280 บาท แต่ได้โอนเงินมา ${slipAmt} บาท จึงมียอดชำระเกิน +${overpaid} บาท กรุณาระบุชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก (หรือแนบภาพหน้าสมุดบัญชี) เพื่อให้ฝ่ายการเงินโอนเงินส่วนเกินคืนให้ครับ`,
-            status: 'pending',
-            requested_at: new Date().toISOString()
+            sender_key: 'finance',
+            sender_name: 'ฝ่ายการเงินและบัญชีโครงการ JRE 2027',
+            sender_role: 'เหรัญญิกและตรวจสอบการชำระเงิน',
+            system_name: 'ระบบการเงินและคืนเงินส่วนเกิน (Refund System)',
+            color_theme: 'amber',
+            title: `💸 ขอข้อมูลเลขบัญชีธนาคารและเลขบัตรประชาชน เพื่อโอนเงินส่วนเกินคืน (+${overpaid} บาท)`
           }
-        ];
+        );
 
-    const targetKey = reg.user_id || reg.id || reg.user_email;
-    const updates = {
-      requested_docs: updatedDocs,
-      overpaid_amount: overpaid,
-      refund_amount: overpaid,
-      refund_status: reg.refund_status === 'refunded' ? 'refunded' : 'pending_refund'
-    };
-    await onUpdateAllocation(targetKey, updates);
-
-    try {
-      await DataService.sendAdminMessage(
-        reg.user_id,
-        `แจ้งเรื่องการโอนเงินคืนส่วนเกิน (+${overpaid} บาท): เนื่องจากท่านมีรายชื่อเป็นคณะกรรมการดำเนินงาน (STAFF) ซึ่งชำระเฉพาะค่าเสื้อโครงการ 280 บาท (จากยอดที่ท่านโอนมา ${slipAmt} บาท) ขอความกรุณากรอก "ชื่อธนาคาร, เลขที่บัญชีธนาคาร, ชื่อบัญชี และเลขประจำตัวประชาชน 13 หลัก" ในหน้าระบบตรวจสอบสถานะ เพื่อให้ฝ่ายการเงินดำเนินการโอนเงินส่วนเกินคืนให้ครับ`,
-        {
-          sender_key: 'finance',
-          sender_name: 'ฝ่ายการเงินและบัญชีโครงการ JRE 2027',
-          sender_role: 'เหรัญญิกและตรวจสอบการชำระเงิน',
-          system_name: 'ระบบการเงินและคืนเงินส่วนเกิน (Refund System)',
-          color_theme: 'amber',
-          title: `💸 ขอข้อมูลเลขบัญชีธนาคารและเลขบัตรประชาชน เพื่อโอนเงินส่วนเกินคืน (+${overpaid} บาท)`
+        if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+          setProfileModalReg(prev => ({ ...prev, ...updates }));
         }
-      );
-    } catch (err) {
-      console.warn('Send refund doc request message notice:', err);
-    }
-
-    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
-      setProfileModalReg(prev => ({ ...prev, ...updates }));
-    }
-    triggerToast(`📨 ส่งคำขอเลขบัญชีธนาคาร ชื่อธนาคาร และเลขบัตรประชาชน เพื่อคืนเงินส่วนเกิน (+${overpaid} บ.) ให้ ${reg.first_name} เรียบร้อยแล้ว`);
+        triggerToast(`📨 ส่งคำขอเลขบัญชีธนาคารและเลขบัตรประชาชน ให้ ${personName} เรียบร้อยแล้ว`, 'success');
+      },
+      'ไม่สามารถส่งคำขอข้อมูลคืนเงินได้'
+    );
   };
 
   // Update Overpayment Refund Info or Status (e.g. Mark as Refunded or Save Bank Details)
@@ -3054,10 +3130,13 @@ export default function AdminDashboardView({
     };
 
     const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, updates);
-
-    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
-      setModalPaymentNotes(updatedPaymentNotes);
+    try {
+      await onUpdateAllocation(targetKey, updates);
+    } catch (err) {
+      triggerToast(`❌ บันทึกสถานะคืนเงินไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`, 'error');
+      return;
+    }
+    if (profileModalReg && (profileModalReg.user_id || profileModalReg.id) === (reg.user_id || reg.id)) {
       setProfileModalReg(prev => ({ ...prev, ...updates }));
     }
 
@@ -3128,6 +3207,17 @@ export default function AdminDashboardView({
     }
 
     const fullName = resolvePersonFullNameWithTitle(reg).fullName;
+    const remAmtCheck = paySummary.accommodationRemaining;
+    if (!silent) {
+      const ok = await askConfirm({
+        title: `🔔 ยืนยันส่งแจ้งเตือนค้างค่าที่พัก (${remAmtCheck} บ.)`,
+        message: `ต้องการส่งข้อความแจ้งเตือนค้างชำระค่าที่พักจำนวน ${remAmtCheck} บาท พร้อมเลขบัญชีรับโอนไปยังกล่องข้อความของ "${fullName}" ใช่หรือไม่?`,
+        confirmText: 'ส่งแจ้งเตือน',
+        cancelText: 'ยกเลิก',
+        variant: 'warning'
+      });
+      if (!ok) return;
+    }
     const uniShort = resolveUniversityInfo(reg).shortTag;
     const bankName = paymentConfig?.bank_name || 'ธนาคารไทยพาณิชย์';
     const bankAcc = paymentConfig?.bank_account_number || '594-264865-5';
@@ -3189,7 +3279,15 @@ export default function AdminDashboardView({
     };
 
     const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, updates);
+    try {
+      await onUpdateAllocation(targetKey, updates);
+    } catch (err) {
+      if (!silent) {
+        triggerToast(`❌ ส่งแจ้งเตือนค่าที่พักไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`, 'error');
+        return;
+      }
+      throw err;
+    }
 
     if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
       setModalPaymentPlan('installment');
@@ -3212,10 +3310,23 @@ export default function AdminDashboardView({
       triggerToast('Staff ต่างมหาวิทยาลัยชำระค่าที่พักครบทุกคนแล้ว');
       return;
     }
-    for (const item of unpaidList) {
-      await handleNotifyStaffAccommodation(item.reg, true);
-    }
-    triggerToast(`🔔 ส่งแจ้งเตือนค้างชำระค่าที่พักให้ Staff ต่างมหาวิทยาลัยครบทั้ง ${unpaidList.length} คน (รวม ฿${staffAndRefundMetrics.externalStaffUnpaidAccomAmount}) เรียบร้อยแล้ว!`);
+    await runSafeAdminMutation(
+      'bulk_notify_staff_accom',
+      {
+        title: `🔔 ยืนยันส่งแจ้งเตือนค้างค่าที่พัก Staff (${unpaidList.length} คน)`,
+        message: `ระบบจะส่งข้อความแจ้งเตือนค้างชำระค่าที่พัก (รวมยอด ฿${staffAndRefundMetrics.externalStaffUnpaidAccomAmount}) ไปยัง Staff ต่างมหาวิทยาลัยทั้ง ${unpaidList.length} คน คุณต้องการยืนยันหรือไม่?`,
+        confirmText: 'ยืนยันส่งทุกคน',
+        cancelText: 'ยกเลิก',
+        variant: 'warning'
+      },
+      async () => {
+        for (const item of unpaidList) {
+          await handleNotifyStaffAccommodation(item.reg, true);
+        }
+        triggerToast(`🔔 ส่งแจ้งเตือนค้างชำระค่าที่พักให้ Staff ต่างมหาวิทยาลัยครบทั้ง ${unpaidList.length} คน (รวม ฿${staffAndRefundMetrics.externalStaffUnpaidAccomAmount}) เรียบร้อยแล้ว!`, 'success');
+      },
+      'ส่งแจ้งเตือนค่าที่พักไม่สำเร็จ'
+    );
   };
 
   const handleNotifyRound2 = async (reg, silent = false) => {
@@ -3240,6 +3351,16 @@ export default function AdminDashboardView({
     const fullName = resolvePersonFullNameWithTitle(reg).fullName;
     const isMsu = isMsuInstitution(reg.institution);
     const remAmt = Number(reg.installment_2_amount) || (isMsu ? 250 : 450);
+    if (!silent) {
+      const ok = await askConfirm({
+        title: `🔔 ยืนยันส่งแจ้งเตือนชำระงวดที่ 2 (${remAmt} บ.)`,
+        message: `ต้องการส่งข้อความแจ้งเตือนค้างชำระงวดที่ 2 จำนวน ${remAmt} บาท พร้อมเลขบัญชีรับโอนไปยังกล่องข้อความของ "${fullName}" ใช่หรือไม่?`,
+        confirmText: 'ส่งแจ้งเตือน',
+        cancelText: 'ยกเลิก',
+        variant: 'warning'
+      });
+      if (!ok) return;
+    }
     const bankName = paymentConfig?.bank_name || 'ธนาคารไทยพาณิชย์';
     const bankAcc = paymentConfig?.bank_account_number || '594-264865-5';
     const bankHolder = paymentConfig?.bank_account_name || 'นางสาวมัญชุพร ยังเหล็ก';
@@ -3267,9 +3388,16 @@ export default function AdminDashboardView({
     };
 
     const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, {
-      admin_messages: [newMsg, ...existingMsgs.filter(m => m?.id !== 'msg_round2_prompt')]
-    });
+    try {
+      await onUpdateAllocation(targetKey, {
+        admin_messages: [newMsg, ...existingMsgs.filter(m => m?.id !== 'msg_round2_prompt')]
+      });
+    } catch (err) {
+      if (!silent) {
+        triggerToast(`❌ ส่งแจ้งเตือนไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่'}`, 'error');
+      }
+      throw err;
+    }
 
     if (!silent) {
       triggerToast(`🔔 ส่งแจ้งเตือนงวดที่ 2 (${remAmt} บ.) ให้ ${fullName} เรียบร้อยแล้ว`);
@@ -3309,6 +3437,15 @@ export default function AdminDashboardView({
     const targetKey = reg.user_id || reg.id || reg.user_email;
     const pName = resolvePersonFullNameWithTitle(reg).fullName || 'ผู้สมัคร';
 
+    const ok = await askConfirm({
+      title: '🛡️ ยืนยันปรับสิทธิ์เปิดเผยข้อมูลสุขภาพ (PDPA)',
+      message: `ต้องการเปลี่ยนสถานะของ "${pName}" เป็น "${nextVal ? 'ยินยอมเปิดเผยให้เพื่อนร่วมห้องทราบ' : 'ปิดข้อมูลสุขภาพจากเพื่อนร่วมห้อง (เห็นเฉพาะ Staff/แพทย์)'}" ใช่หรือไม่?`,
+      confirmText: 'ยืนยันปรับสิทธิ์',
+      cancelText: 'ยกเลิก',
+      variant: 'warning'
+    });
+    if (!ok) return;
+
     const updates = {
       share_health_with_roommate: nextVal,
       health_consent_by: 'admin',
@@ -3328,7 +3465,7 @@ export default function AdminDashboardView({
       );
     } catch (err) {
       console.error(err);
-      triggerToast('เกิดข้อผิดพลาดในการปรับสถานะข้อมูลสุขภาพ', 'error');
+      triggerToast(`❌ ปรับสถานะข้อมูลสุขภาพไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่'}`, 'error');
     }
   };
 
@@ -3336,27 +3473,7 @@ export default function AdminDashboardView({
   const handleToggleRefundMode = async (reg) => {
     if (!reg) return;
     const staffSum = getStaffPaymentSummary(reg);
-    const nextIsNoRefund = !staffSum.isNoRefund;
-    const targetKey = reg.user_id || reg.id || reg.user_email;
-    const pName = resolvePersonFullNameWithTitle(reg).fullName;
-
-    const updates = {
-      refund_action_type: nextIsNoRefund ? 'no_refund' : 'refund',
-      refund_status: nextIsNoRefund ? 'no_refund' : (reg.refund_slip_url ? 'refunded' : 'pending_refund'),
-      no_refund: nextIsNoRefund,
-      keep_as_donation: nextIsNoRefund
-    };
-
-    await onUpdateAllocation(targetKey, updates);
-    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
-      setProfileModalReg(prev => ({ ...prev, ...updates }));
-    }
-
-    if (nextIsNoRefund) {
-      triggerToast(`💙 ปรับสถานะ ${pName} เป็น: ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน ${staffSum.actualSlipAmount} บ.)`);
-    } else {
-      triggerToast(`🔄 ปรับสถานะ ${pName} เป็น: ต้องโอนเงินคืน (+${staffSum.overpaidAmount} บ.) • สรุปยอดเงิน: รายรับ / รายจ่ายโอนคืน / คงเหลือสุทธิ`);
-    }
+    await handleSetRefundMode(reg, !staffSum.isNoRefund ? 'no_refund' : 'refund');
   };
 
   const handleSetRefundMode = async (reg, mode) => {
@@ -3366,23 +3483,38 @@ export default function AdminDashboardView({
     const staffSum = getStaffPaymentSummary(reg);
     const pName = resolvePersonFullNameWithTitle(reg).fullName;
 
-    const updates = {
-      refund_action_type: isNoRef ? 'no_refund' : 'refund',
-      refund_status: isNoRef ? 'no_refund' : (reg.refund_slip_url ? 'refunded' : 'pending_refund'),
-      no_refund: isNoRef,
-      keep_as_donation: isNoRef
-    };
+    await runSafeAdminMutation(
+      `refund_mode_${targetKey}_${mode}`,
+      {
+        title: isNoRef ? '💙 ยืนยัน: ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็ม)' : `💸 ยืนยัน: ปรับเป็นต้องโอนคืน (+${staffSum.overpaidAmount} บ.)`,
+        message: isNoRef
+          ? `ต้องการบันทึกว่า "${pName}" ไม่ต้องโอนเงินส่วนเกินคืน (สมทบเข้าโครงการเต็มจำนวน ${staffSum.actualSlipAmount} บาท) ใช่หรือไม่?`
+          : `ต้องการเปลี่ยนสถานะ "${pName}" กลับเป็น "ต้องโอนเงินส่วนเกินคืน (+${staffSum.overpaidAmount} บาท)" ใช่หรือไม่?`,
+        confirmText: 'ยืนยันการเปลี่ยนสถานะ',
+        cancelText: 'ยกเลิก',
+        variant: 'warning'
+      },
+      async () => {
+        const updates = {
+          refund_action_type: isNoRef ? 'no_refund' : 'refund',
+          refund_status: isNoRef ? 'no_refund' : (reg.refund_slip_url ? 'refunded' : 'pending_refund'),
+          no_refund: isNoRef,
+          keep_as_donation: isNoRef
+        };
 
-    await onUpdateAllocation(targetKey, updates);
-    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
-      setProfileModalReg(prev => ({ ...prev, ...updates }));
-    }
+        await onUpdateAllocation(targetKey, updates);
+        if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+          setProfileModalReg(prev => ({ ...prev, ...updates }));
+        }
 
-    if (isNoRef) {
-      triggerToast(`💙 ปรับสถานะ ${pName} เป็น: ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน ${staffSum.actualSlipAmount} บ.)`);
-    } else {
-      triggerToast(`🔄 ปรับสถานะ ${pName} เป็น: ต้องโอนเงินคืน (+${staffSum.overpaidAmount} บ.) • สรุปยอดเงิน: รายรับ / รายจ่ายโอนคืน / คงเหลือสุทธิ`);
-    }
+        if (isNoRef) {
+          triggerToast(`💙 ปรับสถานะ ${pName} เป็น: ไม่ต้องโอนคืน (สมทบเข้าโครงการเต็มจำนวน ${staffSum.actualSlipAmount} บ.)`, 'success');
+        } else {
+          triggerToast(`🔄 ปรับสถานะ ${pName} เป็น: ต้องโอนเงินคืน (+${staffSum.overpaidAmount} บ.)`, 'success');
+        }
+      },
+      'เปลี่ยนสถานะคืนเงินไม่สำเร็จ'
+    );
   };
 
   // Admin Action: ยกเลิกการจ่ายรอบที่ 2 (ผู้เข้าร่วมไม่ได้เข้าร่วมอบรม -> ตัดจบยอดค้างรับ & ยกเลิกการทวง)
@@ -3429,7 +3561,12 @@ export default function AdminDashboardView({
     };
 
     const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, updates);
+    try {
+      await onUpdateAllocation(targetKey, updates);
+    } catch (err) {
+      triggerToast(`❌ ยกเลิกรอบที่ 2 ไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`, 'error');
+      return;
+    }
 
     if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
       setModalRound2CancelledAbsent(true);
@@ -3452,56 +3589,69 @@ export default function AdminDashboardView({
   const handleRestoreRound2FromCancelled = async (reg) => {
     if (!reg) return;
     const pName = resolvePersonFullNameWithTitle(reg).fullName;
-    const baseRes = getRegistrationPaymentResolution({
-      ...reg,
-      round2_cancelled_absent: false,
-      payment_deferred_post_project: false,
-      installment_2_status: reg.installment_2_slip_url ? 'pending_review' : 'unpaid'
-    }, paymentConfig);
+    await runSafeAdminMutation(
+      `restore_r2_${reg.id || reg.user_id}`,
+      {
+        title: '↩️ ยืนยันคืนค่าสถานะการจ่ายรอบที่ 2',
+        message: `ต้องการคืนค่าสถานะการจ่ายรอบที่ 2 ของ "${pName}" กลับเข้าคิวรอชำระตามปกติใช่หรือไม่?`,
+        confirmText: 'ยืนยันคืนค่าสถานะ',
+        cancelText: 'ยกเลิก',
+        variant: 'warning'
+      },
+      async () => {
+        const baseRes = getRegistrationPaymentResolution({
+          ...reg,
+          round2_cancelled_absent: false,
+          payment_deferred_post_project: false,
+          installment_2_status: reg.installment_2_slip_url ? 'pending_review' : 'unpaid'
+        }, paymentConfig);
 
-    const restoredR2Status = reg.installment_2_slip_url ? 'pending_review' : 'unpaid';
-    const restoredR2Amount = baseRes.isStaff
-      ? (baseRes.staffSummary?.accommodationNetRequiredAfterOffset || 200)
-      : baseRes.round2Fee;
-    const restoredPayAmt = baseRes.isR1Paid ? restoredR2Amount : baseRes.baseTotalFee;
-    const nextNotes = String(reg.payment_notes || '')
-      .split(/\s*\|\s*/)
-      .filter(p => p && !p.includes('ยกเลิกการจ่ายรอบที่ 2'))
-      .join(' | ');
+        const restoredR2Status = reg.installment_2_slip_url ? 'pending_review' : 'unpaid';
+        const restoredR2Amount = baseRes.isStaff
+          ? (baseRes.staffSummary?.accommodationNetRequiredAfterOffset || 200)
+          : baseRes.round2Fee;
+        const restoredPayAmt = baseRes.isR1Paid ? restoredR2Amount : baseRes.baseTotalFee;
+        const nextNotes = String(reg.payment_notes || '')
+          .split(/\s*\|\s*/)
+          .filter(p => p && !p.includes('ยกเลิกการจ่ายรอบที่ 2'))
+          .join(' | ');
 
-    const updates = {
-      round2_cancelled_absent: false,
-      round2_cancelled_at: '',
-      round2_cancelled_note: '',
-      installment_2_status: restoredR2Status,
-      installment_2_amount: restoredR2Amount,
-      installment_2_notes: '',
-      payment_status: restoredR2Status === 'pending_review' ? 'pending_review' : 'unpaid',
-      payment_amount: restoredPayAmt,
-      payment_notes: nextNotes,
-      admin_manual_override: true
-    };
+        const updates = {
+          round2_cancelled_absent: false,
+          round2_cancelled_at: '',
+          round2_cancelled_note: '',
+          installment_2_status: restoredR2Status,
+          installment_2_amount: restoredR2Amount,
+          installment_2_notes: '',
+          payment_status: restoredR2Status === 'pending_review' ? 'pending_review' : 'unpaid',
+          payment_amount: restoredPayAmt,
+          payment_notes: nextNotes,
+          admin_manual_override: true
+        };
 
-    const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, updates);
+        const targetKey = reg.user_id || reg.id || reg.user_email;
+        await onUpdateAllocation(targetKey, updates);
 
-    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
-      setModalRound2CancelledAbsent(false);
-      setModalRound2CancelledNote('');
-      setModalInstallment2Status(restoredR2Status);
-      setModalInstallment2Amount(restoredR2Amount);
-      setModalInstallment2Notes('');
-      setModalPaymentStatus(updates.payment_status);
-      setModalPaymentAmount(restoredPayAmt);
-      setModalPaymentNotes(nextNotes);
-      setProfileModalReg(prev => ({ ...prev, ...updates }));
-    }
+        if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+          setModalRound2CancelledAbsent(false);
+          setModalRound2CancelledNote('');
+          setModalInstallment2Status(restoredR2Status);
+          setModalInstallment2Amount(restoredR2Amount);
+          setModalInstallment2Notes('');
+          setModalPaymentStatus(updates.payment_status);
+          setModalPaymentAmount(restoredPayAmt);
+          setModalPaymentNotes(nextNotes);
+          setProfileModalReg(prev => ({ ...prev, ...updates }));
+        }
 
-    triggerToast(`↩️ คืนค่าสถานะรอบที่ 2 ของ "${pName}" เรียบร้อยแล้ว`);
+        triggerToast(`↩️ คืนค่าสถานะรอบที่ 2 ของ "${pName}" เรียบร้อยแล้ว`, 'success');
+      },
+      'คืนค่าสถานะรอบที่ 2 ไม่สำเร็จ'
+    );
   };
 
   // Admin Checkbox Toggle: จ่ายย้อนหลังหลังจบโครงการ (ผู้เข้าอบรมไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจบโครงการ + หมายเหตุไว้)
-  const handleToggleDeferredPostProject = async (reg, forcedChecked = null, customNote = null) => {
+  const handleToggleDeferredPostProject = async (reg, forcedChecked = null, customNote = null, skipConfirm = false) => {
     if (!reg) return;
     const pName = resolvePersonFullNameWithTitle(reg).fullName;
     const currentChecked = Boolean(reg.payment_deferred_post_project);
@@ -3513,6 +3663,19 @@ export default function AdminDashboardView({
     const noteText = nextChecked
       ? (String(customNote !== null ? customNote : (reg.payment_deferred_note || '')).trim() || defaultNote)
       : '';
+
+    if (!skipConfirm) {
+      const ok = await askConfirm({
+        title: nextChecked ? '🕒 ยืนยัน: บันทึกจ่ายย้อนหลังหลังจบโครงการ' : '↩️ ยืนยัน: ยกเลิกสถานะจ่ายย้อนหลัง',
+        message: nextChecked
+          ? `ต้องการบันทึกว่า "${pName}" ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายยอดค้าง ฿${remAmt} หลังจบโครงการ (งดส่งทวง & แสดงหมายเหตุในสรุปยอด) ใช่หรือไม่?\n\nหมายเหตุ: ${noteText}`
+          : `ต้องการยกเลิกสถานะจ่ายย้อนหลังของ "${pName}" กลับเข้าคิวค้างชำระปกติใช่หรือไม่?`,
+        confirmText: nextChecked ? 'ยืนยันบันทึกจ่ายย้อนหลัง' : 'ยืนยันคืนค่าสถานะ',
+        cancelText: 'ยกเลิก',
+        variant: 'info'
+      });
+      if (!ok) return;
+    }
 
     const cleanedOldNotes = String(reg.payment_notes || '')
       .split(/\s*\|\s*/)
@@ -3541,25 +3704,32 @@ export default function AdminDashboardView({
     };
 
     const targetKey = reg.user_id || reg.id || reg.user_email;
-    await onUpdateAllocation(targetKey, updates);
+    await runSafeAdminMutation(
+      `defer_${targetKey}`,
+      null,
+      async () => {
+        await onUpdateAllocation(targetKey, updates);
 
-    if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
-      setModalPaymentDeferredPostProject(nextChecked);
-      setModalPaymentDeferredNote(noteText);
-      setModalRound2CancelledAbsent(false);
-      setModalRound2CancelledNote('');
-      setModalInstallment2Status(updates.installment_2_status);
-      setModalInstallment2Amount(updates.installment_2_amount);
-      setModalInstallment2Notes(updates.installment_2_notes);
-      setModalPaymentNotes(nextPaymentNotes);
-      setProfileModalReg(prev => ({ ...prev, ...updates }));
-    }
+        if (profileModalReg && (profileModalReg.id === reg.id || profileModalReg.user_id === reg.user_id)) {
+          setModalPaymentDeferredPostProject(nextChecked);
+          setModalPaymentDeferredNote(noteText);
+          setModalRound2CancelledAbsent(false);
+          setModalRound2CancelledNote('');
+          setModalInstallment2Status(updates.installment_2_status);
+          setModalInstallment2Amount(updates.installment_2_amount);
+          setModalInstallment2Notes(updates.installment_2_notes);
+          setModalPaymentNotes(nextPaymentNotes);
+          setProfileModalReg(prev => ({ ...prev, ...updates }));
+        }
 
-    if (nextChecked) {
-      triggerToast(`🕒 ติ๊กจ่ายย้อนหลังหลังจบโครงการให้ "${pName}" แล้ว (งดส่งทวง • บันทึกหมายเหตุในสรุปยอดเรียบร้อย)`);
-    } else {
-      triggerToast(`↩️ ยกเลิกสถานะจ่ายย้อนหลังของ "${pName}" เรียบร้อยแล้ว`);
-    }
+        if (nextChecked) {
+          triggerToast(`🕒 ติ๊กจ่ายย้อนหลังหลังจบโครงการให้ "${pName}" แล้ว (งดส่งทวง • บันทึกหมายเหตุในสรุปยอดเรียบร้อย)`, 'success');
+        } else {
+          triggerToast(`↩️ ยกเลิกสถานะจ่ายย้อนหลังของ "${pName}" เรียบร้อยแล้ว`, 'info');
+        }
+      },
+      'บันทึกสถานะจ่ายย้อนหลังไม่สำเร็จ'
+    );
   };
 
   const isUrgentRound2Target = React.useCallback((reg) => {
@@ -5497,9 +5667,21 @@ export default function AdminDashboardView({
       
       {/* Toast Alert */}
       {alertToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs sm:text-sm font-semibold animate-in slide-in-from-bottom duration-300">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span>{alertToast}</span>
+        <div className={`fixed bottom-6 right-6 z-[150] px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs sm:text-sm font-semibold animate-in slide-in-from-bottom duration-300 border ${
+          alertToast.type === 'error'
+            ? 'bg-rose-600 border-rose-400/60 text-white'
+            : alertToast.type === 'warning'
+            ? 'bg-amber-600 border-amber-400/60 text-white'
+            : 'bg-emerald-600 border-emerald-400/60 text-white'
+        }`}>
+          {alertToast.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 shrink-0" />
+          ) : alertToast.type === 'warning' ? (
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+          )}
+          <span>{typeof alertToast === 'string' ? alertToast : alertToast.msg}</span>
         </div>
       )}
 
@@ -7452,8 +7634,9 @@ export default function AdminDashboardView({
                                   </button>
                                   <button
                                     type="button"
+                                    disabled={Boolean(busyActionKey)}
                                     onClick={() => res.isRound2CancelledAbsent ? handleRestoreRound2FromCancelled(r) : handleToggleDeferredPostProject(r, false)}
-                                    className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold cursor-pointer"
+                                    className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-[10px] font-bold cursor-pointer"
                                     title="คืนค่ารายการนี้กลับเข้าคิวค้างชำระปกติ"
                                   >
                                     ↩️ คืนค่า
@@ -7620,6 +7803,7 @@ export default function AdminDashboardView({
                                             </button>
                                             <button
                                               type="button"
+                                              disabled={Boolean(busyActionKey)}
                                               onClick={async (e) => {
                                                 e.stopPropagation();
                                                 const note = await askPrompt({
@@ -7631,21 +7815,22 @@ export default function AdminDashboardView({
                                                   cancelText: 'ยกเลิก'
                                                 });
                                                 if (note !== null) {
-                                                  await handleToggleDeferredPostProject(reg, true, note);
+                                                  await handleToggleDeferredPostProject(reg, true, note, true);
                                                 }
                                               }}
-                                              className="px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 text-sky-200 border border-sky-500/40 text-[11px] font-bold cursor-pointer"
+                                              className="px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 disabled:opacity-50 text-sky-200 border border-sky-500/40 text-[11px] font-bold cursor-pointer"
                                               title="ติ๊กจ่ายย้อนหลัง (ไม่ได้เข้าร่วมอบรม แต่ยืนยันจะจ่ายหลังจบโครงการ)"
                                             >
                                               ☑️ จ่ายหลังจบงาน
                                             </button>
                                             <button
                                               type="button"
+                                              disabled={Boolean(busyActionKey)}
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleCancelRound2Absent(reg);
                                               }}
-                                              className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-200 border border-rose-500/40 text-[11px] font-bold cursor-pointer"
+                                              className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 disabled:opacity-50 text-rose-200 border border-rose-500/40 text-[11px] font-bold cursor-pointer"
                                               title="ยกเลิกการจ่ายรอบที่ 2 (ผู้เข้าร่วมไม่ได้เข้าร่วมอบรม — ตัดจบยอดค้าง & ยกเลิกการทวง)"
                                             >
                                               🚫 ยกเลิกรอบ 2
@@ -7762,6 +7947,7 @@ export default function AdminDashboardView({
                                         </button>
                                         <button
                                           type="button"
+                                          disabled={Boolean(busyActionKey)}
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             const note = await askPrompt({
@@ -7772,19 +7958,20 @@ export default function AdminDashboardView({
                                               confirmText: '☑️ บันทึก',
                                               cancelText: 'ยกเลิก'
                                             });
-                                            if (note !== null) await handleToggleDeferredPostProject(reg, true, note);
+                                            if (note !== null) await handleToggleDeferredPostProject(reg, true, note, true);
                                           }}
-                                          className="px-2.5 py-1 rounded-xl bg-sky-500/20 text-sky-200 border border-sky-500/40 text-xs font-bold cursor-pointer"
+                                          className="px-2.5 py-1 rounded-xl bg-sky-500/20 disabled:opacity-50 text-sky-200 border border-sky-500/40 text-xs font-bold cursor-pointer"
                                         >
                                           ☑️ หลังจบงาน
                                         </button>
                                         <button
                                           type="button"
+                                          disabled={Boolean(busyActionKey)}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleCancelRound2Absent(reg);
                                           }}
-                                          className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-200 border border-rose-500/40 text-xs font-bold cursor-pointer"
+                                          className="px-2.5 py-1 rounded-xl bg-rose-500/20 disabled:opacity-50 text-rose-200 border border-rose-500/40 text-xs font-bold cursor-pointer"
                                         >
                                           🚫 ยกเลิกรอบ 2
                                         </button>
@@ -8589,21 +8776,37 @@ export default function AdminDashboardView({
                                 {(() => {
                                   const attInfo = getAttendanceConfirmationInfo(reg);
                                   const nextStatus = attInfo.isConfirmed ? 'pending' : 'confirmed';
+                                  const targetUserId = reg.user_id || reg.id;
+                                  const personFullName = resolvePersonFullNameWithTitle(reg).fullName;
                                   return (
                                     <span
-                                      onClick={async (e) => {
+                                      onClick={(e) => {
                                         e.stopPropagation();
                                         if (!onUpdateAllocation) return;
-                                        const targetUserId = reg.user_id || reg.id;
-                                        await onUpdateAllocation(targetUserId, {
-                                          attendance_confirmed_status: nextStatus,
-                                          attendance_confirmed_at: nextStatus === 'confirmed' ? new Date().toISOString() : null,
-                                          attendance_confirmed_by: 'admin'
-                                        });
-                                        triggerToast(
-                                          nextStatus === 'confirmed'
-                                            ? `✅ บันทึกยืนยันการเข้าร่วมของ ${resolvePersonFullNameWithTitle(reg).fullName} เรียบร้อยแล้ว`
-                                            : `⏳ เปลี่ยนสถานะเป็นรอยืนยันเรียบร้อยแล้ว`
+                                        runSafeAdminMutation(
+                                          `attendance_${targetUserId}`,
+                                          {
+                                            title: nextStatus === 'confirmed' ? 'ยืนยันการเข้าร่วมกิจกรรมจริง' : 'เปลี่ยนเป็นรอยืนยันการเข้าร่วม',
+                                            message: nextStatus === 'confirmed'
+                                              ? `ต้องการบันทึกยืนยันการเข้าร่วมกิจกรรมจริงของ "${personFullName}" ใช่หรือไม่?`
+                                              : `ต้องการปรับสถานะการเข้าร่วมของ "${personFullName}" กลับเป็น "รอยืนยัน" ใช่หรือไม่?`,
+                                            confirmText: nextStatus === 'confirmed' ? '✅ ยืนยันมาแน่' : '⏳ ปรับเป็นรอยืนยัน',
+                                            cancelText: 'ยกเลิก',
+                                            variant: nextStatus === 'confirmed' ? 'info' : 'warning'
+                                          },
+                                          async () => {
+                                            await onUpdateAllocation(targetUserId, {
+                                              attendance_confirmed_status: nextStatus,
+                                              attendance_confirmed_at: nextStatus === 'confirmed' ? new Date().toISOString() : null,
+                                              attendance_confirmed_by: 'admin'
+                                            });
+                                            triggerToast(
+                                              nextStatus === 'confirmed'
+                                                ? `✅ บันทึกยืนยันการเข้าร่วมของ ${personFullName} เรียบร้อยแล้ว`
+                                                : `⏳ เปลี่ยนสถานะเป็นรอยืนยันเรียบร้อยแล้ว`
+                                            );
+                                          },
+                                          'บันทึกสถานะการเข้าร่วมไม่สำเร็จ'
                                         );
                                       }}
                                       className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all inline-flex items-center gap-1 ${
@@ -11112,10 +11315,11 @@ export default function AdminDashboardView({
                               />
                               <button
                                 type="button"
+                                disabled={Boolean(busyActionKey)}
                                 onClick={async () => {
-                                  await handleToggleDeferredPostProject(profileModalReg, true, modalPaymentDeferredNote);
+                                  await handleToggleDeferredPostProject(profileModalReg, true, modalPaymentDeferredNote, true);
                                 }}
-                                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-black cursor-pointer shrink-0"
+                                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-black cursor-pointer shrink-0"
                               >
                                 💾 บันทึกหมายเหตุจ่ายย้อนหลัง ({pName.split(' ')[0]})
                               </button>
@@ -11175,29 +11379,44 @@ export default function AdminDashboardView({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffPayInfo.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffPayInfo.offsetToAccommodation} บ. + โอนเพิ่ม ${staffPayInfo.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
-                                    const updates = {
-                                      payment_plan: 'full',
-                                      payment_status: 'paid',
-                                      payment_amount: 0,
-                                      installment_1_status: 'paid',
-                                      installment_2_status: 'paid',
-                                      installment_2_amount: staffPayInfo.accommodationNetRequiredAfterOffset,
-                                      staff_accommodation_paid: true,
-                                      payment_notes: nextNote
-                                    };
-                                    setModalPaymentPlan('full');
-                                    setModalPaymentStatus('paid');
-                                    setModalPaymentAmount(0);
-                                    setModalInstallment1Status('paid');
-                                    setModalInstallment2Status('paid');
-                                    setModalPaymentNotes(nextNote);
-                                    await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
-                                    setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                    triggerToast('อนุมัติการชำระค่าที่พัก Staff ต่างมหาลัยครบถ้วนแล้ว');
+                                  disabled={Boolean(busyActionKey)}
+                                  onClick={() => {
+                                    const targetKey = profileModalReg.user_id || profileModalReg.id;
+                                    runSafeAdminMutation(
+                                      `staff_accom_paid_${targetKey}`,
+                                      {
+                                        title: 'ยืนยันอนุมัติชำระค่าที่พัก Staff ต่างมหาลัยครบแล้ว',
+                                        message: `ต้องการบันทึกว่าคุณ ${profileModalReg.first_name || ''} ชำระค่าที่พัก Staff ต่างมหาลัยครบ 480 บาทแล้วใช่หรือไม่?`,
+                                        confirmText: '✅ ยืนยันอนุมัติครบแล้ว',
+                                        cancelText: 'ยกเลิก',
+                                        variant: 'info'
+                                      },
+                                      async () => {
+                                        const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffPayInfo.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffPayInfo.offsetToAccommodation} บ. + โอนเพิ่ม ${staffPayInfo.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
+                                        const updates = {
+                                          payment_plan: 'full',
+                                          payment_status: 'paid',
+                                          payment_amount: 0,
+                                          installment_1_status: 'paid',
+                                          installment_2_status: 'paid',
+                                          installment_2_amount: staffPayInfo.accommodationNetRequiredAfterOffset,
+                                          staff_accommodation_paid: true,
+                                          payment_notes: nextNote
+                                        };
+                                        await onUpdateAllocation(targetKey, updates);
+                                        setModalPaymentPlan('full');
+                                        setModalPaymentStatus('paid');
+                                        setModalPaymentAmount(0);
+                                        setModalInstallment1Status('paid');
+                                        setModalInstallment2Status('paid');
+                                        setModalPaymentNotes(nextNote);
+                                        setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                        triggerToast('อนุมัติการชำระค่าที่พัก Staff ต่างมหาลัยครบถ้วนแล้ว');
+                                      },
+                                      'อนุมัติชำระค่าที่พักไม่สำเร็จ'
+                                    );
                                   }}
-                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
                                 >
                                   ✅ อนุมัติชำระค่าที่พักครบแล้ว
                                 </button>
@@ -11205,30 +11424,45 @@ export default function AdminDashboardView({
                             ) : (
                               <button
                                 type="button"
-                                onClick={async () => {
+                                disabled={Boolean(busyActionKey)}
+                                onClick={() => {
                                   const rem = staffPayInfo.accommodationNetRequiredAfterOffset;
-                                  const nextNote = staffPayInfo.isOffsetApplied
-                                    ? `หมายเหตุ: Staff ต่างมหาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.) โอนรอบแรกมา ${staffPayInfo.r1SlipAmount} บ. หักค่าเสื้อ 280 บ. และนำส่วนเกิน +${staffPayInfo.offsetToAccommodation} บ. ไปหักลบค่าที่พัก 200 บ. → คงเหลือต้องโอนค่าที่พักเพิ่มอีก ${rem} บ.`
-                                    : `หมายเหตุ: Staff ต่างมหาลัย ชำระค่าเสื้อ 280 บ. แล้ว • ค้างชำระค่าที่พัก ${rem} บ. (รวมต้องชำระ 480 บ.)`;
-                                  const updates = {
-                                    payment_plan: 'installment',
-                                    payment_status: 'unpaid',
-                                    payment_amount: rem,
-                                    installment_2_status: 'unpaid',
-                                    installment_2_amount: rem,
-                                    staff_accommodation_paid: false,
-                                    payment_notes: nextNote
-                                  };
-                                  setModalPaymentPlan('installment');
-                                  setModalPaymentStatus('unpaid');
-                                  setModalPaymentAmount(rem);
-                                  setModalInstallment2Status('unpaid');
-                                  setModalPaymentNotes(nextNote);
-                                  await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
-                                  setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                  triggerToast(`ปรับสถานะกลับเป็นค้างค่าที่พัก ${rem} บาท`);
+                                  const targetKey = profileModalReg.user_id || profileModalReg.id;
+                                  runSafeAdminMutation(
+                                    `staff_accom_unpaid_${targetKey}`,
+                                    {
+                                      title: 'ยืนยันปรับกลับเป็นค้างค่าที่พัก',
+                                      message: `ต้องการปรับสถานะของคุณ ${profileModalReg.first_name || ''} กลับเป็นค้างค่าที่พัก ${rem} บาท ใช่หรือไม่?`,
+                                      confirmText: '↩️ ปรับกลับเป็นค้างค่าที่พัก',
+                                      cancelText: 'ยกเลิก',
+                                      variant: 'warning'
+                                    },
+                                    async () => {
+                                      const nextNote = staffPayInfo.isOffsetApplied
+                                        ? `หมายเหตุ: Staff ต่างมหาลัย (ค่าเสื้อ 280 + ค่าที่พัก 200 = 480 บ.) โอนรอบแรกมา ${staffPayInfo.r1SlipAmount} บ. หักค่าเสื้อ 280 บ. และนำส่วนเกิน +${staffPayInfo.offsetToAccommodation} บ. ไปหักลบค่าที่พัก 200 บ. → คงเหลือต้องโอนค่าที่พักเพิ่มอีก ${rem} บ.`
+                                        : `หมายเหตุ: Staff ต่างมหาลัย ชำระค่าเสื้อ 280 บ. แล้ว • ค้างชำระค่าที่พัก ${rem} บ. (รวมต้องชำระ 480 บ.)`;
+                                      const updates = {
+                                        payment_plan: 'installment',
+                                        payment_status: 'unpaid',
+                                        payment_amount: rem,
+                                        installment_2_status: 'unpaid',
+                                        installment_2_amount: rem,
+                                        staff_accommodation_paid: false,
+                                        payment_notes: nextNote
+                                      };
+                                      await onUpdateAllocation(targetKey, updates);
+                                      setModalPaymentPlan('installment');
+                                      setModalPaymentStatus('unpaid');
+                                      setModalPaymentAmount(rem);
+                                      setModalInstallment2Status('unpaid');
+                                      setModalPaymentNotes(nextNote);
+                                      setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                      triggerToast(`ปรับสถานะกลับเป็นค้างค่าที่พัก ${rem} บาท`);
+                                    },
+                                    'ปรับสถานะค่าที่พักไม่สำเร็จ'
+                                  );
                                 }}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
                               >
                                 ↩️ ปรับกลับเป็นค้างค่าที่พัก ({staffPayInfo.accommodationNetRequiredAfterOffset} บ.)
                               </button>
@@ -11351,16 +11585,50 @@ export default function AdminDashboardView({
                                 {!staffPayInfo.isRefunded ? (
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'refunded' })}
-                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
+                                    disabled={Boolean(busyActionKey)}
+                                    onClick={() => {
+                                      const targetKey = profileModalReg.user_id || profileModalReg.id;
+                                      runSafeAdminMutation(
+                                        `staff_refund_done_${targetKey}`,
+                                        {
+                                          title: 'ยืนยันปรับสถานะเป็น "คืนเงินแล้ว"',
+                                          message: `ต้องการบันทึกว่าโครงการได้โอนเงินคืนให้คุณ ${profileModalReg.first_name || ''} เรียบร้อยแล้วใช่หรือไม่?`,
+                                          confirmText: '✅ ยืนยันคืนเงินแล้ว',
+                                          cancelText: 'ยกเลิก',
+                                          variant: 'info'
+                                        },
+                                        async () => {
+                                          await handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'refunded' });
+                                        },
+                                        'บันทึกสถานะคืนเงินไม่สำเร็จ'
+                                      );
+                                    }}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-[11px] font-black cursor-pointer shadow transition-all"
                                   >
                                     ✅ ปรับ: คืนเงินแล้ว
                                   </button>
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'pending_refund' })}
-                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
+                                    disabled={Boolean(busyActionKey)}
+                                    onClick={() => {
+                                      const targetKey = profileModalReg.user_id || profileModalReg.id;
+                                      runSafeAdminMutation(
+                                        `staff_refund_pending_${targetKey}`,
+                                        {
+                                          title: 'ยืนยันยกเลิกสถานะคืนเงิน',
+                                          message: `ต้องการเปลี่ยนสถานะของคุณ ${profileModalReg.first_name || ''} กลับเป็น "รอคืนเงิน" ใช่หรือไม่?`,
+                                          confirmText: '↩️ ยกเลิกสถานะคืนเงิน',
+                                          cancelText: 'ยกเลิก',
+                                          variant: 'warning'
+                                        },
+                                        async () => {
+                                          await handleUpdateRefundStatusAndInfo(profileModalReg, { refund_status: 'pending_refund' });
+                                        },
+                                        'ยกเลิกสถานะคืนเงินไม่สำเร็จ'
+                                      );
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-semibold cursor-pointer transition-all"
                                   >
                                     ↩️ ยกเลิกสถานะคืนเงิน
                                   </button>
@@ -11946,23 +12214,28 @@ export default function AdminDashboardView({
                                           confirmText: 'ตกลง',
                                           cancelText: 'ยกเลิก'
                                         });
-                                        if (reason) {
-                                          const isMsu = isMsuInstitution(profileModalReg.institution);
-                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                          const updates = {
-                                            installment_1_status: 'unpaid',
-                                            installment_1_notes: reason,
-                                            payment_status: 'unpaid',
-                                            payment_amount: totalFee,
-                                            payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
-                                          };
-                                          setModalPaymentStatus('unpaid');
-                                          setModalPaymentAmount(totalFee);
-                                          setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
-                                          await onUpdateAllocation(profileModalReg.user_id, updates);
-                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                          triggerToast('ยกเลิกการอนุมัติสลิปงวด 1 และปรับให้ส่งใหม่แล้ว');
-                                        }
+                                          if (reason) {
+                                            try {
+                                              const isMsu = isMsuInstitution(profileModalReg.institution);
+                                              const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                              const updates = {
+                                                installment_1_status: 'unpaid',
+                                                installment_1_notes: reason,
+                                                payment_status: 'unpaid',
+                                                payment_amount: totalFee,
+                                                payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                              };
+                                              await onUpdateAllocation(profileModalReg.user_id, updates);
+                                              setModalPaymentStatus('unpaid');
+                                              setModalPaymentAmount(totalFee);
+                                              setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+                                              setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                              triggerToast('ยกเลิกการอนุมัติสลิปงวด 1 และปรับให้ส่งใหม่แล้ว');
+                                            } catch (err) {
+                                              console.error('Failed to reject R1 slip:', err);
+                                              triggerToast(err?.message || 'ยกเลิกการอนุมัติสลิปงวด 1 ไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                            }
+                                          }
                                       }}
                                       className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
                                       title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
@@ -11983,38 +12256,40 @@ export default function AdminDashboardView({
                                           cancelText: 'ยกเลิก',
                                           variant: 'info',
                                           onConfirm: async () => {
-                                            const isMsu = isMsuInstitution(profileModalReg.institution);
-                                            const round2Fee = isMsu 
-                                              ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                              : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                            const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
-                                            
-                                            const updates = {
-                                              installment_1_status: 'paid',
-                                              installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
-                                            };
+                                            try {
+                                              const isMsu = isMsuInstitution(profileModalReg.institution);
+                                              const round2Fee = isMsu 
+                                                ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                                : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                              const isR2Paid = profileModalReg.installment_2_status === 'paid' && Boolean(profileModalReg.installment_2_slip_url);
+                                              
+                                              const updates = {
+                                                installment_1_status: 'paid',
+                                                installment_1_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 1 เรียบร้อย'
+                                              };
 
-                                            if (isR2Paid) {
-                                              updates.payment_status = 'paid';
-                                              updates.payment_amount = 0;
-                                              updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
-                                              setModalPaymentStatus('paid');
-                                              setModalPaymentAmount(0);
-                                              setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
-                                            } else {
-                                              const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
-                                              const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
-                                              updates.payment_status = nextStatus;
-                                              updates.payment_amount = round2Fee;
-                                              updates.payment_notes = nextNotes;
-                                              setModalPaymentStatus(nextStatus);
-                                              setModalPaymentAmount(round2Fee);
-                                              setModalPaymentNotes(nextNotes);
+                                              if (isR2Paid) {
+                                                updates.payment_status = 'paid';
+                                                updates.payment_amount = 0;
+                                                updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                              } else {
+                                                const nextStatus = profileModalReg.installment_2_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                                const nextNotes = `ชำระงวดที่ 1 แล้ว (ค้างชำระงวดที่ 2: ${round2Fee} บ.)`;
+                                                updates.payment_status = nextStatus;
+                                                updates.payment_amount = round2Fee;
+                                                updates.payment_notes = nextNotes;
+                                              }
+
+                                              await onUpdateAllocation(profileModalReg.user_id, updates);
+                                              setModalPaymentStatus(updates.payment_status);
+                                              setModalPaymentAmount(updates.payment_amount);
+                                              setModalPaymentNotes(updates.payment_notes);
+                                              setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                              triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
+                                            } catch (err) {
+                                              console.error('Failed to approve R1 slip:', err);
+                                              triggerToast(err?.message || 'อนุมัติสลิปงวดที่ 1 ไม่สำเร็จ กรุณาลองใหม่', 'error');
                                             }
-
-                                            await onUpdateAllocation(profileModalReg.user_id, updates);
-                                            setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                            triggerToast('อนุมัติสลิปงวดที่ 1 เรียบร้อยแล้ว');
                                           }
                                         });
                                       }}
@@ -12034,23 +12309,28 @@ export default function AdminDashboardView({
                                           confirmText: 'ตกลง',
                                           cancelText: 'ยกเลิก'
                                         });
-                                        if (reason) {
-                                          const isMsu = isMsuInstitution(profileModalReg.institution);
-                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                          const updates = {
-                                            installment_1_status: 'unpaid',
-                                            installment_1_notes: reason,
-                                            payment_status: 'unpaid',
-                                            payment_amount: totalFee,
-                                            payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
-                                          };
-                                          setModalPaymentStatus('unpaid');
-                                          setModalPaymentAmount(totalFee);
-                                          setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
-                                          await onUpdateAllocation(profileModalReg.user_id, updates);
-                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                          triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
-                                        }
+                                          if (reason) {
+                                            try {
+                                              const isMsu = isMsuInstitution(profileModalReg.institution);
+                                              const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                              const updates = {
+                                                installment_1_status: 'unpaid',
+                                                installment_1_notes: reason,
+                                                payment_status: 'unpaid',
+                                                payment_amount: totalFee,
+                                                payment_notes: `สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`
+                                              };
+                                              await onUpdateAllocation(profileModalReg.user_id, updates);
+                                              setModalPaymentStatus('unpaid');
+                                              setModalPaymentAmount(totalFee);
+                                              setModalPaymentNotes(`สลิปงวดที่ 1 ไม่ถูกต้อง: ${reason}`);
+                                              setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                              triggerToast('ปฏิเสธสลิปงวด 1 เรียบร้อย');
+                                            } catch (err) {
+                                              console.error('Failed to reject R1 slip:', err);
+                                              triggerToast(err?.message || 'ปฏิเสธสลิปงวด 1 ไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                            }
+                                          }
                                       }}
                                       className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                     >
@@ -12193,28 +12473,33 @@ export default function AdminDashboardView({
                                           confirmText: 'ตกลง',
                                           cancelText: 'ยกเลิก'
                                         });
-                                        if (reason) {
-                                          const isMsu = isMsuInstitution(profileModalReg.institution);
-                                          const round2Fee = isMsu 
-                                            ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                            : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                          const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                          if (reason) {
+                                            try {
+                                              const isMsu = isMsuInstitution(profileModalReg.institution);
+                                              const round2Fee = isMsu 
+                                                ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                                : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                              const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                              const isR1Paid = profileModalReg.installment_1_status === 'paid';
 
-                                          const updates = {
-                                            installment_2_status: 'unpaid',
-                                            installment_2_notes: reason,
-                                            payment_status: 'unpaid',
-                                            payment_amount: isR1Paid ? round2Fee : totalFee,
-                                            payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
-                                          };
-                                          setModalPaymentStatus('unpaid');
-                                          setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
-                                          setModalPaymentNotes(updates.payment_notes);
-                                          await onUpdateAllocation(profileModalReg.user_id, updates);
-                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                          triggerToast('ยกเลิกการอนุมัติสลิปงวด 2 และปรับให้ส่งใหม่แล้ว');
-                                        }
+                                              const updates = {
+                                                installment_2_status: 'unpaid',
+                                                installment_2_notes: reason,
+                                                payment_status: 'unpaid',
+                                                payment_amount: isR1Paid ? round2Fee : totalFee,
+                                                payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                              };
+                                              await onUpdateAllocation(profileModalReg.user_id, updates);
+                                              setModalPaymentStatus('unpaid');
+                                              setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                              setModalPaymentNotes(updates.payment_notes);
+                                              setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                              triggerToast('ยกเลิกการอนุมัติสลิปงวด 2 และปรับให้ส่งใหม่แล้ว');
+                                            } catch (err) {
+                                              console.error('Failed to reject R2 slip:', err);
+                                              triggerToast(err?.message || 'ยกเลิกการอนุมัติสลิปงวด 2 ไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                            }
+                                          }
                                       }}
                                       className="py-1.5 px-3.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
                                       title="ยกเลิกการอนุมัติและแจ้งให้ส่งสลิปใหม่"
@@ -12235,59 +12520,61 @@ export default function AdminDashboardView({
                                           cancelText: 'ยกเลิก',
                                           variant: 'info',
                                           onConfirm: async () => {
-                                            if (isModalNonMsuStaff) {
-                                              const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffModalSummary?.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffModalSummary.offsetToAccommodation} บ. + โอนเพิ่ม ${staffModalSummary.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
+                                            try {
+                                              if (isModalNonMsuStaff) {
+                                                const nextNote = `หมายเหตุ: Staff ต่างมหาลัย ชำระครบถ้วนแล้ว 480 บ. (ค่าเสื้อ 280 บ. + ค่าที่พัก 200 บ.${staffModalSummary?.isOffsetApplied ? ` [หักลบจากยอดโอนเกินรอบแรก ${staffModalSummary.offsetToAccommodation} บ. + โอนเพิ่ม ${staffModalSummary.accommodationNetRequiredAfterOffset} บ.]` : ''})`;
+                                                const updates = {
+                                                  payment_plan: 'full',
+                                                  payment_status: 'paid',
+                                                  payment_amount: 0,
+                                                  installment_1_status: 'paid',
+                                                  installment_2_status: 'paid',
+                                                  installment_2_notes: 'ตรวจสอบและอนุมัติค่าที่พัก Staff ต่างมหาลัยเรียบร้อย',
+                                                  staff_accommodation_paid: true,
+                                                  payment_notes: nextNote
+                                                };
+                                                await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                                setModalPaymentPlan('full');
+                                                setModalPaymentStatus('paid');
+                                                setModalPaymentAmount(0);
+                                                setModalInstallment1Status('paid');
+                                                setModalInstallment2Status('paid');
+                                                setModalPaymentNotes(nextNote);
+                                                setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                                triggerToast('อนุมัติสลิปค่าที่พัก Staff ต่างมหาลัยครบถ้วน 480 บ. แล้ว');
+                                                return;
+                                              }
+
+                                              const round1Fee = paymentConfig?.installment_round1_amount || 400;
+                                              const isR1Paid = profileModalReg.installment_1_status === 'paid';
+                                              
                                               const updates = {
-                                                payment_plan: 'full',
-                                                payment_status: 'paid',
-                                                payment_amount: 0,
-                                                installment_1_status: 'paid',
                                                 installment_2_status: 'paid',
-                                                installment_2_notes: 'ตรวจสอบและอนุมัติค่าที่พัก Staff ต่างมหาลัยเรียบร้อย',
-                                                staff_accommodation_paid: true,
-                                                payment_notes: nextNote
+                                                installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
                                               };
-                                              setModalPaymentPlan('full');
-                                              setModalPaymentStatus('paid');
-                                              setModalPaymentAmount(0);
-                                              setModalInstallment1Status('paid');
-                                              setModalInstallment2Status('paid');
-                                              setModalPaymentNotes(nextNote);
-                                              await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+
+                                              if (isR1Paid) {
+                                                updates.payment_status = 'paid';
+                                                updates.payment_amount = 0;
+                                                updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
+                                              } else {
+                                                const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
+                                                const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
+                                                updates.payment_status = nextStatus;
+                                                updates.payment_amount = round1Fee;
+                                                updates.payment_notes = nextNotes;
+                                              }
+
+                                              await onUpdateAllocation(profileModalReg.user_id, updates);
+                                              setModalPaymentStatus(updates.payment_status);
+                                              setModalPaymentAmount(updates.payment_amount);
+                                              setModalPaymentNotes(updates.payment_notes);
                                               setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                              triggerToast('อนุมัติสลิปค่าที่พัก Staff ต่างมหาลัยครบถ้วน 480 บ. แล้ว');
-                                              return;
+                                              triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
+                                            } catch (err) {
+                                              console.error('Failed to approve R2/staff slip:', err);
+                                              triggerToast(err?.message || 'อนุมัติสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
                                             }
-
-                                            const round1Fee = paymentConfig?.installment_round1_amount || 400;
-                                            const isR1Paid = profileModalReg.installment_1_status === 'paid';
-                                            
-                                            const updates = {
-                                              installment_2_status: 'paid',
-                                              installment_2_notes: 'ตรวจสอบและอนุมัติยอดงวดที่ 2 เรียบร้อย'
-                                            };
-
-                                            if (isR1Paid) {
-                                              updates.payment_status = 'paid';
-                                              updates.payment_amount = 0;
-                                              updates.payment_notes = 'ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว';
-                                              setModalPaymentStatus('paid');
-                                              setModalPaymentAmount(0);
-                                              setModalPaymentNotes('ชำระครบทั้ง 2 งวดเรียบร้อยแล้ว');
-                                            } else {
-                                              const nextStatus = profileModalReg.installment_1_status === 'pending_review' ? 'pending_review' : 'unpaid';
-                                              const nextNotes = `ชำระงวดที่ 2 เรียบร้อย (ค้างงวดที่ 1: ${round1Fee} บ.)`;
-                                              updates.payment_status = nextStatus;
-                                              updates.payment_amount = round1Fee;
-                                              updates.payment_notes = nextNotes;
-                                              setModalPaymentStatus(nextStatus);
-                                              setModalPaymentAmount(round1Fee);
-                                              setModalPaymentNotes(nextNotes);
-                                            }
-
-                                            await onUpdateAllocation(profileModalReg.user_id, updates);
-                                            setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                            triggerToast(isR1Paid ? 'อนุมัติสลิปงวดที่ 2 และชำระครบ 2 งวดแล้ว' : 'อนุมัติสลิปงวดที่ 2 เรียบร้อยแล้ว');
                                           }
                                         });
                                       }}
@@ -12307,47 +12594,52 @@ export default function AdminDashboardView({
                                           confirmText: 'ตกลง',
                                           cancelText: 'ยกเลิก'
                                         });
-                                        if (reason) {
-                                          if (isModalNonMsuStaff) {
-                                            const rem = staffModalSummary?.accommodationNetRequiredAfterOffset || 200;
-                                            const updates = {
-                                              installment_2_status: 'unpaid',
-                                              installment_2_notes: reason,
-                                              payment_status: 'unpaid',
-                                              payment_amount: rem,
-                                              staff_accommodation_paid: false,
-                                              payment_notes: `สลิปค่าที่พัก Staff ต่างมหาลัยไม่ถูกต้อง: ${reason} (คงเหลือต้องโอนเพิ่ม ${rem} บ.)`
-                                            };
-                                            setModalPaymentStatus('unpaid');
-                                            setModalPaymentAmount(rem);
-                                            setModalPaymentNotes(updates.payment_notes);
-                                            await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
-                                            setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                            triggerToast('ปฏิเสธสลิปค่าที่พัก Staff เรียบร้อย');
-                                            return;
+                                          if (reason) {
+                                            try {
+                                              if (isModalNonMsuStaff) {
+                                                const rem = staffModalSummary?.accommodationNetRequiredAfterOffset || 200;
+                                                const updates = {
+                                                  installment_2_status: 'unpaid',
+                                                  installment_2_notes: reason,
+                                                  payment_status: 'unpaid',
+                                                  payment_amount: rem,
+                                                  staff_accommodation_paid: false,
+                                                  payment_notes: `สลิปค่าที่พัก Staff ต่างมหาลัยไม่ถูกต้อง: ${reason} (คงเหลือต้องโอนเพิ่ม ${rem} บ.)`
+                                                };
+                                                await onUpdateAllocation(profileModalReg.user_id || profileModalReg.id, updates);
+                                                setModalPaymentStatus('unpaid');
+                                                setModalPaymentAmount(rem);
+                                                setModalPaymentNotes(updates.payment_notes);
+                                                setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                                triggerToast('ปฏิเสธสลิปค่าที่พัก Staff เรียบร้อย');
+                                                return;
+                                              }
+
+                                              const isMsu = isMsuInstitution(profileModalReg.institution);
+                                              const round2Fee = isMsu 
+                                                ? (paymentConfig?.installment_round2_amount_msu || 250) 
+                                                : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
+                                              const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
+                                              const isR1Paid = profileModalReg.installment_1_status === 'paid';
+
+                                              const updates = {
+                                                installment_2_status: 'unpaid',
+                                                installment_2_notes: reason,
+                                                payment_status: 'unpaid',
+                                                payment_amount: isR1Paid ? round2Fee : totalFee,
+                                                payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
+                                              };
+                                              await onUpdateAllocation(profileModalReg.user_id, updates);
+                                              setModalPaymentStatus('unpaid');
+                                              setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
+                                              setModalPaymentNotes(updates.payment_notes);
+                                              setProfileModalReg(prev => ({ ...prev, ...updates }));
+                                              triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
+                                            } catch (err) {
+                                              console.error('Failed to reject R2/staff slip:', err);
+                                              triggerToast(err?.message || 'ปฏิเสธสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                            }
                                           }
-
-                                          const isMsu = isMsuInstitution(profileModalReg.institution);
-                                          const round2Fee = isMsu 
-                                            ? (paymentConfig?.installment_round2_amount_msu || 250) 
-                                            : (paymentConfig?.installment_round2_amount_external || paymentConfig?.installment_round2_amount || 450);
-                                          const totalFee = isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850);
-                                          const isR1Paid = profileModalReg.installment_1_status === 'paid';
-
-                                          const updates = {
-                                            installment_2_status: 'unpaid',
-                                            installment_2_notes: reason,
-                                            payment_status: 'unpaid',
-                                            payment_amount: isR1Paid ? round2Fee : totalFee,
-                                            payment_notes: isR1Paid ? `ชำระงวดที่ 1 แล้ว (สลิปงวดที่ 2 ไม่ถูกต้อง: ${reason})` : `ปฏิเสธสลิป: ${reason}`
-                                          };
-                                          setModalPaymentStatus('unpaid');
-                                          setModalPaymentAmount(isR1Paid ? round2Fee : totalFee);
-                                          setModalPaymentNotes(updates.payment_notes);
-                                          await onUpdateAllocation(profileModalReg.user_id, updates);
-                                          setProfileModalReg(prev => ({ ...prev, ...updates }));
-                                          triggerToast('ปฏิเสธสลิปงวด 2 เรียบร้อย');
-                                        }
                                       }}
                                       className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                     >
@@ -12528,24 +12820,29 @@ export default function AdminDashboardView({
                                       cancelText: 'ยกเลิก'
                                     });
                                     if (reason) {
-                                      const isMsu = isMsuInstitution(profileModalReg.institution);
-                                      const totalFee = isModalStaff
-                                        ? STAFF_SHIRT_FEE
-                                        : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
+                                      try {
+                                        const isMsu = isMsuInstitution(profileModalReg.institution);
+                                        const totalFee = isModalStaff
+                                          ? STAFF_SHIRT_FEE
+                                          : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
 
-                                      setModalPaymentStatus('unpaid');
-                                      setModalPaymentAmount(totalFee);
-                                      setModalPaymentNotes(reason);
-                                      const rejectUpdates = {
-                                        payment_status: 'unpaid',
-                                        installment_1_status: 'unpaid',
-                                        installment_1_notes: reason,
-                                        payment_amount: totalFee,
-                                        payment_notes: reason
-                                      };
-                                      await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
-                                      setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
-                                      triggerToast('ยกเลิกการอนุมัติสลิปและปรับเป็นค้างชำระแล้ว');
+                                        const rejectUpdates = {
+                                          payment_status: 'unpaid',
+                                          installment_1_status: 'unpaid',
+                                          installment_1_notes: reason,
+                                          payment_amount: totalFee,
+                                          payment_notes: reason
+                                        };
+                                        await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                        setModalPaymentStatus('unpaid');
+                                        setModalPaymentAmount(totalFee);
+                                        setModalPaymentNotes(reason);
+                                        setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
+                                        triggerToast('ยกเลิกการอนุมัติสลิปและปรับเป็นค้างชำระแล้ว');
+                                      } catch (err) {
+                                        console.error('Failed to revert approved slip:', err);
+                                        triggerToast(err?.message || 'ยกเลิกการอนุมัติสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                      }
                                     }
                                   }}
                                   className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-all active:scale-95"
@@ -12567,25 +12864,30 @@ export default function AdminDashboardView({
                                       cancelText: 'ยกเลิก',
                                       variant: 'info',
                                       onConfirm: async () => {
-                                        const approvalNote = isModalStaff
-                                          ? `ตรวจสอบและอนุมัติสลิปค่าเสื้อ Staff (${STAFF_SHIRT_FEE} บาท) เรียบร้อยแล้ว`
-                                          : 'ตรวจสอบยอดเงินถูกต้องแล้ว';
-                                        const fullApprovalUpdates = {
-                                          payment_plan: 'full',
-                                          payment_status: 'paid',
-                                          payment_amount: 0,
-                                          payment_notes: approvalNote,
-                                          installment_1_status: 'paid',
-                                          installment_1_notes: approvalNote,
-                                          payment_slip_url: effectiveSlipUrl
-                                        };
-                                        setModalPaymentPlan('full');
-                                        setModalPaymentStatus('paid');
-                                        setModalPaymentAmount(0);
-                                        setModalPaymentNotes(approvalNote);
-                                        await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
-                                        setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
-                                        triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
+                                        try {
+                                          const approvalNote = isModalStaff
+                                            ? `ตรวจสอบและอนุมัติสลิปค่าเสื้อ Staff (${STAFF_SHIRT_FEE} บาท) เรียบร้อยแล้ว`
+                                            : 'ตรวจสอบยอดเงินถูกต้องแล้ว';
+                                          const fullApprovalUpdates = {
+                                            payment_plan: 'full',
+                                            payment_status: 'paid',
+                                            payment_amount: 0,
+                                            payment_notes: approvalNote,
+                                            installment_1_status: 'paid',
+                                            installment_1_notes: approvalNote,
+                                            payment_slip_url: effectiveSlipUrl
+                                          };
+                                          await onUpdateAllocation(profileModalReg.user_id, fullApprovalUpdates);
+                                          setModalPaymentPlan('full');
+                                          setModalPaymentStatus('paid');
+                                          setModalPaymentAmount(0);
+                                          setModalPaymentNotes(approvalNote);
+                                          setProfileModalReg(prev => ({ ...prev, ...fullApprovalUpdates }));
+                                          triggerToast('อนุมัติการชำระเงินเรียบร้อยแล้ว');
+                                        } catch (err) {
+                                          console.error('Failed to approve full slip:', err);
+                                          triggerToast(err?.message || 'อนุมัติสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                        }
                                       }
                                     });
                                   }}
@@ -12608,24 +12910,29 @@ export default function AdminDashboardView({
                                       cancelText: 'ยกเลิก'
                                     });
                                     if (reason) {
-                                      const isMsu = isMsuInstitution(profileModalReg.institution);
-                                      const totalFee = isModalStaff
-                                        ? STAFF_SHIRT_FEE
-                                        : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
+                                      try {
+                                        const isMsu = isMsuInstitution(profileModalReg.institution);
+                                        const totalFee = isModalStaff
+                                          ? STAFF_SHIRT_FEE
+                                          : (isMsu ? (paymentConfig?.fee_total_msu || 650) : (paymentConfig?.fee_total_external || paymentConfig?.fee_total || 850));
 
-                                      setModalPaymentStatus('unpaid');
-                                      setModalPaymentAmount(totalFee);
-                                      setModalPaymentNotes(reason);
-                                      const rejectUpdates = {
-                                        payment_status: 'unpaid',
-                                        installment_1_status: 'unpaid',
-                                        installment_1_notes: reason,
-                                        payment_amount: totalFee,
-                                        payment_notes: reason
-                                      };
-                                      await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
-                                      setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
-                                      triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
+                                        const rejectUpdates = {
+                                          payment_status: 'unpaid',
+                                          installment_1_status: 'unpaid',
+                                          installment_1_notes: reason,
+                                          payment_amount: totalFee,
+                                          payment_notes: reason
+                                        };
+                                        await onUpdateAllocation(profileModalReg.user_id, rejectUpdates);
+                                        setModalPaymentStatus('unpaid');
+                                        setModalPaymentAmount(totalFee);
+                                        setModalPaymentNotes(reason);
+                                        setProfileModalReg(prev => ({ ...prev, ...rejectUpdates }));
+                                        triggerToast('ปฏิเสธสลิปและปรับเป็นค้างชำระแล้ว');
+                                      } catch (err) {
+                                        console.error('Failed to reject full slip:', err);
+                                        triggerToast(err?.message || 'ปฏิเสธสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
+                                      }
                                     }
                                   }}
                                   className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow cursor-pointer transition-colors"
@@ -18210,6 +18517,7 @@ export default function AdminDashboardView({
           onSelectApplicant={(reg) => handleOpenProfileModal(reg, 'info')}
           onUpdateAllocation={onUpdateAllocation}
           triggerToast={triggerToast}
+          askConfirm={askConfirm}
         />
       )}
 
@@ -18220,6 +18528,7 @@ export default function AdminDashboardView({
           onUpdateAllocation={onUpdateAllocation}
           onOpenProfileModal={(reg) => handleOpenProfileModal(reg, 'info')}
           triggerToast={triggerToast}
+          askConfirm={askConfirm}
         />
       )}
 
@@ -18238,6 +18547,7 @@ export default function AdminDashboardView({
           user={user}
           triggerToast={triggerToast}
           onRefreshUserAccounts={loadUserAccounts}
+          askConfirm={askConfirm}
         />
       )}
 
@@ -19679,12 +19989,17 @@ export default function AdminDashboardView({
           onMarkOrderReceived={onMarkOrderReceived}
           onMarkRegistrationShirtReceived={async (userId, received) => {
             if (onUpdateAllocation) {
-              await onUpdateAllocation(userId, {
-                shirt_pickup_status: received ? 'received' : 'pending',
-                shirt_received: received,
-                shirt_received_date: received ? new Date().toISOString() : null
-              });
-              triggerToast(received ? 'บันทึกการส่งมอบเสื้อฝึกเรียบร้อยแล้ว' : 'ยกเลิกสถานะส่งมอบเสื้อฝึกเรียบร้อยแล้ว');
+              try {
+                await onUpdateAllocation(userId, {
+                  shirt_pickup_status: received ? 'received' : 'pending',
+                  shirt_received: received,
+                  shirt_received_date: received ? new Date().toISOString() : null
+                });
+                triggerToast(received ? 'บันทึกการส่งมอบเสื้อฝึกเรียบร้อยแล้ว' : 'ยกเลิกสถานะส่งมอบเสื้อฝึกเรียบร้อยแล้ว');
+              } catch (err) {
+                console.error('Failed to toggle shirt received via scanner:', err);
+                triggerToast(err?.message || 'บันทึกสถานะรับเสื้อไม่สำเร็จ กรุณาลองใหม่', 'error');
+              }
             }
           }}
           onVerifyPayment={onVerifyOrderPayment}
@@ -19726,19 +20041,24 @@ export default function AdminDashboardView({
               cancelText: 'ยกเลิก',
               variant: nextReceived ? 'info' : 'warning',
               onConfirm: async () => {
-                if (item.source === 'registration') {
-                  const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || String(item.id || '').replace('reg_shirt_', '');
-                  if (onUpdateAllocation && targetUserId) {
-                    await onUpdateAllocation(targetUserId, {
-                      shirt_pickup_status: nextReceived ? 'received' : 'pending',
-                      shirt_received: nextReceived,
-                      shirt_received_date: nextReceived ? new Date().toISOString() : null
-                    });
-                    triggerToast(nextReceived ? `บันทึกส่งมอบเสื้อคุณ ${item.customer_name} เรียบร้อยแล้ว` : `ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                try {
+                  if (item.source === 'registration') {
+                    const targetUserId = item.user_id || item.rawRegistration?.user_id || item.rawRegistration?.id || String(item.id || '').replace('reg_shirt_', '');
+                    if (onUpdateAllocation && targetUserId) {
+                      await onUpdateAllocation(targetUserId, {
+                        shirt_pickup_status: nextReceived ? 'received' : 'pending',
+                        shirt_received: nextReceived,
+                        shirt_received_date: nextReceived ? new Date().toISOString() : null
+                      });
+                      triggerToast(nextReceived ? `บันทึกส่งมอบเสื้อคุณ ${item.customer_name} เรียบร้อยแล้ว` : `ยกเลิกสถานะส่งมอบเสื้อคุณ ${item.customer_name} แล้ว`);
+                    }
+                  } else if (onMarkOrderReceived) {
+                    await onMarkOrderReceived(item.id, nextReceived ? 'Admin JRE 2027' : null, nextReceived ? 'received' : 'pending');
+                    triggerToast(nextReceived ? `บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว` : `ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
                   }
-                } else if (onMarkOrderReceived) {
-                  await onMarkOrderReceived(item.id, nextReceived ? 'Admin JRE 2027' : null, nextReceived ? 'received' : 'pending');
-                  triggerToast(nextReceived ? `บันทึกส่งมอบออเดอร์ ${item.order_number} เรียบร้อยแล้ว` : `ยกเลิกสถานะส่งมอบออเดอร์ ${item.order_number} แล้ว`);
+                } catch (err) {
+                  console.error('Failed to toggle shirt pickup status:', err);
+                  triggerToast(err?.message || 'บันทึกสถานะการรับเสื้อไม่สำเร็จ กรุณาลองใหม่', 'error');
                 }
               }
             });

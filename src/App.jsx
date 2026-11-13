@@ -1130,8 +1130,10 @@ export default function App() {
     // SECURITY GUARD: Group and room allocations are RESTRICTED to verified Admin!
     if (!hasAdminPrivilege) {
       console.warn('Unauthorized allocation update attempt rejected');
-      return;
+      throw new Error('ไม่มีสิทธิ์ผู้ดูแลระบบหรือเซสชัน Admin หมดอายุ กรุณาเข้าสู่ระบบ Admin ใหม่อีกครั้ง');
     }
+    const prevRegistrations = registrations;
+    const prevMyRegistration = myRegistration;
     setRegistrations(prev => prev.map(r => 
       (r.user_id === userId || r.id === userId || (r.user_email && r.user_email === userId))
         ? { ...r, ...allocations, updated_at: new Date().toISOString() }
@@ -1140,7 +1142,17 @@ export default function App() {
     if (user && (user.id === userId || myRegistration?.user_id === userId || myRegistration?.id === userId)) {
       setMyRegistration(prev => prev ? { ...prev, ...allocations } : prev);
     }
-    await DataService.updateRegistrationAllocations(userId, allocations);
+    try {
+      const saved = await DataService.updateRegistrationAllocations(userId, allocations);
+      if (saved === false) {
+        throw new Error('ไม่พบรหัสผู้สมัครสำหรับการบันทึกข้อมูล');
+      }
+      return true;
+    } catch (err) {
+      setRegistrations(prevRegistrations);
+      setMyRegistration(prevMyRegistration);
+      throw err;
+    }
   };
 
   const handleUpdateRegistration = async (userId, updates) => {
@@ -1164,6 +1176,8 @@ export default function App() {
       }
     }
 
+    const prevRegistrations = registrations;
+    const prevMyRegistration = myRegistration;
     setRegistrations(prev => prev.map(r => 
       (r.user_id === userId || r.id === userId || (r.user_email && r.user_email === userId))
         ? { ...r, ...updates, updated_at: new Date().toISOString() }
@@ -1172,7 +1186,17 @@ export default function App() {
     if (user && (user.id === userId || myRegistration?.user_id === userId || myRegistration?.id === userId)) {
       setMyRegistration(prev => prev ? { ...prev, ...updates } : prev);
     }
-    await DataService.updateRegistrationDetails(userId, updates);
+    try {
+      const saved = await DataService.updateRegistrationDetails(userId, updates);
+      if (saved === false) {
+        throw new Error('ไม่สามารถบันทึกการแก้ไขข้อมูลได้');
+      }
+      return true;
+    } catch (err) {
+      setRegistrations(prevRegistrations);
+      setMyRegistration(prevMyRegistration);
+      throw err;
+    }
   };
 
   const handleDeleteRegistration = async (userId) => {
@@ -1251,6 +1275,7 @@ export default function App() {
   };
 
   const handleVerifyOrderPayment = async (orderId, isApproved, adminNotes) => {
+    const prevOrders = merchandiseOrders;
     // 1. Instant optimistic update in React state (0ms)
     setMerchandiseOrders(prev => prev.map(o => 
       (o.id === orderId || o.order_number === orderId)
@@ -1263,11 +1288,17 @@ export default function App() {
           }
         : o
     ));
-    // 2. Persist in background
-    await DataService.verifyOrderPayment(orderId, isApproved, adminNotes);
+    // 2. Persist and rollback if failed
+    try {
+      await DataService.verifyOrderPayment(orderId, isApproved, adminNotes);
+    } catch (err) {
+      setMerchandiseOrders(prevOrders);
+      throw err;
+    }
   };
 
   const handleMarkOrderReceived = async (orderId, adminName, status = 'received') => {
+    const prevOrders = merchandiseOrders;
     // 1. Instant optimistic update in React state (0ms)
     const now = status === 'received' ? new Date().toISOString() : null;
     const admin = status === 'received' ? (adminName || 'Admin JRE 2027') : null;
@@ -1276,8 +1307,13 @@ export default function App() {
         ? { ...o, pickup_status: status, pickup_at: now, pickup_by_admin: admin, updated_at: new Date().toISOString() }
         : o
     ));
-    // 2. Persist in background
-    await DataService.markOrderReceived(orderId, adminName, status);
+    // 2. Persist and rollback if failed
+    try {
+      await DataService.markOrderReceived(orderId, adminName, status);
+    } catch (err) {
+      setMerchandiseOrders(prevOrders);
+      throw err;
+    }
   };
 
   if (loading) {

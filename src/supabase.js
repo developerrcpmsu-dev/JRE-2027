@@ -751,6 +751,21 @@ function hasClientAdminPrivilege() {
 }
 
 /**
+ * Persists a key/value setting into Supabase `project_settings` and throws on remote failure
+ * so UI handlers never pretend a save succeeded when the database write failed.
+ */
+async function upsertProjectSettingStrict(key, value) {
+  if (!isSupabaseConfigured || !supabase) return true;
+  const { error } = await supabase
+    .from('project_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() });
+  if (error) {
+    throw new Error(error.message || `ไม่สามารถบันทึกข้อมูล "${key}" ลงฐานข้อมูลได้`);
+  }
+  return true;
+}
+
+/**
  * Data Service API - bridges Supabase and LocalStorage smoothly
  */
 export const DataService = {
@@ -1017,22 +1032,25 @@ export const DataService = {
       }
 
       if ((!resultData || resultData.length === 0) && isAdminContext && payload.user_id) {
-        try {
-          const upsertRes = await supabase.from('registrations').upsert(payload, { onConflict: 'user_id' }).select('id');
-          if (!upsertRes.error && upsertRes.data && upsertRes.data.length > 0) {
-            resultData = upsertRes.data;
-            resultError = null;
-          }
-        } catch (e) {}
+        const upsertRes = await supabase.from('registrations').upsert(payload, { onConflict: 'user_id' }).select('id');
+        if (!upsertRes.error && upsertRes.data && upsertRes.data.length > 0) {
+          resultData = upsertRes.data;
+          resultError = null;
+        } else if (upsertRes.error && !resultError) {
+          resultError = upsertRes.error;
+        }
       }
 
       if (resultError) {
-        console.warn('Supabase update details notice:', resultError);
-        if (!isAdminContext) {
-          throw resultError;
-        }
-      } else if ((!resultData || resultData.length === 0) && !isAdminContext) {
-        throw new Error('ไม่พบสิทธิ์หรือไม่พบใบสมัครสำหรับการแก้ไข');
+        console.error('Supabase update registration failed:', resultError);
+        throw new Error(resultError.message || 'ไม่สามารถบันทึกการเปลี่ยนแปลงลงฐานข้อมูลได้');
+      }
+      if (!resultData || resultData.length === 0) {
+        throw new Error(
+          isAdminContext
+            ? 'ไม่พบแถวข้อมูลสำหรับอัปเดตในฐานข้อมูล หรือสิทธิ์ RLS ไม่อนุญาต (ข้อมูลยังไม่ได้รับการบันทึก)'
+            : 'ไม่พบสิทธิ์หรือไม่พบใบสมัครสำหรับการแก้ไข'
+        );
       }
     }
 
@@ -1302,13 +1320,11 @@ export const DataService = {
   },
 
   async deleteRegistration(userId) {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('registrations').delete().eq('user_id', userId);
-        await supabase.from('registrations').delete().eq('id', userId);
-      } catch (e) {
-        console.warn('Supabase delete error', e);
-      }
+    if (isSupabaseConfigured && supabase) {
+      const resByUserId = await supabase.from('registrations').delete().eq('user_id', userId);
+      if (resByUserId.error) throw new Error(resByUserId.error.message || 'ไม่สามารถลบข้อมูลออกจากฐานข้อมูลได้');
+      const resById = await supabase.from('registrations').delete().eq('id', userId);
+      if (resById.error) throw new Error(resById.error.message || 'ไม่สามารถลบข้อมูลออกจากฐานข้อมูลได้');
     }
     const regs = readCachedRegistrations();
     const filtered = regs.filter(r => r.user_id !== userId && r.id !== userId);
@@ -1345,26 +1361,25 @@ export const DataService = {
       slug: cleanSlug
     };
 
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from('announcements')
-          .upsert(annToSave)
-          .select();
-        if (!error && data && data.length > 0) return { ...data[0], slug: cleanSlug };
-        if (error) {
-          console.warn('Supabase announcement save error details:', error);
-          if (error.message && (error.message.includes('slug') || error.code === '42703')) {
-            const { slug, ...withoutSlug } = annToSave;
-            const retryRes = await supabase.from('announcements').upsert(withoutSlug).select();
-            if (!retryRes.error && retryRes.data && retryRes.data.length > 0) {
-              return { ...retryRes.data[0], slug: cleanSlug };
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Supabase announcement save error', e);
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('announcements')
+        .upsert(annToSave)
+        .select();
+      if (!error && data && data.length > 0) {
+        broadcastRealtimeChange('announcements', { action: 'save', id: data[0]?.id });
+        return { ...data[0], slug: cleanSlug };
       }
+      if (error && (error.message?.includes('slug') || error.code === '42703')) {
+        const { slug, ...withoutSlug } = annToSave;
+        const retryRes = await supabase.from('announcements').upsert(withoutSlug).select();
+        if (!retryRes.error && retryRes.data && retryRes.data.length > 0) {
+          broadcastRealtimeChange('announcements', { action: 'save', id: retryRes.data[0]?.id });
+          return { ...retryRes.data[0], slug: cleanSlug };
+        }
+        if (retryRes.error) throw new Error(retryRes.error.message || 'ไม่สามารถบันทึกประกาศลงฐานข้อมูลได้');
+      }
+      if (error) throw new Error(error.message || 'ไม่สามารถบันทึกประกาศลงฐานข้อมูลได้');
     }
     const items = await this.getAnnouncements();
     let updated;
@@ -1391,12 +1406,9 @@ export const DataService = {
   },
 
   async deleteAnnouncement(id) {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('announcements').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase announcement delete error', e);
-      }
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) throw new Error(error.message || 'ไม่สามารถลบประกาศออกจากฐานข้อมูลได้');
     }
     const items = await this.getAnnouncements();
     const filtered = items.filter(i => i.id !== id);
@@ -1541,15 +1553,7 @@ export const DataService = {
   },
 
   async saveFormsConfig(config) {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'forms_config', value: config, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase forms_config save error', e);
-      }
-    }
+    await upsertProjectSettingStrict('forms_config', config);
     localStorage.setItem(STORAGE_KEYS.FORMS_CONFIG, JSON.stringify(config));
     broadcastRealtimeChange('forms_config', { action: 'save' });
     return config;
@@ -1578,15 +1582,7 @@ export const DataService = {
   },
 
   async savePaymentConfig(config) {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'payment_config', value: config, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase payment_config save error', e);
-      }
-    }
+    await upsertProjectSettingStrict('payment_config', config);
     localStorage.setItem(STORAGE_KEYS.PAYMENT_CONFIG, JSON.stringify(config));
     broadcastRealtimeChange('payment_config', { action: 'save' });
     return config;
@@ -1717,19 +1713,7 @@ export const DataService = {
       updated = [newOrder, ...orders];
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ 
-            key: 'merchandise_orders', 
-            value: updated, 
-            updated_at: new Date().toISOString() 
-          });
-      } catch (e) {
-        console.warn('Supabase saveMerchandiseOrder notice, fallback to local', e);
-      }
-    }
+    await upsertProjectSettingStrict('merchandise_orders', updated);
 
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
     broadcastRealtimeChange('merchandise_orders', { action: 'save_order', orderId: newOrder?.id });
@@ -1739,25 +1723,13 @@ export const DataService = {
   async updateMerchandiseOrder(orderId, patch) {
     const orders = await this.getMerchandiseOrders();
     const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId);
-    if (idx === -1) return null;
+    if (idx === -1) throw new Error('ไม่พบคำสั่งซื้อที่ต้องการอัปเดต');
 
     const updatedOrder = { ...orders[idx], ...patch, updated_at: new Date().toISOString() };
     const updated = [...orders];
     updated[idx] = updatedOrder;
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ 
-            key: 'merchandise_orders', 
-            value: updated, 
-            updated_at: new Date().toISOString() 
-          });
-      } catch (e) {
-        console.warn('Supabase updateMerchandiseOrder notice, fallback to local', e);
-      }
-    }
+    await upsertProjectSettingStrict('merchandise_orders', updated);
 
     localStorage.setItem(STORAGE_KEYS.MERCHANDISE_ORDERS, JSON.stringify(updated));
     broadcastRealtimeChange('merchandise_orders', { action: 'update_order', orderId });
@@ -1820,15 +1792,7 @@ export const DataService = {
   },
 
   async saveTeam(team) {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'team_members', value: team, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase saveTeam error', e);
-      }
-    }
+    await upsertProjectSettingStrict('team_members', team);
     localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(team));
     broadcastRealtimeChange('team_members', { action: 'save' });
     return team;
@@ -1855,15 +1819,7 @@ export const DataService = {
   },
 
   async saveSpeakers(speakers) {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'speakers_config', value: speakers, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase saveSpeakers error', e);
-      }
-    }
+    await upsertProjectSettingStrict('speakers_config', speakers);
     localStorage.setItem(STORAGE_KEYS.SPEAKERS, JSON.stringify(speakers));
     broadcastRealtimeChange('speakers_config', { action: 'save' });
     return speakers;
@@ -1906,15 +1862,7 @@ export const DataService = {
       ...existing.filter(item => item.id !== newEntry.id)
     ];
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'medical_dispense_logs', value: updated, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase saveMedicalDispenseLog error', e);
-      }
-    }
+    await upsertProjectSettingStrict('medical_dispense_logs', updated);
     safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(updated));
     broadcastRealtimeChange('medical_dispense_logs', { action: 'save', logId: newEntry.id });
     return newEntry;
@@ -1923,15 +1871,7 @@ export const DataService = {
   async deleteMedicalDispenseLog(id) {
     const existing = await this.getMedicalDispenseLogs();
     const updated = existing.filter(item => item.id !== id);
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('project_settings')
-          .upsert({ key: 'medical_dispense_logs', value: updated, updated_at: new Date().toISOString() });
-      } catch (e) {
-        console.warn('Supabase deleteMedicalDispenseLog error', e);
-      }
-    }
+    await upsertProjectSettingStrict('medical_dispense_logs', updated);
     safeSetLocalStorage(STORAGE_KEYS.MEDICAL_LOGS, JSON.stringify(updated));
     broadcastRealtimeChange('medical_dispense_logs', { action: 'delete', logId: id });
     return updated;
@@ -2529,16 +2469,9 @@ export const DataService = {
 
   async saveStaffAdminAccounts(accountsList) {
     if (!Array.isArray(accountsList)) return accountsList;
+    await upsertProjectSettingStrict('staff_admin_whitelist', accountsList);
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
-          .from('project_settings')
-          .upsert({
-            key: 'staff_admin_whitelist',
-            value: accountsList,
-            updated_at: new Date().toISOString()
-          });
-
         // Also sync roles to user_accounts table in project_settings
         const { data } = await supabase.from('project_settings').select('value').eq('key', 'user_accounts').maybeSingle();
         if (data?.value && Array.isArray(data.value)) {
@@ -2555,15 +2488,11 @@ export const DataService = {
             }
           }
           if (changed) {
-            await supabase.from('project_settings').upsert({
-              key: 'user_accounts',
-              value: userAccs,
-              updated_at: new Date().toISOString()
-            });
+            await upsertProjectSettingStrict('user_accounts', userAccs);
           }
         }
-      } catch (e) {
-        console.warn('Failed to save staff_admin_whitelist:', e);
+      } catch (syncErr) {
+        console.warn('Failed to sync user_accounts roles:', syncErr);
       }
     }
     safeSetLocalStorage('jre2027_staff_admin_whitelist', JSON.stringify(accountsList));
