@@ -928,16 +928,15 @@ export default function UniversalScannerModal({
     setIsSendingMessage(true);
     try {
       const targetUserId = matchResult.participant.user_id || matchResult.participant.id;
-      await DataService.createNotification({
-        user_id: targetUserId,
+      await DataService.sendAdminMessage(targetUserId, messageText.trim(), {
         title: messageKind === 'alert' ? 'แจ้งเตือนด่วนจากกองอำนวยการ JRE 2027' : 'ข้อความจากเจ้าหน้าที่ JRE 2027',
-        message: messageText.trim(),
-        type: messageKind,
-        created_at: new Date().toISOString()
+        category: messageKind === 'alert' ? 'urgent' : 'general',
+        sender_name: currentUser?.display_name || currentUser?.name || currentUser?.nickname || 'เจ้าหน้าที่ JRE 2027'
       });
       setMessageText('');
       setShowMessageForm(false);
       setActionSuccessMsg('✓ ส่งข้อความแจ้งเตือนถึงผู้สมัครเรียบร้อยแล้ว');
+      if (onRefreshRegistrations) onRefreshRegistrations();
     } catch (err) {
       console.error('Send notification error:', err);
       setScanError('ส่งข้อความไม่สำเร็จ: ' + err.message);

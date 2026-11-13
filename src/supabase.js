@@ -1345,6 +1345,17 @@ export const DataService = {
     return this.updateRegistrationDetails(userId, updatePayload);
   },
 
+  async createNotification(payload = {}) {
+    const userId = payload.user_id || payload.userId || payload.id;
+    const text = payload.message || payload.text || payload.title || '';
+    if (!userId || !text) return false;
+    return this.sendAdminMessage(userId, text, {
+      title: payload.title,
+      category: payload.type === 'alert' ? 'urgent' : (payload.type || 'general'),
+      sender_name: payload.sender_name || 'กองอำนวยการ JRE 2027'
+    });
+  },
+
   // Mark admin message(s) as read
   async markAdminMessageRead(userId, messageId = 'all') {
     const regs = await this.getRegistrations({ userId });

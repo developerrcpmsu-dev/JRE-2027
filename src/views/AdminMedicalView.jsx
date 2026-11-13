@@ -125,11 +125,14 @@ export default function AdminMedicalView({
   // Image lightbox popup
   const [previewDoc, setPreviewDoc] = useState(null);
 
-  // Sync URL ?person=<id> when initialPersonId changes externally
+  // Sync URL ?person=<id> when initialPersonId changes externally (including Back button clearing)
   useEffect(() => {
     if (initialPersonId) {
       setInspectedPersonId(initialPersonId);
       setActiveSubView('person');
+    } else {
+      setInspectedPersonId('');
+      setActiveSubView(prev => (prev === 'person' ? 'logs' : prev));
     }
   }, [initialPersonId]);
 

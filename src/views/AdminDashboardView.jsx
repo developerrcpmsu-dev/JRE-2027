@@ -327,9 +327,7 @@ export default function AdminDashboardView({
   }, [isDevOperator]);
 
   React.useEffect(() => {
-    if (initialMedicalPersonId) {
-      setMedicalPersonId(initialMedicalPersonId);
-    }
+    setMedicalPersonId(initialMedicalPersonId || '');
   }, [initialMedicalPersonId]);
 
   const handleOpenMedicalPersonPage = (targetPersonId = '') => {
@@ -523,6 +521,9 @@ export default function AdminDashboardView({
             setIsEditingMerchConfig(false);
           }
           setDedicatedSubpage(null);
+          if (tab !== 'medical') {
+            setMedicalPersonId('');
+          }
           if (tab === 'applicants') {
             setFilterType('all');
             setRoleFilter('all');
@@ -540,6 +541,9 @@ export default function AdminDashboardView({
     }
 
     setDedicatedSubpage(null);
+    if (tab !== 'medical') {
+      setMedicalPersonId('');
+    }
     if (tab === 'applicants') {
       setFilterType('all');
       setRoleFilter('all');
@@ -14208,6 +14212,7 @@ export default function AdminDashboardView({
                   currentUser={user}
                   isDevOperator={isDevOperator}
                   triggerToast={triggerToast}
+                  askConfirm={askConfirm}
                   onOpenFullEmrPage={(pid) => {
                     setProfileModalReg(null);
                     handleOpenMedicalPersonPage(pid);

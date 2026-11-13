@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Award } from 'lucide-react';
+import { Award, Lock } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import FormsBanner from './components/FormsBanner';

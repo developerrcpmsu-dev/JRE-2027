@@ -14,6 +14,7 @@ import {
   FileHeart
 } from 'lucide-react';
 import { DataService } from '../supabase';
+import { confirmWithModal } from '../utils/confirmHelper';
 import {
   PRESET_SYMPTOMS,
   PRESET_FIRST_AID,
@@ -32,7 +33,8 @@ export default function PersonEmrSection({
   externalLogs = null,
   onLogsUpdated = null,
   onOpenFullEmrPage = null,
-  triggerToast = null
+  triggerToast = null,
+  askConfirm = null
 }) {
   const [logs, setLogs] = useState(Array.isArray(externalLogs) ? externalLogs : []);
   const [isLoading, setIsLoading] = useState(!Array.isArray(externalLogs));
@@ -199,9 +201,14 @@ export default function PersonEmrSection({
 
   const handleDelete = async (log) => {
     if (!log?.id) return;
-    if (!window.confirm(`ต้องการลบบันทึกเวชระเบียน "${log.symptoms}" ของ ${log.recipient_name || summary?.name} ใช่หรือไม่?`)) {
-      return;
-    }
+    const confirmed = await confirmWithModal(askConfirm, {
+      title: '🗑️ ยืนยันการลบประวัติเวชระเบียน',
+      message: `ต้องการลบบันทึกเวชระเบียน "${log.symptoms}" ของ ${log.recipient_name || summary?.name} ใช่หรือไม่?`,
+      confirmText: '🗑️ ยืนยันลบ',
+      cancelText: 'ยกเลิก',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await DataService.deleteMedicalDispenseLog(log.id);
       await loadLogs();

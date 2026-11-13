@@ -261,6 +261,9 @@ export function parseCurrentRoute() {
 
       'team': 'team',
       'staff': 'team',
+      'staff-accounts': 'staff-accounts',
+      'staff_accounts': 'staff-accounts',
+      'staff-account': 'staff-accounts',
 
       'users': 'users',
       'accounts': 'users',
@@ -352,6 +355,7 @@ export function parseCurrentRoute() {
     else if (targetSub === 'scanner') canonicalPath = '/admin/scanner';
     else if (targetSub === 'medical') canonicalPath = '/admin/medical';
     else if (targetSub === 'rooms') canonicalPath = '/admin/rooms';
+    else if (targetSub === 'staff-accounts') canonicalPath = '/admin/staff-accounts';
     else if (targetSub === 'documents') canonicalPath = '/admin/documents';
     else if (second === 'applicants' || second === 'registrations') canonicalPath = '/admin/applicants';
     else canonicalPath = '/admin';

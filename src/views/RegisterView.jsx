@@ -59,7 +59,8 @@ import {
   Search,
   Filter,
   Globe,
-  Tag
+  Tag,
+  ZoomIn
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateAgeDetailed, resolveFullAgeDetail } from '../utils/ageCalculator';

@@ -188,7 +188,7 @@ export default function Navbar({
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1 shadow-sm active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'dashboard' || currentTab === 'register'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
-                    : 'bg-slate-900 text-emerald-400 border border-emerald-500/40 hover:bg-slate-850 hover:border-emerald-300'
+                    : 'bg-slate-900 text-emerald-400 border border-emerald-500/40 hover:bg-slate-800 hover:border-emerald-300'
                 }`}
                 title="แดชบอร์ดของฉัน"
               >
@@ -292,7 +292,7 @@ export default function Navbar({
             )}
 
             {user ? (
-              <div className="flex items-center gap-1 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1 pl-1.5 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
+              <div className="flex items-center gap-1 bg-slate-900/95 hover:bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 p-1 pl-1.5 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
                 <button
                   type="button"
                   onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
@@ -333,7 +333,7 @@ export default function Navbar({
                 </button>
               </div>
             ) : isAdmin ? (
-              <div className="flex items-center gap-2 bg-slate-900/95 hover:bg-slate-850/90 border border-purple-800/80 p-1.5 pl-2.5 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
+              <div className="flex items-center gap-2 bg-slate-900/95 hover:bg-slate-800/90 border border-purple-800/80 p-1.5 pl-2.5 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="relative shrink-0 flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-purple-950 border border-purple-500/50 text-purple-300">
                     <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />
@@ -470,7 +470,7 @@ export default function Navbar({
               className={`w-full text-left px-4 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${
                 unreadNotificationsCount > 0
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-slate-300 hover:bg-slate-800 bg-slate-850/60'
+                  : 'text-slate-300 hover:bg-slate-800 bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -492,7 +492,7 @@ export default function Navbar({
           {canSeeGroupChat && (
             <button
               onClick={() => handleNav('chat')}
-              className={`w-full text-left px-4 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${currentTab === 'chat' ? 'bg-indigo-600 text-white' : 'bg-slate-850/60 text-slate-300 hover:bg-slate-800'}`}
+              className={`w-full text-left px-4 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${currentTab === 'chat' ? 'bg-indigo-600 text-white' : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'}`}
             >
               <span className="flex items-center gap-3"><MessageCircle className="w-5 h-5 text-indigo-300" />แชทกลุ่มผู้เข้าร่วม</span>
               {chatUnreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-black text-white">{chatUnreadCount > 99 ? '99+' : chatUnreadCount} ใหม่</span>}
