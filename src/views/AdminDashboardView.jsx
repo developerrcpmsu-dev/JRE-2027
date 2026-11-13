@@ -74,7 +74,8 @@ import {
   LayoutGrid,
   Table,
   ChevronRight,
-  FileHeart
+  FileHeart,
+  Link2
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl, getAttendanceConfirmationInfo } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
@@ -131,6 +132,7 @@ import AdminRoomsView from './AdminRoomsView';
 import AdminDocumentsView from './AdminDocumentsView';
 import AdminMedicalView from './AdminMedicalView';
 import AdminStaffAccountsView from './AdminStaffAccountsView';
+import DevUserUrlsView from './DevUserUrlsView';
 import PersonEmrSection from '../components/PersonEmrSection';
 import { getRegistrationCardData } from '../utils/idCard';
 import ModalPortal from '../components/ModalPortal';
@@ -186,6 +188,7 @@ export default function AdminDashboardView({
   onRefreshUserAccounts,
   onRefreshRegistrations,
   onAdminLogout,
+  onOpenUserPage,
   user = null,
   isAdmin = true
 }) {
@@ -6769,6 +6772,7 @@ export default function AdminDashboardView({
               <option value="speakers_speaker">🎖️ วิทยากรประจำโครงการ ({speakerStats.speakersCount} ท่าน)</option>
               <option value="team">👥 คณะดำเนินงาน & ทีมงาน ({localTeam.length} คน)</option>
               <option value="users">👤 จัดการบัญชีผู้ใช้ ({userAccounts.length} บัญชี)</option>
+              <option value="dev-urls">🔗 ศูนย์รวม URL รายบุคคลตาม UID (Dev) (/admin/dev-urls)</option>
               <option value="staff-accounts">🛡️ สิทธิ์ Staff & Admin Whitelist (Google RBAC)</option>
             </select>
           </div>
@@ -7016,6 +7020,19 @@ export default function AdminDashboardView({
           >
             <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>บัญชีผู้ใช้ ({userAccounts.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('dev-urls')}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
+              activeTab === 'dev-urls'
+                ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-slate-950 shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300/50 font-black'
+                : 'text-cyan-300 hover:text-white bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/40'
+            }`}
+            title="ศูนย์รวม URL หน้าทุกหน้าตาม UID ของทุกคนสำหรับ Dev (/admin/dev-urls)"
+          >
+            <Link2 className="w-4 h-4 text-cyan-300 shrink-0" />
+            <span>🔗 URL รายคน (Dev)</span>
           </button>
 
           <button
@@ -18860,7 +18877,7 @@ export default function AdminDashboardView({
                                 )}
                               </div>
 
-                              {/* Prominent View Full Details Modal Button (No Horizontal Scroll Needed) */}
+                              {/* Prominent View Full Details Modal Button + Dev UID View Buttons */}
                               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                                 <button
                                   type="button"
@@ -18871,6 +18888,34 @@ export default function AdminDashboardView({
                                   <Eye className="w-3.5 h-3.5" />
                                   <span>ดูข้อมูลเพิ่มเติมแบบละเอียด</span>
                                 </button>
+                                {acc.id && onOpenUserPage && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenUserPage(acc.id, 'dashboard')}
+                                      className="px-2 py-1 bg-emerald-950/70 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/40 rounded-lg text-[11px] font-bold cursor-pointer"
+                                      title={`ดูหน้าแดชบอร์ดในมุมมองของบัญชีนี้ (/dashboard?uid=${acc.id})`}
+                                    >
+                                      แดชบอร์ด
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenUserPage(acc.id, 'my-room')}
+                                      className="px-2 py-1 bg-sky-950/70 hover:bg-sky-900 text-sky-200 border border-sky-500/40 rounded-lg text-[11px] font-bold cursor-pointer"
+                                      title={`ดูหน้าห้องพักในมุมมองของบัญชีนี้ (/my-room?uid=${acc.id})`}
+                                    >
+                                      ห้องพัก
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenUserPage(acc.id, 'id-card')}
+                                      className="px-2 py-1 bg-orange-950/70 hover:bg-orange-900 text-orange-200 border border-orange-500/40 rounded-lg text-[11px] font-bold cursor-pointer"
+                                      title={`ดูหน้าบัตร ID ของบัญชีนี้ (/id-card?uid=${acc.id})`}
+                                    >
+                                      บัตร ID
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -19118,8 +19163,20 @@ export default function AdminDashboardView({
           registrations={registrations}
           onUpdateAllocation={onUpdateAllocation}
           onOpenProfileModal={(reg) => handleOpenProfileModal(reg, 'info')}
+          onOpenUserPage={onOpenUserPage}
           triggerToast={triggerToast}
           askConfirm={askConfirm}
+        />
+      )}
+
+      {/* TAB: DEV UID URL DIRECTORY (/admin/dev-urls) */}
+      {activeTab === 'dev-urls' && (
+        <DevUserUrlsView
+          registrations={registrations}
+          userAccounts={userAccounts}
+          onOpenUserPage={onOpenUserPage}
+          onNavigateAdminTab={handleTabChange}
+          triggerToast={triggerToast}
         />
       )}
 

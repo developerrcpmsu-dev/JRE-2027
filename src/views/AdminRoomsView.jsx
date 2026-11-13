@@ -472,6 +472,7 @@ export default function AdminRoomsView({
   registrations = [],
   onUpdateAllocation,
   onOpenProfileModal,
+  onOpenUserPage = null,
   triggerToast,
   askConfirm = null
 }) {
@@ -2559,29 +2560,72 @@ export default function AdminRoomsView({
             })()}
 
             {/* Bottom Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2">
-              {onOpenProfileModal && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const raw = selectedPerson.raw;
-                    setSelectedPerson(null);
-                    onOpenProfileModal(raw);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <span>เปิดโหมดแก้ไข Admin เต็มรูปแบบ</span>
-                  <ArrowRight className="w-3 h-3 text-sky-400" />
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              {onOpenUserPage && selectedPerson?.targetUpdateId && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const uid = selectedPerson.targetUpdateId;
+                      setSelectedPerson(null);
+                      onOpenUserPage(uid, 'my-room');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-sky-950/70 hover:bg-sky-900 text-sky-200 border border-sky-500/40 text-xs font-bold cursor-pointer"
+                    title={`/my-room?uid=${selectedPerson.targetUpdateId}`}
+                  >
+                    🛏️ ดูหน้าห้องพักคนนี้ (UID)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const uid = selectedPerson.targetUpdateId;
+                      setSelectedPerson(null);
+                      onOpenUserPage(uid, 'dashboard');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/40 text-xs font-bold cursor-pointer"
+                    title={`/dashboard?uid=${selectedPerson.targetUpdateId}`}
+                  >
+                    🏠 แดชบอร์ดคนนี้ (UID)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const uid = selectedPerson.targetUpdateId;
+                      setSelectedPerson(null);
+                      onOpenUserPage(uid, 'id-card');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-orange-950/70 hover:bg-orange-900 text-orange-200 border border-orange-500/40 text-xs font-bold cursor-pointer"
+                    title={`/id-card?uid=${selectedPerson.targetUpdateId}`}
+                  >
+                    🪪 บัตร ID คนนี้ (UID)
+                  </button>
+                </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => setSelectedPerson(null)}
-                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black shadow-lg transition-all cursor-pointer"
-              >
-                ปิดหน้าต่าง
-              </button>
+              <div className="flex items-center justify-end gap-2 ml-auto">
+                {onOpenProfileModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const raw = selectedPerson.raw;
+                      setSelectedPerson(null);
+                      onOpenProfileModal(raw);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>เปิดโหมดแก้ไข Admin เต็มรูปแบบ</span>
+                    <ArrowRight className="w-3 h-3 text-sky-400" />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedPerson(null)}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black shadow-lg transition-all cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
             </div>
           </div>
         </div>

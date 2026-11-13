@@ -7,6 +7,7 @@ import GoogleLoginModal from './components/GoogleLoginModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import UserNotificationsModal from './components/UserNotificationsModal';
 import UniversalScannerModal from './components/UniversalScannerModal';
+import DevPreviewBanner from './components/DevPreviewBanner';
 import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
 import RegisterView from './views/RegisterView';
@@ -1330,6 +1331,91 @@ export default function App() {
     }
   };
 
+  const hasDevOrAdminPrivilege = Boolean(
+    isAdmin ||
+    isGoogleDevIdentity(user, staffAdminWhitelist) ||
+    devGoogleSignedIn
+  );
+  const rawInspectUid = route?.inspectUid ? String(route.inspectUid).trim() : '';
+  const isDevInspectActive = Boolean(rawInspectUid && hasDevOrAdminPrivilege && currentTab !== 'admin' && currentTab !== 'users');
+  const isDevInspectRestricted = Boolean(rawInspectUid && !hasDevOrAdminPrivilege);
+
+  const inspectRegistration = isDevInspectActive
+    ? (registrations || []).find(r => {
+        const uid = String(r.user_id || '').trim();
+        const rid = String(r.id || '').trim();
+        const email = String(r.user_email || '').trim().toLowerCase();
+        const needle = rawInspectUid.toLowerCase();
+        return uid === rawInspectUid || rid === rawInspectUid || (email && email === needle);
+      }) || null
+    : null;
+
+  const inspectAccount = isDevInspectActive
+    ? (userAccounts || []).find(a => {
+        const aid = String(a.id || '').trim();
+        const aemail = String(a.email || '').trim().toLowerCase();
+        const needle = rawInspectUid.toLowerCase();
+        return aid === rawInspectUid || (aemail && aemail === needle);
+      }) || null
+    : null;
+
+  const inspectUser = isDevInspectActive
+    ? {
+        id: inspectRegistration?.user_id || inspectAccount?.id || rawInspectUid,
+        name:
+          (inspectRegistration ? `${inspectRegistration.first_name || ''} ${inspectRegistration.last_name || ''}`.trim() : '') ||
+          inspectAccount?.name ||
+          inspectRegistration?.user_email ||
+          rawInspectUid,
+        email: inspectRegistration?.user_email || inspectAccount?.email || '',
+        avatar: inspectRegistration?.user_avatar || inspectAccount?.avatar || '',
+        provider: inspectAccount?.provider || 'google',
+        role: 'applicant',
+        _isDevPreview: true
+      }
+    : null;
+
+  const effectiveUser = isDevInspectActive ? inspectUser : user;
+  const effectiveRegistration = isDevInspectActive ? inspectRegistration : myRegistration;
+
+  const handleOpenUserPageAsDev = (targetUid, page = 'dashboard') => {
+    const cleanUid = String(targetUid || '').trim();
+    if (!cleanUid) return;
+    if (page === 'profile' || page === 'users') {
+      setCurrentTab('users', cleanUid, { clearInspectUid: true });
+      return;
+    }
+    if (page === 'medical') {
+      setCurrentTab('admin', 'medical', { personId: cleanUid, clearInspectUid: true });
+      return;
+    }
+    if (page === 'my-room') {
+      setCurrentTab('my-room', null, { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'id-card') {
+      setCurrentTab('id-card', null, { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'merchandise') {
+      setCurrentTab('merchandise', 'catalog', { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'orders' || page === 'merchandise/orders') {
+      setCurrentTab('merchandise', 'my_orders', { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'register') {
+      setCurrentTab('register', 'form', { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'chat') {
+      setCurrentTab('chat', null, { inspectUid: cleanUid });
+      return;
+    }
+    setCurrentTab('dashboard', null, { inspectUid: cleanUid });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
@@ -1356,20 +1442,66 @@ export default function App() {
         onOpenAdminLogin={handleAdminEntry}
         onLogout={handleLogout}
         onAdminLogout={handleAdminLogout}
-        myRegistration={myRegistration}
+        myRegistration={effectiveRegistration}
         formsConfig={formsConfig}
         onOpenNotifications={() => setUserNotificationsOpen(true)}
         chatUnreadCount={chatUnreadCount}
       />
 
+      {/* Dev UID Account Preview Switcher Bar (Authorized Dev / Admin only) */}
+      {isDevInspectActive && (
+        <DevPreviewBanner
+          inspectUid={rawInspectUid}
+          previewRegistration={inspectRegistration}
+          previewUser={inspectUser}
+          registrations={registrations}
+          currentTab={currentTab}
+          currentSubRoute={currentSubRoute}
+          onSelectInspectUid={(nextUid) => {
+            const curPage = currentTab === 'my-room'
+              ? 'my-room'
+              : currentTab === 'id-card'
+                ? 'id-card'
+                : currentTab === 'merchandise'
+                  ? (currentSubRoute === 'my_orders' ? 'orders' : 'merchandise')
+                  : (currentTab === 'register' && currentSubRoute === 'form' ? 'register' : 'dashboard');
+            handleOpenUserPageAsDev(nextUid, curPage);
+          }}
+          onSwitchInspectPage={(page) => handleOpenUserPageAsDev(rawInspectUid, page)}
+          onOpenDevUrls={() => setCurrentTab('admin', 'dev-urls', { clearInspectUid: true })}
+          onExitInspect={() => {
+            const exitTab = currentTab === 'register' && currentSubRoute === 'dashboard' ? 'dashboard' : currentTab;
+            setCurrentTab(exitTab, exitTab === 'dashboard' ? null : currentSubRoute, { clearInspectUid: true });
+          }}
+        />
+      )}
+
+      {/* Restricted UID link notice when unauthenticated or non-Dev user visits ?uid= / /u/:uid */}
+      {isDevInspectRestricted && (
+        <div className="w-full bg-amber-950/80 border-b border-amber-500/40 px-4 py-2.5">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-amber-200 font-bold">
+              🔒 URL ตรวจสอบมุมมองบัญชีตาม UID (<code className="font-mono">{rawInspectUid}</code>) สงวนสิทธิ์เฉพาะบัญชี Dev / Admin เท่านั้น
+            </span>
+            <button
+              type="button"
+              onClick={handleAdminEntry}
+              className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer"
+            >
+              เข้าสู่ระบบ Dev / Admin
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Forms Banner (Shows ONLY when user is logged in AND Admin activates Pre-test, Post-test, or Eval, and not on register/dashboard view where cards are already prominent) */}
-      {user && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={user} />}
+      {effectiveUser && currentTab !== 'register' && <FormsBanner formsConfig={formsConfig} user={effectiveUser} />}
 
       {/* Main Content Pages - Full Screen Width on Admin Dashboard & User Dashboard */}
       <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-5 2xl:py-6 transition-all ${
         currentTab === 'admin'
           ? 'w-full max-w-none px-2 sm:px-4 lg:px-6 2xl:px-8'
-          : ((currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(myRegistration))) || currentTab === 'my-room')
+          : ((currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(effectiveRegistration))) || currentTab === 'my-room')
             ? 'w-full max-w-[1680px] px-3 sm:px-5 lg:px-8 2xl:px-10 overflow-x-hidden'
             : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
       }`}>
@@ -1377,14 +1509,14 @@ export default function App() {
           <HomeView
             teamMembers={teamMembers}
             speakers={speakers}
-            onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
+            onNavigateRegister={() => setCurrentTab(effectiveRegistration ? 'dashboard' : 'register')}
             onNavigateSchedule={() => setCurrentTab('schedule')}
             onNavigateMerchandise={() => setCurrentTab('merchandise')}
             onOpenScanner={() => {
               setPublicScannerInitialQuery('');
               setPublicScannerOpen(true);
             }}
-            myRegistration={myRegistration}
+            myRegistration={effectiveRegistration}
             registrations={registrations}
             onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
@@ -1398,17 +1530,19 @@ export default function App() {
 
         {currentTab === 'chat' && (
           <GroupChatView
-            user={user}
-            myRegistration={myRegistration}
+            key={effectiveUser?.id || 'chat-self'}
+            user={effectiveUser}
+            myRegistration={effectiveRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
           />
         )}
 
         {currentTab === 'register' && (
           <RegisterView
-            user={user}
+            key={effectiveRegistration?.id || effectiveUser?.id || 'reg-self'}
+            user={effectiveUser}
             isAdmin={isAdmin}
-            myRegistration={myRegistration}
+            myRegistration={effectiveRegistration}
             allRegistrations={registrations}
             onSaveRegistration={handleSaveRegistration}
             onUpdateRegistration={handleUpdateRegistration}
@@ -1428,10 +1562,10 @@ export default function App() {
         {(currentTab === 'announcements' || currentTab === 'pr' || currentTab === 'orders') && (
           <AnnouncementsView 
             announcements={announcements} 
-            user={user}
-            myRegistration={myRegistration}
+            user={effectiveUser}
+            myRegistration={effectiveRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
-            onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
+            onNavigateRegister={() => setCurrentTab(effectiveRegistration ? 'dashboard' : 'register')}
             initialScope={currentSubRoute === 'public' || currentTab === 'pr' ? 'public' : currentSubRoute === 'members' || currentTab === 'orders' ? 'members' : 'all'}
             initialPostId={route.postId || null}
             onScopeChange={(scope) => {
@@ -1444,13 +1578,14 @@ export default function App() {
 
         {(currentTab === 'merchandise' || currentTab === 'shop' || currentTab === 'store') && (
           <MerchandiseView
-            user={user}
-            myRegistration={myRegistration}
+            key={effectiveRegistration?.id || effectiveUser?.id || 'merch-self'}
+            user={effectiveUser}
+            myRegistration={effectiveRegistration}
             merchandiseConfig={merchandiseConfig}
             orders={merchandiseOrders}
             onSaveOrder={handleSaveMerchandiseOrder}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
-            onNavigateRegister={() => setCurrentTab(myRegistration ? 'dashboard' : 'register')}
+            onNavigateRegister={() => setCurrentTab(effectiveRegistration ? 'dashboard' : 'register')}
             initialTab={currentSubRoute === 'my_orders' || currentSubRoute === 'cart' ? 'my_orders' : 'catalog'}
             onTabChange={(tab) => {
               if (tab === 'my_orders' || tab === 'orders' || tab === 'cart') setCurrentTab('merchandise', 'my_orders');
@@ -1468,6 +1603,7 @@ export default function App() {
             onTabChange={(tab, opts = {}) => {
               setCurrentTab('admin', tab, opts);
             }}
+            onOpenUserPage={handleOpenUserPageAsDev}
             registrations={registrations}
             onSaveRegistration={handleSaveRegistration}
             onUpdateAllocation={handleUpdateAllocation}
@@ -1555,8 +1691,9 @@ export default function App() {
 
         {currentTab === 'id-card' && (
           <IDCardView
-            user={user}
-            registration={myRegistration}
+            key={effectiveRegistration?.id || effectiveUser?.id || 'idcard-self'}
+            user={effectiveUser}
+            registration={effectiveRegistration}
             onNavigateDashboard={() => setCurrentTab('dashboard')}
             onNavigateRegister={() => setCurrentTab('register')}
           />
@@ -1564,8 +1701,9 @@ export default function App() {
 
         {currentTab === 'my-room' && (
           <MyRoomView
-            user={user}
-            myRegistration={myRegistration}
+            key={effectiveRegistration?.id || effectiveUser?.id || 'room-self'}
+            user={effectiveUser}
+            myRegistration={effectiveRegistration}
             allRegistrations={registrations}
             onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
@@ -1607,7 +1745,7 @@ export default function App() {
       <UserNotificationsModal
         isOpen={userNotificationsOpen}
         onClose={() => setUserNotificationsOpen(false)}
-        myRegistration={myRegistration}
+        myRegistration={effectiveRegistration}
         onUpdateRegistration={handleUpdateRegistration}
       />
 

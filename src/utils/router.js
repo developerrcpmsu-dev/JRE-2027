@@ -15,51 +15,102 @@
 
 export function parseCurrentRoute() {
   if (typeof window === 'undefined') {
-    return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
+    return { mainTab: 'home', subRoute: null, inspectUid: null, canonicalPath: '/' };
   }
 
   const url = new URL(window.location.href);
   const pathname = url.pathname.toLowerCase().replace(/\/+$/, '') || '/';
   const tabParam = url.searchParams.get('tab')?.toLowerCase();
   const hash = window.location.hash.replace('#', '').toLowerCase();
+  const rawQueryUid = (url.searchParams.get('uid') || url.searchParams.get('as') || '').trim();
+  const segments = pathname.split('/').filter(Boolean);
+  const rawSegments = url.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+  const firstSeg = segments[0];
+
+  const withUid = (routeObj) => {
+    if (!rawQueryUid || routeObj.mainTab === 'admin' || routeObj.subRoute === 'verify') {
+      return { inspectUid: null, ...routeObj };
+    }
+    const sep = (routeObj.canonicalPath || '/').includes('?') ? '&' : '?';
+    return {
+      ...routeObj,
+      inspectUid: rawQueryUid,
+      canonicalPath: `${routeObj.canonicalPath}${sep}uid=${encodeURIComponent(rawQueryUid)}`
+    };
+  };
+
+  // Dev Direct UID Shortcut Routes:
+  // /u/:uid, /u/:uid/dashboard, /u/:uid/my-room, /u/:uid/id-card, /u/:uid/merchandise, /u/:uid/orders, /u/:uid/profile, /u/:uid/medical
+  // /dev/urls, /dev/users, /dev-urls -> Dev UID URL Console (/admin/dev-urls)
+  if (firstSeg === 'dev-urls' || (firstSeg === 'dev' && (!segments[1] || segments[1] === 'urls' || segments[1] === 'users' || segments[1] === 'uid'))) {
+    return { mainTab: 'admin', subRoute: 'dev-urls', inspectUid: null, canonicalPath: '/admin/dev-urls' };
+  }
+  if ((firstSeg === 'u' || (firstSeg === 'dev' && (segments[1] === 'user' || segments[1] === 'u'))) && (firstSeg === 'u' ? rawSegments[1] : rawSegments[2])) {
+    const uidRaw = decodeURIComponent(firstSeg === 'u' ? rawSegments[1] : rawSegments[2]).trim();
+    const pageSeg = (firstSeg === 'u' ? segments[2] : segments[3]) || 'dashboard';
+    const uidParam = encodeURIComponent(uidRaw);
+
+    if (pageSeg === 'my-room' || pageSeg === 'room' || pageSeg === 'rooms' || pageSeg === 'dorm') {
+      return { mainTab: 'my-room', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/my-room?uid=${uidParam}` };
+    }
+    if (pageSeg === 'id-card' || pageSeg === 'badge' || pageSeg === 'card') {
+      return { mainTab: 'id-card', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/id-card?uid=${uidParam}` };
+    }
+    if (pageSeg === 'merchandise' || pageSeg === 'shirt' || pageSeg === 'shop' || pageSeg === 'store') {
+      return { mainTab: 'merchandise', subRoute: 'catalog', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/merchandise?uid=${uidParam}` };
+    }
+    if (pageSeg === 'orders' || pageSeg === 'my-orders') {
+      return { mainTab: 'merchandise', subRoute: 'my_orders', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/merchandise/orders?uid=${uidParam}` };
+    }
+    if (pageSeg === 'register' || pageSeg === 'form' || pageSeg === 'edit') {
+      return { mainTab: 'register', subRoute: 'form', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/register?uid=${uidParam}` };
+    }
+    if (pageSeg === 'chat' || pageSeg === 'group-chat') {
+      return { mainTab: 'chat', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/chat?uid=${uidParam}` };
+    }
+    if (pageSeg === 'profile' || pageSeg === 'user' || pageSeg === 'users') {
+      return { mainTab: 'users', subRoute: uidRaw, inspectUid: null, canonicalPath: `/users/${uidParam}` };
+    }
+    if (pageSeg === 'medical' || pageSeg === 'emr') {
+      return { mainTab: 'admin', subRoute: 'medical', personId: uidRaw, inspectUid: null, canonicalPath: `/admin/medical?person=${uidParam}` };
+    }
+    return { mainTab: 'register', subRoute: 'dashboard', inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/dashboard?uid=${uidParam}` };
+  }
 
   // 1. Detect legacy query parameters (?tab=...) or hash (#...) and translate
   const queryOrHash = tabParam || hash;
   if (queryOrHash) {
-    if (queryOrHash === 'home') return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
-    if (queryOrHash === 'schedule') return { mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' };
+    if (queryOrHash === 'home') return withUid({ mainTab: 'home', subRoute: null, canonicalPath: '/' });
+    if (queryOrHash === 'schedule') return withUid({ mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' });
     if (queryOrHash === 'staff-register' || queryOrHash === 'staff-signup' || queryOrHash === 'staff-id-card') {
-      return { mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' };
+      return withUid({ mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' });
     }
-    if (queryOrHash === 'register' || queryOrHash === 'profile') return { mainTab: 'register', subRoute: null, canonicalPath: '/register' };
-    if (queryOrHash === 'dashboard') return { mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' };
-    if (queryOrHash === 'chat') return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
-    if (queryOrHash === 'id-card' || queryOrHash === 'badge') return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
-    if (queryOrHash === 'pr') return { mainTab: 'announcements', subRoute: 'public', canonicalPath: '/announcements/pr' };
-    if (queryOrHash === 'orders') return { mainTab: 'announcements', subRoute: 'members', canonicalPath: '/announcements/orders' };
-    if (queryOrHash === 'announcements') return { mainTab: 'announcements', subRoute: 'all', canonicalPath: '/announcements' };
+    if (queryOrHash === 'register' || queryOrHash === 'profile') return withUid({ mainTab: 'register', subRoute: null, canonicalPath: '/register' });
+    if (queryOrHash === 'dashboard') return withUid({ mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' });
+    if (queryOrHash === 'chat') return withUid({ mainTab: 'chat', subRoute: null, canonicalPath: '/chat' });
+    if (queryOrHash === 'id-card' || queryOrHash === 'badge') return withUid({ mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' });
+    if (queryOrHash === 'pr') return withUid({ mainTab: 'announcements', subRoute: 'public', canonicalPath: '/announcements/pr' });
+    if (queryOrHash === 'orders') return withUid({ mainTab: 'announcements', subRoute: 'members', canonicalPath: '/announcements/orders' });
+    if (queryOrHash === 'announcements') return withUid({ mainTab: 'announcements', subRoute: 'all', canonicalPath: '/announcements' });
     if (queryOrHash === 'merchandise' || queryOrHash === 'shop' || queryOrHash === 'store') {
-      return { mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' };
+      return withUid({ mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' });
     }
     if (queryOrHash === 'admin') {
       const section = url.searchParams.get('section')?.toLowerCase() || 'applicants';
       const sub = (section === 'shirts' || section === 'merchandise') ? 'shirts' : (section === 'payment' || section === 'finance') ? 'payment' : section;
-      return { mainTab: 'admin', subRoute: sub, canonicalPath: sub === 'applicants' ? '/admin' : `/admin/${sub}` };
+      return { mainTab: 'admin', subRoute: sub, inspectUid: null, canonicalPath: sub === 'applicants' ? '/admin' : `/admin/${sub}` };
     }
     if (queryOrHash === 'presentation' || queryOrHash === 'research' || queryOrHash === 'ai-security') {
-      return { mainTab: 'security', subRoute: 'presentation', canonicalPath: '/presentation' };
+      return { mainTab: 'security', subRoute: 'presentation', inspectUid: null, canonicalPath: '/presentation' };
     }
     if (queryOrHash === 'security' || queryOrHash === 'security-audit' || queryOrHash === 'audit') {
-      return { mainTab: 'security', subRoute: 'audit', canonicalPath: '/security' };
+      return { mainTab: 'security', subRoute: 'audit', inspectUid: null, canonicalPath: '/security' };
     }
   }
 
   // 2. Parse modern path segments (/main/sub)
-  const segments = pathname.split('/').filter(Boolean);
-  const rawSegments = url.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-
   if (segments.length === 0 || segments[0] === 'home') {
-    return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
+    return withUid({ mainTab: 'home', subRoute: null, canonicalPath: '/' });
   }
 
   const first = segments[0];
@@ -70,17 +121,17 @@ export function parseCurrentRoute() {
 
   // Incident route block: JRE 2027 does not host rescue incident reports
   if (first === 'incidents' || first === 'incident') {
-    return { mainTab: 'home', subRoute: null, canonicalPath: '/' };
+    return { mainTab: 'home', subRoute: null, inspectUid: null, canonicalPath: '/' };
   }
 
   // Schedule
   if (first === 'schedule' || first === 'timeline') {
-    return { mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' };
+    return withUid({ mainTab: 'schedule', subRoute: null, canonicalPath: '/schedule' });
   }
 
   // Registration & Dashboard
   if (first === 'chat' || first === 'group-chat') {
-    return { mainTab: 'chat', subRoute: null, canonicalPath: '/chat' };
+    return withUid({ mainTab: 'chat', subRoute: null, canonicalPath: '/chat' });
   }
 
   if (first === 'verify' || first === 'qr-verify' || first === 'check-badge') {
@@ -100,11 +151,11 @@ export function parseCurrentRoute() {
   }
 
   if (first === 'id-card' || first === 'badge' || first === 'badge-card') {
-    return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
+    return withUid({ mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' });
   }
 
   if (first === 'my-room' || first === 'room-status' || first === 'dorm-status' || first === 'my-group' || first === 'assignment') {
-    return { mainTab: 'my-room', subRoute: null, canonicalPath: '/my-room' };
+    return withUid({ mainTab: 'my-room', subRoute: null, canonicalPath: '/my-room' });
   }
   if (
     first === 'staff-register' ||
@@ -114,16 +165,16 @@ export function parseCurrentRoute() {
     (first === 'register' && second === 'staff') ||
     (first === 'staff' && (second === 'register' || second === 'signup' || second === 'id-card' || !second))
   ) {
-    return { mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' };
+    return withUid({ mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' });
   }
   if (first === 'register' || first === 'signup' || first === 'apply') {
     if (url.searchParams.get('role')?.toLowerCase() === 'staff' || url.searchParams.get('staff') === '1') {
-      return { mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' };
+      return withUid({ mainTab: 'register', subRoute: 'staff', canonicalPath: '/staff-register' });
     }
-    return { mainTab: 'register', subRoute: 'form', canonicalPath: '/register' };
+    return withUid({ mainTab: 'register', subRoute: 'form', canonicalPath: '/register' });
   }
   if (first === 'dashboard' || first === 'profile' || first === 'account' || first === 'confirm' || first === 'rsvp') {
-    return { mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' };
+    return withUid({ mainTab: 'register', subRoute: 'dashboard', canonicalPath: '/dashboard' });
   }
 
   // Standalone shortcuts for Admin Executive Summary & Attendance Confirmation
@@ -181,11 +232,11 @@ export function parseCurrentRoute() {
   // Standalone shortcuts for announcements
   if (first === 'pr') {
     const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
-    return { mainTab: 'announcements', subRoute: 'public', postId: queryId, canonicalPath: queryId ? `/announcements/pr?id=${queryId}` : '/announcements/pr' };
+    return withUid({ mainTab: 'announcements', subRoute: 'public', postId: queryId, canonicalPath: queryId ? `/announcements/pr?id=${queryId}` : '/announcements/pr' });
   }
   if (first === 'orders') {
     const queryId = url.searchParams.get('id') || url.searchParams.get('annId') || segments[1] || null;
-    return { mainTab: 'announcements', subRoute: 'members', postId: queryId, canonicalPath: queryId ? `/announcements/orders?id=${queryId}` : '/announcements/orders' };
+    return withUid({ mainTab: 'announcements', subRoute: 'members', postId: queryId, canonicalPath: queryId ? `/announcements/orders?id=${queryId}` : '/announcements/orders' });
   }
 
   // Announcements main & sub-pages
@@ -193,24 +244,24 @@ export function parseCurrentRoute() {
     const queryId = url.searchParams.get('id') || url.searchParams.get('annId');
     if (second === 'pr' || second === 'public') {
       const third = segments[2] || queryId || null;
-      return { mainTab: 'announcements', subRoute: 'public', postId: third, canonicalPath: third ? `/announcements/pr?id=${third}` : '/announcements/pr' };
+      return withUid({ mainTab: 'announcements', subRoute: 'public', postId: third, canonicalPath: third ? `/announcements/pr?id=${third}` : '/announcements/pr' });
     }
     if (second === 'orders' || second === 'members') {
       const third = segments[2] || queryId || null;
-      return { mainTab: 'announcements', subRoute: 'members', postId: third, canonicalPath: third ? `/announcements/orders?id=${third}` : '/announcements/orders' };
+      return withUid({ mainTab: 'announcements', subRoute: 'members', postId: third, canonicalPath: third ? `/announcements/orders?id=${third}` : '/announcements/orders' });
     }
     if (second && second !== 'all') {
-      return { mainTab: 'announcements', subRoute: 'all', postId: second, canonicalPath: `/announcements?id=${second}` };
+      return withUid({ mainTab: 'announcements', subRoute: 'all', postId: second, canonicalPath: `/announcements?id=${second}` });
     }
-    return { mainTab: 'announcements', subRoute: 'all', postId: queryId || null, canonicalPath: queryId ? `/announcements?id=${queryId}` : '/announcements' };
+    return withUid({ mainTab: 'announcements', subRoute: 'all', postId: queryId || null, canonicalPath: queryId ? `/announcements?id=${queryId}` : '/announcements' });
   }
 
   // Merchandise & Sub-pages
   if (first === 'merchandise' || first === 'shop' || first === 'store' || first === 'shirt' || first === 'shirts') {
     if (second === 'orders' || second === 'tracking' || second === 'my-orders' || second === 'cart') {
-      return { mainTab: 'merchandise', subRoute: 'my_orders', canonicalPath: '/merchandise/orders' };
+      return withUid({ mainTab: 'merchandise', subRoute: 'my_orders', canonicalPath: '/merchandise/orders' });
     }
-    return { mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' };
+    return withUid({ mainTab: 'merchandise', subRoute: 'catalog', canonicalPath: '/merchandise' });
   }
 
   // Admin & Sub-pages
@@ -267,6 +318,11 @@ export function parseCurrentRoute() {
 
       'users': 'users',
       'accounts': 'users',
+      'dev-urls': 'dev-urls',
+      'uid-urls': 'dev-urls',
+      'user-urls': 'dev-urls',
+      'impersonate': 'dev-urls',
+      'dev': 'dev-urls',
 
       'catering': 'catering',
       'health': 'catering',
@@ -345,6 +401,7 @@ export function parseCurrentRoute() {
     else if (targetSub === 'advisors') canonicalPath = '/admin/advisors';
     else if (targetSub === 'team') canonicalPath = '/admin/team';
     else if (targetSub === 'users') canonicalPath = '/admin/users';
+    else if (targetSub === 'dev-urls') canonicalPath = '/admin/dev-urls';
     else if (targetSub === 'catering') canonicalPath = '/admin/catering';
     else if (targetSub === 'staff-accommodation') canonicalPath = '/admin/staff-accommodation';
     else if (targetSub === 'full-payment') canonicalPath = '/admin/full-payment';
@@ -471,6 +528,7 @@ export function getPathForRoute(mainTab, subRoute) {
       if (subRoute === 'advisors' || subRoute === 'advisor') return '/admin/advisors';
       if (subRoute === 'team' || subRoute === 'staff') return '/admin/team';
       if (subRoute === 'users' || subRoute === 'accounts') return '/admin/users';
+      if (subRoute === 'dev-urls' || subRoute === 'uid-urls' || subRoute === 'user-urls' || subRoute === 'impersonate') return '/admin/dev-urls';
       if (subRoute === 'rooms' || subRoute === 'room' || subRoute === 'accommodation' || subRoute === 'dorm' || subRoute === 'dormitory') return '/admin/rooms';
       if (subRoute === 'documents' || subRoute === 'rosters' || subRoute === 'document' || subRoute === 'roster' || subRoute === 'signing') return '/admin/documents';
       if (subRoute === 'medical' || subRoute === 'dispensary' || subRoute === 'clinic' || subRoute === 'emr' || subRoute === 'pharmacy') return '/admin/medical';
@@ -534,6 +592,14 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false, options = {})
     currentParams.set('person', options.personId);
   }
 
+  // Handle Dev UID inspection (?uid=...)
+  if (options.clearInspectUid || (mainTab === 'admin' && !options.keepUid) || mainTab === 'users') {
+    currentParams.delete('uid');
+    currentParams.delete('as');
+  } else if (options.inspectUid) {
+    currentParams.set('uid', options.inspectUid);
+  }
+
   const queryString = currentParams.toString();
   const fullTarget = queryString ? `${targetPath}?${queryString}` : targetPath;
 
@@ -543,6 +609,35 @@ export function syncUrlToRoute(mainTab, subRoute, replace = false, options = {})
     } else {
       window.history.pushState({ mainTab, subRoute }, '', fullTarget);
     }
+  }
+}
+
+export function buildUserPageUrl(uid, page = 'dashboard', origin = '') {
+  const safeUid = encodeURIComponent(String(uid || '').trim());
+  const base = origin ? String(origin).replace(/\/+$/, '') : '';
+  if (!safeUid) return `${base}/${String(page || 'dashboard').replace(/^\/+/, '')}`;
+  switch (page) {
+    case 'my-room':
+      return `${base}/my-room?uid=${safeUid}`;
+    case 'id-card':
+      return `${base}/id-card?uid=${safeUid}`;
+    case 'merchandise':
+      return `${base}/merchandise?uid=${safeUid}`;
+    case 'orders':
+    case 'merchandise/orders':
+      return `${base}/merchandise/orders?uid=${safeUid}`;
+    case 'register':
+      return `${base}/register?uid=${safeUid}`;
+    case 'chat':
+      return `${base}/chat?uid=${safeUid}`;
+    case 'profile':
+    case 'users':
+      return `${base}/users/${safeUid}`;
+    case 'medical':
+      return `${base}/admin/medical?person=${safeUid}`;
+    case 'dashboard':
+    default:
+      return `${base}/dashboard?uid=${safeUid}`;
   }
 }
 
