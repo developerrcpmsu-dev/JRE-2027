@@ -117,18 +117,21 @@ function RoomOccupantCell({
             </div>
           )}
 
-          <div className="min-w-0">
-            <div className={`font-bold text-white text-xs ${hoverText} transition-colors flex items-center gap-1.5 min-w-0`}>
-              <span className="whitespace-nowrap">{person.name}</span>
+          <div className="min-w-0 flex-1">
+            <div className={`font-bold text-white text-xs sm:text-[13px] leading-snug ${hoverText} transition-colors flex flex-wrap items-center gap-x-1.5 gap-y-0.5`}>
+              <span>{person.name}</span>
               {person.nickname !== '-' && (
-                <span className="text-amber-300 font-normal truncate">({person.nickname})</span>
+                <span className="text-amber-200 font-semibold">({person.nickname})</span>
               )}
             </div>
-            <div className={`text-[11px] ${subText} font-mono mt-0.5 truncate`}>
+            <div className={`text-[11px] ${subText} font-mono mt-0.5 leading-snug break-words`}>
               {person.callsign} • โทร: {person.phone}
             </div>
             {person.previousRoom && person.previousRoom !== person.roomNumber && (
-              <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400/40 text-[9.5px] font-bold">
+              <div
+                data-badge="transfer"
+                className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-900/75 text-indigo-100 border border-indigo-400/60 print:bg-indigo-100 print:text-indigo-950 print:border-indigo-700 text-[10px] font-bold leading-snug"
+              >
                 <ArrowLeftRight className="w-2.5 h-2.5 shrink-0" />
                 <span>ย้ายจากห้อง {person.previousRoom} → {person.roomNumber || 'รอจัด'}</span>
               </div>
@@ -136,49 +139,62 @@ function RoomOccupantCell({
           </div>
         </div>
 
-        <span className={`text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 ${badgeHover} no-print`}>
+        <span className={`text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 font-mono shrink-0 ${badgeHover} no-print`}>
           🔍 ดูโปรไฟล์
         </span>
       </div>
 
       {person.medicalEquipmentNeeded && (
-        <div className="mt-1.5 text-[10px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md">
-          <Stethoscope className="w-3 h-3 text-emerald-400 shrink-0" />
+        <div
+          data-badge="equipment"
+          className="mt-1.5 text-[11px] leading-snug text-emerald-100 font-bold flex flex-wrap items-center gap-1 bg-emerald-900/70 border border-emerald-400/60 print:bg-emerald-100 print:text-emerald-950 print:border-emerald-700 px-2 py-1 rounded-md"
+        >
+          <Stethoscope className="w-3 h-3 text-emerald-300 shrink-0" />
           <span>เตรียมยา:</span>
-          <span className="font-normal text-emerald-200 truncate">{person.medicalEquipmentNeeded}</span>
+          <span className="font-semibold text-white print:text-emerald-950">{person.medicalEquipmentNeeded}</span>
         </div>
       )}
 
       {person.specialItemsNeeded && (
-        <div className="mt-1 text-[10px] text-indigo-300 font-bold flex items-center gap-1 bg-indigo-950/60 border border-indigo-500/40 px-2 py-0.5 rounded-md">
-          <PackageCheck className="w-3 h-3 text-indigo-400 shrink-0" />
+        <div
+          data-badge="items"
+          className="mt-1 text-[11px] leading-snug text-indigo-100 font-bold flex flex-wrap items-center gap-1 bg-indigo-900/70 border border-indigo-400/60 print:bg-indigo-100 print:text-indigo-950 print:border-indigo-700 px-2 py-1 rounded-md"
+        >
+          <PackageCheck className="w-3 h-3 text-indigo-300 shrink-0" />
           <span>ของที่ต้องใช้:</span>
-          <span className="font-normal text-indigo-200 truncate">{person.specialItemsNeeded}</span>
+          <span className="font-semibold text-white print:text-indigo-950">{person.specialItemsNeeded}</span>
         </div>
       )}
 
       {hasAlert && (
-        <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 pt-1.5 border-t border-slate-700/80 flex flex-wrap items-center gap-1.5 leading-snug">
           {person.hasMedicalHistory && (
-            <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-black flex items-center gap-1">
-              <Stethoscope className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+            <span
+              data-badge="medical"
+              className="px-2 py-0.5 rounded bg-rose-900/80 text-rose-100 border border-rose-400/70 print:bg-rose-100 print:text-rose-950 print:border-rose-700 text-[11px] font-bold flex items-center gap-1 leading-snug"
+            >
+              <Stethoscope className="w-3 h-3 text-rose-300 shrink-0" />
               <span>โรค: {person.medicalHistory}</span>
             </span>
           )}
           {person.hasFoodAllergy && (
-            <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[10px] font-black flex items-center gap-1">
-              <UtensilsCrossed className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+            <span
+              data-badge="allergy"
+              className="px-2 py-0.5 rounded bg-amber-900/80 text-amber-100 border border-amber-400/70 print:bg-amber-100 print:text-amber-950 print:border-amber-700 text-[11px] font-bold flex items-center gap-1 leading-snug"
+            >
+              <UtensilsCrossed className="w-3 h-3 text-amber-300 shrink-0" />
               <span>แพ้: {person.foodAllergy}</span>
             </span>
           )}
-          <span className="text-[10px] text-rose-400 font-mono font-bold">
+          <span className="text-[11px] text-rose-300 print:text-slate-900 font-mono font-bold">
             🩸 {person.bloodGroup}
           </span>
           <span
-            className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${
+            data-badge={person.isHealthShared ? 'stay' : 'allergy'}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border leading-snug ${
               person.isHealthShared
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                ? 'bg-emerald-900/70 text-emerald-100 border-emerald-400/60 print:bg-emerald-100 print:text-emerald-950 print:border-emerald-700'
+                : 'bg-amber-900/70 text-amber-100 border-amber-400/60 print:bg-amber-100 print:text-amber-950 print:border-amber-700'
             }`}
             title={`${consentInfo.fullLabel} (${consentInfo.statusLabel})`}
           >
@@ -285,27 +301,34 @@ function RoomZoneTable({
 }) {
   const isBlue = accentColor === 'blue';
   return (
-    <div className={`rounded-3xl print:rounded-none bg-slate-950/80 border ${isBlue ? 'border-blue-500/40' : 'border-pink-500/40'} print:border-2 print:border-slate-950 overflow-hidden shadow-2xl`}>
+    <div className={`rounded-3xl print:rounded-none bg-slate-950/90 border ${isBlue ? 'border-blue-500/50' : 'border-pink-500/50'} print:border-2 print:border-slate-950 overflow-hidden shadow-2xl`}>
       <div
+        data-badge={isBlue ? 'section-header-blue' : 'section-header-pink'}
         className={`p-4 sm:p-5 bg-gradient-to-r ${
-          isBlue ? 'from-blue-950/80 via-slate-900 to-indigo-950/80 border-b border-blue-500/30' : 'from-pink-950/80 via-slate-900 to-rose-950/80 border-b border-pink-500/30'
-        } print:bg-slate-200 print:border-b-2 print:border-slate-950 flex flex-wrap items-center justify-between gap-3`}
+          isBlue ? 'from-blue-950 via-slate-900 to-indigo-950 border-b border-blue-500/40' : 'from-pink-950 via-slate-900 to-rose-950 border-b border-pink-500/40'
+        } print:bg-none ${isBlue ? 'print:bg-blue-100' : 'print:bg-pink-100'} print:border-b-2 print:border-slate-950 flex flex-wrap items-center justify-between gap-3`}
       >
         <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-2xl border ${isBlue ? 'bg-blue-500/20 text-blue-300 border-blue-400/30' : 'bg-pink-500/20 text-pink-300 border-pink-400/30'}`}>
-            <DoorClosed className={`w-5 h-5 ${isBlue ? 'text-blue-400' : 'text-pink-400'}`} />
+          <div
+            data-badge={isBlue ? 'room-male' : 'room-female'}
+            className={`p-2.5 rounded-2xl border ${isBlue ? 'bg-blue-500/25 text-blue-200 border-blue-400/50 print:bg-white print:text-slate-950 print:border-slate-900' : 'bg-pink-500/25 text-pink-200 border-pink-400/50 print:bg-white print:text-slate-950 print:border-slate-900'}`}
+          >
+            <DoorClosed className={`w-5 h-5 ${isBlue ? 'text-blue-300 print:text-slate-950' : 'text-pink-300 print:text-slate-950'}`} />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-black text-white print:text-slate-950 flex items-center gap-2">
               <span>{title}</span>
             </h2>
-            <p className={`text-xs ${isBlue ? 'text-blue-200' : 'text-pink-200'}`}>
+            <p className={`text-xs font-medium ${isBlue ? 'text-blue-100' : 'text-pink-100'} print:text-slate-900`}>
               {subtitle}
             </p>
           </div>
         </div>
 
-        <span className={`px-3 py-1 rounded-full border font-mono font-black text-xs ${isBlue ? 'bg-blue-500/20 text-blue-200 border-blue-400/40' : 'bg-pink-500/20 text-pink-200 border-pink-400/40'}`}>
+        <span
+          data-badge={isBlue ? 'room-male' : 'room-female'}
+          className={`px-3 py-1 rounded-full border font-mono font-black text-xs ${isBlue ? 'bg-blue-500/25 text-blue-100 border-blue-400/50 print:bg-white print:text-slate-950 print:border-slate-900' : 'bg-pink-500/25 text-pink-100 border-pink-400/50 print:bg-white print:text-slate-950 print:border-slate-900'}`}
+        >
           {occupiedCount >= targetCount ? `ครบ ${occupiedCount} คน (100%)` : `${occupiedCount}/${targetCount} คน (${Math.round((occupiedCount / (targetCount || 1)) * 100)}%)`}
         </span>
       </div>
@@ -341,22 +364,29 @@ function RoomZoneTable({
                   <td className="py-3.5 px-4 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span
+                        data-badge={isBlue ? 'room-male' : 'room-female'}
                         className={`font-mono font-black text-sm px-3 py-1 rounded-xl border shadow-sm ${
-                          isBlue ? 'text-sky-300 bg-sky-950/60 border-sky-500/40' : 'text-pink-300 bg-pink-950/60 border-pink-500/40'
+                          isBlue ? 'text-sky-100 bg-sky-900/80 border-sky-400/60 print:bg-sky-100 print:text-sky-950 print:border-sky-800' : 'text-pink-100 bg-pink-900/80 border-pink-400/60 print:bg-pink-100 print:text-pink-950 print:border-pink-800'
                         }`}
                       >
                         {room.roomLabel}
                       </span>
-                      <span className="text-[10px] text-slate-400 mt-1">
+                      <span className="text-[11px] font-semibold text-slate-300 print:text-slate-900 mt-1">
                         {room.floorLabel || `ชั้น ${room.floor || 1}`}{room.isDynamic ? ' • ห้องอื่น/ย้ายชั้น' : ''}
                       </span>
                       {hasRoomMedicalAlert && (
-                        <span className="mt-1 px-2 py-0.5 rounded-full bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] font-black flex items-center gap-0.5">
+                        <span
+                          data-badge="medical"
+                          className="mt-1 px-2 py-0.5 rounded-full bg-rose-900/80 text-rose-100 border border-rose-400/70 print:bg-rose-100 print:text-rose-950 print:border-rose-700 text-[10px] font-black flex items-center gap-0.5"
+                        >
                           🚨 เฝ้าระวังสุขภาพ
                         </span>
                       )}
                       {hasBothMedical && (
-                        <span className="mt-1 px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-200 border border-amber-400/50 text-[9px] font-bold">
+                        <span
+                          data-badge="allergy"
+                          className="mt-1 px-2 py-0.5 rounded-full bg-amber-900/80 text-amber-100 border border-amber-400/70 print:bg-amber-100 print:text-amber-950 print:border-amber-700 text-[10px] font-bold"
+                        >
                           ⚠️ มีผู้ป่วย/แพ้ 2 คน
                         </span>
                       )}
@@ -395,14 +425,21 @@ function RoomZoneTable({
 
                   <td className="py-3.5 px-4 text-center space-y-1.5">
                     <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-black border inline-block ${
+                      data-badge={
                         room.stayingCount === 0 && room.optedOutCount > 0
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          ? 'optout'
                           : room.occupants.length >= (room.capacity || 2)
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            ? 'stay'
+                            : 'optout'
+                      }
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-black border inline-block leading-snug ${
+                        room.stayingCount === 0 && room.optedOutCount > 0
+                          ? 'bg-amber-900/75 text-amber-100 border-amber-400/70 print:bg-amber-100 print:text-amber-950 print:border-amber-700'
+                          : room.occupants.length >= (room.capacity || 2)
+                            ? 'bg-emerald-900/75 text-emerald-100 border-emerald-400/70 print:bg-emerald-100 print:text-emerald-950 print:border-emerald-700'
                             : room.occupants.length > 0
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                              ? 'bg-amber-900/75 text-amber-100 border-amber-400/70 print:bg-amber-100 print:text-amber-950 print:border-amber-700'
+                              : 'bg-slate-800 text-slate-200 border-slate-600 print:bg-slate-100 print:text-slate-900 print:border-slate-700'
                       }`}
                     >
                       {room.optedOutCount > 0
@@ -413,12 +450,13 @@ function RoomZoneTable({
                     </span>
 
                     <div
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                      data-badge={room.allKeysReturned ? 'stay' : room.keysIssuedCount > 0 ? 'room-male' : undefined}
+                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold border leading-snug ${
                         room.allKeysReturned
-                          ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                          ? 'bg-emerald-900/75 text-emerald-100 border-emerald-400/70 print:bg-emerald-100 print:text-emerald-950 print:border-emerald-700'
                           : room.keysIssuedCount > 0
-                            ? 'bg-sky-950/60 text-sky-300 border-sky-500/40'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            ? 'bg-sky-900/75 text-sky-100 border-sky-400/70 print:bg-sky-100 print:text-sky-950 print:border-sky-700'
+                            : 'bg-slate-900 text-slate-200 border-slate-600 print:bg-slate-100 print:text-slate-900 print:border-slate-700'
                       }`}
                     >
                       🔑 {room.keySummaryLabel}
@@ -450,7 +488,10 @@ function RoomZoneTable({
                     )}
 
                     {hasRoomMedicalAlert && (
-                      <span className="block text-[9px] font-bold text-rose-300/90">
+                      <span
+                        data-badge="medical"
+                        className="inline-block px-2 py-0.5 rounded bg-rose-900/75 text-rose-100 border border-rose-400/60 print:bg-rose-100 print:text-rose-950 print:border-rose-700 text-[10px] font-bold leading-snug"
+                      >
                         🩺 เตรียมยา/อุปกรณ์
                       </span>
                     )}

@@ -28,23 +28,166 @@ export function downloadCsv(csvContent, filename) {
 }
 
 /**
+ * Map dark-mode or low-contrast Tailwind classes into crisp WCAG AAA light-paper colors for PNG export.
+ */
+function normalizeClonedNodeForLightPng(node, isDarkRosterRoot) {
+  const cls = typeof node.className === 'string' ? node.className : '';
+  if (node.style.display === 'none' || /\bno-print\b/.test(cls)) {
+    node.style.display = 'none';
+    return;
+  }
+  const dataBadge = node.getAttribute ? node.getAttribute('data-badge') : '';
+
+  // Remove dark gradients, dark blurs, and muddying text/box shadows
+  node.style.backgroundImage = 'none';
+  node.style.boxShadow = 'none';
+  node.style.textShadow = 'none';
+
+  // Prevent html2canvas from slicing Thai upper/lower vowel marks and tone marks
+  if (cls.includes('truncate') || cls.includes('overflow-hidden')) {
+    node.style.overflow = 'visible';
+    node.style.textOverflow = 'clip';
+    if (cls.includes('truncate')) {
+      node.style.whiteSpace = 'normal';
+    }
+  }
+
+  // Ensure crisp readable line-height on compact labels
+  if (cls.includes('text-[8px]') || cls.includes('text-[9px]') || cls.includes('text-[10px]') || cls.includes('text-[11px]')) {
+    node.style.lineHeight = '1.45';
+  }
+
+  // Fix html2canvas classic vertical baseline shift on inline bordered pill/badge <span>s
+  if (
+    node.tagName === 'SPAN' &&
+    !cls.includes('block') &&
+    !/\bborder-b\b/.test(cls) &&
+    (/\bborder(-| |$)/.test(cls) || /\bborder-\[/.test(cls))
+  ) {
+    node.style.display = 'inline-flex';
+    node.style.alignItems = 'center';
+    node.style.justifyContent = 'center';
+    node.style.verticalAlign = 'middle';
+    node.style.lineHeight = '1.25';
+    node.style.paddingTop = '2px';
+    node.style.paddingBottom = '3px';
+  }
+
+  if (!isDarkRosterRoot) {
+    // Boost faint gray text on official white sheets
+    if (/\btext-slate-[345]00\b/.test(cls)) {
+      node.style.color = '#1e293b';
+    }
+    if (/\bbg-slate-[89]00\b/.test(cls) || /\bbg-slate-950\b/.test(cls)) {
+      node.style.backgroundColor = '#ffffff';
+      node.style.color = '#0f172a';
+      node.style.border = '1.5px solid #0f172a';
+    }
+    return;
+  }
+
+  // Dedicated high-contrast light-paper conversion for dark interactive tables (#printable-rooms-roster)
+  if (dataBadge === 'section-header-blue' || (cls.includes('bg-gradient-to-r') && cls.includes('from-blue-9'))) {
+    node.style.backgroundColor = '#dbeafe';
+    node.style.borderBottom = '2px solid #0f172a';
+    node.style.color = '#0f172a';
+    return;
+  }
+  if (dataBadge === 'section-header-pink' || (cls.includes('bg-gradient-to-r') && cls.includes('from-pink-9'))) {
+    node.style.backgroundColor = '#fce7f3';
+    node.style.borderBottom = '2px solid #0f172a';
+    node.style.color = '#0f172a';
+    return;
+  }
+  if (dataBadge === 'medical' || /\bbg-rose-(950|900|500)\b|\bbg-rose-(950|900|500)\//.test(cls)) {
+    node.style.backgroundColor = '#fee2e2';
+    node.style.borderColor = '#991b1b';
+    node.style.color = '#7f1d1d';
+    return;
+  }
+  if (dataBadge === 'allergy' || dataBadge === 'optout' || /\bbg-amber-(950|900|600|500)\b|\bbg-amber-(950|900|600|500)\//.test(cls)) {
+    node.style.backgroundColor = '#fef3c7';
+    node.style.borderColor = '#b45309';
+    node.style.color = '#78350f';
+    return;
+  }
+  if (dataBadge === 'equipment' || dataBadge === 'stay' || /\bbg-emerald-(950|900|600|500)\b|\bbg-emerald-(950|900|600|500)\//.test(cls)) {
+    node.style.backgroundColor = '#d1fae5';
+    node.style.borderColor = '#047857';
+    node.style.color = '#064e3b';
+    return;
+  }
+  if (dataBadge === 'items' || dataBadge === 'transfer' || /\bbg-indigo-(950|900|500)\b|\bbg-indigo-(950|900|500)\//.test(cls)) {
+    node.style.backgroundColor = '#e0e7ff';
+    node.style.borderColor = '#3730a3';
+    node.style.color = '#1e1b4b';
+    return;
+  }
+  if (dataBadge === 'room-male' || /\bbg-(sky|blue)-(950|900|500)\b|\bbg-(sky|blue)-(950|900|500)\//.test(cls)) {
+    node.style.backgroundColor = '#e0f2fe';
+    node.style.borderColor = '#0369a1';
+    node.style.color = '#0c4a6e';
+    return;
+  }
+  if (dataBadge === 'room-female' || /\bbg-pink-(950|900|500)\b|\bbg-pink-(950|900|500)\//.test(cls)) {
+    node.style.backgroundColor = '#fce7f3';
+    node.style.borderColor = '#be185d';
+    node.style.color = '#831843';
+    return;
+  }
+
+  // Dark containers & white/light screen text -> crisp black-on-white
+  if (/\bbg-slate-(800|900|950)\b|\bbg-slate-(800|900|950)\//.test(cls)) {
+    node.style.backgroundColor = '#ffffff';
+    node.style.borderColor = '#334155';
+  }
+  if (/\btext-(white|slate-[1234]00|amber-[123]00|rose-[1234]00|emerald-[1234]00|indigo-[123]00|sky-[123]00|blue-[123]00|pink-[123]00)\b/.test(cls)) {
+    // Preserve readable dark semantic colors when inside colored pill
+    const insideBadge = node.closest && node.closest('[data-badge]');
+    if (!insideBadge) {
+      node.style.color = '#0f172a';
+    } else {
+      const bType = insideBadge.getAttribute('data-badge');
+      if (bType === 'medical') node.style.color = '#7f1d1d';
+      else if (bType === 'allergy' || bType === 'optout') node.style.color = '#78350f';
+      else if (bType === 'equipment' || bType === 'stay') node.style.color = '#064e3b';
+      else if (bType === 'items' || bType === 'transfer') node.style.color = '#1e1b4b';
+      else if (bType === 'room-male') node.style.color = '#0c4a6e';
+      else if (bType === 'room-female') node.style.color = '#831843';
+      else node.style.color = '#0f172a';
+    }
+  } else {
+    node.style.color = '#0f172a';
+  }
+}
+
+/**
  * Export any HTML element to a high-DPI PNG image using html2canvas
  */
 export async function exportElementToPng(elementOrId, filename = 'document.png') {
   const el = typeof elementOrId === 'string' ? document.getElementById(elementOrId) : elementOrId;
   if (!el) throw new Error('ไม่พบองค์ประกอบสำหรับสร้างรูปภาพ (Element not found)');
 
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    try {
+      await document.fonts.ready;
+    } catch (_) {}
+  }
+
   const originalOverflow = el.style.overflow;
   el.style.overflow = 'visible';
 
   try {
     const targetId = typeof elementOrId === 'string' ? elementOrId : el.id;
+    const isHugeDoc = (el.scrollHeight || 0) > 9000;
     const canvas = await html2canvas(el, {
-      scale: 2, // High-DPI 2x
+      scale: isHugeDoc ? 2 : 3,
       useCORS: true,
+      allowTaint: false,
+      imageTimeout: 8000,
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: Math.max(1320, el.scrollWidth + 40),
+      windowWidth: Math.max(1420, (el.scrollWidth || 1200) + 64),
       onclone: (clonedDoc) => {
         const clonedEl = targetId ? clonedDoc.getElementById(targetId) : null;
         if (!clonedEl) return;
@@ -54,41 +197,43 @@ export async function exportElementToPng(elementOrId, filename = 'document.png')
           node.style.display = 'none';
         });
 
-        // Show official print-only headers inside PNG exports
+        // Show official print-only headers & signature footers inside PNG exports
         clonedEl.querySelectorAll('.hidden.print\\:block').forEach((node) => {
           node.style.display = 'block';
         });
+        clonedEl.querySelectorAll('.hidden.print\\:grid').forEach((node) => {
+          node.style.display = 'grid';
+        });
 
-        // Convert dark-themed containers (e.g., AdminRoomsView) to crisp white official form paper
+        // Convert container to crisp official light paper
         clonedEl.style.background = '#ffffff';
-        clonedEl.style.color = '#000000';
-        clonedEl.style.padding = '24px';
-        clonedEl.style.fontFamily = "'Sarabun', 'TH Sarabun New', sans-serif";
+        clonedEl.style.backgroundImage = 'none';
+        clonedEl.style.color = '#0f172a';
+        clonedEl.style.padding = '28px';
+        clonedEl.style.boxShadow = 'none';
+        clonedEl.style.overflow = 'visible';
+        clonedEl.style.fontFamily = "'Sarabun', 'TH Sarabun New', Tahoma, sans-serif";
 
-        if (targetId === 'printable-rooms-roster') {
-          clonedEl.querySelectorAll('div, span, p, h1, h2, h3').forEach((node) => {
-            node.style.color = '#000000';
-            node.style.textShadow = 'none';
-            if (node.className && typeof node.className === 'string' && /bg-(slate|blue|pink|sky|indigo|rose|emerald)-9/.test(node.className)) {
-              node.style.background = '#ffffff';
-            }
-          });
-        }
+        const isDarkRosterRoot = targetId === 'printable-rooms-roster';
+        clonedEl.querySelectorAll('*').forEach((node) => {
+          if (node.style) normalizeClonedNodeForLightPng(node, isDarkRosterRoot);
+        });
 
         // Enforce sharp official grid borders on all tables inside PNG
         clonedEl.querySelectorAll('table').forEach((tbl) => {
           tbl.style.borderCollapse = 'collapse';
           tbl.style.border = '2px solid #0f172a';
           tbl.style.background = '#ffffff';
+          tbl.style.borderRadius = '0';
         });
         clonedEl.querySelectorAll('th').forEach((th) => {
           th.style.border = '1.5px solid #0f172a';
           th.style.backgroundColor = '#e2e8f0';
-          th.style.color = '#000000';
+          th.style.color = '#0f172a';
         });
         clonedEl.querySelectorAll('td').forEach((td) => {
           td.style.border = '1px solid #334155';
-          td.style.color = '#000000';
+          td.style.color = '#0f172a';
         });
       }
     });

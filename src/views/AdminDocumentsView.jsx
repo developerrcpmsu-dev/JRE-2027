@@ -174,14 +174,14 @@ function AttendanceGenderTable({ title, rows }) {
               <td className="py-2 px-2 border border-slate-700 text-center font-mono font-semibold whitespace-nowrap">{p.callsign}</td>
               <td className="py-2 px-2 border border-slate-700 text-center font-bold whitespace-nowrap">{p.institution}</td>
               <td className="py-2 px-2 border border-slate-700 text-[11px]">
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className={`px-1.5 py-0.2 border text-[9px] font-black ${getRosterGroupBadgeClasses(p.rosterGroup)}`}>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 border text-[9.5px] font-black leading-none ${getRosterGroupBadgeClasses(p.rosterGroup)}`}>
                     {p.rosterGroup}
                   </span>
                   <span>{p.role}</span>
                 </div>
                 {p.isNoAccount && (
-                  <span className="inline-block mt-0.5 px-1.5 py-0.5 bg-amber-100 text-amber-950 border border-amber-700 text-[9px] font-bold">
+                  <span className="inline-flex items-center mt-1 px-1.5 py-0.5 bg-amber-100 text-amber-950 border border-amber-700 text-[9px] font-bold leading-none">
                     Admin เพิ่ม • ไม่มีบัญชี
                   </span>
                 )}
@@ -232,7 +232,7 @@ function IdCardGenderTable({ title, rows }) {
               <td className="py-2 px-2 border border-slate-700 text-center font-mono font-semibold whitespace-nowrap">{c.callsign}</td>
               <td className="py-2 px-2 border border-slate-700 text-center font-bold whitespace-nowrap">{c.institution}</td>
               <td className="py-2 px-2 border border-slate-700 text-[11px]">
-                <span className={`inline-block mr-1 px-1 py-0.2 border text-[9px] font-black ${getRosterGroupBadgeClasses(c.rosterGroup)}`}>
+                <span className={`inline-flex items-center mr-1 px-1.5 py-0.5 border text-[9.5px] font-black leading-none ${getRosterGroupBadgeClasses(c.rosterGroup)}`}>
                   {c.rosterGroup}
                 </span>
                 {c.role}
@@ -365,7 +365,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
       <table className="official-table w-full text-left text-xs border-collapse border-2 border-slate-950">
         <thead>
           <tr className="bg-slate-200 text-slate-950 font-bold text-center">
-            <th className="py-2 px-2 border-[1.5px] border-slate-950 w-20">ห้อง</th>
+            <th className="py-2 px-2 border-[1.5px] border-slate-950 w-28">ห้อง</th>
             <th className="py-2 px-1.5 border-[1.5px] border-slate-950 w-14">ลำดับ</th>
             <th className="py-2 px-2.5 border-[1.5px] border-slate-950 text-left min-w-[205px] whitespace-nowrap">ชื่อ - นามสกุล / ติดต่อ</th>
             <th className="py-2 px-2.5 border-[1.5px] border-slate-950 text-left">โรคประจำตัว / อาการแพ้ / หมู่เลือด</th>
@@ -382,28 +382,30 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                 {[0, 1].map((b) => {
                   const p = rm.occupants[b];
                   const hasCare = Boolean(p && (p.needsBuddyCare || p.medicalEquipmentNeeded || p.specialItemsNeeded || p.isSpecialCare));
+                  const rowBg = hasCare ? 'bg-rose-50/70' : 'bg-white';
                   return (
                     <tr
                       key={`${rm.room}-${b}`}
-                      className={`${b === 1 ? 'official-room-end ' : ''}${hasCare ? 'bg-rose-50/70' : 'bg-white'}`}
+                      className={b === 1 ? 'official-room-end' : ''}
                     >
-                      {b === 0 && (
-                        <td
-                          rowSpan={2}
-                          className={`py-2 px-2 border border-slate-900 border-b-2 border-b-slate-950 text-center font-mono font-black text-sm align-middle ${
-                            roomHasAlert ? 'bg-rose-100 text-rose-950' : 'bg-slate-100 text-slate-900'
-                          }`}
-                        >
-                          {rm.roomLabel}
-                          <span className="block text-[10px] font-normal text-slate-700">
-                            {rm.floorLabel ? `${rm.floorLabel} (${zoneLabel.includes('ชาย') ? 'ชาย' : 'หญิง'})` : zoneLabel}
-                          </span>
-                          <span className="block text-[9px] font-sans font-bold text-slate-900 mt-0.5">
-                            กุญแจ: {rm.keySummaryLabel}
-                          </span>
-                        </td>
-                      )}
-                      <td className="py-2 px-1.5 border border-slate-700 text-center font-mono text-[11px] font-bold">
+                      <td
+                        className={`px-2 text-center align-middle leading-tight border-l border-r border-slate-900 ${
+                          b === 0 ? 'pt-2 pb-1 border-t border-b-0' : 'pt-0.5 pb-2 border-t-0 border-b-2 border-b-slate-950'
+                        } ${roomHasAlert ? 'bg-rose-100 text-rose-950' : 'bg-slate-100 text-slate-900'}`}
+                      >
+                        {b === 0 ? (
+                          <div className="font-mono font-black text-xs leading-tight">{rm.roomLabel}</div>
+                        ) : (
+                          <div className="text-[9.5px] font-sans font-bold text-slate-800 leading-snug">
+                            {rm.allKeysReturned
+                              ? 'คืนกุญแจครบ'
+                              : rm.keysIssuedCount > 0
+                                ? `จ่าย ${rm.keysIssuedCount} ดอก`
+                                : 'ยังไม่จ่ายกุญแจ'}
+                          </div>
+                        )}
+                      </td>
+                      <td className={`py-2.5 px-1.5 border border-slate-700 text-center font-mono text-[11px] font-bold ${rowBg}`}>
                         {b + 1}
                         <span className="block text-[9px] font-normal text-slate-600">เตียง {b + 1}</span>
                         {hasCare && (
@@ -412,7 +414,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-2.5 border border-slate-700">
+                      <td className={`py-2 px-2.5 border border-slate-700 ${rowBg}`}>
                         {p ? (
                           <div className="space-y-0.5">
                             <div className="font-bold text-slate-950 whitespace-nowrap">
@@ -439,7 +441,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           <span className="text-slate-500 italic">(ว่าง)</span>
                         )}
                       </td>
-                      <td className="py-2 px-2.5 border border-slate-700">
+                      <td className={`py-2 px-2.5 border border-slate-700 ${rowBg}`}>
                         {p ? (
                           p.hasMedicalHistory || p.hasFoodAllergy ? (
                             <div className="space-y-0.5 text-[11px]">
@@ -468,14 +470,14 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           )
                         ) : '-'}
                       </td>
-                      <td className="py-2 px-2.5 border border-slate-700 text-[11px]">
+                      <td className={`py-2 px-2.5 border border-slate-700 text-[11px] ${rowBg}`}>
                         {p?.medicalEquipmentNeeded ? (
                           <span className="font-bold text-emerald-950">{p.medicalEquipmentNeeded}</span>
                         ) : (
                           <span className="text-slate-500">-</span>
                         )}
                       </td>
-                      <td className="py-2 px-2.5 border border-slate-700 text-[11px]">
+                      <td className={`py-2 px-2.5 border border-slate-700 text-[11px] ${rowBg}`}>
                         {p?.specialItemsNeeded ? (
                           <span className="font-semibold text-indigo-950">{p.specialItemsNeeded}</span>
                         ) : p?.isSpecialCare ? (
@@ -484,7 +486,7 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           <span className="text-slate-500">-</span>
                         )}
                       </td>
-                      <td className="py-2 px-2 border border-slate-700 text-center text-[11px]">
+                      <td className={`py-2 px-2 border border-slate-700 text-center text-[11px] ${rowBg}`}>
                         {p ? (
                           hasCare ? (
                             <div className="space-y-0.5">
@@ -1486,8 +1488,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('attendance')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'attendance'
-                  ? 'bg-teal-950/80 border-teal-400 text-white ring-2 ring-teal-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-teal-900/90 border-teal-400 text-white ring-2 ring-teal-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1495,7 +1497,7 @@ export default function AdminDocumentsView({
                 <Users className="w-4 h-4 text-teal-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">ลงทะเบียนอบรม ({attendanceData.length} คน)</div>
-              <span className="text-[10px] text-teal-300">มีช่องลงลายมือชื่อ + หมายเหตุ</span>
+              <span className="text-[11px] font-medium text-teal-200">มีช่องลงลายมือชื่อ + หมายเหตุ</span>
             </button>
 
             <button
@@ -1503,8 +1505,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('id-cards')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'id-cards'
-                  ? 'bg-indigo-950/80 border-indigo-400 text-white ring-2 ring-indigo-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-indigo-900/90 border-indigo-400 text-white ring-2 ring-indigo-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1512,7 +1514,7 @@ export default function AdminDocumentsView({
                 <CreditCard className="w-4 h-4 text-indigo-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">รับบัตรประจำตัว ({idCardData.length} ใบ)</div>
-              <span className="text-[10px] text-indigo-300">สถานะรูปบัตร + ลายมือชื่อรับบัตร</span>
+              <span className="text-[11px] font-medium text-indigo-200">สถานะรูปบัตร + ลายมือชื่อรับบัตร</span>
             </button>
 
             <button
@@ -1520,8 +1522,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('shirts')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'shirts'
-                  ? 'bg-purple-950/80 border-purple-400 text-white ring-2 ring-purple-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-purple-900/90 border-purple-400 text-white ring-2 ring-purple-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1529,7 +1531,7 @@ export default function AdminDocumentsView({
                 <Shirt className="w-4 h-4 text-purple-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">เสื้อฝึกปฏิบัติการ ({shirtData.length} ตัว)</div>
-              <span className="text-[10px] text-purple-300">TSIKKU / RCPMSU + ช่องเซ็นรับ</span>
+              <span className="text-[11px] font-medium text-purple-200">TSIKKU / RCPMSU + ช่องเซ็นรับ</span>
             </button>
 
             <button
@@ -1537,8 +1539,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('rooms')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'rooms'
-                  ? 'bg-sky-950/80 border-sky-400 text-white ring-2 ring-sky-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-sky-900/90 border-sky-400 text-white ring-2 ring-sky-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1546,7 +1548,7 @@ export default function AdminDocumentsView({
                 <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">เข้าพัก &amp; รับ-คืนกุญแจ (PDPA)</div>
-              <span className="text-[10px] text-sky-300">เชื่อมสถานะไม่พักหอ/กุญแจ • ไม่โชว์โรค</span>
+              <span className="text-[11px] font-medium text-sky-200">เชื่อมสถานะไม่พักหอ/กุญแจ • ไม่โชว์โรค</span>
             </button>
 
             <button
@@ -1554,8 +1556,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('qr-master')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'qr-master'
-                  ? 'bg-cyan-950/80 border-cyan-400 text-white ring-2 ring-cyan-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-cyan-900/90 border-cyan-400 text-white ring-2 ring-cyan-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1563,12 +1565,12 @@ export default function AdminDocumentsView({
                 <QrCode className="w-4 h-4 text-cyan-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">QR ทุกชื่อในใบเดียว ({qrMasterData.length} คน)</div>
-              <span className="text-[10px] text-cyan-300">สแกนเช็คชื่อ/บัตร/เสื้อ/EMR ได้เลย</span>
+              <span className="text-[11px] font-medium text-cyan-200">สแกนเช็คชื่อ/บัตร/เสื้อ/EMR ได้เลย</span>
             </button>
           </div>
 
           {/* GROUP B: 4 INTERNAL ADMIN/STAFF/MEDICAL DETAILED DOCUMENTS */}
-          <div className="flex items-center gap-2 pt-2 text-[11px] font-black uppercase tracking-wider text-rose-300">
+          <div className="flex items-center gap-2 pt-2 text-xs font-black uppercase tracking-wider text-rose-200">
             <Stethoscope className="w-3.5 h-3.5" />
             <span>หมวด ข. เอกสารข้อมูลละเอียดสำหรับ Admin / Staff / ฝ่ายพยาบาล (4 ใบ • ไม่ต้องให้ผู้เข้าร่วมเซ็น)</span>
           </div>
@@ -1578,8 +1580,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('rooms-staff')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'rooms-staff'
-                  ? 'bg-rose-950/80 border-rose-400 text-white ring-2 ring-rose-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-rose-900/90 border-rose-400 text-white ring-2 ring-rose-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1587,7 +1589,7 @@ export default function AdminDocumentsView({
                 <Stethoscope className="w-4 h-4 text-rose-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">Staff พยาบาล &amp; หอพัก ({roomData.activeFloorSummary || 'ชั้น 3'} + มมส)</div>
-              <span className="text-[10px] text-rose-300">มีต้องเตรียม / ไม่มีต้องเตรียม • ช่องติ๊กเตรียมแล้ว</span>
+              <span className="text-[11px] font-medium text-rose-200">มีต้องเตรียม / ไม่มีต้องเตรียม • ช่องติ๊กเตรียมแล้ว</span>
             </button>
 
             <button
@@ -1595,8 +1597,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('admin-master')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'admin-master'
-                  ? 'bg-amber-950/80 border-amber-400 text-white ring-2 ring-amber-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-amber-900/90 border-amber-400 text-white ring-2 ring-amber-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1604,7 +1606,7 @@ export default function AdminDocumentsView({
                 <ClipboardList className="w-4 h-4 text-amber-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">Admin Master ({adminMasterData.length} คน)</div>
-              <span className="text-[10px] text-amber-300">RSVP • ห้อง/กุญแจ • เสื้อ/บัตร • การเงิน • สุขภาพ</span>
+              <span className="text-[11px] font-medium text-amber-200">RSVP • ห้อง/กุญแจ • เสื้อ/บัตร • การเงิน • สุขภาพ</span>
             </button>
 
             <button
@@ -1612,8 +1614,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('medical-supplies')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'medical-supplies'
-                  ? 'bg-emerald-950/80 border-emerald-400 text-white ring-2 ring-emerald-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-emerald-900/90 border-emerald-400 text-white ring-2 ring-emerald-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1621,7 +1623,7 @@ export default function AdminDocumentsView({
                 <Pill className="w-4 h-4 text-emerald-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">สรุปยอดยา ({medicalSuppliesPrep.summaryItems.length} รายการ • {medicalSuppliesPrep.prepRows.length} คน)</div>
-              <span className="text-[10px] text-emerald-300">สรุปจัดเตรียม + รายชื่อขอยา/เวชภัณฑ์ + URL รายคน</span>
+              <span className="text-[11px] font-medium text-emerald-200">สรุปจัดเตรียม + รายชื่อขอยา/เวชภัณฑ์ + URL รายคน</span>
             </button>
 
             <button
@@ -1629,8 +1631,8 @@ export default function AdminDocumentsView({
               onClick={() => setActiveDoc('emr-records')}
               className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 activeDoc === 'emr-records'
-                  ? 'bg-pink-950/80 border-pink-400 text-white ring-2 ring-pink-400/30 shadow-lg'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-pink-900/90 border-pink-400 text-white ring-2 ring-pink-400/40 shadow-lg'
+                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 hover:bg-slate-800/90'
               }`}
             >
               <div className="flex items-center justify-between font-bold mb-1">
@@ -1638,7 +1640,7 @@ export default function AdminDocumentsView({
                 <FileHeart className="w-4 h-4 text-pink-400 shrink-0" />
               </div>
               <div className="text-sm font-black text-white">Field EMR ({emrDocData.allCaseRows.length} เคส • {emrDocData.allPersonRows.length} คน)</div>
-              <span className="text-[10px] text-pink-300">ระบุอาการ ยา สัญญาณชีพ + URL แยกรายคน / รายเคส</span>
+              <span className="text-[11px] font-medium text-pink-200">ระบุอาการ ยา สัญญาณชีพ + URL แยกรายคน / รายเคส</span>
             </button>
           </div>
         </div>

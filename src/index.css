@@ -250,6 +250,15 @@ body.modal-scroll-locked {
     break-inside: avoid !important;
   }
 
+  #printable-rooms-roster *,
+  #printable-document-sheet *,
+  #printable-emr-case-sheet *,
+  #printable-catering-sheet * {
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
   #printable-rooms-roster .rounded-3xl,
   #printable-rooms-roster .rounded-2xl,
   #printable-rooms-roster .rounded-xl,
@@ -265,6 +274,62 @@ body.modal-scroll-locked {
     border-radius: 0 !important;
     background: #ffffff !important;
     border: 1.5px solid #0f172a !important;
+  }
+
+  /* Print semantic light-paper overrides for AdminRoomsView badges & section headers */
+  #printable-rooms-roster [data-badge="section-header-blue"] {
+    background-color: #dbeafe !important;
+    border-bottom: 2px solid #0f172a !important;
+  }
+  #printable-rooms-roster [data-badge="section-header-pink"] {
+    background-color: #fce7f3 !important;
+    border-bottom: 2px solid #0f172a !important;
+  }
+  #printable-rooms-roster [data-badge="medical"],
+  #printable-rooms-roster [class*="bg-rose-"] {
+    background-color: #fee2e2 !important;
+    border-color: #991b1b !important;
+    color: #7f1d1d !important;
+  }
+  #printable-rooms-roster [data-badge="allergy"],
+  #printable-rooms-roster [data-badge="optout"],
+  #printable-rooms-roster [class*="bg-amber-"] {
+    background-color: #fef3c7 !important;
+    border-color: #b45309 !important;
+    color: #78350f !important;
+  }
+  #printable-rooms-roster [data-badge="equipment"],
+  #printable-rooms-roster [data-badge="stay"],
+  #printable-rooms-roster [class*="bg-emerald-"] {
+    background-color: #d1fae5 !important;
+    border-color: #047857 !important;
+    color: #064e3b !important;
+  }
+  #printable-rooms-roster [data-badge="items"],
+  #printable-rooms-roster [data-badge="transfer"],
+  #printable-rooms-roster [class*="bg-indigo-"] {
+    background-color: #e0e7ff !important;
+    border-color: #3730a3 !important;
+    color: #1e1b4b !important;
+  }
+  #printable-rooms-roster [data-badge="room-male"],
+  #printable-rooms-roster [class*="bg-sky-"],
+  #printable-rooms-roster [class*="bg-blue-"] {
+    background-color: #e0f2fe !important;
+    border-color: #0369a1 !important;
+    color: #0c4a6e !important;
+  }
+  #printable-rooms-roster [data-badge="room-female"],
+  #printable-rooms-roster [class*="bg-pink-"] {
+    background-color: #fce7f3 !important;
+    border-color: #be185d !important;
+    color: #831843 !important;
+  }
+  #printable-rooms-roster [class*="bg-slate-8"],
+  #printable-rooms-roster [class*="bg-slate-9"] {
+    background-color: #ffffff !important;
+    border-color: #334155 !important;
+    color: #0f172a !important;
   }
 
   #printable-rooms-roster h1,
@@ -295,7 +360,7 @@ body.modal-scroll-locked {
   #printable-catering-sheet span,
   #printable-catering-sheet div,
   #printable-catering-sheet p {
-    color: #000000 !important;
+    color: #0f172a !important;
     text-shadow: none !important;
   }
 
@@ -304,6 +369,7 @@ body.modal-scroll-locked {
     overflow: visible !important;
     white-space: normal !important;
     text-overflow: clip !important;
+    line-height: 1.45 !important;
   }
 
   #printable-rooms-roster .min-w-0,
