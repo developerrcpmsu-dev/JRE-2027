@@ -4253,9 +4253,13 @@ export default function RegisterView({
               {(() => {
                 const isMsuUser = isMsuInstitution(myRegistration?.institution);
                 const rawRoom = String(myRegistration?.room_assigned || '').trim();
-                const roomMatch = rawRoom.match(/(\d{3})/);
-                const roomNum = roomMatch ? roomMatch[1] : null;
-                const hasRoom = Boolean(roomNum && rawRoom !== '-' && rawRoom !== 'ไม่มี');
+                const explicitFloorMatch = rawRoom.match(/ชั้น\s*(\d{1,2})/);
+                const roomMatch = rawRoom.replace(/ชั้น\s*\d{1,2}/g, '').match(/(\d{2,4})/);
+                const roomNum = roomMatch ? roomMatch[1] : (!['', '-', 'ไม่มี', 'รอจัดห้อง', 'ยังไม่จัดห้อง', 'รอจัดสรร'].includes(rawRoom) ? rawRoom : null);
+                const roomFloorNum = explicitFloorMatch
+                  ? explicitFloorMatch[1]
+                  : (roomMatch ? (roomMatch[1].length >= 4 ? roomMatch[1].slice(0, roomMatch[1].length - 2) : (roomMatch[1].length === 3 ? roomMatch[1][0] : '1')) : '1');
+                const hasRoom = Boolean(roomNum);
                 const myDormOptOut = Boolean(myRegistration?.dorm_opt_out);
                 const myKeyHeld = Boolean(myRegistration?.room_key_held);
                 const myKeyReturned = Boolean(myRegistration?.room_key_returned);
@@ -4267,8 +4271,10 @@ export default function RegisterView({
                   const match = (allRegistrations || []).find(r => {
                     const isSelf = r.id === myRegistration.id || (r.user_id && r.user_id === myRegistration.user_id);
                     if (isSelf) return false;
-                    const rMatch = String(r.room_assigned || '').match(/(\d{3})/);
-                    return rMatch && rMatch[1] === roomNum;
+                    const rawOther = String(r.room_assigned || '').trim();
+                    const rMatch = rawOther.replace(/ชั้น\s*\d{1,2}/g, '').match(/(\d{2,4})/);
+                    const otherKey = rMatch ? rMatch[1] : rawOther;
+                    return otherKey && otherKey === roomNum;
                   });
                   if (!match) return null;
 
@@ -4366,9 +4372,9 @@ export default function RegisterView({
                           <Building className="w-3.5 h-3.5" /> หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)
                         </span>
                         <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex flex-wrap items-center gap-2">
-                          <span>ห้อง {roomNum}</span>
+                          <span>{/^\d/.test(roomNum) ? `ห้อง ${roomNum}` : roomNum}</span>
                           <span className="text-xs font-normal text-sky-300 bg-sky-950/60 px-2.5 py-0.5 rounded-full border border-sky-500/30">
-                            ชั้น 1 • ห้องละ 2 คน
+                            ชั้น {roomFloorNum} • ห้องละ 2 คน
                           </span>
                         </h3>
                       </div>

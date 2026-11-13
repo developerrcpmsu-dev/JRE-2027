@@ -383,7 +383,7 @@ function populateDormitorySignInSheet(ws, roomList, msuList = []) {
     ws,
     'โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027)',
     'บัญชีลงลายมือชื่อเข้าห้องพักและรับกุญแจ หอพักกุดรัง มมส (ฉบับปิดข้อมูลสุขภาพ PDPA)',
-    'ชั้น 1 ห้อง 101 - 110 • ห้องพักชาย (101 - 107 • 14 คน) / ห้องพักหญิง (108 - 110 • 6 คน) • เอกสารสำหรับจุดลงทะเบียนรับ/คืนกุญแจ',
+    'หอพักกุดรัง มมส • แยกห้องชาย/หญิง ตามผังห้องและชั้นล่าสุด • เอกสารสำหรับจุดลงทะเบียนรับ/คืนกุญแจ',
     'J'
   );
 
@@ -426,8 +426,8 @@ function populateDormitorySignInSheet(ws, roomList, msuList = []) {
       const isOptOut = Boolean(p?.dormOptOut);
       const bg = isOptOut ? 'FFFEF3C7' : (isMale ? (currentRow % 2 === 0 ? 'FFF0F9FF' : 'FFFFFFFF') : (currentRow % 2 === 0 ? 'FFFDF2F8' : 'FFFFFFFF'));
 
-      row.getCell(1).value = `ห้อง ${rm.room}`;
-      row.getCell(2).value = isMale ? 'ชาย 👨' : 'หญิง 👩';
+      row.getCell(1).value = rm.roomLabel || `ห้อง ${rm.room}`;
+      row.getCell(2).value = `${rm.floorLabel || `ชั้น ${rm.floor || 1}`} ${isMale ? 'ชาย 👨' : 'หญิง 👩'}`;
       row.getCell(3).value = `คนที่ ${b + 1} (เตียง ${b + 1})`;
       row.getCell(4).value = p ? `${p.name}${isOptOut ? ' [ไม่พักหอ]' : ''}` : '(ว่าง)';
       row.getCell(5).value = p ? p.nickname : '-';

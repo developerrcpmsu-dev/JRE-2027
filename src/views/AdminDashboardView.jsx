@@ -77,7 +77,7 @@ import {
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl, getAttendanceConfirmationInfo } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
-import { buildRoomMovePayload } from '../utils/roomUtils';
+import { buildRoomMovePayload, parseRoomInfo } from '../utils/roomUtils';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
@@ -2406,10 +2406,11 @@ export default function AdminDashboardView({
         const curRoom = String(currentReg?.room_assigned || '').trim();
         let roomMoveFields = {};
         if (currentReg && nextRoom !== curRoom) {
-          const curDigits = curRoom.match(/(\d{3})/)?.[1] || null;
+          const parsedCur = parseRoomInfo(curRoom);
           roomMoveFields = buildRoomMovePayload(
             {
-              roomNumber: curDigits,
+              roomNumber: parsedCur.roomKey,
+              roomFloor: parsedCur.floorNumber || 1,
               rawRoom: curRoom,
               roomChangeHistory: currentReg.room_change_history
             },
@@ -3089,16 +3090,21 @@ export default function AdminDashboardView({
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
         ...(modalRoom.trim() !== String(profileModalReg.room_assigned || '').trim()
-          ? buildRoomMovePayload(
-              {
-                roomNumber: String(profileModalReg.room_assigned || '').match(/(\d{3})/)?.[1] || null,
-                rawRoom: String(profileModalReg.room_assigned || '').trim(),
-                roomChangeHistory: profileModalReg.room_change_history
-              },
-              modalRoom.trim(),
-              'แก้ไขห้องพักจากหน้าต่างโปรไฟล์ Admin',
-              'admin'
-            )
+          ? (() => {
+              const curRaw = String(profileModalReg.room_assigned || '').trim();
+              const parsedCur = parseRoomInfo(curRaw);
+              return buildRoomMovePayload(
+                {
+                  roomNumber: parsedCur.roomKey,
+                  roomFloor: parsedCur.floorNumber || 1,
+                  rawRoom: curRaw,
+                  roomChangeHistory: profileModalReg.room_change_history
+                },
+                modalRoom.trim(),
+                'แก้ไขห้องพักจากหน้าต่างโปรไฟล์ Admin',
+                'admin'
+              );
+            })()
           : {}),
         dorm_opt_out: Boolean(modalDormOptOut),
         dorm_opt_out_by: Boolean(modalDormOptOut) !== Boolean(profileModalReg.dorm_opt_out)

@@ -29,6 +29,39 @@ export const DORMITORY_ROOM_CONFIGS = [
   { room: '110', roomLabel: 'ห้อง 110', gender: 'หญิง', floor: 1, capacity: 2 }
 ];
 
+const EMPTY_ROOM_VALUES = new Set(['', '-', '--', 'ไม่มี', 'รอจัดห้อง', 'ยังไม่จัดห้อง', 'ยังไม่ระบุห้อง', 'รอจัดสรร']);
+
+/**
+ * Parse arbitrary room & floor text (e.g. "ห้อง 204", "ชั้น 3 ห้อง 305", "ชั้น 2 ห้อง 12", "B201").
+ */
+export function parseRoomInfo(rawInput) {
+  const raw = String(rawInput || '').trim();
+  if (!raw || EMPTY_ROOM_VALUES.has(raw)) {
+    return { roomKey: null, roomLabel: '', floorNumber: null, floorLabel: '' };
+  }
+
+  const explicitFloorMatch = raw.match(/ชั้น\s*(\d{1,2})/);
+  const cleanedWithoutFloor = raw.replace(/ชั้น\s*\d{1,2}/g, '').trim();
+  const numMatch = (cleanedWithoutFloor || raw).match(/(\d{2,4})/);
+  const roomKey = numMatch ? numMatch[1] : (cleanedWithoutFloor.replace(/^ห้อง\s*/i, '').trim() || raw);
+
+  let floorNumber = null;
+  if (explicitFloorMatch) {
+    floorNumber = Number(explicitFloorMatch[1]);
+  } else if (numMatch) {
+    const digits = numMatch[1];
+    if (digits.length === 3) floorNumber = Number(digits[0]);
+    else if (digits.length >= 4) floorNumber = Number(digits.slice(0, digits.length - 2));
+    else floorNumber = 1;
+  } else {
+    floorNumber = 1;
+  }
+
+  const floorLabel = floorNumber ? `ชั้น ${floorNumber}` : 'ชั้น 1';
+  const roomLabel = /^\d/.test(roomKey) ? `ห้อง ${roomKey}` : roomKey;
+  return { roomKey, roomLabel, floorNumber, floorLabel };
+}
+
 /**
  * Safely parse JSON metadata stored inside special_notes.
  */
@@ -113,9 +146,9 @@ export function normalizeDormPerson(reg) {
     healthPriorityTier = 1;
   }
 
-  const roomMatch = rawRoom.match(/(\d{3})/);
+  const parsedCurrentRoom = parseRoomInfo(rawRoom);
   const previousRoomRaw = String(reg.previous_room || extra.previous_room || '').trim();
-  const previousRoomMatch = previousRoomRaw.match(/(\d{3})/);
+  const parsedPreviousRoom = parseRoomInfo(previousRoomRaw);
   const roomChangedAt = reg.room_changed_at || extra.room_changed_at || '';
   const roomChangedBy = reg.room_changed_by || extra.room_changed_by || '';
   const roomChangeNote = reg.room_change_note || extra.room_change_note || '';
@@ -197,9 +230,13 @@ export function normalizeDormPerson(reg) {
     roomKeyNote,
     keyStatusLabel,
     rawRoom,
-    roomNumber: roomMatch ? roomMatch[1] : null,
+    roomNumber: parsedCurrentRoom.roomKey,
+    roomLabel: parsedCurrentRoom.roomLabel || rawRoom,
+    roomFloor: parsedCurrentRoom.floorNumber || 1,
+    roomFloorLabel: parsedCurrentRoom.floorLabel || 'ชั้น 1',
     previousRoomRaw,
-    previousRoom: previousRoomMatch ? previousRoomMatch[1] : (previousRoomRaw || null),
+    previousRoom: parsedPreviousRoom.roomKey || (previousRoomRaw || null),
+    previousRoomFloor: parsedPreviousRoom.floorNumber || null,
     roomChangedAt,
     roomChangedBy,
     roomChangeNote,
@@ -210,18 +247,33 @@ export function normalizeDormPerson(reg) {
 /**
  * Build allocation update payload for moving/changing a participant's room,
  * automatically preserving previous room & appending to room_change_history.
+ * Supports any room number and any floor (e.g. 101-110, 204, 305, custom rooms).
  */
-export function buildRoomMovePayload(person, nextRoomInput, note = '', actor = 'admin') {
-  const nextDigits = String(nextRoomInput || '').match(/(\d{3})/)?.[1] || '';
-  const nextRoomValue = nextDigits ? `ห้อง ${nextDigits}` : String(nextRoomInput || '').trim();
-  const currentRoomVal = person?.roomNumber
-    ? `ห้อง ${person.roomNumber}`
-    : (person?.rawRoom || 'ยังไม่ระบุห้อง');
+export function buildRoomMovePayload(person, nextRoomInput, note = '', actor = 'admin', nextFloorInput = '') {
+  const cleanFloor = String(nextFloorInput || '').replace(/ชั้น\s*/g, '').trim();
+  const rawNext = String(nextRoomInput || '').trim();
+  let nextRoomValue = '';
+
+  if (rawNext && !EMPTY_ROOM_VALUES.has(rawNext)) {
+    const parsedNext = parseRoomInfo(rawNext);
+    const roomPart = parsedNext.roomLabel || (rawNext.startsWith('ห้อง') ? rawNext : `ห้อง ${rawNext}`);
+    if (cleanFloor) {
+      const inferredMatchesFloor = parsedNext.floorNumber && String(parsedNext.floorNumber) === cleanFloor;
+      nextRoomValue = inferredMatchesFloor ? roomPart : `ชั้น ${cleanFloor} ${roomPart}`;
+    } else {
+      nextRoomValue = roomPart;
+    }
+  }
+
+  const parsedTarget = parseRoomInfo(nextRoomValue);
+  const currentRoomVal = person?.rawRoom
+    ? person.rawRoom
+    : (person?.roomNumber ? `ห้อง ${person.roomNumber}` : 'ยังไม่ระบุห้อง');
   const existingHistory = Array.isArray(person?.roomChangeHistory) ? person.roomChangeHistory : [];
   const now = new Date().toISOString();
   const cleanNote = String(note || '').trim();
 
-  const isSame = person?.roomNumber && nextDigits && person.roomNumber === nextDigits;
+  const isSame = person?.roomNumber && parsedTarget.roomKey && person.roomNumber === parsedTarget.roomKey && (person?.roomFloor || 1) === (parsedTarget.floorNumber || 1);
   if (isSame && !cleanNote) {
     return { room_assigned: nextRoomValue };
   }
@@ -266,6 +318,7 @@ export function buildDormitoryRoomData(registrations = []) {
   DORMITORY_ROOM_CONFIGS.forEach(c => {
     map[c.room] = {
       ...c,
+      floorLabel: `ชั้น ${c.floor}`,
       occupants: []
     };
   });
@@ -284,7 +337,20 @@ export function buildDormitoryRoomData(registrations = []) {
       return;
     }
 
-    if (person.roomNumber && map[person.roomNumber]) {
+    if (person.roomNumber) {
+      if (!map[person.roomNumber]) {
+        const floorNum = person.roomFloor || 1;
+        map[person.roomNumber] = {
+          room: person.roomNumber,
+          roomLabel: person.roomLabel || `ห้อง ${person.roomNumber}`,
+          gender: person.gender === 'หญิง' ? 'หญิง' : 'ชาย',
+          floor: floorNum,
+          floorLabel: person.roomFloorLabel || `ชั้น ${floorNum}`,
+          capacity: 2,
+          isDynamic: true,
+          occupants: []
+        };
+      }
       map[person.roomNumber].occupants.push(person);
     } else if (!person.dormOptOut) {
       unassignedExternal.push(person);
@@ -327,9 +393,16 @@ export function buildDormitoryRoomData(registrations = []) {
     }
   });
 
-  const rooms = Object.values(map);
+  const rooms = Object.values(map).sort((a, b) => {
+    if ((a.floor || 1) !== (b.floor || 1)) return (a.floor || 1) - (b.floor || 1);
+    return String(a.room).localeCompare(String(b.room), 'th', { numeric: true });
+  });
   const maleRooms = rooms.filter(r => r.gender === 'ชาย');
   const femaleRooms = rooms.filter(r => r.gender === 'หญิง');
+  const activeFloors = [...new Set(rooms.filter(r => r.occupants.length > 0 || !r.isDynamic).map(r => r.floor || 1))].sort((a, b) => a - b);
+  const activeFloorSummary = activeFloors.length > 1
+    ? `ชั้น ${activeFloors.join(', ')}`
+    : `ชั้น ${activeFloors[0] || 1}`;
 
   const analyzeZone = (zoneRooms) => {
     const doubleCareRooms = [];
@@ -368,6 +441,8 @@ export function buildDormitoryRoomData(registrations = []) {
     rooms,
     maleRooms,
     femaleRooms,
+    activeFloors,
+    activeFloorSummary,
     unassignedExternal,
     optedOutPeople,
     localMsu,

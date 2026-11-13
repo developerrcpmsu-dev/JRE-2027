@@ -33,7 +33,8 @@ import {
 import { 
   buildDormitoryRoomData,
   parseSpecialNotesExtra,
-  getSpecialItemsNeeded
+  getSpecialItemsNeeded,
+  parseRoomInfo
 } from '../utils/roomUtils';
 import { getAttendanceConfirmationInfo } from '../supabase';
 import { 
@@ -93,7 +94,9 @@ function DormSignInZoneTable({ title, subtitle, rooms, altBgClass, zoneLabel }) 
                     {b === 0 && (
                       <td rowSpan={2} className="py-2 px-2 border-r border-slate-900 text-center font-mono font-black text-sm bg-slate-100 align-middle">
                         {rm.roomLabel}
-                        <span className="block text-[10px] font-normal text-slate-500">{zoneLabel}</span>
+                        <span className="block text-[10px] font-normal text-slate-500">
+                          {rm.floorLabel ? `${rm.floorLabel} (${zoneLabel.includes('ชาย') ? 'ชาย' : 'หญิง'})` : zoneLabel}
+                        </span>
                         <span className="block text-[9px] font-sans font-bold text-sky-800 mt-0.5">
                           🔑 {rm.keySummaryLabel}
                         </span>
@@ -196,7 +199,9 @@ function StaffMedicalZoneTable({ title, rooms, zoneLabel }) {
                           }`}
                         >
                           {rm.roomLabel}
-                          <span className="block text-[10px] font-normal text-slate-600">{zoneLabel}</span>
+                          <span className="block text-[10px] font-normal text-slate-600">
+                            {rm.floorLabel ? `${rm.floorLabel} (${zoneLabel.includes('ชาย') ? 'ชาย' : 'หญิง'})` : zoneLabel}
+                          </span>
                           <span className="block text-[9px] font-sans font-bold text-sky-900 mt-0.5">
                             🔑 {rm.keySummaryLabel}
                           </span>
@@ -341,10 +346,11 @@ export default function AdminDocumentsView({
 
       const isMsu = Boolean(uniInfo?.isMsu);
       const isDormOptOut = Boolean(extra.dorm_opt_out || reg.dorm_opt_out);
-      const matchedRoom = reg.room_assigned ? String(reg.room_assigned).match(/(\d{3})/)?.[1] : null;
+      const parsedRoom = parseRoomInfo(reg.room_assigned);
+      const matchedRoom = parsedRoom.roomKey;
       const roomNote = isDormOptOut
         ? 'แจ้งไม่พักหอ'
-        : (isMsu ? 'มมส (ไป-กลับเอง)' : (matchedRoom ? `พักหอกุดรัง (${matchedRoom})` : 'พักหอกุดรัง'));
+        : (isMsu ? 'มมส (ไป-กลับเอง)' : (matchedRoom ? `พักหอกุดรัง (${parsedRoom.floorLabel} ${parsedRoom.roomLabel})` : 'พักหอกุดรัง'));
       const rsvpShort = attInfo.isDeclined ? ' [ไม่เข้าร่วม]' : (attInfo.isConfirmed ? ' [ยืนยันมา]' : '');
       const notes = `${roomNote}${rsvpShort}`;
 
@@ -526,13 +532,14 @@ export default function AdminDocumentsView({
       const roleWithDuty = dutyNote ? `${role} • ${dutyNote}` : role;
 
       // Dorm & key status
-      const matchedRoom = reg.room_assigned ? String(reg.room_assigned).match(/(\d{3})/)?.[1] : (roomPerson?.roomNumber || '');
+      const parsedRoom = parseRoomInfo(reg.room_assigned);
+      const matchedRoom = parsedRoom.roomKey || roomPerson?.roomNumber || '';
       const isDormOptOut = Boolean(extra.dorm_opt_out || reg.dorm_opt_out);
       const dormAndKeySummary = isDormOptOut
         ? 'แจ้งไม่พักหอพักมหาลัย'
         : uniInfo.isMsu
           ? 'มมส (ไป-กลับเอง)'
-          : `${matchedRoom ? `ห้อง ${matchedRoom}` : 'รอจัดห้อง'} • ${roomPerson?.keyStatusLabel || 'ยังไม่ได้จ่ายกุญแจ'}`;
+          : `${matchedRoom ? `${parsedRoom.floorLabel || roomPerson?.roomFloorLabel || 'ชั้น 1'} ห้อง ${matchedRoom}` : 'รอจัดห้อง'} • ${roomPerson?.keyStatusLabel || 'ยังไม่ได้จ่ายกุญแจ'}`;
 
       // Shirt & ID Card
       const isCardOnly = Boolean(extra.staff_id_card_only || reg.staff_id_card_only);
@@ -1269,20 +1276,20 @@ export default function AdminDocumentsView({
               </div>
 
               <DormSignInZoneTable
-                title="🚪 1. ห้องพักชาย (7 ห้อง / 14 คน — หอพักกุดรัง ชั้น 1 ห้อง 101 ถึง 107)"
+                title={`🚪 1. ห้องพักชาย (${roomData.maleRooms.length} ห้อง — หอพักกุดรัง ${roomData.activeFloorSummary || 'ชั้น 1'})`}
                 subtitle="ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
                 rooms={roomData.maleRooms}
                 altBgClass="bg-blue-50/40"
-                zoneLabel="ชั้น 1 (ชาย)"
+                zoneLabel="ชาย"
               />
 
               <div className="pt-2">
                 <DormSignInZoneTable
-                  title="🚪 2. ห้องพักหญิง (3 ห้อง / 6 คน — หอพักกุดรัง ชั้น 1 ห้อง 108 ถึง 110)"
+                  title={`🚪 2. ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง — หอพักกุดรัง ${roomData.activeFloorSummary || 'ชั้น 1'})`}
                   subtitle="ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
                   rooms={roomData.femaleRooms}
                   altBgClass="bg-pink-50/40"
-                  zoneLabel="ชั้น 1 (หญิง)"
+                  zoneLabel="หญิง"
                 />
               </div>
 
@@ -1311,15 +1318,15 @@ export default function AdminDocumentsView({
               </div>
 
               <StaffMedicalZoneTable
-                title="🚪 1. โซนห้องพักชาย (ห้อง 101 - 107)"
+                title={`🚪 1. โซนห้องพักชาย (${displayedStaffMaleRooms.length} ห้อง)`}
                 rooms={displayedStaffMaleRooms}
-                zoneLabel="ชั้น 1 (ชาย)"
+                zoneLabel="ชาย"
               />
 
               <StaffMedicalZoneTable
-                title="🚪 2. โซนห้องพักหญิง (ห้อง 108 - 110)"
+                title={`🚪 2. โซนห้องพักหญิง (${displayedStaffFemaleRooms.length} ห้อง)`}
                 rooms={displayedStaffFemaleRooms}
-                zoneLabel="ชั้น 1 (หญิง)"
+                zoneLabel="หญิง"
               />
 
               {roomData.msuNeedsCare.length > 0 && (

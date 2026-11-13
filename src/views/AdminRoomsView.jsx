@@ -38,7 +38,8 @@ import {
   DORMITORY_ROOM_CONFIGS,
   buildDormitoryRoomData,
   computeSmartRoomPlan,
-  buildRoomMovePayload
+  buildRoomMovePayload,
+  parseRoomInfo
 } from '../utils/roomUtils';
 import {
   exportDormitoryRosterToExcel,
@@ -348,7 +349,9 @@ function RoomZoneTable({
                       >
                         {room.roomLabel}
                       </span>
-                      <span className="text-[10px] text-slate-400 mt-1">ชั้น 1</span>
+                      <span className="text-[10px] text-slate-400 mt-1">
+                        {room.floorLabel || `ชั้น ${room.floor || 1}`}{room.isDynamic ? ' • ห้องอื่น/ย้ายชั้น' : ''}
+                      </span>
                       {hasRoomMedicalAlert && (
                         <span className="mt-1 px-2 py-0.5 rounded-full bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] font-black flex items-center gap-0.5">
                           🚨 เฝ้าระวังสุขภาพ
@@ -478,6 +481,9 @@ export default function AdminRoomsView({
   const [roomFilter, setRoomFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'moved' | 'unassigned' | 'opt_out' | 'alerts' | 'pending_key'
   const [roomMoveNote, setRoomMoveNote] = useState('');
+  const [customEditPersonId, setCustomEditPersonId] = useState('');
+  const [customRoomInput, setCustomRoomInput] = useState('');
+  const [customFloorInput, setCustomFloorInput] = useState('');
   const [copiedAll, setCopiedAll] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [previewDocModal, setPreviewDocModal] = useState(null);
@@ -491,19 +497,21 @@ export default function AdminRoomsView({
       if (!prev || prev.targetUpdateId !== person.targetUpdateId) return prev;
       const mergedRaw = { ...(prev.raw || {}), ...updates };
       const consent = getHealthConsentInfo(mergedRaw);
-      const nextRoomDigits = updates.room_assigned !== undefined
-        ? (String(updates.room_assigned || '').match(/(\d{3})/)?.[1] || null)
-        : prev.roomNumber;
-      const prevRoomDigits = updates.previous_room !== undefined
-        ? (String(updates.previous_room || '').match(/(\d{3})/)?.[1] || updates.previous_room || null)
-        : prev.previousRoom;
+      const parsedNext = updates.room_assigned !== undefined
+        ? parseRoomInfo(updates.room_assigned)
+        : { roomKey: prev.roomNumber, floorNumber: prev.roomFloor, floorLabel: prev.roomFloorLabel };
+      const parsedPrev = updates.previous_room !== undefined
+        ? parseRoomInfo(updates.previous_room)
+        : { roomKey: prev.previousRoom };
       return {
         ...prev,
         ...updates,
-        roomNumber: nextRoomDigits,
+        roomNumber: parsedNext.roomKey || null,
+        roomFloor: parsedNext.floorNumber || 1,
+        roomFloorLabel: parsedNext.floorLabel || 'ชั้น 1',
         rawRoom: updates.room_assigned !== undefined ? updates.room_assigned : prev.rawRoom,
         assignedRoom: updates.room_assigned !== undefined ? (updates.room_assigned || 'ยังไม่ระบุห้อง') : prev.assignedRoom,
-        previousRoom: prevRoomDigits,
+        previousRoom: parsedPrev.roomKey || (updates.previous_room || null),
         previousRoomRaw: updates.previous_room !== undefined ? updates.previous_room : prev.previousRoomRaw,
         roomChangedAt: updates.room_changed_at !== undefined ? updates.room_changed_at : prev.roomChangedAt,
         roomChangedBy: updates.room_changed_by !== undefined ? updates.room_changed_by : prev.roomChangedBy,
@@ -737,34 +745,41 @@ export default function AdminRoomsView({
     [allExternalPeople, genderFilter, roomFilter, statusFilter, searchQuery]
   );
 
-  const handleMovePersonRoom = async (person, nextRoomNumber, moveNote = '') => {
+  const handleMovePersonRoom = async (person, nextRoomInput, moveNote = '', nextFloorInput = '') => {
     if (!onUpdateAllocation || isMovingSingle || !person) return false;
-    const cleanNext = String(nextRoomNumber || '').trim();
-    if ((cleanNext || '') === (person.roomNumber || '')) return false;
+    const rawNext = String(nextRoomInput || '').trim();
+    const payloadPreview = buildRoomMovePayload(person, rawNext, moveNote, 'admin', nextFloorInput);
+    const nextRoomVal = payloadPreview.room_assigned || '';
+    const parsedTarget = parseRoomInfo(nextRoomVal);
+    if ((parsedTarget.roomKey || '') === (person.roomNumber || '') && (parsedTarget.floorNumber || 1) === (person.roomFloor || 1) && !String(moveNote || '').trim()) {
+      return false;
+    }
 
-    const fromLabel = person.roomNumber ? `ห้อง ${person.roomNumber}` : 'ยังไม่ระบุห้อง';
-    const toLabel = cleanNext ? `ห้อง ${cleanNext}` : 'ยังไม่ระบุห้อง (ล้างห้องพัก)';
-    const destInfo = cleanNext ? roomOccupancyMap[cleanNext] : null;
+    const fromLabel = person.rawRoom || (person.roomNumber ? `ห้อง ${person.roomNumber}` : 'ยังไม่ระบุห้อง');
+    const toLabel = nextRoomVal || 'ยังไม่ระบุห้อง (ล้างห้องพัก)';
+    const destInfo = parsedTarget.roomKey ? roomOccupancyMap[parsedTarget.roomKey] : null;
     const destHint = destInfo && destInfo.count > 0
       ? ` (ห้องปลายทางมีคนอยู่แล้ว ${destInfo.count}/${destInfo.capacity}: ${destInfo.names})`
       : destInfo
         ? ' (ห้องปลายทางว่างอยู่)'
-        : '';
+        : ' (เปิดห้อง/ชั้นใหม่ในระบบอัตโนมัติ)';
 
     const confirmed = await confirmAction({
       title: 'ยืนยันการเปลี่ยน/ย้ายห้องพัก',
       message: `ต้องการย้าย "${person.name}" จาก [${fromLabel}] ไปยัง [${toLabel}]${destHint} ใช่หรือไม่? ระบบจะเก็บประวัติห้องเก่าไว้ให้อัตโนมัติ`,
-      confirmText: cleanNext ? `✓ ย้ายไป ${toLabel}` : '✓ ยืนยันล้างเลขห้อง',
+      confirmText: nextRoomVal ? `✓ ย้ายไป ${toLabel}` : '✓ ยืนยันล้างเลขห้อง',
       variant: 'info'
     });
     if (!confirmed) return false;
 
     setIsMovingSingle(true);
     try {
-      const payload = buildRoomMovePayload(person, cleanNext, moveNote, 'admin');
-      await onUpdateAllocation(person.targetUpdateId, payload);
-      syncSelectedPerson(person, payload);
+      await onUpdateAllocation(person.targetUpdateId, payloadPreview);
+      syncSelectedPerson(person, payloadPreview);
       setRoomMoveNote('');
+      setCustomEditPersonId('');
+      setCustomRoomInput('');
+      setCustomFloorInput('');
       if (triggerToast) {
         triggerToast(`✓ ย้าย ${person.name}: ${fromLabel} → ${toLabel} และบันทึกประวัติห้องเก่าเรียบร้อยแล้ว`, 'success');
       }
@@ -980,7 +995,7 @@ export default function AdminRoomsView({
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center gap-1.5 shadow-sm">
                 <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                <span>ชั้น 1 • ห้อง 101 - 110 (ห้องละ 2 คน)</span>
+                <span>{roomData.activeFloorSummary || 'ชั้น 1'} • {roomData.rooms.length} ห้อง (ปรับห้อง/ชั้นอื่นได้)</span>
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 URL: /admin/rooms
@@ -1297,9 +1312,11 @@ export default function AdminRoomsView({
               onChange={(e) => setRoomFilter(e.target.value)}
               className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold focus:outline-none focus:border-sky-400"
             >
-              <option value="all">ทุกห้อง (101-110)</option>
-              {DORMITORY_ROOM_CONFIGS.map(c => (
-                <option key={c.room} value={c.room}>ห้อง {c.room} ({c.gender})</option>
+              <option value="all">ทุกห้อง ({roomData.rooms.length} ห้อง)</option>
+              {roomData.rooms.map(c => (
+                <option key={c.room} value={c.room}>
+                  ห้อง {c.room} (ชั้น {c.floor || 1} • {c.gender}){c.occupants.length > 0 ? ` [${c.occupants.length}]` : ''}
+                </option>
               ))}
             </select>
 
@@ -1311,7 +1328,7 @@ export default function AdminRoomsView({
                   genderFilter === 'all' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                ทั้งหมด (10 ห้อง)
+                ทั้งหมด ({roomData.rooms.length} ห้อง)
               </button>
               <button
                 type="button"
@@ -1320,7 +1337,7 @@ export default function AdminRoomsView({
                   genderFilter === 'ชาย' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                👨 ชาย (7 ห้อง)
+                👨 ชาย ({roomData.maleRooms.length} ห้อง)
               </button>
               <button
                 type="button"
@@ -1329,7 +1346,7 @@ export default function AdminRoomsView({
                   genderFilter === 'หญิง' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                👩 หญิง (3 ห้อง)
+                👩 หญิง ({roomData.femaleRooms.length} ห้อง)
               </button>
             </div>
           </div>
@@ -1340,14 +1357,14 @@ export default function AdminRoomsView({
       {viewMode === 'table' && (
         <div id="printable-rooms-roster" className="space-y-8 print:p-4 print:bg-white print:text-slate-900">
           <div className="hidden print:block text-center pb-4 mb-4 border-b-2 border-slate-900">
-            <h1 className="text-xl font-black text-slate-950">หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (ชั้น 1 ห้อง 101 - 110)</h1>
-            <p className="text-xs font-bold text-slate-700">โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) • ผังจัดสรรห้องพัก 10 ห้อง (20 คน)</p>
+            <h1 className="text-xl font-black text-slate-950">หอพักกุดรัง มหาวิทยาลัยมหาสารคาม ({roomData.activeFloorSummary || 'ชั้น 1'})</h1>
+            <p className="text-xs font-bold text-slate-700">โครงการฝึกซ้อมร่วมประจำปี Joint Response Exercise (JRE 2027) • ผังจัดสรรห้องพัก {roomData.rooms.length} ห้อง</p>
           </div>
 
           {(genderFilter === 'all' || genderFilter === 'ชาย') && filteredMaleRooms.length > 0 && (
             <RoomZoneTable
-              title="🚪 ห้องพักชาย (7 ห้อง / 14 คน — ชั้น 1)"
-              subtitle="หอพักกุดรัง มมส • ห้อง 101 ถึง 107 (ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น)"
+              title={`🚪 ห้องพักชาย (${roomData.maleRooms.length} ห้อง — ${roomData.activeFloorSummary || 'ชั้น 1'})`}
+              subtitle="หอพักกุดรัง มมส • ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
               rooms={filteredMaleRooms}
               occupiedCount={totalMaleOccupants}
               targetCount={maleTargetCount}
@@ -1364,8 +1381,8 @@ export default function AdminRoomsView({
 
           {(genderFilter === 'all' || genderFilter === 'หญิง') && filteredFemaleRooms.length > 0 && (
             <RoomZoneTable
-              title="🚪 ห้องพักหญิง (3 ห้อง / 6 คน — ชั้น 1)"
-              subtitle="หอพักกุดรัง มมส • ห้อง 108 ถึง 110 (ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น)"
+              title={`🚪 ห้องพักหญิง (${roomData.femaleRooms.length} ห้อง — ${roomData.activeFloorSummary || 'ชั้น 1'})`}
+              subtitle="หอพักกุดรัง มมส • ห้องละ 2 คน • เตียงเดี่ยวคู่ ❄️ แอร์ 🚿 น้ำอุ่น"
               rooms={filteredFemaleRooms}
               occupiedCount={totalFemaleOccupants}
               targetCount={femaleTargetCount}
@@ -1722,31 +1739,97 @@ export default function AdminRoomsView({
 
                       <td className="py-3 px-3">
                         {onUpdateAllocation ? (
-                          <div className="space-y-1">
-                            <select
-                              disabled={isMovingSingle}
-                              value={person.roomNumber || ''}
-                              onChange={(e) => handleMovePersonRoom(person, e.target.value, roomMoveNote)}
-                              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-sky-500/40 text-sky-200 font-bold text-xs cursor-pointer disabled:opacity-50 focus:outline-none focus:border-sky-400"
-                            >
-                              <option value="">-- ยังไม่ระบุห้อง --</option>
-                              {DORMITORY_ROOM_CONFIGS.filter(c => c.gender === person.gender).map(c => {
-                                const info = roomOccupancyMap[c.room] || { count: 0, capacity: 2, names: '' };
-                                const isCurrent = person.roomNumber === c.room;
-                                const suffix = info.count === 0
-                                  ? 'ว่าง 2'
-                                  : isCurrent
-                                    ? `ห้องปัจจุบัน • ${info.count}/${info.capacity}`
-                                    : info.count >= info.capacity
-                                      ? `เต็ม ${info.count}/${info.capacity}: ${info.names}`
-                                      : `มี ${info.count}/${info.capacity}: ${info.names}`;
-                                return (
-                                  <option key={c.room} value={c.room}>
-                                    ห้อง {c.room} ({suffix})
-                                  </option>
-                                );
-                              })}
-                            </select>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                disabled={isMovingSingle}
+                                value={person.roomNumber || ''}
+                                onChange={(e) => {
+                                  if (e.target.value === '__CUSTOM__') {
+                                    setCustomEditPersonId(person.id);
+                                    setCustomRoomInput(person.roomNumber || '');
+                                    setCustomFloorInput(person.roomFloor ? String(person.roomFloor) : '');
+                                    return;
+                                  }
+                                  handleMovePersonRoom(person, e.target.value, roomMoveNote);
+                                }}
+                                className="flex-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-sky-500/40 text-sky-200 font-bold text-xs cursor-pointer disabled:opacity-50 focus:outline-none focus:border-sky-400"
+                              >
+                                <option value="">-- ยังไม่ระบุห้อง --</option>
+                                {roomData.rooms.filter(c => c.gender === person.gender || c.room === person.roomNumber).map(c => {
+                                  const info = roomOccupancyMap[c.room] || { count: 0, capacity: 2, names: '' };
+                                  const isCurrent = person.roomNumber === c.room;
+                                  const floorTag = c.floor ? `ชั้น ${c.floor} • ` : '';
+                                  const suffix = info.count === 0
+                                    ? `${floorTag}ว่าง 2`
+                                    : isCurrent
+                                      ? `${floorTag}ห้องปัจจุบัน • ${info.count}/${info.capacity}`
+                                      : info.count >= info.capacity
+                                        ? `${floorTag}เต็ม ${info.count}/${info.capacity}: ${info.names}`
+                                        : `${floorTag}มี ${info.count}/${info.capacity}: ${info.names}`;
+                                  return (
+                                    <option key={c.room} value={c.room}>
+                                      ห้อง {c.room} ({suffix})
+                                    </option>
+                                  );
+                                })}
+                                <option value="__CUSTOM__">✏️ ระบุเลขห้อง / ชั้นอื่นเอง...</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (customEditPersonId === person.id) {
+                                    setCustomEditPersonId('');
+                                  } else {
+                                    setCustomEditPersonId(person.id);
+                                    setCustomRoomInput(person.roomNumber || '');
+                                    setCustomFloorInput(person.roomFloor ? String(person.roomFloor) : '');
+                                  }
+                                }}
+                                className="px-2 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-200 border border-indigo-400/40 text-[10px] font-bold shrink-0 cursor-pointer"
+                                title="พิมพ์เลขห้อง/ชั้นอื่นๆ เช่น 204, 305, ชั้น 3"
+                              >
+                                ✏️ อื่นๆ
+                              </button>
+                            </div>
+
+                            {customEditPersonId === person.id && (
+                              <div className="p-2 rounded-xl bg-slate-900 border border-indigo-500/50 space-y-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={customFloorInput}
+                                    onChange={(e) => setCustomFloorInput(e.target.value)}
+                                    className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-[11px] text-amber-200 font-bold focus:outline-none"
+                                  >
+                                    <option value="">ชั้นอัตโนมัติ</option>
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(f => (
+                                      <option key={f} value={String(f)}>ชั้น {f}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="text"
+                                    value={customRoomInput}
+                                    onChange={(e) => setCustomRoomInput(e.target.value)}
+                                    placeholder="เลขห้อง เช่น 204, 305"
+                                    className="w-28 flex-1 px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={isMovingSingle || !customRoomInput.trim()}
+                                    onClick={() => handleMovePersonRoom(person, customRoomInput, roomMoveNote, customFloorInput)}
+                                    className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer"
+                                  >
+                                    ย้าย
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {person.roomNumber && (
+                              <div className="text-[10px] text-sky-300/90 font-semibold">
+                                📍 {person.roomFloorLabel || `ชั้น ${person.roomFloor || 1}`} • ห้อง {person.roomNumber}
+                              </div>
+                            )}
                             {person.roomChangeNote && (
                               <div className="text-[10px] text-indigo-300 truncate" title={person.roomChangeNote}>
                                 📝 {person.roomChangeNote}
@@ -1755,7 +1838,7 @@ export default function AdminRoomsView({
                           </div>
                         ) : (
                           <span className="font-mono font-bold text-sky-300">
-                            {person.roomNumber ? `ห้อง ${person.roomNumber}` : 'รอจัดห้อง'}
+                            {person.roomNumber ? `${person.roomFloorLabel || 'ชั้น 1'} ห้อง ${person.roomNumber}` : 'รอจัดห้อง'}
                           </span>
                         )}
                       </td>
@@ -2067,24 +2150,33 @@ export default function AdminRoomsView({
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-slate-300 font-bold flex items-center gap-1.5">
                   <DoorClosed className="w-4 h-4 text-sky-400" />
-                  <span>การจัดสรรห้องพัก:</span>
+                  <span>การจัดสรรห้องพัก ({selectedPerson.roomFloorLabel || `ชั้น ${selectedPerson.roomFloor || 1}`}):</span>
                 </span>
                 {onUpdateAllocation && !selectedPerson.isMsu ? (
                   <select
                     disabled={isMovingSingle}
                     value={selectedPerson.roomNumber || ''}
-                    onChange={(e) => handleMovePersonRoom(selectedPerson, e.target.value, roomMoveNote)}
+                    onChange={(e) => {
+                      if (e.target.value === '__CUSTOM__') {
+                        setCustomEditPersonId(selectedPerson.id);
+                        setCustomRoomInput(selectedPerson.roomNumber || '');
+                        setCustomFloorInput(selectedPerson.roomFloor ? String(selectedPerson.roomFloor) : '');
+                        return;
+                      }
+                      handleMovePersonRoom(selectedPerson, e.target.value, roomMoveNote);
+                    }}
                     className="font-mono font-black text-sky-300 px-2.5 py-1 rounded-lg bg-sky-900/60 border border-sky-500/40 text-xs cursor-pointer disabled:opacity-50"
                   >
                     <option value="">ยังไม่ระบุห้อง</option>
-                    {DORMITORY_ROOM_CONFIGS.filter(c => c.gender === selectedPerson.gender).map(c => {
+                    {roomData.rooms.filter(c => c.gender === selectedPerson.gender || c.room === selectedPerson.roomNumber).map(c => {
                       const info = roomOccupancyMap[c.room] || { count: 0, capacity: 2 };
                       return (
                         <option key={c.room} value={c.room}>
-                          ห้อง {c.room} ({c.gender} • {info.count}/{info.capacity})
+                          ห้อง {c.room} (ชั้น {c.floor || 1} • {c.gender} • {info.count}/{info.capacity})
                         </option>
                       );
                     })}
+                    <option value="__CUSTOM__">✏️ ระบุเลขห้อง / ชั้นอื่นเอง...</option>
                   </select>
                 ) : (
                   <span className="font-mono font-black text-sky-300 px-2.5 py-0.5 rounded-lg bg-sky-900/60 border border-sky-500/40">
@@ -2094,14 +2186,44 @@ export default function AdminRoomsView({
               </div>
 
               {onUpdateAllocation && !selectedPerson.isMsu && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <input
-                    type="text"
-                    value={roomMoveNote}
-                    onChange={(e) => setRoomMoveNote(e.target.value)}
-                    placeholder="หมายเหตุการย้ายห้อง (ถ้ามี เช่น หอพักยืนยันห้องใหม่)..."
-                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
-                  />
+                <div className="space-y-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-slate-900/80 border border-indigo-500/35">
+                    <span className="text-[10px] font-bold text-indigo-300">ระบุชั้น/ห้องอื่น:</span>
+                    <select
+                      value={customFloorInput}
+                      onChange={(e) => setCustomFloorInput(e.target.value)}
+                      className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-[11px] text-amber-200 font-bold focus:outline-none"
+                    >
+                      <option value="">ชั้นอัตโนมัติ</option>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(f => (
+                        <option key={f} value={String(f)}>ชั้น {f}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={customRoomInput}
+                      onChange={(e) => setCustomRoomInput(e.target.value)}
+                      placeholder="เลขห้อง เช่น 204, 305, B12"
+                      className="flex-1 min-w-[120px] px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={isMovingSingle || !customRoomInput.trim()}
+                      onClick={() => handleMovePersonRoom(selectedPerson, customRoomInput, roomMoveNote, customFloorInput)}
+                      className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold cursor-pointer"
+                    >
+                      ย้ายไปห้องนี้
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={roomMoveNote}
+                      onChange={(e) => setRoomMoveNote(e.target.value)}
+                      placeholder="หมายเหตุการย้ายห้อง (ถ้ามี เช่น หอพักยืนยันห้องใหม่)..."
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
                 </div>
               )}
 
