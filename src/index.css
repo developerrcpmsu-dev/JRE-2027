@@ -51,6 +51,15 @@
   background: #f97316;
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Modal background scroll lock & overscroll containment */
 html.modal-scroll-locked,
 body.modal-scroll-locked {

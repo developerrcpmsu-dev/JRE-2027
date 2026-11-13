@@ -59,14 +59,14 @@ export default function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full">
-      <div className="w-full max-w-[1850px] 2xl:max-w-[99%] mx-auto px-3 sm:px-4 lg:px-5 xl:px-6">
-        <div className="flex items-center justify-between h-14 sm:h-16 lg:h-16 gap-1.5 xl:gap-2">
+    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-x-clip">
+      <div className="w-full max-w-[1850px] mx-auto px-2.5 sm:px-4 xl:px-5">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 xl:gap-2 min-w-0">
           
           {/* Logo & Brand */}
           <div 
             onClick={() => handleNav('home')} 
-            className="flex items-center gap-2 cursor-pointer group select-none shrink-0"
+            className="flex items-center gap-1.5 cursor-pointer group select-none shrink-0"
           >
             <div className="relative shrink-0 flex items-center justify-center">
               <img 
@@ -75,39 +75,39 @@ export default function Navbar({
                 className="w-7 h-8 sm:w-8 sm:h-9 object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
               />
             </div>
-            <div className="shrink-0 flex items-center gap-1.5">
-              <span className="text-base sm:text-lg xl:text-xl 2xl:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
+            <div className="shrink-0 flex items-center gap-1">
+              <span className="text-base sm:text-lg min-[1600px]:text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-amber-200 whitespace-nowrap">
                 JRE <span className="text-rescue-500">2027</span>
               </span>
-              <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
+              <span className="hidden min-[1560px]:inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-widest uppercase bg-rescue-500/20 text-rescue-400 border border-rescue-500/30 rounded-md whitespace-nowrap">
                 มมส
               </span>
             </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden xl:flex items-center gap-1 2xl:gap-1.5 shrink-0">
+          <nav className="hidden xl:flex flex-1 min-w-0 items-center justify-center gap-1 min-[1650px]:gap-1.5 overflow-x-auto no-scrollbar px-1">
             <button
               onClick={() => handleNav('home')}
-              className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentTab === 'home'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
             >
-              <Home className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
+              <Home className="w-3.5 h-3.5 shrink-0" />
               <span>หน้าแรก</span>
             </button>
 
             <button
               onClick={() => handleNav('schedule')}
-              className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentTab === 'schedule'
                   ? 'bg-slate-800 text-rescue-400 shadow-sm border border-slate-700'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
               <span>กำหนดการ</span>
             </button>
 
@@ -115,98 +115,99 @@ export default function Navbar({
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('pr')}
-                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'pr' || (currentTab === 'announcements' && currentSubRoute === 'public')
                     ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="ประชาสัมพันธ์ข้อมูลและเงื่อนไขการรับสมัคร"
               >
-                <Megaphone className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
-                <span>ข่าวสาร<span className="hidden 2xl:inline">ประชาสัมพันธ์</span></span>
+                <Megaphone className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                <span>ข่าวสาร<span className="hidden min-[1680px]:inline">ประชาสัมพันธ์</span></span>
               </button>
             ) : (
               /* คำสั่งและประกาศสำหรับสมาชิก (แสดงเมื่อสมัครแล้ว) */
               <button
                 onClick={() => handleNav('orders')}
-                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
+                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer relative ${
                   currentTab === 'orders' || (currentTab === 'announcements' && currentSubRoute === 'members')
                     ? 'bg-indigo-600/30 text-indigo-300 shadow-sm border border-indigo-500/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="คำสั่งและประกาศสำหรับสมาชิกผู้เข้าร่วม"
               >
-                <Bell className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-indigo-400 shrink-0" />
-                <span>คำสั่ง<span className="hidden 2xl:inline">สมาชิก</span></span>
-                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
+                <Bell className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>คำสั่ง<span className="hidden min-[1680px]:inline">สมาชิก</span></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
               </button>
             )}
 
             {canSeeGroupChat && (
               <button
                 onClick={() => handleNav('chat')}
-                className={`relative px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`relative px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'chat' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title={`แชทกลุ่มผู้เข้าร่วม${chatUnreadCount ? ` (${chatUnreadCount} ข้อความยังไม่อ่าน)` : ''}`}
               >
-                <MessageCircle className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-indigo-300 shrink-0" />
-                <span>แชทกลุ่ม</span>
+                <MessageCircle className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+                <span>แชท<span className="hidden min-[1560px]:inline">กลุ่ม</span></span>
                 {chatUnreadCount > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-black text-white flex items-center justify-center">{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
               </button>
             )}
 
             <button
               onClick={() => handleNav('merchandise')}
-              className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentTab === 'merchandise' || currentTab === 'shop'
                   ? 'bg-orange-600/30 text-orange-400 shadow-sm border border-orange-500/50'
                   : 'text-slate-300 hover:text-white hover:bg-slate-900'
               }`}
               title="สั่งซื้อเสื้อ & กางเกงกู้ภัยโครงการ JRE 2027"
             >
-              <Shirt className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
-              <span>สั่งเสื้อ<span className="hidden 2xl:inline">/กางเกง</span></span>
+              <Shirt className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+              <span>สั่งเสื้อ<span className="hidden min-[1680px]:inline">/กางเกง</span></span>
             </button>
 
             {/* Applicant Registration CTA or Dashboard Button */}
             {!myRegistration ? (
               <button
                 onClick={() => handleNav('register')}
-                className={`px-2.5 2xl:px-3 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap cursor-pointer ${
+                className={`px-2 min-[1650px]:px-3 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'register'
                     ? 'bg-gradient-to-r from-rescue-600 via-orange-600 to-amber-600 text-white shadow-lg ring-2 ring-orange-400/80'
                     : 'bg-gradient-to-r from-rescue-600 via-orange-500 to-amber-500 hover:from-rescue-500 hover:to-orange-400 text-white hover:shadow-orange-500/30'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
-                <span>สมัคร<span className="hidden 2xl:inline">เข้าร่วม</span>โครงการ</span>
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>สมัคร<span className="hidden min-[1680px]:inline">เข้าร่วม</span>โครงการ</span>
               </button>
             ) : (
               <button
                 onClick={() => handleNav('dashboard')}
-                className={`px-2.5 2xl:px-3 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap cursor-pointer ${
+                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'dashboard' || currentTab === 'register'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
                     : 'bg-slate-900 text-emerald-400 border border-emerald-500/40 hover:bg-slate-850 hover:border-emerald-300'
                 }`}
+                title="แดชบอร์ดของฉัน"
               >
-                <UserCheck className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
-                <span>แดชบอร์ด<span className="hidden 2xl:inline">ของฉัน</span></span>
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>แดชบอร์ด<span className="hidden min-[1680px]:inline">ของฉัน</span></span>
               </button>
             )}
 
             {myRegistration && (
               <button
                 onClick={() => handleNav('id-card')}
-                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'id-card'
                     ? 'bg-orange-500/20 text-orange-300 shadow-sm border border-orange-400/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="เปิดบัตรประจำตัวดิจิทัล JRE 2027"
               >
-                <QrCode className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
+                <QrCode className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                 <span>บัตร ID</span>
               </button>
             )}
@@ -214,24 +215,24 @@ export default function Navbar({
             {myRegistration && (
               <button
                 onClick={() => handleNav('my-room')}
-                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-2 min-[1650px]:px-2.5 py-1.5 rounded-xl text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                   currentTab === 'my-room'
                     ? 'bg-sky-500/20 text-sky-300 shadow-sm border border-sky-400/50'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
                 }`}
                 title="ดูสถานะห้องนอน กุญแจ เพื่อนร่วมห้อง & กลุ่มฝึกของฉัน"
               >
-                <Building className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-sky-400 shrink-0" />
+                <Building className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <span>ห้องพัก</span>
               </button>
             )}
 
             {/* Admin Panel Tab in Nav with attached Admin Logout button */}
             {isAdmin ? (
-              <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-2 rounded-xl shrink-0 shadow-sm">
+              <div className="flex items-center gap-0.5 bg-purple-950/70 border border-purple-800/80 p-0.5 pl-1.5 rounded-xl shrink-0 shadow-sm">
                 <button
                   onClick={() => handleNav('admin')}
-                  className={`px-2 py-1 rounded-lg text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg text-xs min-[1750px]:text-[13px] font-bold transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer ${
                     currentTab === 'admin'
                       ? 'bg-purple-600 text-white shadow-md'
                       : 'text-purple-300 hover:text-white hover:bg-purple-900/60'
@@ -239,7 +240,7 @@ export default function Navbar({
                   title="เปิดระบบจัดการ Admin"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                  <Award className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0 text-amber-300" />
+                  <Award className="w-3.5 h-3.5 shrink-0 text-amber-300" />
                   <span>Admin</span>
                 </button>
                 <div className="w-[1px] h-4 bg-purple-800/80 mx-0.5 shrink-0" />
@@ -249,36 +250,36 @@ export default function Navbar({
                   className="p-1.5 rounded-lg text-rose-300 hover:text-white hover:bg-rose-600/40 transition-all flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="text-[11px] whitespace-nowrap hidden 2xl:inline font-medium">ออก Admin</span>
+                  <span className="text-[11px] whitespace-nowrap hidden min-[1750px]:inline font-medium">ออก Admin</span>
                 </button>
               </div>
             ) : hasStaffPrivilege ? (
               <button
                 onClick={onOpenAdminLogin}
-                className="px-2.5 py-1 rounded-lg text-xs 2xl:text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-sm"
+                className="px-2 py-1 rounded-lg text-xs font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-sm"
                 title="ท่านมีสิทธิ์ Staff/Admin: คลิกเพื่อเข้าสู่ระบบ Admin Console"
               >
-                <ShieldCheck className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-amber-400 shrink-0" />
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>เข้า Admin</span>
               </button>
             ) : null}
           </nav>
 
           {/* Desktop Right Action Area: Auth & Status */}
-          <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0">
+          <div className="hidden xl:flex items-center gap-1.5 shrink-0">
             {/* Participant Notification Bell */}
             {myRegistration && (
               <button
                 type="button"
                 onClick={onOpenNotifications}
                 title={`กล่องข้อความและการแจ้งเตือน (${unreadNotificationsCount} ยังไม่อ่าน)`}
-                className={`relative p-1.5 2xl:p-2 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
+                className={`relative p-1.5 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
                   unreadNotificationsCount > 0
                     ? 'bg-amber-500/15 border-amber-500/60 text-amber-300 hover:bg-amber-500/25 ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/20'
                     : 'bg-slate-900/90 border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800'
                 }`}
               >
-                <Bell className={`w-3.5 h-3.5 2xl:w-4 2xl:h-4 ${unreadNotificationsCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                <Bell className={`w-3.5 h-3.5 ${unreadNotificationsCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
                 {unreadNotificationsCount > 0 ? (
                   <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md shadow-red-500/50 animate-pulse">
                     {unreadNotificationsCount}
@@ -292,12 +293,12 @@ export default function Navbar({
             )}
 
             {user ? (
-              <div className="flex items-center gap-1 2xl:gap-1.5 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1 2xl:p-1.5 pl-1.5 2xl:pl-2 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
+              <div className="flex items-center gap-1 bg-slate-900/95 hover:bg-slate-850/90 border border-slate-700/80 hover:border-slate-600 p-1 pl-1.5 rounded-xl shadow-xl shadow-black/30 backdrop-blur-md transition-all shrink-0">
                 <button
                   type="button"
                   onClick={() => handleNav(myRegistration ? 'dashboard' : 'register')}
                   title="ดูประวัติบัญชี / ผลการจัดสรรกลุ่มและห้องนอน"
-                  className="flex items-center gap-1.5 2xl:gap-2 hover:opacity-90 transition-opacity text-left cursor-pointer shrink-0"
+                  className="flex items-center gap-1.5 hover:opacity-90 transition-opacity text-left cursor-pointer shrink-0"
                 >
                   <div className="relative shrink-0">
                     <img 
@@ -308,9 +309,9 @@ export default function Navbar({
                     <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border-2 border-slate-900 rounded-full" />
                   </div>
                   <div className="text-left text-xs leading-tight shrink-0">
-                    <p className="font-bold text-white truncate max-w-[65px] 2xl:max-w-[105px] whitespace-nowrap">{user.name || user.email?.split('@')[0]}</p>
+                    <p className="font-bold text-white truncate max-w-[75px] min-[1650px]:max-w-[115px] whitespace-nowrap">{user.name || user.email?.split('@')[0]}</p>
                     <p className="text-slate-400 text-[10px] flex items-center gap-1 font-medium mt-0.5 whitespace-nowrap">
-                      <span className="text-emerald-400 font-semibold truncate max-w-[60px] 2xl:max-w-none">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
+                      <span className="text-emerald-400 font-semibold truncate max-w-[70px] min-[1650px]:max-w-[110px]">{myRegistration ? (myRegistration.group_assigned ? `กลุ่ม ${myRegistration.group_assigned}` : 'ลงทะเบียนแล้ว') : 'Google Login'}</span>
                     </p>
                   </div>
                 </button>
