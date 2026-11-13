@@ -18,7 +18,8 @@ import {
   Shirt,
   Sparkles,
   QrCode,
-  MessageCircle
+  MessageCircle,
+  Building
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -207,6 +208,21 @@ export default function Navbar({
               >
                 <QrCode className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-orange-400 shrink-0" />
                 <span>บัตร ID</span>
+              </button>
+            )}
+
+            {myRegistration && (
+              <button
+                onClick={() => handleNav('my-room')}
+                className={`px-2 2xl:px-2.5 py-1.5 rounded-xl text-xs 2xl:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  currentTab === 'my-room'
+                    ? 'bg-sky-500/20 text-sky-300 shadow-sm border border-sky-400/50'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-900'
+                }`}
+                title="ดูสถานะห้องนอน กุญแจ เพื่อนร่วมห้อง & กลุ่มฝึกของฉัน"
+              >
+                <Building className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-sky-400 shrink-0" />
+                <span>ห้องพัก</span>
               </button>
             )}
 
@@ -577,6 +593,20 @@ export default function Navbar({
             >
               <QrCode className="w-5 h-5" />
               <span>บัตรประจำตัว ID Card JRE 2027</span>
+            </button>
+          )}
+
+          {myRegistration && (
+            <button
+              onClick={() => handleNav('my-room')}
+              className={`w-full text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 ${
+                currentTab === 'my-room'
+                  ? 'bg-sky-500 text-slate-950 shadow-lg shadow-sky-500/20'
+                  : 'bg-slate-800 text-sky-300 border border-sky-500/30'
+              }`}
+            >
+              <Building className="w-5 h-5" />
+              <span>สถานะห้องนอน & กลุ่มฝึกของฉัน</span>
             </button>
           )}
 

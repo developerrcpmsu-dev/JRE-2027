@@ -319,7 +319,8 @@ export default function RegisterView({
   formsConfig,
   paymentConfig,
   subRoute,
-  onSubRouteChange
+  onSubRouteChange,
+  onNavigateMyRoom
 }) {
   // In-app Popup Modal for Confirmations & Alerts
   const { confirmModalProps, askConfirm } = useConfirmModal();
@@ -372,6 +373,17 @@ export default function RegisterView({
     )
   );
 
+  // Granular Edit Locks: Allow editing profile & ID card photo while strictly locking ordered shirts & verified/paid slips
+  const isFullSlipLocked = Boolean(
+    myRegistration && (myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified')
+  );
+  const isRound1SlipLocked = Boolean(
+    myRegistration && myRegistration.installment_1_status === 'paid'
+  );
+  const isRound2SlipLocked = Boolean(
+    myRegistration && myRegistration.installment_2_status === 'paid'
+  );
+
   const scheduleStatus = getRegistrationScheduleStatus(effectivePaymentConfig);
   const isStaffPortal = Boolean(
     subRoute === 'staff' ||
@@ -389,27 +401,26 @@ export default function RegisterView({
 
   const [isEditing, setIsEditing] = useState(false);
 
+  const isShirtOrderLocked = Boolean(
+    isEditing &&
+    myRegistration &&
+    !isSuperEditor &&
+    myRegistration.shirt_size &&
+    myRegistration.shirt_size !== '-' &&
+    myRegistration.shirt_size !== 'ไม่มี'
+  );
+
   useEffect(() => {
     if (subRoute === 'dashboard') {
       setIsEditing(false);
     } else if (subRoute === 'staff' && myRegistration) {
       setIsEditing(false);
     } else if (subRoute === 'form' && myRegistration) {
-      if (isSuperEditor || isStaffPortal || isStaffRegistration(myRegistration)) {
-        setIsEditing(true);
-      } else if (isApplicantFullyPaid) {
-        setIsEditing(false);
-        if (onSubRouteChange) onSubRouteChange('dashboard');
-        triggerToast('ท่านชำระเงินครบถ้วนและได้รับการยืนยันสิทธิ์สมบูรณ์แล้ว ไม่สามารถแก้ไขข้อมูลใบสมัครได้', 'info');
-      } else if (isRegistrationClosed) {
-        setIsEditing(false);
-        if (onSubRouteChange) onSubRouteChange('dashboard');
-        triggerToast('โครงการได้ปิดรับสมัครแล้ว ไม่อนุญาตให้แก้ไขข้อมูลใบสมัคร แต่ท่านยังสามารถชำระเงินงวดที่ 2 ได้ตามปกติ', 'warning');
-      } else {
-        setIsEditing(true);
-      }
+      populateFormFromRegistration(myRegistration);
+      setCurrentFormStep(1);
+      setIsEditing(true);
     }
-  }, [subRoute, myRegistration, isApplicantFullyPaid, isRegistrationClosed, isSuperEditor, isStaffPortal]);
+  }, [subRoute, myRegistration]);
 
   // Form State
   const [firstName, setFirstName] = useState('');
@@ -1411,6 +1422,9 @@ export default function RegisterView({
     }
     setAgreeCorrectInfo(true);
     setAgreePDPAAndRules(true);
+    if (reg.payment_slip_url) setFormSlipFull(reg.payment_slip_url);
+    if (reg.installment_1_slip_url) setFormSlipRound1(reg.installment_1_slip_url);
+    if (reg.installment_2_slip_url) setFormSlipRound2(reg.installment_2_slip_url);
   };
 
   const handleCancelEditRegistration = () => {
@@ -1755,6 +1769,108 @@ export default function RegisterView({
     }
   };
 
+  // Direct Step 1 Save for existing registrants editing personal info & ID Card photo
+  // Strictly preserves locked shirt order, approved payment slips/statuses, and Admin assignments
+  const handleDirectProfileEditSave = async () => {
+    if (!user) {
+      onOpenGoogleLogin();
+      return;
+    }
+    if (!myRegistration) return;
+
+    const step1Errs = validateStep1();
+    if (Object.keys(step1Errs).length > 0) {
+      setCurrentFormStep(1);
+      setFieldErrors(step1Errs);
+      const firstKey = focusAndScrollToFirstError(step1Errs);
+      setStatusMessage({ type: 'error', text: step1Errs[firstKey] });
+      triggerToast(step1Errs[firstKey], 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage(null);
+
+    const formattedDob = `${birthYearBE}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`;
+    let finalFirstName = firstName.trim() || firstNameTh.trim();
+    let finalLastName = lastName.trim() || lastNameTh.trim();
+    if (!finalFirstName && fullNameAffiliation) {
+      const parts = fullNameAffiliation.trim().split(' ');
+      finalFirstName = parts[0] || fullNameAffiliation;
+      finalLastName = parts.slice(1).join(' ') || '-';
+    }
+
+    const resolvedFinalGender = gender || resolveGender({
+      title_th: titleTh === 'อื่นๆ' ? titleOtherTh.trim() : titleTh,
+      title_en: titleEn
+    });
+
+    const profileUpdates = {
+      user_avatar: user.avatar || myRegistration.user_avatar || '',
+      first_name: finalFirstName,
+      last_name: finalLastName,
+      title_th: titleTh === 'อื่นๆ' ? titleOtherTh.trim() : titleTh,
+      title_other_th: titleOtherTh.trim(),
+      first_name_th: firstNameTh.trim(),
+      last_name_th: lastNameTh.trim(),
+      institution_abbr_th: institutionAbbrTh.trim(),
+      title_en: titleEn === 'อื่นๆ' ? titleOtherEn.trim() : titleEn,
+      title_other_en: titleOtherEn.trim(),
+      first_name_en: firstNameEn.trim(),
+      last_name_en: lastNameEn.trim(),
+      institution_abbr_en: institutionAbbrEn.trim(),
+      full_name_affiliation: fullNameAffiliation.trim() || `${finalFirstName} ${finalLastName}`.trim(),
+      nickname: buildNicknameString(nicknameTh, nicknameEn) || nickname.trim(),
+      nickname_th: nicknameTh.trim(),
+      nickname_en: nicknameEn.trim(),
+      callsign: callsign.trim(),
+      member_type: memberType,
+      unit: unit.trim(),
+      affiliation: institution.trim(),
+      institution: institution.trim(),
+      gender: resolvedFinalGender,
+      id_card_photo: idCardPhoto || myRegistration.id_card_photo || user.avatar || '',
+      id_card_url: idCardPhoto || myRegistration.id_card_url || user.avatar || '',
+      dob: formattedDob,
+      age_years: ageResult.years,
+      age_months: ageResult.months,
+      age_days: ageResult.days,
+      blood_group: bloodGroup,
+      phone: phone.trim(),
+      emergency_name: `${emergencyName.trim()} (${emergencyRelation})`,
+      emergency_phone: emergencyPhone.trim(),
+      medical_history: medicalHistory.trim() || 'ไม่มี',
+      food_allergy: foodAllergy.trim() || 'ไม่มี',
+      previous_training: previousTraining.trim(),
+      shirt_size: isShirtOrderLocked ? myRegistration.shirt_size : shirtSize,
+      custom_shirt_note: isShirtOrderLocked ? (myRegistration.custom_shirt_note || '') : customShirtNote.trim()
+    };
+
+    try {
+      const targetId = myRegistration.id || myRegistration.user_id || user.id;
+      if (onUpdateRegistration) {
+        await onUpdateRegistration(targetId, profileUpdates);
+      } else {
+        await onSaveRegistration({ ...myRegistration, ...profileUpdates });
+      }
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraftRestored(false);
+      setIsEditing(false);
+      if (onSubRouteChange) onSubRouteChange('dashboard');
+      setStatusMessage({
+        type: 'success',
+        text: '✓ บันทึกการแก้ไขข้อมูลส่วนตัวและรูปบัตร ID Card เรียบร้อยแล้ว!'
+      });
+      triggerToast('✓ บันทึกการแก้ไขข้อมูล & รูปบัตร ID Card เรียบร้อยแล้ว', 'success');
+    } catch (err) {
+      console.error(err);
+      setStatusMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการบันทึกการแก้ไข กรุณาลองใหม่' });
+      triggerToast('เกิดข้อผิดพลาดในการบันทึกการแก้ไข', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
@@ -1931,39 +2047,62 @@ export default function RegisterView({
       finalLastName = parts.slice(1).join(' ') || '-';
     }
 
-    // Smart Auto-Confirmation Logic
+    // Smart Auto-Confirmation Logic (Preserve approved/paid statuses & locked slips during edits)
+    const submitEffectivePlan = (isEditing && myRegistration && !isSuperEditor && hasAnyPaymentApproved && myRegistration.payment_plan)
+      ? myRegistration.payment_plan
+      : effectivePlan;
+    const lockFull = Boolean(isEditing && !isSuperEditor && isFullSlipLocked);
+    const lockRound1 = Boolean(isEditing && !isSuperEditor && isRound1SlipLocked);
+    const lockRound2 = Boolean(isEditing && !isSuperEditor && isRound2SlipLocked);
+    const lockedShirtSize = isShirtOrderLocked ? myRegistration.shirt_size : shirtSize;
+    const lockedCustomShirtNote = isShirtOrderLocked ? (myRegistration.custom_shirt_note || '') : customShirtNote.trim();
+
     let finalPaymentStatus = 'unpaid';
     let finalInstallment1Status = 'unpaid';
     let finalInstallment2Status = 'unpaid';
 
-      if (effectivePlan === 'full') {
-        const activeFullOcr = slipOcrFull || slipOcrRound1;
-        if (activeFullOcr?.isFullyVerified) {
-          // All conditions matched (amount + date + no duplicate) -> Instant Auto Confirm!
-          finalPaymentStatus = 'paid';
-        } else if (formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url) {
-          // Mismatch or unverified -> Allowed to submit, but requires admin review
-          finalPaymentStatus = 'pending_review';
+      if (submitEffectivePlan === 'full') {
+        if (lockFull) {
+          finalPaymentStatus = myRegistration.payment_status;
+        } else {
+          const activeFullOcr = slipOcrFull || slipOcrRound1;
+          if (activeFullOcr?.isFullyVerified) {
+            finalPaymentStatus = 'paid';
+          } else if (formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url) {
+            finalPaymentStatus = myRegistration?.payment_status === 'paid' || myRegistration?.payment_status === 'verified'
+              ? myRegistration.payment_status
+              : 'pending_review';
+          }
         }
-      } else if (effectivePlan === 'installment') {
+      } else if (submitEffectivePlan === 'installment') {
         // Round 1 (Deposit 400 THB)
-        if (slipOcrRound1?.isFullyVerified) {
+        if (lockRound1) {
+          finalInstallment1Status = myRegistration.installment_1_status;
+          finalPaymentStatus = myRegistration.payment_status === 'paid' || myRegistration.payment_status === 'verified'
+            ? myRegistration.payment_status
+            : 'partial_paid';
+        } else if (slipOcrRound1?.isFullyVerified) {
           finalInstallment1Status = 'paid';
           finalPaymentStatus = 'partial_paid';
         } else if (formSlipRound1 || myRegistration?.installment_1_slip_url) {
-          finalInstallment1Status = 'pending_review';
+          finalInstallment1Status = myRegistration?.installment_1_status === 'paid' ? 'paid' : 'pending_review';
           finalPaymentStatus = 'partial_paid';
         }
 
         // Round 2 (if present)
-        if (currentFormStep === 4 || formSlipRound2 || myRegistration?.installment_2_slip_url) {
+        if (lockRound2) {
+          finalInstallment2Status = myRegistration.installment_2_status;
+          if (finalInstallment1Status === 'paid') {
+            finalPaymentStatus = 'paid';
+          }
+        } else if (currentFormStep === 4 || formSlipRound2 || myRegistration?.installment_2_slip_url) {
           if (slipOcrRound2?.isFullyVerified) {
             finalInstallment2Status = 'paid';
             if (finalInstallment1Status === 'paid') {
               finalPaymentStatus = 'paid';
             }
           } else if (formSlipRound2 || myRegistration?.installment_2_slip_url) {
-            finalInstallment2Status = 'pending_review';
+            finalInstallment2Status = myRegistration?.installment_2_status === 'paid' ? 'paid' : 'pending_review';
           }
         }
       }
@@ -1997,8 +2136,8 @@ export default function RegisterView({
         gender: resolvedFinalGender,
         is_staff: effectiveIsStaff,
         registration_type: effectiveIsStaff ? 'staff' : 'participant',
-        shirt_size: shirtSize,
-        custom_shirt_note: customShirtNote.trim(),
+        shirt_size: lockedShirtSize,
+        custom_shirt_note: lockedCustomShirtNote,
         id_card_photo: idCardPhoto,
         id_card_url: idCardPhoto,
         dob: formattedDob,
@@ -2016,34 +2155,46 @@ export default function RegisterView({
         group_assigned: myRegistration?.group_assigned || '',
         room_assigned: myRegistration?.room_assigned || '',
         is_special_care: myRegistration?.is_special_care || false,
-        share_health_with_roommate: consentHealthShare !== undefined ? consentHealthShare : true,
-        health_consent_by: 'user',
-        health_consent_at: new Date().toISOString(),
+        share_health_with_roommate: myRegistration?.share_health_with_roommate !== undefined ? myRegistration.share_health_with_roommate : (consentHealthShare !== undefined ? consentHealthShare : true),
+        health_consent_by: myRegistration?.health_consent_by || 'user',
+        health_consent_at: myRegistration?.health_consent_at || new Date().toISOString(),
         special_notes: myRegistration?.special_notes || '',
         admin_private_notes: myRegistration?.admin_private_notes || '',
-        payment_plan: effectivePlan,
+        payment_plan: submitEffectivePlan,
         payment_status: finalPaymentStatus,
-        payment_amount: feeInfo.totalFee,
-        payment_bank_info: `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
-        payment_slip_url: effectivePlan === 'full' 
-          ? (formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url || '') 
-          : (formSlipRound2 || formSlipRound1 || myRegistration?.payment_slip_url || ''),
-        payment_slip_date: (effectivePlan === 'full' ? (formSlipFull || formSlipRound1) : (formSlipRound2 || formSlipRound1)) 
-          ? new Date().toISOString() 
-          : (myRegistration?.payment_slip_date || ''),
-        installment_1_status: effectivePlan === 'full' ? 'unpaid' : finalInstallment1Status,
-        installment_1_amount: feeInfo.round1Amount,
-        installment_1_due: feeInfo.round1Due,
-        installment_1_slip_url: effectivePlan === 'full' ? '' : (formSlipRound1 || myRegistration?.installment_1_slip_url || ''),
-        installment_1_slip_date: (effectivePlan !== 'full' && formSlipRound1) ? new Date().toISOString() : (effectivePlan === 'full' ? '' : (myRegistration?.installment_1_slip_date || '')),
-        installment_2_status: effectivePlan === 'full' ? 'unpaid' : finalInstallment2Status,
-        installment_2_amount: feeInfo.round2Amount,
-        installment_2_due: feeInfo.round2Due,
-        installment_2_slip_url: effectivePlan === 'full' ? '' : (formSlipRound2 || myRegistration?.installment_2_slip_url || ''),
-        installment_2_slip_date: (effectivePlan !== 'full' && formSlipRound2) ? new Date().toISOString() : (effectivePlan === 'full' ? '' : (myRegistration?.installment_2_slip_date || '')),
-        slip_ocr_round1: slipOcrRound1 || myRegistration?.slip_ocr_round1 || null,
-        slip_ocr_round2: slipOcrRound2 || myRegistration?.slip_ocr_round2 || null,
-        slip_ocr_full: slipOcrFull || slipOcrRound1 || myRegistration?.slip_ocr_full || null,
+        payment_amount: myRegistration?.payment_amount ?? feeInfo.totalFee,
+        payment_bank_info: myRegistration?.payment_bank_info || `${effectivePaymentConfig.bank_name} เลขที่ ${effectivePaymentConfig.bank_account_number} ชื่อบัญชี ${effectivePaymentConfig.bank_account_name}`,
+        payment_slip_url: lockFull
+          ? (myRegistration?.payment_slip_url || '')
+          : submitEffectivePlan === 'full'
+            ? (formSlipFull || formSlipRound1 || myRegistration?.payment_slip_url || myRegistration?.installment_1_slip_url || '')
+            : (formSlipRound2 || formSlipRound1 || myRegistration?.payment_slip_url || ''),
+        payment_slip_date: lockFull
+          ? (myRegistration?.payment_slip_date || '')
+          : (submitEffectivePlan === 'full' ? (formSlipFull || formSlipRound1) : (formSlipRound2 || formSlipRound1))
+            ? new Date().toISOString()
+            : (myRegistration?.payment_slip_date || ''),
+        installment_1_status: submitEffectivePlan === 'full' ? (myRegistration?.installment_1_status || 'unpaid') : finalInstallment1Status,
+        installment_1_amount: myRegistration?.installment_1_amount ?? feeInfo.round1Amount,
+        installment_1_due: myRegistration?.installment_1_due || feeInfo.round1Due,
+        installment_1_slip_url: lockRound1
+          ? (myRegistration?.installment_1_slip_url || '')
+          : (submitEffectivePlan === 'full' ? '' : (formSlipRound1 || myRegistration?.installment_1_slip_url || '')),
+        installment_1_slip_date: lockRound1
+          ? (myRegistration?.installment_1_slip_date || '')
+          : (submitEffectivePlan !== 'full' && formSlipRound1 ? new Date().toISOString() : (submitEffectivePlan === 'full' ? '' : (myRegistration?.installment_1_slip_date || ''))),
+        installment_2_status: submitEffectivePlan === 'full' ? (myRegistration?.installment_2_status || 'unpaid') : finalInstallment2Status,
+        installment_2_amount: myRegistration?.installment_2_amount ?? feeInfo.round2Amount,
+        installment_2_due: myRegistration?.installment_2_due || feeInfo.round2Due,
+        installment_2_slip_url: lockRound2
+          ? (myRegistration?.installment_2_slip_url || '')
+          : (submitEffectivePlan === 'full' ? '' : (formSlipRound2 || myRegistration?.installment_2_slip_url || '')),
+        installment_2_slip_date: lockRound2
+          ? (myRegistration?.installment_2_slip_date || '')
+          : (submitEffectivePlan !== 'full' && formSlipRound2 ? new Date().toISOString() : (submitEffectivePlan === 'full' ? '' : (myRegistration?.installment_2_slip_date || ''))),
+        slip_ocr_round1: lockRound1 ? (myRegistration?.slip_ocr_round1 || null) : (slipOcrRound1 || myRegistration?.slip_ocr_round1 || null),
+        slip_ocr_round2: lockRound2 ? (myRegistration?.slip_ocr_round2 || null) : (slipOcrRound2 || myRegistration?.slip_ocr_round2 || null),
+        slip_ocr_full: lockFull ? (myRegistration?.slip_ocr_full || null) : (slipOcrFull || slipOcrRound1 || myRegistration?.slip_ocr_full || null),
         admin_messages: myRegistration?.admin_messages || [],
         requested_docs: myRegistration?.requested_docs || [],
         status: 'confirmed'
@@ -2561,7 +2712,7 @@ export default function RegisterView({
   }
 
   // APPLICANT DASHBOARD (View existing profile & history & Admin allocations)
-  if (myRegistration && (!isEditing || (!isSuperEditor && !isStaffPortal && !isStaffRegistration(myRegistration)))) {
+  if (myRegistration && !isEditing) {
     if (isStaffPortal) {
       return (
         <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -3107,29 +3258,21 @@ export default function RegisterView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-              {/* EDIT REGISTRATION BUTTON: Unlocked for Staff / Staff Portal / Admin / Dev */}
-              {(!isSuperEditor && !isStaffPortal && !isStaffReg) ? (
-                <div
-                  className="px-4 py-2.5 bg-slate-900/90 text-slate-400 border border-slate-700/60 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
-                  title="โครงการได้ปิดรับสมัครและส่งผลิตเสื้อแล้ว การแก้ไขข้อมูลสงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin / Dev) และ Staff เท่านั้น"
-                >
-                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  <span>ล็อคการแก้ไขแล้ว (เฉพาะ Admin / Dev)</span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(true);
-                    if (onSubRouteChange) onSubRouteChange(isStaffPortal || isStaffReg ? 'staff' : 'form');
-                  }}
-                  className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
-                  title="แก้ไขข้อมูลประวัติ และอัปโหลด/เปลี่ยนรูปถ่ายทำบัตร ID Card"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span>{isStaffPortal || isStaffReg ? '✏️ แก้ไขข้อมูล Staff & เปลี่ยนรูปทำบัตร ID Card' : 'แก้ไขข้อมูล (สิทธิ์ Admin / Dev)'}</span>
-                </button>
-              )}
+              {/* EDIT REGISTRATION BUTTON: Available to ALL registered participants & Staff (shirt & verified slips locked automatically) */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (myRegistration) populateFormFromRegistration(myRegistration);
+                  setCurrentFormStep(1);
+                  setIsEditing(true);
+                  if (onSubRouteChange) onSubRouteChange(isStaffPortal || isStaffReg ? 'staff' : 'form');
+                }}
+                className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
+                title="แก้ไขข้อมูลส่วนตัว และอัปโหลด/เปลี่ยนรูปถ่ายทำบัตร ID Card (ยกเว้นไซส์เสื้อและสลิปที่อนุมัติแล้ว)"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>✏️ แก้ไขข้อมูล & เปลี่ยนรูปทำบัตร ID Card</span>
+              </button>
 
               <button
                 type="button"
@@ -4198,554 +4341,85 @@ export default function RegisterView({
             </div>
           )}
 
-          {/* 1. ADMIN ALLOCATIONS: Group & Room (Clean 2-Card Responsive Layout) */}
-          <div className="mt-6 p-4 sm:p-6 bg-gradient-to-br from-indigo-950/35 via-slate-950/90 to-amber-950/30 border border-indigo-600/35 rounded-3xl shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/90 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rescue-500/15 border border-rescue-500/30 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-rescue-400" />
-                </div>
-                <div>
-                  <h2 className="text-sm sm:text-lg font-black text-white">
-                    ผลการจัดสรรกลุ่มฝึก & ห้องนอนจากผู้ดูแลระบบ (Admin Assignment)
-                  </h2>
-                  <p className="text-[11px] text-slate-400">
-                    อัปเดตแบบเรียลไทม์ตามคำสั่งโครงการ JRE 2027
-                  </p>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700/80 text-[10px] font-bold text-slate-300 w-fit">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                ข้อมูลเชื่อมโยง Admin Console
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-              {/* Card A: Assigned Training Group */}
-              <div className="lg:col-span-5 bg-slate-900/90 border border-indigo-500/40 p-4 sm:p-5 rounded-2xl shadow-lg flex flex-col justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs uppercase font-bold text-indigo-300 tracking-wider flex items-center gap-1.5">
-                      <span>🎯</span> กลุ่มฝึกปฏิบัติการที่สังกัด (Assigned Group)
-                    </p>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                      myRegistration.group_assigned
-                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    }`}>
-                      {myRegistration.group_assigned ? 'จัดสรรแล้ว' : 'รอจัดสรร'}
-                    </span>
-                  </div>
-
-                  {myRegistration.group_assigned ? (
-                    <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-1.5">
-                      <p className="text-2xl sm:text-3xl font-black text-indigo-200 tracking-tight">
-                        {myRegistration.group_assigned}
-                      </p>
-                      <p className="text-xs text-slate-300 flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>เข้ารายงานตัว ณ จุดรวมพลของกลุ่มตามเวลากำหนดการ</span>
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                      <div className="flex items-center gap-2 text-amber-300">
-                        <Clock className="w-4 h-4 animate-spin-slow shrink-0" />
-                        <span className="text-sm font-bold">กำลังรอ Admin จัดสรรกลุ่มฝึกปฏิบัติการ...</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
-                        เมื่อฝ่ายอำนวยการฝึกจัดแบ่งกลุ่มฐานฝึก (Station/Team) เรียบร้อยแล้ว ชื่อกลุ่มและจุดรวมพลจะปรากฏที่นี่โดยอัตโนมัติ
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-                  <span>📋 ตรวจสอบกำหนดการฐานฝึกได้ที่เมนู &ldquo;กำหนดการ&rdquo;</span>
-                  {myRegistration.group_assigned && (
-                    <span className="font-mono text-indigo-300 font-bold">GROUP ACTIVE</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Card B: Accommodation & Roommate Card */}
-              {(() => {
-                const isMsuUser = isMsuInstitution(myRegistration?.institution);
-                const rawRoom = String(myRegistration?.room_assigned || '').trim();
-                const explicitFloorMatch = rawRoom.match(/ชั้น\s*(\d{1,2})/);
-                const roomMatch = rawRoom.replace(/ชั้น\s*\d{1,2}/g, '').match(/(\d{2,4})/);
-                const roomNum = roomMatch ? roomMatch[1] : (!['', '-', 'ไม่มี', 'รอจัดห้อง', 'ยังไม่จัดห้อง', 'รอจัดสรร'].includes(rawRoom) ? rawRoom : null);
-                const roomFloorNum = explicitFloorMatch
-                  ? explicitFloorMatch[1]
-                  : (roomMatch ? (roomMatch[1].length >= 4 ? roomMatch[1].slice(0, roomMatch[1].length - 2) : (roomMatch[1].length === 3 ? roomMatch[1][0] : '1')) : '1');
-                const hasRoom = Boolean(roomNum);
-                const myDormOptOut = Boolean(myRegistration?.dorm_opt_out);
-                const myKeyHeld = Boolean(myRegistration?.room_key_held);
-                const myKeyReturned = Boolean(myRegistration?.room_key_returned);
-
-                // Find Roommate from allRegistrations
-                const roommate = (() => {
-                  if (!hasRoom || !roomNum) return null;
-                  const match = (allRegistrations || []).find(r => {
-                    const isSelf = r.id === myRegistration.id || (r.user_id && r.user_id === myRegistration.user_id);
-                    if (isSelf) return false;
-                    const rawOther = String(r.room_assigned || '').trim();
-                    const rMatch = rawOther.replace(/ชั้น\s*\d{1,2}/g, '').match(/(\d{2,4})/);
-                    const otherKey = rMatch ? rMatch[1] : rawOther;
-                    return otherKey && otherKey === roomNum;
-                  });
-                  if (!match) return null;
-
-                  const nameData = resolvePersonFullNameWithTitle(match);
-                  let extra = {};
-                  try {
-                    if (match.special_notes && typeof match.special_notes === 'string' && match.special_notes.startsWith('{')) {
-                      extra = JSON.parse(match.special_notes);
-                    } else if (match.special_notes && typeof match.special_notes === 'object') {
-                      extra = match.special_notes;
-                    }
-                  } catch (e) {}
-
-                  const med = match.medical_history || extra.medical_history || '-';
-                  const alg = match.food_allergy || extra.food_allergy || '-';
-                  const hasMed = hasHealthCondition(med);
-                  const hasAlg = hasHealthCondition(alg);
-
-                  return {
-                    raw: match,
-                    isHealthShared: isHealthSharedWithRoommate(match),
-                    dormOptOut: Boolean(match.dorm_opt_out ?? extra.dorm_opt_out ?? false),
-                    roomKeyHeld: Boolean(match.room_key_held ?? extra.room_key_held ?? false),
-                    roomKeyReturned: Boolean(match.room_key_returned ?? extra.room_key_returned ?? false),
-                    name: nameData.fullName,
-                    nickname: extra.nickname || match.nickname || '-',
-                    callsign: normalizeCallsignSpacing(extra.callsign || match.callsign || '-'),
-                    phone: match.phone || extra.phone || '-',
-                    bloodGroup: match.blood_group || extra.blood_group || '-',
-                    medical: med,
-                    hasMed,
-                    allergy: alg,
-                    hasAlg,
-                    emergencyName: match.emergency_name || extra.emergency_name || '-',
-                    emergencyPhone: match.emergency_phone || extra.emergency_phone || '-'
-                  };
-                })();
-
-                return (
-                  <div className="lg:col-span-7 flex flex-col">
-                    {!hasRoom ? (
-                      <div className="flex-1 bg-slate-900/90 border border-slate-700/60 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg flex flex-col justify-between gap-3">
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-xs uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1.5">
-                              <span>🏠</span> ข้อมูลที่พักค้างแรม (Accommodation Status)
-                            </p>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
-                              isMsuUser
-                                ? 'bg-slate-800 text-slate-300 border-slate-700'
-                                : myDormOptOut
-                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                  : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                            }`}>
-                              {isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่พักหอ (Admin บันทึกให้)' : 'เข้าพักหอพัก (รอระบุเลขห้อง)'}
-                            </span>
-                          </div>
-
-                          {isMsuUser ? (
-                            <div className="p-3.5 sm:p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
-                              <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-                                <span>🏠 ไม่ได้พักหอพัก (เดินทางไป-กลับเอง)</span>
-                              </div>
-                              <p className="text-xs text-amber-100/90 leading-relaxed">
-                                ท่านสังกัดมหาวิทยาลัยมหาสารคาม (มมส) พักอาศัยในพื้นที่ จึงไม่ได้จัดสรรห้องพักหอพักกุดรัง โดยท่านสามารถเดินทางมาเข้าร่วมการฝึกตามกำหนดการในแต่ละวันได้ตามปกติครับ
-                              </p>
-                            </div>
-                          ) : myDormOptOut ? (
-                            <div className="p-3.5 sm:p-4 rounded-xl bg-amber-950/35 border border-amber-500/40 space-y-1.5">
-                              <div className="text-amber-300 font-bold text-sm">
-                                🚫 สถานะห้องพัก: ไม่พักหอพัก (Admin บันทึกให้)
-                              </div>
-                              <p className="text-xs text-amber-100/80 leading-relaxed">
-                                Admin ฝ่ายสถานที่ได้บันทึกยกเว้นการเข้าพักหอพักของท่านในระบบแล้ว (หากมีการเปลี่ยนแปลงกรุณาติดต่อ Admin)
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
-                              <div className="flex items-center gap-2 text-sky-300 font-bold text-sm">
-                                <Clock className="w-4 h-4 animate-spin-slow text-sky-400 shrink-0" />
-                                <span>กำลังรอ Admin ฝ่ายสถานที่จัดสรรเลขห้องพัก...</span>
-                              </div>
-                              <p className="text-xs text-slate-400 leading-relaxed">
-                                ผู้เข้าร่วมจากต่างมหาวิทยาลัยทุกคนเข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม เตียงเดี่ยวคู่ ห้องละ 2 คน • หากมีเหตุสุดวิสัยโปรดติดต่อ Admin)
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-                          <span>📍 สถานที่ฝึก: ศูนย์ฝึกอบรมและปฏิบัติการกู้ภัย มมส</span>
-                          <span className="font-mono text-slate-500">ACCOMMODATION INFO</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={`flex-1 bg-gradient-to-br from-slate-900 via-slate-900 ${myDormOptOut ? 'to-amber-950/35 border-amber-500/50' : 'to-sky-950/40 border-sky-500/40'} border p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-xl space-y-4`}>
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
-                          <div>
-                            <span className="text-[10px] uppercase font-black text-sky-400 tracking-wider flex items-center gap-1.5">
-                              <Building className="w-3.5 h-3.5" /> หอพักกุดรัง มหาวิทยาลัยมหาสารคาม (มมส)
-                            </span>
-                            <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5 flex flex-wrap items-center gap-2">
-                              <span>{/^\d/.test(roomNum) ? `ห้อง ${roomNum}` : roomNum}</span>
-                              <span className="text-xs font-normal text-sky-300 bg-sky-950/60 px-2.5 py-0.5 rounded-full border border-sky-500/30">
-                                ชั้น {roomFloorNum} • ห้องละ 2 คน
-                              </span>
-                            </h3>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            {myDormOptOut ? (
-                              <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
-                                <span>🚫 ไม่พักหอพัก (Admin บันทึกให้)</span>
-                              </span>
-                            ) : (
-                              <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                <span>เข้าพักหอพัก ✓</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Key Status & Opt-Out Banner */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-950/75 p-3 rounded-xl border border-slate-800">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-slate-300">🔑 สถานะกุญแจห้องพัก:</span>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
-                              myKeyReturned
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : myKeyHeld
-                                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                                  : myDormOptOut
-                                    ? 'bg-slate-800 text-slate-400 border-slate-700'
-                                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                            }`}>
-                              {myKeyReturned
-                                ? '✅ คืนกุญแจห้องแล้ว'
-                                : myKeyHeld
-                                  ? '🔑 ได้รับกุญแจห้องแล้ว (อยู่ที่คุณ)'
-                                  : myDormOptOut
-                                    ? 'ไม่ต้องรับกุญแจ (Admin บันทึกไม่พักหอ)'
-                                    : '⏳ ยังไม่ได้รับกุญแจ'}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-slate-400">
-                            {myDormOptOut
-                              ? '* Admin บันทึกสถานะไม่พักหอให้แล้ว หากเปลี่ยนแปลงโปรดแจ้ง Admin'
-                              : '* ผู้เข้าร่วมต่างมหาวิทยาลัยทุกคนเข้าพักหอพักที่โครงการจัดเตรียมให้'}
-                          </span>
-                        </div>
-
-                        {/* Facilities row */}
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                          <span className="text-sky-300 font-semibold">❄️ ห้องปรับอากาศ (แอร์)</span>
-                          <span>•</span>
-                          <span className="text-amber-300 font-semibold">🚿 น้ำอุ่น</span>
-                          <span>•</span>
-                          <span className="text-emerald-300 font-semibold">🛏️ เตียงเดี่ยวคู่ (2 เตียง)</span>
-                          <span>•</span>
-                          <span className="text-slate-400">หมอนและผ้าห่มพร้อม</span>
-                        </div>
-
-                        {/* ROOMMATE CARD SECTION */}
-                        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-xs font-black text-white flex items-center gap-2">
-                              <span>🤝 เพื่อนร่วมห้องของคุณ (Your Roommate):</span>
-                            </span>
-                            {roommate && (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {roommate.dormOptOut ? (
-                                  <span className="text-[10px] font-bold text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-500/40">
-                                    🚫 เมทแจ้งไม่ประสงค์พักหอพัก
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-                                    พักห้องเดียวกัน 2/2 คน
-                                  </span>
-                                )}
-                                {roommate.roomKeyHeld && (
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                    roommate.roomKeyReturned
-                                      ? 'text-emerald-300 bg-emerald-950/40 border-emerald-500/30'
-                                      : 'text-sky-300 bg-sky-950/40 border-sky-500/30'
-                                  }`}>
-                                    {roommate.roomKeyReturned ? '✅ เมทคืนกุญแจแล้ว' : '🔑 เมทถือกุญแจอยู่'}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {roommate ? (
-                            <div className="space-y-3">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-700/60">
-                                <div>
-                                  <div className="font-bold text-white text-sm flex items-center gap-2 flex-wrap">
-                                    <span>{roommate.name}</span>
-                                    {roommate.nickname !== '-' && (
-                                      <span className="text-amber-300 font-normal">({roommate.nickname})</span>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-sky-300 font-mono mt-0.5">
-                                    📡 นามเรียกขาน: <strong>{roommate.callsign}</strong>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  {roommate.phone && roommate.phone !== '-' ? (
-                                    <a
-                                      href={`tel:${roommate.phone}`}
-                                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
-                                    >
-                                      <Phone className="w-3.5 h-3.5" />
-                                      <span>โทรหาเมท: {roommate.phone}</span>
-                                    </a>
-                                  ) : (
-                                    <span className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 text-xs font-semibold">
-                                      ไม่มีเบอร์โทรเมท
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Roommate Medical & Emergency Health Card */}
-                              {!roommate.isHealthShared ? (
-                                <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
-                                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
-                                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>🔒 เมทเลือกไม่ประสงค์เปิดเผยข้อมูลสุขภาพส่วนบุคคล</span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                                    เพื่อนร่วมห้องของท่านขอสงวนสิทธิ์ไม่เปิดเผยรายละเอียดโรคประจำตัวหรืออาการแพ้ในระบบ หากเพื่อนร่วมห้องมีอาการผิดปกติ สามารถโทรติดต่อผู้ติดต่อฉุกเฉินของเมท ({roommate.emergencyPhone}) หรือแจ้ง Staff / ทีมแพทย์สนามได้ทันทีครับ
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                  <div className={`p-2.5 rounded-xl border ${
-                                    roommate.hasAlg
-                                      ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
-                                      : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                                  }`}>
-                                    <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                                      <UtensilsCrossed className={`w-3.5 h-3.5 ${roommate.hasAlg ? 'text-amber-400' : 'text-slate-400'}`} />
-                                      <span>ประวัติแพ้อาหาร/ยาของเมท:</span>
-                                    </div>
-                                    <div className={roommate.hasAlg ? 'font-black text-amber-300' : 'text-slate-400'}>
-                                      {roommate.hasAlg ? `⚠️ ${roommate.allergy}` : 'ปกติ (ไม่มีประวัติแพ้อาหาร/ยา)'}
-                                    </div>
-                                  </div>
-
-                                  <div className={`p-2.5 rounded-xl border ${
-                                    roommate.hasMed
-                                      ? 'bg-rose-950/40 border-rose-500/50 text-rose-200'
-                                      : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                                  }`}>
-                                    <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                                      <Stethoscope className={`w-3.5 h-3.5 ${roommate.hasMed ? 'text-rose-400' : 'text-slate-400'}`} />
-                                      <span>โรคประจำตัว/ข้อจำกัดของเมท:</span>
-                                    </div>
-                                    <div className={roommate.hasMed ? 'font-black text-rose-300' : 'text-slate-400'}>
-                                      {roommate.hasMed ? `🩺 ${roommate.medical}` : 'ปกติ (ไม่มีโรคประจำตัว)'}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Roommate Blood Group & Emergency Contact */}
-                              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-slate-400">🩸 กรุ๊ปเลือดเมท:</span>
-                                  <strong className="text-rose-300 font-mono text-sm">{roommate.bloodGroup}</strong>
-                                </div>
-
-                                {roommate.emergencyName !== '-' && (
-                                  <div className="flex items-center gap-1.5 text-[11px]">
-                                    <span className="text-slate-400">🚨 ติดต่อฉุกเฉินของเมท:</span>
-                                    <span className="text-white font-bold">{roommate.emergencyName}</span>
-                                    {roommate.emergencyPhone && roommate.emergencyPhone !== '-' && (
-                                      <a href={`tel:${roommate.emergencyPhone}`} className="text-sky-300 underline font-mono">
-                                        ({roommate.emergencyPhone})
-                                      </a>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              <p className="text-[11px] text-slate-400 italic">
-                                💡 หมายเหตุเพื่อความปลอดภัย: ช่วยกันดูแลสังเกตอาการของเพื่อนร่วมห้อง หากเกิดอาการแพ้หรือเจ็บป่วยฉุกเฉินยามวิกาล สามารถโทรหาผู้ติดต่อฉุกเฉินของเมท หรือแจ้งสายด่วนพยาบาลสนามได้ทันที
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="p-3 text-center text-xs text-slate-500 italic">
-                              เตียงเดี่ยวคู่ (ยังไม่พบเพื่อนร่วมห้องในระบบ หรืออยู่ระหว่างการลงทะเบียน)
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* 2. HEALTH PRIVACY & FIELD MEDICAL SUPPORT (2 Separate Side-by-Side Cards on Desktop, Stacked on Mobile) */}
+          {/* 1. COMPACT GROUP & ACCOMMODATION SUMMARY CARD -> Navigates to Dedicated /my-room Page */}
           {(() => {
-            const healthConsentInfo = getHealthConsentInfo(myRegistration);
+            const isMsuUser = isMsuInstitution(myRegistration?.institution);
+            const rawRoom = String(myRegistration?.room_assigned || '').trim();
+            const roomMatch = rawRoom.replace(/ชั้น\s*\d{1,2}/g, '').match(/(\d{2,4})/);
+            const roomNum = roomMatch ? roomMatch[1] : (!['', '-', 'ไม่มี', 'รอจัดห้อง', 'ยังไม่จัดห้อง', 'รอจัดสรร'].includes(rawRoom) ? rawRoom : null);
+            const myDormOptOut = Boolean(myRegistration?.dorm_opt_out);
+            const myKeyHeld = Boolean(myRegistration?.room_key_held);
+            const myKeyReturned = Boolean(myRegistration?.room_key_returned);
+            const roomBadgeText = roomNum
+              ? (/^\d/.test(roomNum) ? `ห้อง ${roomNum}` : roomNum)
+              : (isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่พักหอ (Admin บันทึก)' : 'รอ Admin จัดห้อง');
+
             return (
-              <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-stretch">
-                {/* LEFT CARD: 🛡️ Roommate Health Privacy */}
-                <div className="lg:col-span-6 p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-indigo-500/35 shadow-xl flex flex-col justify-between gap-4">
-                  <div className="space-y-3.5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center justify-center shrink-0">
-                          <ShieldCheck className="w-5 h-5 text-indigo-400" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm sm:text-base font-black text-white">
-                            🛡️ สิทธิ์ความเป็นส่วนตัวข้อมูลสุขภาพ (Roommate Health Privacy)
-                          </h3>
-                          <p className="text-[11px] text-slate-400">
-                            ควบคุมการแสดงข้อมูลโรคประจำตัวและประวัติการแพ้ให้เพื่อนร่วมห้อง
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`px-3 py-1 rounded-full text-[11px] font-black border ${
-                        consentHealthShare
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      }`}>
-                        {consentHealthShare ? '👁️ ยินยอมเปิดเผยให้เมททราบ' : '🔒 ปิดเป็นความลับ (ซ่อนจากเมท)'}
-                      </span>
-                      <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-900 text-slate-300 border border-slate-700">
-                        {healthConsentInfo.fullLabel}
-                      </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-[11px] sm:text-xs text-slate-300 leading-relaxed space-y-1.5">
-                      <p className="font-semibold text-sky-200">
-                        (ข้อมูลด้านสุขภาพเบื้องต้น เช่น อาการแพ้ต่างๆ โรคประจำตัว)
-                      </p>
-                      <p>
-                        ทางเราขออนุญาตให้เมทของท่านทราบในกรณีที่ท่านมีอาการอะไร เมทของท่านจะได้ช่วยเหลือท่านได้อย่างถูกต้องเพื่อความปลอดภัยของตัวท่าน ทางเราไม่ได้มีเจตนาที่จะเปิดเผยประวัติสุขภาพของท่านไปในทางที่ไม่ดีหรือสู่สาธารณะแต่อย่างใด หากท่านไม่ยินยอม สามารถตั้งค่าปิดได้ตลอดเวลา หรือแจ้ง Staff ทุกคนให้ปิดข้อมูลของท่านได้ทุกเมื่อครับ
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setConsentHealthShare(true)}
-                        className={`p-3 rounded-2xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
-                          consentHealthShare
-                            ? 'bg-emerald-500/15 border-emerald-500 text-white ring-2 ring-emerald-500/40 shadow-md'
-                            : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-                        }`}
-                      >
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
-                          consentHealthShare ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600 bg-slate-800'
-                        }`}>
-                          {consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-bold block text-emerald-300">
-                            ✅ ยินยอม / ตกลงเปิดเผยข้อมูลสุขภาพ
-                          </span>
-                          <span className="text-[11px] text-slate-300 block leading-snug">
-                            ยินยอมให้เพื่อนร่วมห้องและทีมงานทราบข้อมูลโรคประจำตัว/การแพ้ เพื่อความปลอดภัยและการปฐมพยาบาล
-                          </span>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setConsentHealthShare(false)}
-                        className={`p-3 rounded-2xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${
-                          !consentHealthShare
-                            ? 'bg-amber-500/15 border-amber-500 text-white ring-2 ring-amber-500/40 shadow-md'
-                            : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-                        }`}
-                      >
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
-                          !consentHealthShare ? 'bg-amber-500 border-amber-400 text-slate-950' : 'border-slate-600 bg-slate-800'
-                        }`}>
-                          {!consentHealthShare && <Check className="w-3.5 h-3.5 font-black stroke-[3]" />}
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-bold block text-amber-300">
-                            ❌ ปฏิเสธ / ไม่ยินยอมเปิดเผยข้อมูลสุขภาพ
-                          </span>
-                          <span className="text-[11px] text-slate-300 block leading-snug">
-                            ปิดเป็นความลับ ซ่อนจากเพื่อนร่วมห้อง • แสดงเฉพาะฝ่ายพยาบาลสนามเมื่อจำเป็นเท่านั้น
-                          </span>
-                        </div>
-                      </button>
-                    </div>
+              <div className="mt-6 p-4 sm:p-5 bg-gradient-to-r from-indigo-950/45 via-slate-900 to-sky-950/40 border border-indigo-500/35 rounded-3xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 border border-indigo-400/35 flex items-center justify-center shrink-0 text-indigo-300">
+                    <Building className="w-6 h-6" />
                   </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-800/80">
-                    <span className="text-[11px] text-slate-400">
-                      {consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
-                        ? '⚡ มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก: กรุณากดปุ่มบันทึกด้านขวา'
-                        : '✓ บันทึกการตั้งค่าเป็นปัจจุบันแล้ว'}
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={isSavingHealthConsent || consentHealthShare === isHealthSharedWithRoommate(myRegistration)}
-                      onClick={async () => {
-                        setIsSavingHealthConsent(true);
-                        try {
-                          const healthPayload = {
-                            share_health_with_roommate: consentHealthShare,
-                            health_consent_by: 'user',
-                            health_consent_at: new Date().toISOString()
-                          };
-                          if (onUpdateRegistration) {
-                            await onUpdateRegistration(myRegistration.id || myRegistration.user_id, healthPayload);
-                          } else {
-                            await DataService.updateRegistrationDetails(myRegistration.id || myRegistration.user_id, healthPayload);
-                          }
-                          triggerToast(
-                            consentHealthShare
-                              ? '✓ บันทึกสำเร็จ: ยินยอมเปิดเผยข้อมูลสุขภาพให้เพื่อนร่วมห้องทราบเพื่อความปลอดภัยแล้ว'
-                              : '✓ บันทึกสำเร็จ: ตั้งค่าไม่เปิดเผยข้อมูลสุขภาพให้เมททราบเรียบร้อย (เฉพาะทีมแพทย์สนามและ Staff ที่มองเห็นได้)',
-                            'success'
-                          );
-                        } catch (err) {
-                          console.error(err);
-                          triggerToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่าความเป็นส่วนตัว', 'error');
-                        } finally {
-                          setIsSavingHealthConsent(false);
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
-                        consentHealthShare !== isHealthSharedWithRoommate(myRegistration)
-                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                      }`}
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>{isSavingHealthConsent ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่า'}</span>
-                    </button>
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm sm:text-base font-black text-white">
+                        สถานะห้องนอน & กลุ่มฝึกของฉัน (Admin Assignment)
+                      </h2>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/80 border border-emerald-500/30 text-[10px] font-bold text-emerald-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        ข้อมูลเรียลไทม์
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className={`px-2.5 py-0.5 rounded-full font-bold border ${
+                        myRegistration.group_assigned
+                          ? 'bg-indigo-500/20 text-indigo-200 border-indigo-500/40'
+                          : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      }`}>
+                        🎯 กลุ่มฝึก: {myRegistration.group_assigned || 'รอจัดสรร'}
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded-full font-bold border ${
+                        roomNum
+                          ? 'bg-sky-500/20 text-sky-200 border-sky-500/40'
+                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}>
+                        🏠 ที่พัก: {roomBadgeText}
+                      </span>
+                      {roomNum && (
+                        <span className={`px-2.5 py-0.5 rounded-full font-bold border ${
+                          myKeyReturned
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : myKeyHeld
+                              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}>
+                          {myKeyReturned ? '✅ คืนกุญแจแล้ว' : myKeyHeld ? '🔑 ถือกุญแจอยู่' : '🔑 ยังไม่รับกุญแจ'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* RIGHT CARD: 🩺 Medical Equipment & Medicine Request */}
-                <div className="lg:col-span-6 p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-emerald-500/35 shadow-xl flex flex-col justify-between gap-4">
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateMyRoom && onNavigateMyRoom()}
+                    className="w-full lg:w-auto px-5 py-3 bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                  >
+                    <Building className="w-4 h-4 shrink-0" />
+                    <span>ดูรายละเอียดห้องพัก เพื่อนร่วมห้อง & สิทธิ์สุขภาพ →</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 2. FIELD MEDICAL SUPPORT REQUEST */}
+          {(() => {
+            return (
+              <div className="mt-6">
+                {/* Medical Equipment & Medicine Request */}
+                <div className="p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-emerald-500/35 shadow-xl flex flex-col justify-between gap-4">
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
                       <div className="flex items-center gap-2.5">
@@ -5568,235 +5242,57 @@ export default function RegisterView({
           </div>
           )}
 
-          {/* SECTION: ข้อความแจ้งเตือนจาก Admin (Admin Direct Messages) */}
-          {adminMessages.length > 0 ? (
-            <div className="mt-6 p-5 sm:p-6 rounded-3xl border bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-slate-800 shadow-xl space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                    <Bell className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-white text-sm sm:text-base">
-                        ข้อความและการแจ้งเตือนจากผู้ดูแลระบบ ({adminMessages.length} ข้อความ)
-                      </h3>
-                      {unreadMessagesCount > 0 && (
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
-                          {unreadMessagesCount} ยังไม่อ่าน
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400">ส่งตรงจาก Admin และฝ่ายงานต่างๆ ของโครงการ JRE 2027 (แยกตามฝ่ายและระบบ)</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-                  {unreadMessagesCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleMarkAllAdminMessagesRead}
-                      className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                      title="ทำเครื่องหมายว่าอ่านทุกข้อความแล้ว"
-                    >
-                      <CheckCheck className="w-3.5 h-3.5" />
-                      <span>อ่านทั้งหมดแล้ว</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowNotificationsModal(true)}
-                    className="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>เปิดแบบป๊อปอัป (แยกตามฝ่าย)</span>
-                  </button>
-                </div>
+          {/* COMPACT NOTIFICATION & MESSAGES BAR -> Opens Existing Popup Modal */}
+          <div className="mt-6 p-4 sm:p-5 rounded-3xl border bg-slate-950/85 border-purple-500/30 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                unreadMessagesCount > 0
+                  ? 'bg-purple-500/20 border-purple-400/50 text-purple-300'
+                  : 'bg-slate-900 border-slate-700 text-slate-400'
+              }`}>
+                <Bell className={`w-5 h-5 ${unreadMessagesCount > 0 ? 'animate-pulse text-purple-300' : ''}`} />
               </div>
-
-              <div className="space-y-3">
-                {adminMessages.map((msg, idx) => {
-                  const isUnread = !msg.read;
-                  const senderInfo = resolveMessageSenderInfo(msg);
-                  return (
-                    <div 
-                      key={msg.id || idx} 
-                      className={`p-4 rounded-2xl border transition-all text-xs space-y-2.5 ${
-                        isUnread
-                          ? 'bg-gradient-to-r from-purple-950/30 via-slate-900 to-slate-900 border-purple-500/50 shadow-md ring-1 ring-purple-500/20'
-                          : 'bg-slate-900/90 border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-start sm:items-center justify-between gap-2 text-[11px] mb-1">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-purple-300 text-xs sm:text-sm">{senderInfo.senderName}</span>
-                            <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded text-[10px] font-bold">
-                              {senderInfo.roleBadge}
-                            </span>
-                            {isUnread ? (
-                              <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
-                                🔴 ยังไม่อ่าน
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold">
-                                ✓ อ่านแล้ว
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-2 py-0.5 bg-purple-500/15 text-purple-300 border border-purple-500/30 rounded text-[10px] font-semibold">
-                              ระบบ: {senderInfo.systemName}
-                            </span>
-                            {msg.title && (
-                              <span className="text-[11px] font-bold text-slate-200">
-                                • เรื่อง: {msg.title}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-slate-500 text-[10px] flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          {msg.created_at ? new Date(msg.created_at).toLocaleString('th-TH') : ''}
-                        </span>
-                      </div>
-
-                      <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line select-text">
-                        {msg.text}
-                      </div>
-
-                      {(msg.action_url || (typeof msg.text === 'string' && msg.text.includes('https://m.me/'))) && (
-                        <div className="p-3 bg-blue-950/60 border border-blue-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                          <div className="flex items-center gap-2 min-w-0 text-blue-200 font-bold">
-                            <MessageSquare className="w-4 h-4 text-blue-400 shrink-0" />
-                            <span className="truncate">
-                              แชทกลุ่มผู้เข้าร่วมโครงการ JRE 2027 (ทุกคนต้องกดเข้ากลุ่ม)
-                            </span>
-                          </div>
-                          <a
-                            href={msg.action_url || OFFICIAL_GROUP_CHAT_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow-md transition-all"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            <span>{msg.action_label || '💬 กดเข้าร่วมแชทกลุ่ม JRE 2027 ที่นี่'}</span>
-                          </a>
-                        </div>
-                      )}
-
-                      {msg.attachment_url && (
-                        <div className="p-2.5 bg-slate-950/90 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-2 min-w-0 text-indigo-300">
-                            <FileText className="w-3.5 h-3.5 shrink-0" />
-                            <span className="font-semibold truncate">
-                              เอกสารแนบ: {msg.attachment_name || 'ไฟล์แนบจากผู้ดูแลระบบ'}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setPreviewDocModal({
-                              title: msg.title || 'เอกสารแนบจากข้อความแจ้งเตือน',
-                              fileName: msg.attachment_name || 'เอกสารแนบ',
-                              fileUrl: msg.attachment_url
-                            })}
-                            className="px-2.5 py-1 bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>เปิดดูไฟล์</span>
-                          </button>
-                        </div>
-                      )}
-
-                      {(() => {
-                        const msgUnpaid = getUnpaidSlipTarget(myRegistration);
-                        const isPaymentMsg = Boolean(
-                          msg.request_payment ||
-                          ['staff_accommodation', 'round_2_payment', 'urgent_round2_deadline', 'payment_reminder', 'installment'].includes(msg.msg_type) ||
-                          /ค้างชำระ|งวดที่\s*2|งวด\s*2|ค่าที่พัก|ส่งสลิป|โอนชำระ|แนบสลิป/.test(`${msg.title || ''} ${msg.text || ''}`)
-                        );
-                        if (!msgUnpaid || msgUnpaid.isPaid || !msgUnpaid.expectedAmount || !isPaymentMsg) return null;
-                        return (
-                          <div className="p-3 bg-gradient-to-r from-amber-950/60 via-slate-900 to-orange-950/50 border border-amber-500/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                            <div className="flex items-center gap-2 min-w-0 text-amber-200 font-bold">
-                              <CreditCard className="w-4 h-4 text-amber-400 shrink-0" />
-                              <span className="truncate">
-                                แนบสลิปยอดค้าง: {msgUnpaid.label} • SCB 594-264865-5
-                              </span>
-                            </div>
-                            <label className={`px-3.5 py-2 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shrink-0 shadow cursor-pointer transition-all active:scale-95 ${(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? 'opacity-50 pointer-events-none' : ''}`}>
-                              {(isUploadingRound1 || isUploadingRound2 || isUploadingSlip) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                              <span>📤 ส่งสลิป {msgUnpaid.expectedAmount} บาท</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => (
-                                  msgUnpaid.isInstallmentRound2
-                                    ? handleUploadInstallmentSlip(e, 2)
-                                    : msgUnpaid.installmentRound === 1
-                                      ? handleUploadInstallmentSlip(e, 1)
-                                      : handleUploadPaymentSlip(e)
-                                )}
-                                className="hidden"
-                              />
-                            </label>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="flex items-center justify-between pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAdminMessageRead(msg.id)}
-                          className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                            isUnread
-                              ? 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40'
-                              : 'bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border border-slate-700'
-                          }`}
-                        >
-                          {isUnread ? (
-                            <>
-                              <CheckCheck className="w-3.5 h-3.5 text-purple-400" />
-                              <span>ทำเครื่องหมายว่าอ่านแล้ว</span>
-                            </>
-                          ) : (
-                            <>
-                              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-                              <span>เปลี่ยนเป็นยังไม่อ่าน</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAdminMessage(msg.id)}
-                          className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl font-medium flex items-center gap-1 transition-all cursor-pointer"
-                          title="ลบข้อความแจ้งเตือนนี้"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>ลบ</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-bold text-white text-sm sm:text-base">
+                    ข้อความและการแจ้งเตือนจากผู้ดูแลระบบ ({adminMessages.length} ข้อความ)
+                  </h3>
+                  {unreadMessagesCount > 0 && (
+                    <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black animate-pulse">
+                      {unreadMessagesCount} ยังไม่อ่าน
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 truncate">
+                  {adminMessages.length > 0
+                    ? `ส่งตรงจาก Admin และฝ่ายงานต่างๆ ของโครงการ JRE 2027 • ล่าสุด: ${String(adminMessages[0]?.title || adminMessages[0]?.text || '').slice(0, 70)}`
+                    : 'ยังไม่มีข้อความแจ้งเตือนใหม่จากผู้ดูแลระบบ'}
+                </p>
               </div>
             </div>
-          ) : (
-            <div className="mt-6 p-4 rounded-2xl border border-slate-800 bg-slate-950/40 flex items-center justify-between gap-3 text-xs text-slate-400">
-              <div className="flex items-center gap-2.5">
-                <Bell className="w-4 h-4 text-slate-500" />
-                <span>กล่องข้อความและการแจ้งเตือน: ไม่มีข้อความใหม่จากผู้ดูแลระบบ</span>
-              </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              {unreadMessagesCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllAdminMessagesRead}
+                  className="px-3 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="ทำเครื่องหมายว่าอ่านทุกข้อความแล้ว"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  <span>อ่านทั้งหมดแล้ว</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowNotificationsModal(true)}
-                className="text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+                className="px-4 py-2 bg-purple-600/25 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95"
               >
-                เปิดกล่องข้อความ
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>📬 เปิดกล่องข้อความ ({adminMessages.length})</span>
               </button>
             </div>
-          )}
+          </div>
 
           {/* SECTION: รายการเอกสารที่ต้องนำส่ง (Requested Documents) */}
           {requestedDocs.length > 0 && (
@@ -8759,7 +8255,7 @@ export default function RegisterView({
               ) : <div />}
 
               <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
-                {(isStaffPortal || isStaff) && (
+                {(isStaffPortal || isStaff) ? (
                   <button
                     type="button"
                     onClick={handleDirectStaffSave}
@@ -8768,6 +8264,16 @@ export default function RegisterView({
                   >
                     <Save className="w-5 h-5" />
                     <span>{isSubmitting ? 'กำลังบันทึกข้อมูล Staff เข้าระบบ...' : '💾 บันทึกข้อมูล Staff เข้าระบบ & ออกบัตรประจำตัว ID Card ทันที'}</span>
+                  </button>
+                ) : (isEditing && myRegistration) && (
+                  <button
+                    type="button"
+                    onClick={handleDirectProfileEditSave}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-2xl shadow-xl shadow-emerald-500/30 transition-all active:scale-95 text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-5 h-5" />
+                    <span>{isSubmitting ? 'กำลังบันทึกการแก้ไข...' : '💾 บันทึกการแก้ไขข้อมูล & รูปบัตร ID Card ทันที'}</span>
                   </button>
                 )}
 
@@ -8880,6 +8386,14 @@ export default function RegisterView({
                     </span>
                   )}
                 </label>
+                {isShirtOrderLocked && (
+                  <div className="mb-3 p-3 rounded-2xl bg-amber-950/40 border border-amber-500/45 text-amber-200 text-xs flex items-center gap-2.5">
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      <strong>🔒 ล็อคการแก้ไขไซส์เสื้อแล้ว:</strong> ท่านได้สั่งเสื้อไซส์ <strong className="text-white">{myRegistration?.shirt_size}</strong> ไปเรียบร้อยแล้ว จึงไม่สามารถเปลี่ยนไซส์เสื้อได้ (หากมีเหตุจำเป็นกรุณาติดต่อ Admin)
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                   {SHIRT_SIZE_OPTIONS.map((opt) => {
                     const isSelected = shirtSize === opt.value;
@@ -8893,11 +8407,15 @@ export default function RegisterView({
                       <button
                         type="button"
                         key={opt.value}
+                        disabled={isShirtOrderLocked}
                         onClick={() => {
+                          if (isShirtOrderLocked) return;
                           setShirtSize(opt.value);
                           clearFieldError('shirtSize');
                         }}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                          isShirtOrderLocked ? 'cursor-not-allowed opacity-65' : 'cursor-pointer'
+                        } ${
                           isSelected
                             ? 'bg-orange-500/20 border-orange-500 ring-2 ring-orange-500/30 text-white shadow-md'
                             : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
@@ -8989,11 +8507,15 @@ export default function RegisterView({
                             <button
                               key={preset}
                               type="button"
+                              disabled={isShirtOrderLocked}
                               onClick={() => {
+                                if (isShirtOrderLocked) return;
                                 setCustomShirtNote(preset);
                                 clearFieldError('customShirtNote');
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                                isShirtOrderLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                              } ${
                                 customShirtNote === preset
                                   ? 'bg-amber-500 text-slate-950 border-amber-300'
                                   : 'bg-slate-900 hover:bg-slate-800 text-amber-200 border-slate-700'
@@ -9007,13 +8529,15 @@ export default function RegisterView({
                         <input
                           id="field-customShirtNote"
                           type="text"
+                          disabled={isShirtOrderLocked}
                           value={customShirtNote}
                           onChange={(e) => {
+                            if (isShirtOrderLocked) return;
                             setCustomShirtNote(e.target.value);
                             if (e.target.value.trim()) clearFieldError('customShirtNote');
                           }}
                           placeholder="พิมพ์ระบุไซส์หรือรอบอกที่ต้องการ เช่น 6XL รอบอก 54 นิ้ว ความยาว 32 นิ้ว..."
-                          className="w-full px-4 py-2.5 bg-slate-950 border border-amber-500/50 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className={`w-full px-4 py-2.5 bg-slate-950 border border-amber-500/50 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 ${isShirtOrderLocked ? 'opacity-65 cursor-not-allowed' : ''}`}
                         />
 
                         {fieldErrors.customShirtNote && (
@@ -9154,7 +8678,9 @@ export default function RegisterView({
               </div>
 
               {/* Quick Staff Toggle inside Step 3 Summary */}
-              <label className={`p-3 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-all select-none ${
+              <label className={`p-3 rounded-2xl border flex items-center justify-between gap-3 transition-all select-none ${
+                (isShirtOrderLocked || (isEditing && hasAnyPaymentApproved && !isSuperEditor)) ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
+              } ${
                 isStaff
                   ? 'bg-fuchsia-950/60 border-fuchsia-400 ring-1 ring-fuchsia-500/40'
                   : 'bg-slate-900/70 border-slate-800 hover:border-fuchsia-500/40'
@@ -9162,9 +8688,10 @@ export default function RegisterView({
                 <div className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
+                    disabled={isShirtOrderLocked || (isEditing && hasAnyPaymentApproved && !isSuperEditor)}
                     checked={isStaff}
                     onChange={(e) => handleToggleStaffMode(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 text-fuchsia-500 focus:ring-fuchsia-500 cursor-pointer accent-fuchsia-500 shrink-0"
+                    className="w-4 h-4 rounded border-slate-600 text-fuchsia-500 focus:ring-fuchsia-500 cursor-pointer accent-fuchsia-500 shrink-0 disabled:cursor-not-allowed"
                   />
                   <span className="text-xs font-bold text-white">
                     🛠️ ติ๊กเลือกหากท่านเป็น <strong className="text-fuchsia-300">Staff โครงการ</strong> (Staff มมส จ่ายเฉพาะค่าเสื้อ <strong className="text-amber-300">280 บาท</strong> ไม่มีแบ่งจ่าย 2 งวด • Staff มข/ต่างมหาลัย จ่ายค่าเสื้อ <strong className="text-amber-300">280 บาท</strong> + ค่าห้องพัก <strong className="text-sky-300">200 บาท</strong> แบ่งจ่าย 2 งวดได้)
@@ -9332,84 +8859,108 @@ export default function RegisterView({
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
                   {/* Slip Preview Box */}
-                  <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
-                    {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) ? (
+                  {(() => {
+                    const currentSlipUrl = paymentPlan === 'full'
+                      ? (formSlipFull || (isEditing ? myRegistration?.payment_slip_url : ''))
+                      : (formSlipRound1 || (isEditing ? myRegistration?.installment_1_slip_url : ''));
+                    const isSlipLocked = Boolean(
+                      isEditing && myRegistration && !isSuperEditor &&
+                      (paymentPlan === 'full' ? isFullSlipLocked : isRound1SlipLocked)
+                    );
+                    return (
                       <>
-                        <img 
-                          src={paymentPlan === 'full' ? formSlipFull : formSlipRound1} 
-                          alt="สลิปโอนเงิน" 
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-[10px] text-white font-bold">เปลี่ยนสลิป</span>
+                        <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                          {currentSlipUrl ? (
+                            <>
+                              <img 
+                                src={currentSlipUrl} 
+                                alt="สลิปโอนเงิน" 
+                                className="w-full h-full object-cover"
+                              />
+                              {!isSlipLocked && (
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <span className="text-[10px] text-white font-bold">เปลี่ยนสลิป</span>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-center p-2 text-slate-500">
+                              <FileText className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                              <span className="text-[10px] block">ยังไม่แนบสลิป</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Upload Input & Actions */}
+                        <div className="flex-1 w-full space-y-2">
+                          {isSlipLocked ? (
+                            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                              <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>
+                                <strong>🔒 สลิปโอนเงินนี้ได้รับการตรวจสอบและอนุมัติแล้ว</strong> — ไม่สามารถแก้ไขหรือลบสลิปได้
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
+                                (paymentPlan === 'full' ? isProcessingFormSlipFull : isProcessingFormSlip) ? 'opacity-50 pointer-events-none' : ''
+                              }`}>
+                                {(paymentPlan === 'full' ? isProcessingFormSlipFull : isProcessingFormSlip) ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>กำลังสแกน OCR สลิป...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>
+                                      {currentSlipUrl 
+                                        ? 'เปลี่ยนไฟล์สลิป' 
+                                        : `อัปโหลดสลิปโอนเงิน (${paymentPlan === 'full' ? `${feeInfo.totalFee} บ.` : `${feeInfo.round1Amount} บ.`})`}
+                                    </span>
+                                  </>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={paymentPlan === 'full' ? handleFormSlipFullChange : handleFormSlipRound1Change}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (paymentPlan === 'full') {
+                                      setFormSlipFull('');
+                                      setFormSlipFullFileName('');
+                                      setSlipOcrFull(null);
+                                    } else {
+                                      setFormSlipRound1('');
+                                      setFormSlipRound1FileName('');
+                                      setSlipOcrRound1(null);
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>ลบสลิป</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {(paymentPlan === 'full' ? formSlipFullFileName : formSlipRound1FileName) && (
+                            <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span className="truncate max-w-xs">{paymentPlan === 'full' ? formSlipFullFileName : formSlipRound1FileName}</span>
+                            </p>
+                          )}
                         </div>
                       </>
-                    ) : (
-                      <div className="text-center p-2 text-slate-500">
-                        <FileText className="w-8 h-8 mx-auto mb-1 opacity-50" />
-                        <span className="text-[10px] block">ยังไม่แนบสลิป</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Upload Input & Actions */}
-                  <div className="flex-1 w-full space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
-                        (paymentPlan === 'full' ? isProcessingFormSlipFull : isProcessingFormSlip) ? 'opacity-50 pointer-events-none' : ''
-                      }`}>
-                        {(paymentPlan === 'full' ? isProcessingFormSlipFull : isProcessingFormSlip) ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>กำลังสแกน OCR สลิป...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>
-                              {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) 
-                                ? 'เปลี่ยนไฟล์สลิป' 
-                                : `อัปโหลดสลิปโอนเงิน (${paymentPlan === 'full' ? `${feeInfo.totalFee} บ.` : `${feeInfo.round1Amount} บ.`})`}
-                            </span>
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={paymentPlan === 'full' ? handleFormSlipFullChange : handleFormSlipRound1Change}
-                          className="hidden"
-                        />
-                      </label>
-
-                      {(paymentPlan === 'full' ? formSlipFull : formSlipRound1) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (paymentPlan === 'full') {
-                              setFormSlipFull('');
-                              setFormSlipFullFileName('');
-                              setSlipOcrFull(null);
-                            } else {
-                              setFormSlipRound1('');
-                              setFormSlipRound1FileName('');
-                              setSlipOcrRound1(null);
-                            }
-                          }}
-                          className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>ลบสลิป</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {(paymentPlan === 'full' ? formSlipFullFileName : formSlipRound1FileName) && (
-                      <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span className="truncate max-w-xs">{paymentPlan === 'full' ? formSlipFullFileName : formSlipRound1FileName}</span>
-                      </p>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD */}
@@ -10034,74 +9585,93 @@ export default function RegisterView({
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
                   {/* Slip Preview Box */}
-                  <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
-                    {formSlipRound2 ? (
+                  {(() => {
+                    const currentSlip2Url = formSlipRound2 || (isEditing ? myRegistration?.installment_2_slip_url : '');
+                    const isSlip2Locked = Boolean(isEditing && myRegistration && !isSuperEditor && isRound2SlipLocked);
+                    return (
                       <>
-                        <img 
-                          src={formSlipRound2} 
-                          alt="สลิปโอนเงินรอบที่ 2" 
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-[10px] text-white font-bold">เปลี่ยนสลิป</span>
+                        <div className="w-24 h-28 rounded-2xl bg-slate-900 border-2 border-dashed border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                          {currentSlip2Url ? (
+                            <>
+                              <img 
+                                src={currentSlip2Url} 
+                                alt="สลิปโอนเงินรอบที่ 2" 
+                                className="w-full h-full object-cover"
+                              />
+                              {!isSlip2Locked && (
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <span className="text-[10px] text-white font-bold">เปลี่ยนสลิป</span>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-center p-2 text-slate-500">
+                              <FileText className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                              <span className="text-[10px] block">ยังไม่แนบสลิป</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Upload Input & Actions */}
+                        <div className="flex-1 w-full space-y-2">
+                          {isSlip2Locked ? (
+                            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                              <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>
+                                <strong>🔒 สลิปโอนเงินงวดที่ 2 ได้รับการตรวจสอบและอนุมัติแล้ว</strong> — ไม่สามารถแก้ไขหรือลบสลิปได้
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
+                                isProcessingFormSlipRound2 ? 'opacity-50 pointer-events-none' : ''
+                              }`}>
+                                {isProcessingFormSlipRound2 ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>กำลังสแกน OCR สลิป...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>{currentSlip2Url ? 'เปลี่ยนไฟล์สลิป' : `อัปโหลดสลิปโอนเงิน (${feeInfo.round2Amount} บ.)`}</span>
+                                  </>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={handleFormSlipRound2Change}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              {formSlipRound2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormSlipRound2('');
+                                    setFormSlipRound2FileName('');
+                                    setSlipOcrRound2(null);
+                                  }}
+                                  className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>ลบสลิป</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {formSlipRound2FileName && (
+                            <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span className="truncate max-w-xs">{formSlipRound2FileName}</span>
+                            </p>
+                          )}
                         </div>
                       </>
-                    ) : (
-                      <div className="text-center p-2 text-slate-500">
-                        <FileText className="w-8 h-8 mx-auto mb-1 opacity-50" />
-                        <span className="text-[10px] block">ยังไม่แนบสลิป</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Upload Input & Actions */}
-                  <div className="flex-1 w-full space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-md ${
-                        isProcessingFormSlipRound2 ? 'opacity-50 pointer-events-none' : ''
-                      }`}>
-                        {isProcessingFormSlipRound2 ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>กำลังสแกน OCR สลิป...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>{formSlipRound2 ? 'เปลี่ยนไฟล์สลิป' : `อัปโหลดสลิปโอนเงิน (${feeInfo.round2Amount} บ.)`}</span>
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={handleFormSlipRound2Change}
-                          className="hidden"
-                        />
-                      </label>
-
-                      {formSlipRound2 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormSlipRound2('');
-                            setFormSlipRound2FileName('');
-                            setSlipOcrRound2(null);
-                          }}
-                          className="px-3 py-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>ลบสลิป</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {formSlipRound2FileName && (
-                      <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span className="truncate max-w-xs">{formSlipRound2FileName}</span>
-                      </p>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 🔍 REAL-TIME SLIP OCR INFORMATION CARD FOR ROUND 2 */}

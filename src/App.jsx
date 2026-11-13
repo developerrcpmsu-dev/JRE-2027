@@ -16,6 +16,7 @@ import MerchandiseView from './views/MerchandiseView';
 import AuthPortalView from './views/AuthPortalView';
 import UserProfileView from './views/UserProfileView';
 import IDCardView from './views/IDCardView';
+import MyRoomView from './views/MyRoomView';
 import SecurityAuditView from './views/SecurityAuditView';
 import GroupChatView from './views/GroupChatView';
 import { DataService, supabase, isSupabaseConfigured, subscribeToRealtimeChanges, broadcastRealtimeChange } from './supabase';
@@ -58,6 +59,9 @@ export default function App() {
       sub = 'members';
     } else if (newTab === 'id-card' || newTab === 'badge') {
       main = 'id-card';
+      sub = null;
+    } else if (newTab === 'my-room' || newTab === 'room-status' || newTab === 'dorm-status' || newTab === 'my-group' || newTab === 'assignment') {
+      main = 'my-room';
       sub = null;
     } else if (newTab === 'dashboard') {
       main = 'register';
@@ -1363,7 +1367,7 @@ export default function App() {
       <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-5 2xl:py-6 transition-all ${
         currentTab === 'admin'
           ? 'w-full max-w-none px-2 sm:px-4 lg:px-6 2xl:px-8'
-          : (currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(myRegistration)))
+          : ((currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(myRegistration))) || currentTab === 'my-room')
             ? 'w-full max-w-[1680px] px-3 sm:px-5 lg:px-8 2xl:px-10 overflow-x-hidden'
             : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
       }`}>
@@ -1415,6 +1419,7 @@ export default function App() {
             onSubRouteChange={(sub) => {
               setCurrentTab('register', sub);
             }}
+            onNavigateMyRoom={() => setCurrentTab('my-room')}
           />
         )}
 
@@ -1548,6 +1553,18 @@ export default function App() {
           <IDCardView
             user={user}
             registration={myRegistration}
+            onNavigateDashboard={() => setCurrentTab('dashboard')}
+            onNavigateRegister={() => setCurrentTab('register')}
+          />
+        )}
+
+        {currentTab === 'my-room' && (
+          <MyRoomView
+            user={user}
+            myRegistration={myRegistration}
+            allRegistrations={registrations}
+            onUpdateRegistration={handleUpdateRegistration}
+            onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             onNavigateDashboard={() => setCurrentTab('dashboard')}
             onNavigateRegister={() => setCurrentTab('register')}
           />

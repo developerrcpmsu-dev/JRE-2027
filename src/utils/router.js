@@ -98,6 +98,10 @@ export function parseCurrentRoute() {
   if (first === 'id-card' || first === 'badge' || first === 'badge-card') {
     return { mainTab: 'id-card', subRoute: null, canonicalPath: '/id-card' };
   }
+
+  if (first === 'my-room' || first === 'room-status' || first === 'dorm-status' || first === 'my-group' || first === 'assignment') {
+    return { mainTab: 'my-room', subRoute: null, canonicalPath: '/my-room' };
+  }
   if (
     first === 'staff-register' ||
     first === 'staff-signup' ||
@@ -400,6 +404,12 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'id-card':
     case 'badge':
       return '/id-card';
+    case 'my-room':
+    case 'room-status':
+    case 'dorm-status':
+    case 'my-group':
+    case 'assignment':
+      return '/my-room';
     case 'pr':
       return '/announcements/pr';
     case 'orders':
