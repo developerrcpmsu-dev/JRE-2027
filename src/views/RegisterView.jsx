@@ -2869,29 +2869,6 @@ export default function RegisterView({
           </div>
         </section>
 
-        {/* Digital ID Card generated directly from the applicant record */}
-        <section className="rounded-3xl border border-orange-500/25 bg-gradient-to-br from-slate-900 via-[#0b1f3a] to-slate-950 p-4 shadow-2xl sm:p-6">
-          <div className="mb-4 flex flex-col gap-2 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">JRE 2027 Participant Badge</p>
-              </div>
-              <h2 className="mt-1 text-lg font-black text-white sm:text-xl">บัตรประจำตัวดิจิทัลของฉัน</h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold text-emerald-300">
-                <CheckCircle2 className="h-3.5 w-3.5" /> ข้อมูลเชื่อมต่อแล้ว
-              </span>
-            </div>
-          </div>
-          <IDCardPreview 
-            registration={myRegistration} 
-            user={user} 
-            defaultOrientation="portrait"
-            allowOrientationToggle={true}
-          />
-        </section>
-
         {/* Top Header Profile Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-slate-800 pb-6">
