@@ -332,7 +332,10 @@ export default function RegisterView({
   paymentConfig,
   subRoute,
   onSubRouteChange,
-  onNavigateMyRoom
+  onNavigateMyRoom,
+  onNavigateMedicalSupport,
+  onNavigateMyEmr,
+  onNavigateMyPayment
 }) {
   // In-app Popup Modal for Confirmations & Alerts
   const { confirmModalProps, askConfirm } = useConfirmModal();
@@ -4487,345 +4490,87 @@ export default function RegisterView({
             );
           })()}
 
-          {/* 2. FIELD MEDICAL SUPPORT REQUEST */}
+          {/* 2. COMPACT FIELD MEDICAL SUPPORT SUMMARY CARD -> /medical-support */}
           {(() => {
+            const savedMedReq = String(getMedicalEquipmentNeeded(myRegistration) || '').trim();
             return (
-              <div className="mt-6">
-                {/* Medical Equipment & Medicine Request */}
-                <div className="p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-emerald-500/35 shadow-xl flex flex-col justify-between gap-4">
-                  <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-                          <Stethoscope className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="font-black text-white text-sm sm:text-base flex flex-wrap items-center gap-2">
-                            <span>🩺 คำขอเตรียมยา / เวชภัณฑ์ภาคสนาม</span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Medical Support
-                            </span>
-                          </h3>
-                          <p className="text-[11px] text-slate-400">
-                            แจ้งรายการยาหรือเวชภัณฑ์ที่ต้องการให้ทีมแพทย์สนามและฝ่ายพยาบาลจัดเตรียมล่วงหน้า (ทั้งผู้มีโรคประจำตัวและคนปกติ)
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <textarea
-                        rows="4"
-                        value={userMedicalEquipment}
-                        onChange={e => setUserMedicalEquipment(e.target.value)}
-                        placeholder="เช่น ขอยาพาราเซตามอลสำรอง, ขอยาทากันยุง / คาลาไมน์แก้คัน, ยาแก้แพ้แก้คัดจมูก, ผงเกลือแร่ ORS, ผ้าพันแผล หรือระบุยาประจำตัวที่ต้องนำติดตัวมา"
-                        className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                      />
-
-                      <div className="space-y-2 p-3 rounded-2xl bg-slate-900/70 border border-slate-800/90">
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-semibold">
-                          <span>💡 คำแนะนำ:</span>
-                          <span className="text-slate-400 font-normal">กดปุ่มเพื่อเพิ่มรายการอัตโนมัติ</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {[
-                            'ยาพาราเซตามอล',
-                            'ยาแก้แพ้ / คัดจมูก',
-                            'ผงเกลือแร่ ORS',
-                            'ยาทากันยุง / คาลาไมน์',
-                            'พลาสเตอร์ยา / ทำแผล'
-                          ].map(tag => (
-                            <button
-                              key={tag}
-                              type="button"
-                              onClick={() => {
-                                const cur = userMedicalEquipment.trim();
-                                if (!cur.includes(tag)) {
-                                  setUserMedicalEquipment(cur ? `${cur}, ${tag}` : tag);
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500/40 border border-slate-700 text-[11px] font-medium text-slate-200 cursor-pointer transition-colors"
-                            >
-                              + {tag}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+              <div className="mt-4 p-4 sm:p-5 bg-gradient-to-r from-emerald-950/40 via-slate-900 to-teal-950/35 border border-emerald-500/35 rounded-3xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-400/35 flex items-center justify-center shrink-0 text-emerald-300">
+                    <Stethoscope className="w-6 h-6" />
                   </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-800/80">
-                    <span className="text-[11px] text-slate-400">
-                      {userMedicalEquipment !== (getMedicalEquipmentNeeded(myRegistration) || '')
-                        ? '⚡ มีคำขอที่ยังไม่ได้บันทึก: กรุณากดปุ่มบันทึกด้านขวา'
-                        : '✓ ข้อมูลคำขอเตรียมยาเป็นปัจจุบันแล้ว'}
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={isSavingMedEquip || userMedicalEquipment === (getMedicalEquipmentNeeded(myRegistration) || '')}
-                      onClick={async () => {
-                        setIsSavingMedEquip(true);
-                        try {
-                          const targetId = myRegistration.id || myRegistration.user_id;
-                          const val = userMedicalEquipment.trim();
-                          if (onUpdateRegistration) {
-                            await onUpdateRegistration(targetId, { medical_equipment_needed: val });
-                          } else {
-                            await DataService.updateRegistrationDetails(targetId, { medical_equipment_needed: val });
-                          }
-                          triggerToast('✓ บันทึกคำขอเตรียมยาและเวชภัณฑ์เรียบร้อยแล้ว คณะทำงานและทีมแพทย์สนามจะจัดเตรียมไว้ให้ครับ', 'success');
-                        } catch (err) {
-                          console.error(err);
-                          triggerToast('เกิดข้อผิดพลาดในการบันทึกคำขอเตรียมยา', 'error');
-                        } finally {
-                          setIsSavingMedEquip(false);
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
-                        userMedicalEquipment !== (getMedicalEquipmentNeeded(myRegistration) || '')
-                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                      }`}
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>{isSavingMedEquip ? 'กำลังบันทึก...' : '💾 บันทึกคำขอเตรียมยา'}</span>
-                    </button>
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm sm:text-base font-black text-white">
+                        🩺 คำขอเตรียมยา / เวชภัณฑ์ภาคสนาม (Medical Support)
+                      </h2>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        savedMedReq
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}>
+                        {savedMedReq ? '✓ บันทึกคำขอแล้ว' : 'ยังไม่ได้ระบุคำขอเพิ่มเติม'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 truncate max-w-3xl">
+                      {savedMedReq
+                        ? `รายการที่แจ้งไว้: ${savedMedReq}`
+                        : 'แจ้งรายการยาหรือเวชภัณฑ์ที่ต้องการให้ทีมแพทย์สนามและฝ่ายพยาบาลจัดเตรียมล่วงหน้าได้ทุกเมื่อ'}
+                    </p>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateMedicalSupport && onNavigateMedicalSupport()}
+                    className="w-full lg:w-auto px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                  >
+                    <Stethoscope className="w-4 h-4 shrink-0" />
+                    <span>จัดการ / บันทึกคำขอเตรียมยา →</span>
+                  </button>
                 </div>
               </div>
             );
           })()}
 
-          {/* 3. DEDICATED FIELD EMR RECORDS SECTION (Search, Filter & < 0 > Pagination) */}
+          {/* 3. COMPACT FIELD EMR RECORDS SUMMARY CARD -> /my-emr */}
           {(() => {
-            const EMR_PAGE_SIZE = 4;
-            const q = emrSearchQuery.trim().toLowerCase();
-            const filteredLogs = (medDispenseLogs || []).filter(log => {
-              const medsText = String(log.medicines_dispensed || log.medications_dispensed || '').trim();
-              const notesText = String(log.medical_notes || '').trim();
-              if (emrFilterType === 'with_meds' && (!medsText || medsText === '-')) return false;
-              if (emrFilterType === 'with_notes' && !notesText) return false;
-              if (!q) return true;
-              return [
-                log.symptoms,
-                log.chief_complaint,
-                medsText,
-                log.dosage_instruction,
-                log.instructions,
-                log.dispenser_name,
-                log.dispenser_callsign,
-                notesText
-              ].some(val => String(val || '').toLowerCase().includes(q));
-            });
-
-            const totalFiltered = filteredLogs.length;
-            const totalPages = totalFiltered === 0 ? 0 : Math.ceil(totalFiltered / EMR_PAGE_SIZE);
-            const currentPage = totalPages === 0 ? 0 : Math.min(Math.max(1, emrPage), totalPages);
-            const startIdx = totalPages === 0 ? 0 : (currentPage - 1) * EMR_PAGE_SIZE;
-            const pagedLogs = totalPages === 0 ? [] : filteredLogs.slice(startIdx, startIdx + EMR_PAGE_SIZE);
-
+            const totalLogs = (medDispenseLogs || []).length;
+            const latestLog = totalLogs > 0 ? medDispenseLogs[0] : null;
             return (
-              <div className="mt-6 p-4 sm:p-6 rounded-3xl bg-slate-950/90 border border-rose-500/35 shadow-xl space-y-4">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/30">
-                      <HeartPulse className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm sm:text-base font-black text-white flex flex-wrap items-center gap-2">
-                        <span>📋 ประวัติการรับยาและเวชระเบียนสนามของคุณ (Field EMR Records)</span>
-                      </h3>
-                      <p className="text-[11px] text-slate-400">
-                        บันทึกอาการ การจ่ายยา และคำแนะนำจากทีมแพทย์/พยาบาลสนามแบบเรียลไทม์ • ค้นหาและกรองประวัติได้ทันที
-                      </p>
-                    </div>
+              <div className="mt-4 p-4 sm:p-5 bg-gradient-to-r from-rose-950/40 via-slate-900 to-indigo-950/35 border border-rose-500/35 rounded-3xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-rose-500/20 border border-rose-400/35 flex items-center justify-center shrink-0 text-rose-300">
+                    <HeartPulse className="w-6 h-6" />
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[11px] font-mono font-bold px-3 py-1 rounded-full bg-slate-900 text-slate-200 border border-slate-700">
-                      {totalFiltered === medDispenseLogs.length
-                        ? `ทั้งหมด ${medDispenseLogs.length} รายการ`
-                        : `พบ ${totalFiltered} / ${medDispenseLogs.length} รายการ`}
-                    </span>
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm sm:text-base font-black text-white">
+                        📋 ประวัติการรับยาและเวชระเบียนสนาม (Field EMR Records)
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-950/80 border border-rose-500/40 text-[10px] font-mono font-bold text-rose-200">
+                        {isLoadingMedLogs ? 'กำลังโหลด...' : `ทั้งหมด ${totalLogs} รายการ`}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 truncate max-w-3xl">
+                      {latestLog
+                        ? `ล่าสุด: อาการ ${latestLog.symptoms || latestLog.chief_complaint || 'ไม่ระบุ'} • ยา: ${latestLog.medicines_dispensed || latestLog.medications_dispensed || '-'}`
+                        : 'ยังไม่มีประวัติการเบิกรับยา ณ จุดปฐมพยาบาลสนาม JRE 2027 (อัปเดตเรียลไทม์)'}
+                    </p>
                   </div>
                 </div>
 
-                {/* Search + Filter + < 0 > Pagination Bar */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/75 border border-slate-800">
-                  {/* Search & Filter */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
-                    <div className="relative flex-1 min-w-[200px]">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={emrSearchQuery}
-                        onChange={e => setEmrSearchQuery(e.target.value)}
-                        placeholder="ค้นหาอาการ, ยาที่ได้รับ, ผู้จ่ายยา, หมายเหตุ..."
-                        className="w-full pl-8 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-400"
-                      />
-                      {emrSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setEmrSearchQuery('')}
-                          aria-label="ล้างคำค้นหาเวชระเบียน"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] text-slate-400 flex items-center gap-1 shrink-0">
-                        <Filter className="w-3.5 h-3.5 text-rose-400" />
-                        <span className="hidden sm:inline">กรอง:</span>
-                      </span>
-                      <select
-                        value={emrFilterType}
-                        onChange={e => setEmrFilterType(e.target.value)}
-                        className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-slate-200 focus:outline-none focus:border-rose-400 cursor-pointer"
-                      >
-                        <option value="all">ทั้งหมด ({medDispenseLogs.length})</option>
-                        <option value="with_meds">เฉพาะที่มีรายการเบิกจ่ายยา</option>
-                        <option value="with_notes">เฉพาะที่มีหมายเหตุ/เฝ้าระวัง</option>
-                      </select>
-                      {(emrSearchQuery || emrFilterType !== 'all') && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmrSearchQuery('');
-                            setEmrFilterType('all');
-                          }}
-                          className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300 border border-slate-700 cursor-pointer transition-colors"
-                        >
-                          ล้างตัวกรอง
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* < 0 > Pagination Control */}
-                  <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800 shrink-0">
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      หน้า:
-                    </span>
-                    <div className="inline-flex items-center rounded-xl bg-slate-950 border border-slate-700 p-0.5 shadow-inner">
-                      <button
-                        type="button"
-                        disabled={currentPage <= 1}
-                        onClick={() => setEmrPage(p => Math.max(1, p - 1))}
-                        aria-label="หน้าเวชระเบียนก่อนหน้า"
-                        className="w-8 h-7 rounded-lg flex items-center justify-center text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <span className="px-3 text-xs font-mono font-black text-white min-w-[48px] text-center select-none">
-                        {totalPages === 0 ? '0' : `${currentPage} / ${totalPages}`}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={currentPage >= totalPages || totalPages === 0}
-                        onClick={() => setEmrPage(p => Math.min(totalPages, p + 1))}
-                        aria-label="หน้าเวชระเบียนถัดไป"
-                        className="w-8 h-7 rounded-lg flex items-center justify-center text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateMyEmr && onNavigateMyEmr()}
+                    className="w-full lg:w-auto px-5 py-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                  >
+                    <HeartPulse className="w-4 h-4 shrink-0" />
+                    <span>ดูประวัติรับยา & เวชระเบียนส่วนตัว →</span>
+                  </button>
                 </div>
-
-                {/* EMR List Content */}
-                {isLoadingMedLogs ? (
-                  <div className="p-6 text-center text-xs text-slate-400 bg-slate-900/60 rounded-2xl border border-slate-800 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
-                    <span>กำลังโหลดข้อมูลเวชระเบียน...</span>
-                  </div>
-                ) : medDispenseLogs.length === 0 ? (
-                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 space-y-1">
-                    <p className="font-semibold text-slate-300">ยังไม่มีประวัติการเบิกรับยา ณ จุดปฐมพยาบาลสนาม JRE 2027</p>
-                    <p className="text-[11px] text-slate-500">หากท่านมารับยาหรือตรวจอาการ ระบบจะบันทึกและแสดงที่นี่แบบเรียลไทม์</p>
-                  </div>
-                ) : pagedLogs.length === 0 ? (
-                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 space-y-2">
-                    <p className="font-semibold text-slate-300">ไม่พบประวัติเวชระเบียนที่ตรงกับคำค้นหาหรือตัวกรองที่เลือก</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmrSearchQuery('');
-                        setEmrFilterType('all');
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-[11px] cursor-pointer"
-                    >
-                      แสดงทั้งหมด ({medDispenseLogs.length} รายการ)
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    {pagedLogs.map((log, idx) => {
-                      const medsDispensed = log.medicines_dispensed || log.medications_dispensed || '-';
-                      const dosageText = log.dosage_instruction || log.instructions || 'ตามแพทย์/พยาบาลสั่ง';
-                      const rawTime = log.dispensed_at || log.created_at;
-                      const formattedTime = rawTime ? new Date(rawTime).toLocaleString('th-TH', {
-                        year: '2-digit',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) : 'เมื่อเร็วๆ นี้';
-
-                      return (
-                        <div
-                          key={log.id || `${startIdx}-${idx}`}
-                          className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-rose-500/40 transition-colors space-y-2.5 text-xs flex flex-col justify-between"
-                        >
-                          <div className="space-y-2.5">
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
-                                  จ่ายยาแล้ว ✓
-                                </span>
-                                <span className="font-bold text-white">
-                                  อาการ: <span className="text-amber-300">{log.symptoms || log.chief_complaint || 'ไม่ระบุ'}</span>
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                📅 {formattedTime}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
-                              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                                <span className="text-slate-400 block text-[10px] mb-0.5">💊 ยาและเวชภัณฑ์ที่ได้รับ:</span>
-                                <span className="font-bold text-emerald-300 break-words">{medsDispensed}</span>
-                              </div>
-                              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                                <span className="text-slate-400 block text-[10px] mb-0.5">🩺 คำแนะนำในการใช้ยา:</span>
-                                <span className="text-slate-200 break-words">{dosageText}</span>
-                              </div>
-                            </div>
-
-                            {log.medical_notes && (
-                              <div className="p-2 rounded-xl bg-amber-950/25 border border-amber-500/25 text-[11px] text-amber-200">
-                                <span className="font-bold">📝 บันทึกเพิ่มเติม:</span> {log.medical_notes}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400">
-                            <span>
-                              👨‍⚕️ ผู้จ่ายยา: <strong className="text-purple-300">{log.dispenser_name || 'เจ้าหน้าที่พยาบาล'}</strong>
-                              {log.dispenser_callsign && <span className="font-mono text-slate-400"> ({log.dispenser_callsign})</span>}
-                            </span>
-                            <span className="font-mono text-slate-500">ID: {log.id ? String(log.id).slice(0, 8) : `#${startIdx + idx + 1}`}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -4845,478 +4590,66 @@ export default function RegisterView({
             </div>
           )}
 
-          {/* SECTION: สถานะการชำระเงิน & ระบบแบ่งจ่าย 2 งวด (Hidden on /staff-register or ID-card-only Staff unless unpaid balance exists) */}
-          {!(isStaffPortal || ((myRegistration.staff_id_card_only || ((!myRegistration.shirt_size || myRegistration.shirt_size === '-') && Number(myRegistration.payment_amount || 0) === 0 && !myRegistration.payment_slip_url && !myRegistration.installment_1_slip_url)) && !((getUnpaidSlipTarget(myRegistration)?.expectedAmount || 0) > 0))) && (
-          <div className="mt-8 p-5 sm:p-6 rounded-3xl border bg-slate-950/80 border-slate-800 space-y-5 shadow-xl">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-                    <span>ข้อมูลค่าสมัคร & สถานะการชำระเงิน</span>
-                    <span className="text-[11px] font-normal text-slate-400">
-                      ({isInstallmentPlan ? 'แผนแบ่งจ่าย 2 งวด' : 'แผนชำระเต็มจำนวน (จ่ายครบ 1 รอบ)'})
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {isMsu ? '🎓 สังกัดนิสิต มมส (ยอดรวม 650 บ. • ไม่มีค่าที่พัก)' : '🏨 สังกัดต่างมหาวิทยาลัย (ยอดรวม 850 บ. • รวมที่พักหอกุดรัง มมส)'} • {dashboardPaymentConfig.notes || 'รองรับการชำระเต็มจำนวนหรือแบ่งจ่าย 2 งวด'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Overall Payment Status Pill */}
-              {myRegistration.payment_status === 'paid' ? (
-                <span className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                  <CheckCircle className="w-4 h-4" /> ชำระค่าสมัครครบถ้วนแล้ว
-                </span>
-              ) : myRegistration.payment_status === 'pending_review' ? (
-                <span className="px-3.5 py-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 animate-pulse shadow-sm">
-                  <Clock className="w-4 h-4" /> ส่งสลิปแล้ว กำลังรอผู้ดูแลตรวจสอบ
-                </span>
-              ) : (
-                <span className="px-3.5 py-1.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                  <AlertCircle className="w-4 h-4" /> ค้างชำระค่าลงทะเบียน ({dashboardPaymentConfig.fee_total} บ.)
-                </span>
-              )}
-            </div>
-
-            {/* Bank Account Info Card with 1-Click Copy */}
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/30 border border-slate-800 rounded-2xl space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span className="font-bold text-white flex items-center gap-1.5">
-                  🏦 ข้อมูลบัญชีธนาคารสำหรับโอนเงิน
-                </span>
-                <span className="text-[10px] text-emerald-400 font-medium">
-                  ✓ คลิกปุ่มเพื่อคัดลอกได้ทันที
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                {/* Bank Account Number */}
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block">{dashboardPaymentConfig.bank_name}</span>
-                    <span className="font-mono font-bold text-amber-300 text-sm truncate block">
-                      {dashboardPaymentConfig.bank_account_number}
-                    </span>
+          {/* 4. COMPACT PAYMENT & SLIP SUMMARY CARD -> /my-payment (Hidden on /staff-register or ID-card-only Staff unless unpaid balance exists) */}
+          {!(isStaffPortal || ((myRegistration.staff_id_card_only || ((!myRegistration.shirt_size || myRegistration.shirt_size === '-') && Number(myRegistration.payment_amount || 0) === 0 && !myRegistration.payment_slip_url && !myRegistration.installment_1_slip_url)) && !((getUnpaidSlipTarget(myRegistration)?.expectedAmount || 0) > 0))) && (() => {
+            const latestUploader = resolveSlipUploaderDisplay(
+              myRegistration,
+              isInstallmentPlan
+                ? (myRegistration.installment_2_slip_url ? 'round2' : 'round1')
+                : 'full'
+            );
+            return (
+              <div className="mt-4 p-4 sm:p-5 bg-gradient-to-r from-amber-950/35 via-slate-900 to-purple-950/35 border border-amber-500/35 rounded-3xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-400/35 flex items-center justify-center shrink-0 text-amber-300">
+                    <CreditCard className="w-6 h-6" />
                   </div>
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm sm:text-base font-black text-white">
+                        💳 ข้อมูลค่าสมัคร & สถานะการชำระเงิน
+                      </h2>
+                      {myRegistration.payment_status === 'paid' || isFullyPaid ? (
+                        <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> ชำระครบถ้วนแล้ว
+                        </span>
+                      ) : myRegistration.payment_status === 'pending_review' ? (
+                        <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-[10px] font-bold inline-flex items-center gap-1 animate-pulse">
+                          <Clock className="w-3 h-3" /> รอผู้ดูแลตรวจสอบสลิป
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> คงเหลือ {remainingAmount.toLocaleString()} บ.
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="px-2.5 py-0.5 rounded-full font-bold bg-slate-950/80 text-slate-200 border border-slate-700">
+                        {isInstallmentPlan ? 'แบ่งจ่าย 2 งวด' : 'ชำระเต็มจำนวน'} • ยอดรวม {totalFee.toLocaleString()} บ.
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        ชำระแล้ว {paidAmount.toLocaleString()} บ.
+                      </span>
+                      {latestUploader && (
+                        <SlipUploaderBadge uploader={latestUploader} size="xs" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => handleCopyText(dashboardPaymentConfig.bank_account_number, 'bank_acc', 'เลขบัญชี')}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
-                    title="คัดลอกเลขบัญชี"
+                    onClick={() => onNavigateMyPayment && onNavigateMyPayment()}
+                    className="w-full lg:w-auto px-5 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer whitespace-nowrap"
                   >
-                    {copiedKey === 'bank_acc' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'bank_acc' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                    <CreditCard className="w-4 h-4 shrink-0" />
+                    <span>ดูเลขบัญชีโอนเงิน & แนบ/ดูสลิป →</span>
                   </button>
                 </div>
-
-                {/* Account Name */}
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block">ชื่อบัญชี</span>
-                    <span className="font-semibold text-white text-xs truncate block" title={dashboardPaymentConfig.bank_account_name}>
-                      {dashboardPaymentConfig.bank_account_name}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyText(dashboardPaymentConfig.bank_account_name, 'bank_name', 'ชื่อบัญชี')}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px]"
-                    title="คัดลอกชื่อบัญชี"
-                  >
-                    {copiedKey === 'bank_name' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'bank_name' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
-                  </button>
-                </div>
-
-                {/* Contact Phone (No PromptPay) */}
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-amber-300 block flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-amber-400" />
-                      ☎️ สอบถามเพิ่มเติม (ไม่มีพร้อมเพย์)
-                    </span>
-                    <span className="font-mono font-bold text-white text-sm truncate block mt-0.5">
-                      {dashboardPaymentConfig.contact_phone || '098-329-6762'}
-                    </span>
-                  </div>
-                  <a
-                    href={`tel:${(dashboardPaymentConfig.contact_phone || '098-329-6762').replace(/[^0-9]/g, '')}`}
-                    className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-white rounded-lg transition-colors shrink-0 flex items-center gap-1 text-[11px] font-semibold"
-                    title="โทรสอบถาม"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    <span>โทรติดต่อ</span>
-                  </a>
-                </div>
               </div>
-
-              <div className="mt-3 text-[11px] bg-rose-950/40 border border-rose-500/40 text-rose-200 p-2.5 rounded-xl flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>
-                  <strong>ข้อควรระวัง:</strong> รับโอนเงินเฉพาะบัญชี <strong>ธนาคารไทยพาณิชย์ 594-264865-5 (นางสาวมัญชุพร ยังเหล็ก)</strong> เท่านั้น • <u>ไม่มีระบบพร้อมเพย์ (PromptPay)</u> (เบอร์ 098-329-6762 มีไว้สำหรับสอบถามข้อมูลเท่านั้น ห้ามโอนเงินผ่านเบอร์โทร)
-                </span>
-              </div>
-
-              {myRegistration.payment_notes && (
-                <div className="text-[11px] text-amber-200/90 bg-amber-950/40 p-2.5 rounded-xl border border-amber-800/40">
-                  <span className="font-bold">หมายเหตุจากฝ่ายการเงิน: </span>
-                  {myRegistration.payment_notes}
-                </div>
-              )}
-            </div>
-
-            {/* Payment Plan Indicator Banner (Locked on dashboard; can only change at Step 1 if unpaid) */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <span className="text-base shrink-0">📌</span>
-                <div>
-                  <span className="text-xs text-slate-400 font-medium">รูปแบบการชำระเงินที่เลือกไว้:</span>
-                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                    <span className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm ${
-                      isInstallmentPlan 
-                        ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40' 
-                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    }`}>
-                      {isInstallmentPlan ? (
-                        <>💳 แบ่งจ่าย 2 งวด ({dashboardPaymentConfig.installment_round1_amount} + {dashboardPaymentConfig.installment_round2_amount} บาท)</>
-                      ) : (
-                        <>🌟 ชำระเต็มจำนวน ({dashboardPaymentConfig.fee_total} บาท)</>
-                      )}
-                    </span>
-                    {hasTransferredOrPaid ? (
-                      <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1">
-                        <Lock className="w-3 h-3 text-amber-400" /> ล็อกตามประวัติการชำระ
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-[10px] font-semibold">
-                        เลือกไว้ในแบบฟอร์ม
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* If unpaid and no slips attached, allow going to Step 1 to change plan (Only while registration is open) */}
-              {!hasTransferredOrPaid && !isApplicantFullyPaid && !isRegistrationClosed && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(true);
-                    setCurrentFormStep(1);
-                    if (onSubRouteChange) onSubRouteChange('form');
-                  }}
-                  className="text-xs text-sky-400 hover:text-sky-300 hover:underline flex items-center gap-1.5 cursor-pointer font-semibold py-1.5 px-3 rounded-xl bg-sky-950/30 border border-sky-800/40 transition-colors shrink-0"
-                  title="หากต้องการเปลี่ยนรูปแบบการชำระเงิน ให้กลับไปเลือกใหม่ที่แบบฟอร์มขั้นตอนที่ 1"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span>ต้องการเปลี่ยนรูปแบบ? (แก้ไขที่ขั้นตอนที่ 1)</span>
-                </button>
-              )}
-            </div>
-
-            {/* VIEW A: 2-ROUND INSTALLMENT VIEW */}
-            {isInstallmentPlan ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                {/* Round 1 Installment Box */}
-                <div className="bg-slate-900/90 border border-purple-500/40 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider block">
-                        {isStaffReg ? 'ส่วนที่ 1: ค่าเสื้อ Staff โครงการ' : 'งวดที่ 1 (รอบแรก - วันเปิดรับสมัคร)'}
-                      </span>
-                      <p className="text-xl font-black text-white mt-0.5">
-                        {dashboardPaymentConfig.installment_round1_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
-                        {isStaffReg && staffSummary.isOffsetApplied && (
-                          <span className="ml-2 text-xs font-bold text-purple-300">
-                            (โอนมา {staffSummary.r1SlipAmount} บ. • หักลบค่าที่พัก +{staffSummary.offsetToAccommodation} บ.)
-                          </span>
-                        )}
-                      </p>
-                    </div>
-
-                    {myRegistration.installment_1_status === 'paid' ? (
-                      <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> ชำระแล้ว
-                      </span>
-                    ) : myRegistration.installment_1_status === 'pending_review' ? (
-                      <span className="px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
-                        <Clock className="w-3.5 h-3.5" /> รอตรวจสอบ
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-[11px] font-bold">
-                        ค้างชำระงวด 1
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-slate-300 space-y-1">
-                    <p className="flex items-center gap-1.5 text-slate-400">
-                      <CalendarClock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>รายละเอียด: <strong className="text-white">{dashboardPaymentConfig.installment_round1_due}</strong></span>
-                    </p>
-                  </div>
-
-                  {/* Slip 1 Section */}
-                  <div className="pt-2 border-t border-slate-800">
-                    {myRegistration.installment_1_slip_url ? (
-                      <div className="flex items-center gap-3">
-                        <div
-                          onClick={() => setPreviewSlipModal(myRegistration.installment_1_slip_url)}
-                          className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shrink-0"
-                        >
-                          <img
-                            src={myRegistration.installment_1_slip_url}
-                            alt="สลิปงวด 1"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                          <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Maximize2 className="w-4 h-4 text-white" />
-                          </div>
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <span className="text-[11px] text-emerald-400 font-semibold block">
-                            ✓ อัปโหลดสลิปงวดที่ 1 แล้ว
-                          </span>
-                          <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round1')} size="xs" />
-                          <span className="text-[10px] text-slate-500 block truncate">
-                            {myRegistration.installment_1_slip_date ? new Date(myRegistration.installment_1_slip_date).toLocaleString('th-TH') : '-'}
-                          </span>
-                        {myRegistration.installment_1_status === 'paid' ? (
-                          <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
-                            <CheckCircle className="w-3.5 h-3.5" /> อนุมัติงวดที่ 1 แล้ว (ล็อคสลิป)
-                          </span>
-                        ) : (
-                          <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
-                            <span>{myRegistration.installment_1_status === 'unpaid' ? 'อัปโหลดสลิปงวด 1 ใหม่' : 'ส่งสลิปงวด 1 ใหม่ทดแทน (กรณีแนบผิด)'}</span>
-                            <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <label className={`w-full cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingRound1 ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {isUploadingRound1 ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>กำลังส่งสลิปงวด 1...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4" />
-                          <span>แนบสลิปงวดที่ 1 ({dashboardPaymentConfig.installment_round1_amount} บ.)</span>
-                        </>
-                      )}
-                      <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 1)} className="hidden" />
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Round 2 Installment Box */}
-              <div className="bg-slate-900/90 border border-indigo-500/40 p-4 sm:p-5 rounded-2xl relative overflow-hidden shadow-lg space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">
-                      {isStaffReg ? 'ส่วนที่ 2: ค่าที่พักหอพักกุดรังสำหรับ Staff ต่างมหาลัย (200 บ.)' : 'งวดที่ 2 (รอบที่ 2)'}
-                    </span>
-                    <p className="text-xl font-black text-white mt-0.5">
-                      {dashboardPaymentConfig.installment_round2_amount} <span className="text-sm font-normal text-slate-400">บาท</span>
-                      {isStaffReg && staffSummary.isOffsetApplied && (
-                        <span className="ml-2 text-xs font-bold text-amber-300">
-                          (จากค่าที่พัก 200 บ. หักส่วนเกิน -{staffSummary.offsetToAccommodation} บ.)
-                        </span>
-                      )}
-                    </p>
-                  </div>
-
-                  {myRegistration.round2_cancelled_absent ? (
-                    <span className="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-600 rounded-full text-[11px] font-bold flex items-center gap-1">
-                      🚫 ยกเลิกรอบ 2 (ไม่เข้าร่วมอบรม • ตัดจบ 0 บ.)
-                    </span>
-                  ) : myRegistration.payment_deferred_post_project && myRegistration.installment_2_status !== 'paid' ? (
-                    <span className="px-2.5 py-1 bg-sky-500/20 text-sky-300 border border-sky-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
-                      🕒 จ่ายย้อนหลังหลังจบโครงการ
-                    </span>
-                  ) : myRegistration.installment_2_status === 'paid' ? (
-                    <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full text-[11px] font-bold flex items-center gap-1">
-                      <CheckCircle className="w-3.5 h-3.5" /> ชำระแล้ว
-                    </span>
-                  ) : myRegistration.installment_2_status === 'pending_review' ? (
-                    <span className="px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
-                      <Clock className="w-3.5 h-3.5" /> รอตรวจสอบ
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full text-[11px] font-bold">
-                      {isStaffReg ? `ค้างค่าที่พัก (${dashboardPaymentConfig.installment_round2_amount} บ.)` : 'ค้างชำระงวด 2'}
-                    </span>
-                  )}
-                </div>
-
-                <div className="text-xs text-slate-300 space-y-1">
-                  <p className="flex items-center gap-1.5 text-slate-400">
-                    <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>กำหนดชำระ: <strong className="text-white">{dashboardPaymentConfig.installment_round2_due}</strong></span>
-                  </p>
-                  <div className="mt-1 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 flex items-center gap-1.5">
-                    <span>💡</span>
-                    <span>
-                      {isStaffReg
-                        ? (staffSummary.isOffsetApplied
-                          ? `ระบบนำเงินที่ท่านโอนเกินในรอบแรก (+${staffSummary.offsetToAccommodation} บ.) มาหักลบค่าที่พัก 200 บ. ให้แล้ว คงเหลือโอนเพิ่มเพียง ${dashboardPaymentConfig.installment_round2_amount} บาท`
-                          : 'สามารถโอนชำระค่าที่พักสำหรับ Staff ต่างมหาวิทยาลัย (200 บาท) และแนบสลิปด้านล่างได้ทันที')
-                        : 'ชำระล่วงหน้าได้ทันที: สามารถชำระเงินและแนบสลิปงวดที่ 2 ก่อนกำหนดได้ตลอดเวลา โดยไม่ต้องรอถึงเดือนพฤศจิกายน'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Slip 2 Section */}
-                <div className="pt-2 border-t border-slate-800">
-                  {myRegistration.installment_2_slip_url ? (
-                    <div className="flex items-center gap-3">
-                      <div
-                        onClick={() => setPreviewSlipModal(myRegistration.installment_2_slip_url)}
-                        className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shrink-0"
-                      >
-                        <img
-                          src={myRegistration.installment_2_slip_url}
-                          alt="สลิปงวด 2"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <Maximize2 className="w-4 h-4 text-white" />
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <span className="text-[11px] text-emerald-400 font-semibold block">
-                          ✓ อัปโหลดสลิปแล้ว
-                        </span>
-                        <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'round2')} size="xs" />
-                        <span className="text-[10px] text-slate-500 block truncate">
-                          {myRegistration.installment_2_slip_date ? new Date(myRegistration.installment_2_slip_date).toLocaleString('th-TH') : '-'}
-                        </span>
-                        {myRegistration.installment_2_status === 'paid' ? (
-                          <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
-                            <CheckCircle className="w-3.5 h-3.5" /> อนุมัติแล้ว (ล็อคสลิป)
-                          </span>
-                        ) : myRegistration.round2_cancelled_absent ? (
-                          <span className="text-[10px] text-slate-400 font-bold block mt-1.5">
-                            🚫 ยกเลิกการจ่ายรอบที่ 2 แล้ว
-                          </span>
-                        ) : (
-                          <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
-                            <span>{myRegistration.installment_2_status === 'unpaid' ? 'อัปโหลดสลิปใหม่' : 'ส่งสลิปใหม่ทดแทน (กรณีแนบผิด)'}</span>
-                            <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
-                          </label>
-                        )}
-                      </div>
-                      </div>
-                    ) : (
-                      <label className={`w-full cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingRound2 ? 'opacity-50 pointer-events-none' : ''}`}>
-                        {isUploadingRound2 ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>กำลังส่งสลิป...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4" />
-                            <span>{isStaffReg ? `แนบสลิปค่าที่พัก Staff (${dashboardPaymentConfig.installment_round2_amount} บ.)` : `แนบสลิปงวดที่ 2 (${dashboardPaymentConfig.installment_round2_amount} บ.)`}</span>
-                          </>
-                        )}
-                        <input type="file" accept="image/*" onChange={(e) => handleUploadInstallmentSlip(e, 2)} className="hidden" />
-                      </label>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* VIEW B: FULL PAYMENT VIEW */
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
-                <div className="space-y-1.5">
-                  <p className="text-slate-400">
-                    ยอดค่าลงทะเบียนเต็มจำนวน: <span className="font-bold text-white text-base">{dashboardPaymentConfig.fee_total} บาท</span>
-                  </p>
-                  <p className="text-slate-400 leading-relaxed">
-                    ครอบคลุมค่าประกันอุบัติเหตุ อาหารทุกมื้อ ที่พักค้างแรม อุปกรณ์การฝึก และวุฒิบัตรรับรอง
-                  </p>
-                </div>
-
-                {/* Full Payment Slip Upload & Viewer */}
-                <div className="flex flex-col justify-center items-start sm:items-end gap-2">
-                  {myRegistration.payment_slip_url ? (
-                    <div className="flex items-center gap-3">
-                      <div 
-                        onClick={() => setPreviewSlipModal(myRegistration.payment_slip_url)}
-                        className="cursor-pointer group relative w-16 h-16 rounded-xl overflow-hidden border border-slate-700 bg-slate-900"
-                      >
-                        <img 
-                          src={myRegistration.payment_slip_url} 
-                          alt="สลิปโอนเงิน" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                        />
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <Maximize2 className="w-4 h-4 text-white" />
-                        </div>
-                      </div>
-                      <div className="space-y-0.5">
-                        <span className="text-[11px] text-emerald-400 font-semibold block">
-                          ✓ อัปโหลดสลิปเต็มจำนวนแล้ว
-                        </span>
-                        <SlipUploaderBadge uploader={resolveSlipUploaderDisplay(myRegistration, 'full')} size="xs" />
-                        <span className="text-[10px] text-slate-500 block">
-                          ส่งเมื่อ: {myRegistration.payment_slip_date ? new Date(myRegistration.payment_slip_date).toLocaleString('th-TH') : '-'}
-                        </span>
-                        {myRegistration.slip_ocr_full && (
-                          <span className="text-[10px] text-amber-300 font-mono block">
-                            {myRegistration.slip_ocr_full.isDetected 
-                              ? `โอน: ${myRegistration.slip_ocr_full.transferDateTimeStr || myRegistration.slip_ocr_full.uploadTimeStr} (${myRegistration.slip_ocr_full.amountFormatted})`
-                              : `อัปโหลด: ${myRegistration.slip_ocr_full.uploadTimeStr} (รอตรวจยอด)`}
-                          </span>
-                        )}
-                        {myRegistration.payment_status === 'paid' ? (
-                          <span className="text-[10px] text-emerald-400 font-bold block mt-1.5 flex items-center gap-1">
-                            <CheckCircle className="w-3.5 h-3.5" /> ตรวจสอบและอนุมัติยอดเงินแล้ว (ล็อคสลิป)
-                          </span>
-                        ) : (
-                          <label className="text-[10px] text-blue-400 hover:underline cursor-pointer mt-1 inline-flex items-center gap-1">
-                            <span>{myRegistration.payment_status === 'unpaid' ? 'อัปโหลดสลิปใหม่ (ส่งใหม่)' : 'ส่งสลิปใหม่ทดแทน (กรณีแนบผิด)'}</span>
-                            <input type="file" accept="image/*" onChange={handleUploadPaymentSlip} className="hidden" />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 ${isUploadingSlip ? 'opacity-50 pointer-events-none' : ''}`}>
-                        {isUploadingSlip ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>กำลังส่งสลิป...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4" />
-                            <span>อัปโหลดสลิปโอนเงินเต็มจำนวน ({dashboardPaymentConfig.fee_total} บ.)</span>
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleUploadPaymentSlip}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          )}
+            );
+          })()}
 
           {/* COMPACT NOTIFICATION & MESSAGES BAR -> Opens Existing Popup Modal */}
           <div className="mt-6 p-4 sm:p-5 rounded-3xl border bg-slate-950/85 border-purple-500/30 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">

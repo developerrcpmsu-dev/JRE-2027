@@ -16,7 +16,10 @@ import {
   ShieldCheck,
   Layers,
   BedDouble,
-  Filter
+  Filter,
+  HeartPulse,
+  ClipboardList,
+  CreditCard
 } from 'lucide-react';
 import {
   resolveUniversityInfo,
@@ -36,15 +39,21 @@ import { buildUserPageUrl } from '../utils/router';
 const USER_PAGE_SPECS = [
   { key: 'dashboard', label: 'แดชบอร์ด', pathPrefix: '/dashboard', icon: LayoutDashboard, color: 'emerald' },
   { key: 'my-room', label: 'ห้องพัก', pathPrefix: '/my-room', icon: Building, color: 'sky' },
+  { key: 'medical-support', label: 'เตรียมยา', pathPrefix: '/medical-support', icon: HeartPulse, color: 'teal' },
+  { key: 'my-emr', label: 'EMR ส่วนตัว', pathPrefix: '/my-emr', icon: ClipboardList, color: 'indigo' },
+  { key: 'my-payment', label: 'ชำระเงิน', pathPrefix: '/my-payment', icon: CreditCard, color: 'violet' },
   { key: 'id-card', label: 'บัตร ID', pathPrefix: '/id-card', icon: IdCard, color: 'orange' },
   { key: 'merchandise', label: 'สั่งเสื้อ', pathPrefix: '/merchandise', icon: Shirt, color: 'amber' },
   { key: 'profile', label: 'โปรไฟล์', pathPrefix: '/users', icon: User, color: 'cyan' },
-  { key: 'medical', label: 'เวชระเบียน', pathPrefix: '/admin/medical', icon: Stethoscope, color: 'rose' }
+  { key: 'medical', label: 'เวชระเบียนรวม', pathPrefix: '/admin/medical', icon: Stethoscope, color: 'rose' }
 ];
 
 const BUTTON_COLOR_CLASSES = {
   emerald: 'bg-emerald-950/70 hover:bg-emerald-900/80 text-emerald-200 border-emerald-500/40',
   sky: 'bg-sky-950/70 hover:bg-sky-900/80 text-sky-200 border-sky-500/40',
+  teal: 'bg-teal-950/70 hover:bg-teal-900/80 text-teal-200 border-teal-500/40',
+  indigo: 'bg-indigo-950/70 hover:bg-indigo-900/80 text-indigo-200 border-indigo-500/40',
+  violet: 'bg-violet-950/70 hover:bg-violet-900/80 text-violet-200 border-violet-500/40',
   orange: 'bg-orange-950/70 hover:bg-orange-900/80 text-orange-200 border-orange-500/40',
   amber: 'bg-amber-950/70 hover:bg-amber-900/80 text-amber-200 border-amber-500/40',
   cyan: 'bg-cyan-950/70 hover:bg-cyan-900/80 text-cyan-200 border-cyan-500/40',
@@ -275,10 +284,9 @@ export default function DevUserUrlsView({
               <Link2 className="w-4 h-4" />
             </div>
             <div className="text-[10px] font-mono text-slate-300 space-y-0.5 leading-relaxed">
-              <div>/u/&lt;UID&gt;/dashboard</div>
-              <div>/u/&lt;UID&gt;/my-room</div>
-              <div>/u/&lt;UID&gt;/id-card</div>
-              <div>/u/&lt;UID&gt;/merchandise</div>
+              <div>/u/&lt;UID&gt;/dashboard • /u/&lt;UID&gt;/my-room</div>
+              <div>/u/&lt;UID&gt;/medical-support • /u/&lt;UID&gt;/my-emr</div>
+              <div>/u/&lt;UID&gt;/my-payment • /u/&lt;UID&gt;/id-card • /merchandise</div>
             </div>
           </div>
         </div>
@@ -471,7 +479,7 @@ export default function DevUserUrlsView({
                   </div>
 
                   {/* Per-page URL action buttons */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-slate-800/80">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2 pt-2 border-t border-slate-800/80">
                     {USER_PAGE_SPECS.map(spec => {
                       const IconComp = spec.icon;
                       const fullUrl = buildUserPageUrl(item.uid, spec.key, origin);

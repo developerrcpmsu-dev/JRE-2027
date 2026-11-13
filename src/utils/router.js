@@ -53,6 +53,15 @@ export function parseCurrentRoute() {
     if (pageSeg === 'my-room' || pageSeg === 'room' || pageSeg === 'rooms' || pageSeg === 'dorm') {
       return { mainTab: 'my-room', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/my-room?uid=${uidParam}` };
     }
+    if (pageSeg === 'medical-support' || pageSeg === 'med-support' || pageSeg === 'medicine-request' || pageSeg === 'med-request' || pageSeg === 'medical-equipment') {
+      return { mainTab: 'medical-support', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/medical-support?uid=${uidParam}` };
+    }
+    if (pageSeg === 'my-emr' || pageSeg === 'field-emr' || pageSeg === 'my-medical') {
+      return { mainTab: 'my-emr', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/my-emr?uid=${uidParam}` };
+    }
+    if (pageSeg === 'my-payment' || pageSeg === 'payment' || pageSeg === 'payment-status' || pageSeg === 'slip' || pageSeg === 'fee' || pageSeg === 'my-fee') {
+      return { mainTab: 'my-payment', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/my-payment?uid=${uidParam}` };
+    }
     if (pageSeg === 'id-card' || pageSeg === 'badge' || pageSeg === 'card') {
       return { mainTab: 'id-card', subRoute: null, inspectUid: uidRaw, fromDevUrlShortcut: true, canonicalPath: `/id-card?uid=${uidParam}` };
     }
@@ -156,6 +165,18 @@ export function parseCurrentRoute() {
 
   if (first === 'my-room' || first === 'room-status' || first === 'dorm-status' || first === 'my-group' || first === 'assignment') {
     return withUid({ mainTab: 'my-room', subRoute: null, canonicalPath: '/my-room' });
+  }
+
+  if (first === 'medical-support' || first === 'med-support' || first === 'medicine-request' || first === 'med-request' || first === 'medical-equipment') {
+    return withUid({ mainTab: 'medical-support', subRoute: null, canonicalPath: '/medical-support' });
+  }
+
+  if (first === 'my-emr' || first === 'field-emr' || first === 'my-medical') {
+    return withUid({ mainTab: 'my-emr', subRoute: null, canonicalPath: '/my-emr' });
+  }
+
+  if (first === 'my-payment' || first === 'payment' || first === 'payment-status' || first === 'my-fee' || first === 'slip') {
+    return withUid({ mainTab: 'my-payment', subRoute: null, canonicalPath: '/my-payment' });
   }
   if (
     first === 'staff-register' ||
@@ -502,6 +523,22 @@ export function getPathForRoute(mainTab, subRoute) {
     case 'my-group':
     case 'assignment':
       return '/my-room';
+    case 'medical-support':
+    case 'med-support':
+    case 'medicine-request':
+    case 'med-request':
+    case 'medical-equipment':
+      return '/medical-support';
+    case 'my-emr':
+    case 'field-emr':
+    case 'my-medical':
+      return '/my-emr';
+    case 'my-payment':
+    case 'payment':
+    case 'payment-status':
+    case 'my-fee':
+    case 'slip':
+      return '/my-payment';
     case 'pr':
       return '/announcements/pr';
     case 'orders':
@@ -619,6 +656,14 @@ export function buildUserPageUrl(uid, page = 'dashboard', origin = '') {
   switch (page) {
     case 'my-room':
       return `${base}/my-room?uid=${safeUid}`;
+    case 'medical-support':
+      return `${base}/medical-support?uid=${safeUid}`;
+    case 'my-emr':
+    case 'field-emr':
+      return `${base}/my-emr?uid=${safeUid}`;
+    case 'my-payment':
+    case 'payment':
+      return `${base}/my-payment?uid=${safeUid}`;
     case 'id-card':
       return `${base}/id-card?uid=${safeUid}`;
     case 'merchandise':

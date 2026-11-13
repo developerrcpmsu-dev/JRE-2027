@@ -18,6 +18,9 @@ import AuthPortalView from './views/AuthPortalView';
 import UserProfileView from './views/UserProfileView';
 import IDCardView from './views/IDCardView';
 import MyRoomView from './views/MyRoomView';
+import MedicalSupportView from './views/MedicalSupportView';
+import MyEmrView from './views/MyEmrView';
+import MyPaymentView from './views/MyPaymentView';
 import SecurityAuditView from './views/SecurityAuditView';
 import GroupChatView from './views/GroupChatView';
 import { DataService, supabase, isSupabaseConfigured, subscribeToRealtimeChanges, broadcastRealtimeChange } from './supabase';
@@ -77,6 +80,15 @@ export default function App() {
       sub = null;
     } else if (newTab === 'my-room' || newTab === 'room-status' || newTab === 'dorm-status' || newTab === 'my-group' || newTab === 'assignment') {
       main = 'my-room';
+      sub = null;
+    } else if (newTab === 'medical-support' || newTab === 'med-support' || newTab === 'medicine-request' || newTab === 'med-request' || newTab === 'medical-equipment') {
+      main = 'medical-support';
+      sub = null;
+    } else if (newTab === 'my-emr' || newTab === 'field-emr' || newTab === 'my-medical') {
+      main = 'my-emr';
+      sub = null;
+    } else if (newTab === 'my-payment' || newTab === 'payment' || newTab === 'payment-status' || newTab === 'my-fee' || newTab === 'slip') {
+      main = 'my-payment';
       sub = null;
     } else if (newTab === 'dashboard') {
       main = 'register';
@@ -1406,6 +1418,18 @@ export default function App() {
       setCurrentTab('my-room', null, { inspectUid: cleanUid });
       return;
     }
+    if (page === 'medical-support') {
+      setCurrentTab('medical-support', null, { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'my-emr') {
+      setCurrentTab('my-emr', null, { inspectUid: cleanUid });
+      return;
+    }
+    if (page === 'my-payment') {
+      setCurrentTab('my-payment', null, { inspectUid: cleanUid });
+      return;
+    }
     if (page === 'id-card') {
       setCurrentTab('id-card', null, { inspectUid: cleanUid });
       return;
@@ -1473,11 +1497,17 @@ export default function App() {
           onSelectInspectUid={(nextUid) => {
             const curPage = currentTab === 'my-room'
               ? 'my-room'
-              : currentTab === 'id-card'
-                ? 'id-card'
-                : currentTab === 'merchandise'
-                  ? (currentSubRoute === 'my_orders' ? 'orders' : 'merchandise')
-                  : (currentTab === 'register' && currentSubRoute === 'form' ? 'register' : 'dashboard');
+              : currentTab === 'medical-support'
+                ? 'medical-support'
+                : currentTab === 'my-emr'
+                  ? 'my-emr'
+                  : currentTab === 'my-payment'
+                    ? 'my-payment'
+                    : currentTab === 'id-card'
+                      ? 'id-card'
+                      : currentTab === 'merchandise'
+                        ? (currentSubRoute === 'my_orders' ? 'orders' : 'merchandise')
+                        : (currentTab === 'register' && currentSubRoute === 'form' ? 'register' : 'dashboard');
             handleOpenUserPageAsDev(nextUid, curPage);
           }}
           onSwitchInspectPage={(page) => handleOpenUserPageAsDev(rawInspectUid, page)}
@@ -1496,7 +1526,7 @@ export default function App() {
       <main className={`flex-1 w-full mx-auto py-2.5 sm:py-4 lg:py-5 2xl:py-6 transition-all ${
         currentTab === 'admin'
           ? 'w-full max-w-none px-2 sm:px-4 lg:px-6 2xl:px-8'
-          : ((currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(effectiveRegistration))) || currentTab === 'my-room')
+          : ((currentTab === 'register' && (currentSubRoute === 'dashboard' || Boolean(effectiveRegistration))) || currentTab === 'my-room' || currentTab === 'medical-support' || currentTab === 'my-emr' || currentTab === 'my-payment')
             ? 'w-full max-w-[1680px] px-3 sm:px-5 lg:px-8 2xl:px-10 overflow-x-hidden'
             : 'max-w-7xl px-3 sm:px-6 lg:px-8 overflow-x-hidden'
       }`}>
@@ -1597,6 +1627,9 @@ export default function App() {
               setCurrentTab('register', sub);
             }}
             onNavigateMyRoom={() => setCurrentTab('my-room')}
+            onNavigateMedicalSupport={() => setCurrentTab('medical-support')}
+            onNavigateMyEmr={() => setCurrentTab('my-emr')}
+            onNavigateMyPayment={() => setCurrentTab('my-payment')}
           />
         )}
 
@@ -1748,6 +1781,53 @@ export default function App() {
             user={effectiveUser}
             myRegistration={effectiveRegistration}
             allRegistrations={registrations}
+            onUpdateRegistration={handleUpdateRegistration}
+            onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+            onNavigateDashboard={() => setCurrentTab('dashboard')}
+            onNavigateRegister={() => setCurrentTab('register')}
+          />
+        )}
+
+        {currentTab === 'medical-support' && (
+          <MedicalSupportView
+            key={effectiveRegistration?.id || effectiveUser?.id || 'med-support-self'}
+            user={effectiveUser}
+            myRegistration={effectiveRegistration}
+            onUpdateRegistration={handleUpdateRegistration}
+            onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+            onNavigateDashboard={() => setCurrentTab('dashboard')}
+            onNavigateRegister={() => setCurrentTab('register')}
+            onNavigateMyEmr={() => setCurrentTab('my-emr')}
+          />
+        )}
+
+        {currentTab === 'my-emr' && (
+          <MyEmrView
+            key={effectiveRegistration?.id || effectiveUser?.id || 'my-emr-self'}
+            user={effectiveUser}
+            myRegistration={effectiveRegistration}
+            isAdmin={isAdmin}
+            isDevOperator={isStrictDevUser}
+            onOpenGoogleLogin={() => setGoogleModalOpen(true)}
+            onNavigateDashboard={() => setCurrentTab('dashboard')}
+            onNavigateRegister={() => setCurrentTab('register')}
+            onNavigateMedicalSupport={() => setCurrentTab('medical-support')}
+            onNavigateAdminMedical={() => setCurrentTab('admin', 'medical', {
+              personId: effectiveRegistration?.id || effectiveUser?.id || null,
+              clearInspectUid: true
+            })}
+          />
+        )}
+
+        {currentTab === 'my-payment' && (
+          <MyPaymentView
+            key={effectiveRegistration?.id || effectiveUser?.id || 'my-payment-self'}
+            user={effectiveUser}
+            operatorUser={user}
+            isDevOperator={isStrictDevUser}
+            isAdmin={isAdmin}
+            myRegistration={effectiveRegistration}
+            paymentConfig={paymentConfig}
             onUpdateRegistration={handleUpdateRegistration}
             onOpenGoogleLogin={() => setGoogleModalOpen(true)}
             onNavigateDashboard={() => setCurrentTab('dashboard')}

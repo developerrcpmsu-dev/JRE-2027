@@ -10,7 +10,10 @@ import {
   Shirt,
   User,
   Stethoscope,
-  Link2
+  Link2,
+  HeartPulse,
+  ClipboardList,
+  CreditCard
 } from 'lucide-react';
 import { resolvePersonFullNameWithTitle, normalizeCallsignSpacing, isMsuInstitution } from '../data/defaultData';
 import { parseRoomInfo, parseSpecialNotesExtra } from '../utils/roomUtils';
@@ -42,6 +45,9 @@ export default function DevPreviewBanner({
 
   const activePageKey = (() => {
     if (currentTab === 'my-room') return 'my-room';
+    if (currentTab === 'medical-support') return 'medical-support';
+    if (currentTab === 'my-emr') return 'my-emr';
+    if (currentTab === 'my-payment') return 'my-payment';
     if (currentTab === 'id-card') return 'id-card';
     if (currentTab === 'merchandise') return currentSubRoute === 'my_orders' ? 'orders' : 'merchandise';
     if (currentTab === 'register' && currentSubRoute === 'form') return 'register';
@@ -118,6 +124,9 @@ export default function DevPreviewBanner({
           {[
             { key: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
             { key: 'my-room', label: 'ห้องพัก', icon: Building },
+            { key: 'medical-support', label: 'เตรียมยา', icon: HeartPulse },
+            { key: 'my-emr', label: 'EMR ส่วนตัว', icon: ClipboardList },
+            { key: 'my-payment', label: 'ชำระเงิน', icon: CreditCard },
             { key: 'id-card', label: 'บัตร ID', icon: IdCard },
             { key: 'merchandise', label: 'สั่งเสื้อ', icon: Shirt }
           ].map(tab => {
