@@ -114,6 +114,13 @@ export function normalizeDormPerson(reg) {
   }
 
   const roomMatch = rawRoom.match(/(\d{3})/);
+  const previousRoomRaw = String(reg.previous_room || extra.previous_room || '').trim();
+  const previousRoomMatch = previousRoomRaw.match(/(\d{3})/);
+  const roomChangedAt = reg.room_changed_at || extra.room_changed_at || '';
+  const roomChangedBy = reg.room_changed_by || extra.room_changed_by || '';
+  const roomChangeNote = reg.room_change_note || extra.room_change_note || '';
+  const rawHistory = reg.room_change_history || extra.room_change_history;
+  const roomChangeHistory = Array.isArray(rawHistory) ? rawHistory : [];
   const healthConsent = getHealthConsentInfo(reg);
   const dormOptOut = Boolean(reg.dorm_opt_out ?? extra.dorm_opt_out ?? false);
   const dormOptOutBy = reg.dorm_opt_out_by || extra.dorm_opt_out_by || '';
@@ -190,7 +197,51 @@ export function normalizeDormPerson(reg) {
     roomKeyNote,
     keyStatusLabel,
     rawRoom,
-    roomNumber: roomMatch ? roomMatch[1] : null
+    roomNumber: roomMatch ? roomMatch[1] : null,
+    previousRoomRaw,
+    previousRoom: previousRoomMatch ? previousRoomMatch[1] : (previousRoomRaw || null),
+    roomChangedAt,
+    roomChangedBy,
+    roomChangeNote,
+    roomChangeHistory
+  };
+}
+
+/**
+ * Build allocation update payload for moving/changing a participant's room,
+ * automatically preserving previous room & appending to room_change_history.
+ */
+export function buildRoomMovePayload(person, nextRoomInput, note = '', actor = 'admin') {
+  const nextDigits = String(nextRoomInput || '').match(/(\d{3})/)?.[1] || '';
+  const nextRoomValue = nextDigits ? `ห้อง ${nextDigits}` : String(nextRoomInput || '').trim();
+  const currentRoomVal = person?.roomNumber
+    ? `ห้อง ${person.roomNumber}`
+    : (person?.rawRoom || 'ยังไม่ระบุห้อง');
+  const existingHistory = Array.isArray(person?.roomChangeHistory) ? person.roomChangeHistory : [];
+  const now = new Date().toISOString();
+  const cleanNote = String(note || '').trim();
+
+  const isSame = person?.roomNumber && nextDigits && person.roomNumber === nextDigits;
+  if (isSame && !cleanNote) {
+    return { room_assigned: nextRoomValue };
+  }
+
+  const nextToLabel = nextRoomValue || 'ยังไม่ระบุห้อง';
+  const entry = {
+    from: currentRoomVal,
+    to: nextToLabel,
+    changed_at: now,
+    changed_by: actor,
+    note: cleanNote
+  };
+
+  return {
+    room_assigned: nextRoomValue,
+    previous_room: currentRoomVal,
+    room_changed_at: now,
+    room_changed_by: actor,
+    room_change_note: cleanNote,
+    room_change_history: [...existingHistory, entry]
   };
 }
 

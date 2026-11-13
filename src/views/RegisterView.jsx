@@ -445,7 +445,6 @@ export default function RegisterView({
   // Health privacy consent for roommate
   const [consentHealthShare, setConsentHealthShare] = useState(() => isHealthSharedWithRoommate(myRegistration));
   const [isSavingHealthConsent, setIsSavingHealthConsent] = useState(false);
-  const [isSavingDormOptOut, setIsSavingDormOptOut] = useState(false);
 
   useEffect(() => {
     setConsentHealthShare(isHealthSharedWithRoommate(myRegistration));
@@ -4262,48 +4261,6 @@ export default function RegisterView({
                 const myKeyReturned = Boolean(myRegistration?.room_key_returned);
                 const healthConsentInfo = getHealthConsentInfo(myRegistration);
 
-                const handleToggleMyDormOptOut = async () => {
-                  if (!myRegistration || isSavingDormOptOut) return;
-                  const nextOptOut = !myDormOptOut;
-                  const confirmed = await askConfirm({
-                    title: nextOptOut ? 'ยืนยันแจ้งไม่ประสงค์เข้าพักหอพัก?' : 'เปลี่ยนกลับมาประสงค์เข้าพักหอพัก?',
-                    message: nextOptOut
-                      ? 'ระบบจะแจ้งฝ่ายสถานที่และ Admin ห้องพักว่าท่านไม่ประสงค์เข้าพักหอพักที่มหาวิทยาลัยจัดเตรียมให้ เพื่อจัดเตรียมกุญแจและเอกสารเข้าพักให้ถูกต้อง'
-                      : 'ระบบจะอัปเดตสถานะกลับมาเป็นประสงค์เข้าพักหอพักที่โครงการจัดเตรียมให้',
-                    confirmText: nextOptOut ? 'ยืนยัน ไม่พักหอพัก' : 'ยืนยัน เข้าพักหอพัก',
-                    cancelText: 'ยกเลิก',
-                    variant: nextOptOut ? 'warning' : 'success'
-                  });
-                  if (!confirmed) return;
-
-                  setIsSavingDormOptOut(true);
-                  try {
-                    const targetId = myRegistration.user_id || myRegistration.id;
-                    const payload = {
-                      dorm_opt_out: nextOptOut,
-                      dorm_opt_out_by: 'user',
-                      dorm_opt_out_at: new Date().toISOString(),
-                      attendance_need_accommodation: !nextOptOut && !isMsuUser
-                    };
-                    if (onUpdateRegistration) {
-                      await onUpdateRegistration(targetId, payload);
-                    } else {
-                      await DataService.updateRegistrationDetails(targetId, payload);
-                    }
-                    triggerToast(
-                      nextOptOut
-                        ? 'บันทึกแจ้ง "ไม่ประสงค์เข้าพักหอพักที่มหาลัยจัดเตรียมให้" เรียบร้อยแล้ว'
-                        : 'เปลี่ยนสถานะกลับมา "เข้าพักหอพักที่มหาลัยจัดเตรียมให้" เรียบร้อยแล้ว',
-                      nextOptOut ? 'info' : 'success'
-                    );
-                  } catch (err) {
-                    console.error(err);
-                    triggerToast('ไม่สามารถอัปเดตสถานะการพักหอพักได้ กรุณาลองใหม่อีกครั้ง', 'error');
-                  } finally {
-                    setIsSavingDormOptOut(false);
-                  }
-                };
-
                 // Find Roommate from allRegistrations
                 const roommate = (() => {
                   if (!hasRoom || !roomNum) return null;
@@ -4364,28 +4321,10 @@ export default function RegisterView({
                               ? 'bg-slate-800 text-slate-300 border-slate-700'
                               : myDormOptOut
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                                : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
                           }`}>
-                            {isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่ประสงค์พักหอพัก' : 'รอจัดสรร'}
+                            {isMsuUser ? 'มมส (ไป-กลับเอง)' : myDormOptOut ? 'ไม่พักหอ (Admin บันทึกให้)' : 'เข้าพักหอพัก (รอระบุเลขห้อง)'}
                           </span>
-                          {!isMsuUser && (
-                            <button
-                              type="button"
-                              disabled={isSavingDormOptOut}
-                              onClick={handleToggleMyDormOptOut}
-                              className={`px-3 py-1 rounded-xl text-[11px] font-black border transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
-                                myDormOptOut
-                                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
-                                  : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-400/50'
-                              }`}
-                            >
-                              {isSavingDormOptOut
-                                ? 'กำลังบันทึก...'
-                                : myDormOptOut
-                                  ? '🛏️ เปลี่ยนกลับมาขอเข้าพักหอพัก'
-                                  : '🚫 ไม่ประสงค์พักหอพักที่มหาลัยจัดเตรียมให้'}
-                            </button>
-                          )}
                         </div>
                       </div>
 
@@ -4401,10 +4340,10 @@ export default function RegisterView({
                       ) : myDormOptOut ? (
                         <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/40 space-y-1">
                           <div className="text-amber-300 font-bold text-sm">
-                            🚫 ท่านแจ้ง &ldquo;ไม่ประสงค์เข้าพักหอพักที่มหาวิทยาลัยจัดเตรียมให้&rdquo; แล้ว
+                            🚫 สถานะห้องพัก: ไม่พักหอพัก (Admin บันทึกให้)
                           </div>
                           <p className="text-xs text-amber-100/80 leading-relaxed">
-                            ข้อมูลนี้ถูกเชื่อมกับตารางห้องพักและใบรายชื่อ Admin เรียบร้อยแล้ว (หากเปลี่ยนใจสามารถกดปุ่มด้านบนได้ทุกเมื่อ)
+                            Admin ฝ่ายสถานที่ได้บันทึกยกเว้นการเข้าพักหอพักของท่านในระบบแล้ว (หากมีการเปลี่ยนแปลงกรุณาติดต่อ Admin)
                           </p>
                         </div>
                       ) : (
@@ -4414,7 +4353,7 @@ export default function RegisterView({
                             <span>กำลังรอ Admin ฝ่ายสถานที่จัดสรรเลขห้องพัก...</span>
                           </div>
                           <p className="text-xs text-slate-400 leading-relaxed">
-                            ท่านยืนยันสิทธิ์ที่พักแล้ว เข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม เตียงเดี่ยวคู่ ห้องละ 2 คน)
+                            ผู้เข้าร่วมจากต่างมหาวิทยาลัยทุกคนเข้าพัก ณ หอพักกุดรัง มมส (ห้องแอร์ พร้อมเครื่องทำน้ำอุ่น หมอน ผ้าห่ม เตียงเดี่ยวคู่ ห้องละ 2 คน • หากมีเหตุสุดวิสัยโปรดติดต่อ Admin)
                           </p>
                         </div>
                       )}
@@ -4437,30 +4376,14 @@ export default function RegisterView({
                       <div className="flex flex-wrap items-center gap-2">
                         {myDormOptOut ? (
                           <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
-                            <span>🚫 แจ้งไม่ประสงค์พักหอพักแล้ว</span>
+                            <span>🚫 ไม่พักหอพัก (Admin บันทึกให้)</span>
                           </span>
                         ) : (
                           <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
                             <CheckCircle className="w-3.5 h-3.5" />
-                            <span>จัดสรรห้องแล้ว ✓</span>
+                            <span>เข้าพักหอพัก ✓</span>
                           </span>
                         )}
-                        <button
-                          type="button"
-                          disabled={isSavingDormOptOut}
-                          onClick={handleToggleMyDormOptOut}
-                          className={`px-3 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
-                            myDormOptOut
-                              ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
-                              : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-400/50'
-                          }`}
-                        >
-                          {isSavingDormOptOut
-                            ? 'กำลังบันทึก...'
-                            : myDormOptOut
-                              ? '🛏️ เปลี่ยนกลับมาขอเข้าพักหอพัก'
-                              : '🚫 ไม่ประสงค์พักหอพักที่มหาลัยจัดเตรียมให้'}
-                        </button>
                       </div>
                     </div>
 
@@ -4482,15 +4405,15 @@ export default function RegisterView({
                             : myKeyHeld
                               ? '🔑 ได้รับกุญแจห้องแล้ว (อยู่ที่คุณ)'
                               : myDormOptOut
-                                ? 'ไม่ต้องรับกุญแจ (ไม่พักหอ)'
+                                ? 'ไม่ต้องรับกุญแจ (Admin บันทึกไม่พักหอ)'
                                 : '⏳ ยังไม่ได้รับกุญแจ'}
                         </span>
                       </div>
-                      {myDormOptOut && (
-                        <span className="text-[11px] text-amber-300 font-semibold">
-                          * ท่านแจ้งไม่ประสงค์พักหอพักแล้ว ข้อมูลเชื่อมต่อไปยัง Admin และใบเซ็นชื่อเข้าพักอัตโนมัติ
-                        </span>
-                      )}
+                      <span className="text-[11px] text-slate-400">
+                        {myDormOptOut
+                          ? '* Admin บันทึกสถานะไม่พักหอให้แล้ว หากเปลี่ยนแปลงโปรดแจ้ง Admin'
+                          : '* ผู้เข้าร่วมต่างมหาวิทยาลัยทุกคนเข้าพักหอพักที่โครงการจัดเตรียมให้ (หากจำเป็นต้องปรับโปรดติดต่อ Admin)'}
+                      </span>
                     </div>
 
                     {/* Facilities row */}

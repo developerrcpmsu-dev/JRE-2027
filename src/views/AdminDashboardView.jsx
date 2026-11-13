@@ -77,6 +77,7 @@ import {
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl, getAttendanceConfirmationInfo } from '../supabase';
 import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
+import { buildRoomMovePayload } from '../utils/roomUtils';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
   DEFAULT_MERCHANDISE_CONFIG,
@@ -2400,9 +2401,27 @@ export default function AdminDashboardView({
         variant: 'info'
       },
       async () => {
+        const nextRoom = allocRoom.trim();
+        const currentReg = (registrations || []).find(r => r.user_id === userId || r.id === userId);
+        const curRoom = String(currentReg?.room_assigned || '').trim();
+        let roomMoveFields = {};
+        if (currentReg && nextRoom !== curRoom) {
+          const curDigits = curRoom.match(/(\d{3})/)?.[1] || null;
+          roomMoveFields = buildRoomMovePayload(
+            {
+              roomNumber: curDigits,
+              rawRoom: curRoom,
+              roomChangeHistory: currentReg.room_change_history
+            },
+            nextRoom,
+            'แก้ไขห้องพักจากตาราง Admin',
+            'admin'
+          );
+        }
         await onUpdateAllocation(userId, {
           group_assigned: allocGroup.trim(),
-          room_assigned: allocRoom.trim()
+          room_assigned: nextRoom,
+          ...roomMoveFields
         });
         setEditingUserId(null);
         triggerToast('✓ บันทึกการจัดสรรกลุ่มและห้องพักเรียบร้อย', 'success');
@@ -3069,6 +3088,18 @@ export default function AdminDashboardView({
         shirt_pickup_status: modalShirtPickupStatus || 'pending',
         group_assigned: modalGroup.trim(),
         room_assigned: modalRoom.trim(),
+        ...(modalRoom.trim() !== String(profileModalReg.room_assigned || '').trim()
+          ? buildRoomMovePayload(
+              {
+                roomNumber: String(profileModalReg.room_assigned || '').match(/(\d{3})/)?.[1] || null,
+                rawRoom: String(profileModalReg.room_assigned || '').trim(),
+                roomChangeHistory: profileModalReg.room_change_history
+              },
+              modalRoom.trim(),
+              'แก้ไขห้องพักจากหน้าต่างโปรไฟล์ Admin',
+              'admin'
+            )
+          : {}),
         dorm_opt_out: Boolean(modalDormOptOut),
         dorm_opt_out_by: Boolean(modalDormOptOut) !== Boolean(profileModalReg.dorm_opt_out)
           ? 'admin'

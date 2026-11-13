@@ -28,14 +28,17 @@ import {
   Image as ImageIcon,
   ShieldCheck,
   PackageCheck,
-  Key
+  Key,
+  ArrowLeftRight,
+  History
 } from 'lucide-react';
 import { getHealthConsentInfo } from '../data/defaultData';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import {
   DORMITORY_ROOM_CONFIGS,
   buildDormitoryRoomData,
-  computeSmartRoomPlan
+  computeSmartRoomPlan,
+  buildRoomMovePayload
 } from '../utils/roomUtils';
 import {
   exportDormitoryRosterToExcel,
@@ -125,6 +128,12 @@ function RoomOccupantCell({
             <div className={`text-[11px] ${subText} font-mono mt-0.5 truncate`}>
               {person.callsign} • โทร: {person.phone}
             </div>
+            {person.previousRoom && person.previousRoom !== person.roomNumber && (
+              <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400/40 text-[9.5px] font-bold">
+                <ArrowLeftRight className="w-2.5 h-2.5 shrink-0" />
+                <span>ย้ายจากห้อง {person.previousRoom} → {person.roomNumber || 'รอจัด'}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -187,7 +196,7 @@ function RoomOccupantCell({
         <div className="flex flex-wrap items-center gap-1">
           {person.dormOptOut ? (
             <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black">
-              🚫 ไม่พักหอ ({person.dormOptOutBy === 'admin' ? 'Admin ติ๊ก' : 'เจ้าตัวแจ้ง'})
+              🚫 ไม่พักหอ (Admin ติ๊ก)
             </span>
           ) : (
             <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
@@ -463,10 +472,12 @@ export default function AdminRoomsView({
   askConfirm = null
 }) {
   const confirmAction = (opts) => confirmWithModal(askConfirm, opts);
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards' | 'directory'
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState('all'); // 'all', 'ชาย', 'หญิง'
   const [roomFilter, setRoomFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'moved' | 'unassigned' | 'opt_out' | 'alerts' | 'pending_key'
+  const [roomMoveNote, setRoomMoveNote] = useState('');
   const [copiedAll, setCopiedAll] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [previewDocModal, setPreviewDocModal] = useState(null);
@@ -480,9 +491,24 @@ export default function AdminRoomsView({
       if (!prev || prev.targetUpdateId !== person.targetUpdateId) return prev;
       const mergedRaw = { ...(prev.raw || {}), ...updates };
       const consent = getHealthConsentInfo(mergedRaw);
+      const nextRoomDigits = updates.room_assigned !== undefined
+        ? (String(updates.room_assigned || '').match(/(\d{3})/)?.[1] || null)
+        : prev.roomNumber;
+      const prevRoomDigits = updates.previous_room !== undefined
+        ? (String(updates.previous_room || '').match(/(\d{3})/)?.[1] || updates.previous_room || null)
+        : prev.previousRoom;
       return {
         ...prev,
         ...updates,
+        roomNumber: nextRoomDigits,
+        rawRoom: updates.room_assigned !== undefined ? updates.room_assigned : prev.rawRoom,
+        assignedRoom: updates.room_assigned !== undefined ? (updates.room_assigned || 'ยังไม่ระบุห้อง') : prev.assignedRoom,
+        previousRoom: prevRoomDigits,
+        previousRoomRaw: updates.previous_room !== undefined ? updates.previous_room : prev.previousRoomRaw,
+        roomChangedAt: updates.room_changed_at !== undefined ? updates.room_changed_at : prev.roomChangedAt,
+        roomChangedBy: updates.room_changed_by !== undefined ? updates.room_changed_by : prev.roomChangedBy,
+        roomChangeNote: updates.room_change_note !== undefined ? updates.room_change_note : prev.roomChangeNote,
+        roomChangeHistory: Array.isArray(updates.room_change_history) ? updates.room_change_history : prev.roomChangeHistory,
         dormOptOut: Boolean(mergedRaw.dorm_opt_out),
         dormOptOutBy: mergedRaw.dorm_opt_out_by || '',
         dormOptOutAt: mergedRaw.dorm_opt_out_at || '',
@@ -655,6 +681,103 @@ export default function AdminRoomsView({
 
   const roomData = useMemo(() => buildDormitoryRoomData(registrations), [registrations]);
 
+  const allExternalPeople = useMemo(() => {
+    const combined = [
+      ...roomData.rooms.flatMap(rm => rm.occupants.map(p => ({ ...p, currentRoomObj: rm }))),
+      ...(roomData.unassignedExternal || []).map(p => ({ ...p, currentRoomObj: null }))
+    ];
+    return combined.sort((a, b) => {
+      const rA = a.roomNumber || '999';
+      const rB = b.roomNumber || '999';
+      if (rA !== rB) return rA.localeCompare(rB, 'th');
+      return a.name.localeCompare(b.name, 'th');
+    });
+  }, [roomData]);
+
+  const roomOccupancyMap = useMemo(() => {
+    const map = {};
+    roomData.rooms.forEach(rm => {
+      map[rm.room] = {
+        count: rm.occupants.length,
+        capacity: rm.capacity || 2,
+        names: rm.occupants.map(o => o.nickname !== '-' ? o.nickname : o.firstName).join(', ')
+      };
+    });
+    return map;
+  }, [roomData.rooms]);
+
+  const personMatchesFilter = (p) => {
+    if (genderFilter !== 'all' && p.gender !== genderFilter) return false;
+    if (roomFilter !== 'all' && p.roomNumber !== roomFilter && p.previousRoom !== roomFilter) return false;
+    if (statusFilter === 'moved' && !(p.previousRoom && p.previousRoom !== p.roomNumber) && !(p.roomChangeHistory?.length > 0)) return false;
+    if (statusFilter === 'unassigned' && p.roomNumber) return false;
+    if (statusFilter === 'opt_out' && !p.dormOptOut) return false;
+    if (statusFilter === 'alerts' && !(p.hasMedicalHistory || p.hasFoodAllergy || p.isSpecialCare)) return false;
+    if (statusFilter === 'pending_key' && (p.dormOptOut || !p.roomKeyHeld || p.roomKeyReturned)) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const histMatch = Array.isArray(p.roomChangeHistory) && p.roomChangeHistory.some(h =>
+      String(h.from || '').toLowerCase().includes(q) || String(h.to || '').toLowerCase().includes(q)
+    );
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.nickname.toLowerCase().includes(q) ||
+      p.callsign.toLowerCase().includes(q) ||
+      p.phone.includes(q) ||
+      p.institution.toLowerCase().includes(q) ||
+      p.uniShort.toLowerCase().includes(q) ||
+      String(p.roomNumber || '').includes(q) ||
+      String(p.previousRoom || '').includes(q) ||
+      histMatch
+    );
+  };
+
+  const filteredExternalPeople = useMemo(
+    () => allExternalPeople.filter(personMatchesFilter),
+    [allExternalPeople, genderFilter, roomFilter, statusFilter, searchQuery]
+  );
+
+  const handleMovePersonRoom = async (person, nextRoomNumber, moveNote = '') => {
+    if (!onUpdateAllocation || isMovingSingle || !person) return false;
+    const cleanNext = String(nextRoomNumber || '').trim();
+    if ((cleanNext || '') === (person.roomNumber || '')) return false;
+
+    const fromLabel = person.roomNumber ? `ห้อง ${person.roomNumber}` : 'ยังไม่ระบุห้อง';
+    const toLabel = cleanNext ? `ห้อง ${cleanNext}` : 'ยังไม่ระบุห้อง (ล้างห้องพัก)';
+    const destInfo = cleanNext ? roomOccupancyMap[cleanNext] : null;
+    const destHint = destInfo && destInfo.count > 0
+      ? ` (ห้องปลายทางมีคนอยู่แล้ว ${destInfo.count}/${destInfo.capacity}: ${destInfo.names})`
+      : destInfo
+        ? ' (ห้องปลายทางว่างอยู่)'
+        : '';
+
+    const confirmed = await confirmAction({
+      title: 'ยืนยันการเปลี่ยน/ย้ายห้องพัก',
+      message: `ต้องการย้าย "${person.name}" จาก [${fromLabel}] ไปยัง [${toLabel}]${destHint} ใช่หรือไม่? ระบบจะเก็บประวัติห้องเก่าไว้ให้อัตโนมัติ`,
+      confirmText: cleanNext ? `✓ ย้ายไป ${toLabel}` : '✓ ยืนยันล้างเลขห้อง',
+      variant: 'info'
+    });
+    if (!confirmed) return false;
+
+    setIsMovingSingle(true);
+    try {
+      const payload = buildRoomMovePayload(person, cleanNext, moveNote, 'admin');
+      await onUpdateAllocation(person.targetUpdateId, payload);
+      syncSelectedPerson(person, payload);
+      setRoomMoveNote('');
+      if (triggerToast) {
+        triggerToast(`✓ ย้าย ${person.name}: ${fromLabel} → ${toLabel} และบันทึกประวัติห้องเก่าเรียบร้อยแล้ว`, 'success');
+      }
+      return true;
+    } catch (err) {
+      console.error('Failed to move room:', err);
+      if (triggerToast) triggerToast(err?.message || 'ย้ายห้องพักไม่สำเร็จ กรุณาลองใหม่', 'error');
+      return false;
+    } finally {
+      setIsMovingSingle(false);
+    }
+  };
+
   const totalOccupants = useMemo(() => {
     return roomData.rooms.reduce((sum, r) => sum + r.occupants.length, 0);
   }, [roomData.rooms]);
@@ -675,22 +798,18 @@ export default function AdminRoomsView({
   const matchesSearch = (room) => {
     if (genderFilter !== 'all' && room.gender !== genderFilter) return false;
     if (roomFilter !== 'all' && room.room !== roomFilter) return false;
+    if (statusFilter !== 'all') {
+      return room.occupants.some(personMatchesFilter);
+    }
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     if (room.room.includes(q) || room.roomLabel.toLowerCase().includes(q)) return true;
-    return room.occupants.some(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.nickname.toLowerCase().includes(q) ||
-      p.callsign.toLowerCase().includes(q) ||
-      p.phone.includes(q) ||
-      p.institution.toLowerCase().includes(q) ||
-      p.uniShort.toLowerCase().includes(q)
-    );
+    return room.occupants.some(personMatchesFilter);
   };
 
-  const filteredRooms = useMemo(() => roomData.rooms.filter(matchesSearch), [roomData.rooms, genderFilter, roomFilter, searchQuery]);
-  const filteredMaleRooms = useMemo(() => roomData.maleRooms.filter(matchesSearch), [roomData.maleRooms, genderFilter, roomFilter, searchQuery]);
-  const filteredFemaleRooms = useMemo(() => roomData.femaleRooms.filter(matchesSearch), [roomData.femaleRooms, genderFilter, roomFilter, searchQuery]);
+  const filteredRooms = useMemo(() => roomData.rooms.filter(matchesSearch), [roomData.rooms, genderFilter, roomFilter, statusFilter, searchQuery]);
+  const filteredMaleRooms = useMemo(() => roomData.maleRooms.filter(matchesSearch), [roomData.maleRooms, genderFilter, roomFilter, statusFilter, searchQuery]);
+  const filteredFemaleRooms = useMemo(() => roomData.femaleRooms.filter(matchesSearch), [roomData.femaleRooms, genderFilter, roomFilter, statusFilter, searchQuery]);
 
   // Open Smart Room Plan Preview Modal
   const handleOpenSmartPlan = () => {
@@ -710,7 +829,8 @@ export default function AdminRoomsView({
     setIsApplyingPlan(true);
     try {
       for (const ch of smartPlanModal.changes) {
-        await onUpdateAllocation(ch.person.targetUpdateId, { room_assigned: ch.newRoomValue });
+        const payload = buildRoomMovePayload(ch.person, ch.newRoom, 'จัดห้องอัตโนมัติ (Smart Arrange)', 'admin');
+        await onUpdateAllocation(ch.person.targetUpdateId, payload);
       }
       setSmartPlanModal(null);
       if (triggerToast) {
@@ -851,8 +971,8 @@ export default function AdminRoomsView({
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-950 via-slate-900 to-indigo-950 border border-sky-500/30 p-6 sm:p-8 shadow-2xl no-print">
         <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-start justify-between gap-5">
-          <div className="flex-1 min-w-0 space-y-2.5">
+        <div className="relative z-10 flex flex-col gap-5">
+          <div className="w-full space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 rounded-full text-xs font-black bg-sky-500/20 text-sky-300 border border-sky-400/30 flex items-center gap-1.5 shadow-sm">
                 <Building className="w-3.5 h-3.5 text-sky-400" />
@@ -870,15 +990,15 @@ export default function AdminRoomsView({
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug">
               🏨 ตารางจัดสรรห้องพัก &amp; ระบบโปรไฟล์ผู้เข้าพัก
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              ผังเข้าพักหอพักกุดรัง ชั้น 1 ชาย (101-107) และหญิง (108-110) <strong>จัดลำดับในห้อง: 1. คนมีโรคประจำตัว/แพ้ • 2. คนปกติช่วยดูแล</strong> จัดห้องแล้ว {totalOccupants}/{totalExternalNeedRoom || 20} คน
+            <p className="text-xs sm:text-sm text-slate-300 max-w-4xl leading-relaxed">
+              ผังเข้าพักหอพักกุดรัง ชั้น 1 ชาย (101-107) และหญิง (108-110) <strong>จัดลำดับในห้อง: 1. คนมีโรคประจำตัว/แพ้ • 2. คนปกติช่วยดูแล</strong> จัดห้องแล้ว {totalOccupants}/{totalExternalNeedRoom || 20} คน • สถานะ &ldquo;ไม่พักหอ&rdquo; กดปรับได้เฉพาะ Admin เท่านั้น
             </p>
           </div>
 
-          {/* Primary Top-Right Controls */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Primary Controls Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
             {/* View Mode Toggle */}
-            <div className="flex items-center p-1 rounded-2xl bg-slate-900 border border-slate-700 shadow-md">
+            <div className="flex flex-wrap items-center p-1 rounded-2xl bg-slate-900 border border-slate-700 shadow-md">
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
@@ -903,6 +1023,19 @@ export default function AdminRoomsView({
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
                 <span>การ์ดผังห้อง</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('directory')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'directory'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                <span>รายคน • เปลี่ยนห้อง / ประวัติห้องเก่า-ใหม่</span>
               </button>
             </div>
 
@@ -1131,7 +1264,7 @@ export default function AdminRoomsView({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาเลขห้อง (101-110), ชื่อ-สกุล, ชื่อเล่น, นามเรียกขาน (TSI/RCP), เบอร์โทร..."
+              placeholder="ค้นหาเลขห้องปัจจุบัน/ห้องเก่า, ชื่อ-สกุล, ชื่อเล่น, นามเรียกขาน, เบอร์โทร..."
               className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
             />
             {searchQuery && (
@@ -1146,6 +1279,19 @@ export default function AdminRoomsView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-indigo-200 font-bold focus:outline-none focus:border-indigo-400"
+            >
+              <option value="all">สถานะทั้งหมด</option>
+              <option value="moved">🔄 เคยย้ายห้อง (มีห้องเก่า → ใหม่)</option>
+              <option value="unassigned">⏳ ยังไม่ได้ระบุห้อง</option>
+              <option value="opt_out">🚫 Admin ติ๊กไม่พักหอ</option>
+              <option value="alerts">🚨 มีโรคประจำตัว / แพ้</option>
+              <option value="pending_key">🔑 ยังไม่คืนกุญแจ</option>
+            </select>
+
             <select
               value={roomFilter}
               onChange={(e) => setRoomFilter(e.target.value)}
@@ -1404,11 +1550,16 @@ export default function AdminRoomsView({
                             <div className="flex flex-wrap items-center gap-1">
                               {person.dormOptOut ? (
                                 <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black">
-                                  🚫 ไม่ประสงค์พักหอ ({person.dormOptOutBy === 'admin' ? 'Admin' : 'เจ้าตัว'})
+                                  🚫 ไม่พักหอ (Admin ติ๊ก)
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
                                   🛏️ เข้าพักหอ
+                                </span>
+                              )}
+                              {person.previousRoom && person.previousRoom !== person.roomNumber && (
+                                <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400/40 text-[10px] font-bold">
+                                  🔄 เก่า {person.previousRoom} → {person.roomNumber || 'รอจัด'}
                                 </span>
                               )}
                               <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">
@@ -1465,6 +1616,226 @@ export default function AdminRoomsView({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* VIEW MODE 3: PER-PERSON DIRECTORY & QUICK ROOM TRANSFER + HISTORY */}
+      {viewMode === 'directory' && (
+        <div className="rounded-3xl bg-slate-950/85 border border-indigo-500/40 overflow-hidden shadow-2xl no-print">
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-950/80 via-slate-900 to-sky-950/80 border-b border-indigo-500/30 flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <ArrowLeftRight className="w-5 h-5 text-indigo-400" />
+                <span>รายชื่อผู้เข้าพักรายคน • เปลี่ยน/ย้ายห้องพัก &amp; ตรวจประวัติห้องเก่า-ใหม่</span>
+              </h2>
+              <p className="text-xs text-indigo-200">
+                ค้นหาได้ทันทีว่าใครอยู่ห้องไหน ย้ายมาจากห้องเก่าเลขใด และเลือกเปลี่ยนห้องรายคนได้ทันทีเมื่อหอพักคอนเฟิร์ม ({filteredExternalPeople.length}/{allExternalPeople.length} ท่าน)
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={roomMoveNote}
+                onChange={(e) => setRoomMoveNote(e.target.value)}
+                placeholder="หมายเหตุการย้าย (ถ้ามี เช่น หอพักปรับห้อง)"
+                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 w-64 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-900/95 text-slate-300 border-b border-slate-800 font-bold text-[11px]">
+                  <th className="py-3 px-3 text-center w-12">ที่</th>
+                  <th className="py-3 px-3">ผู้เข้าพัก (ชื่อ / นามเรียกขาน / เบอร์ / สุขภาพ)</th>
+                  <th className="py-3 px-3 text-center w-44">ห้องเก่า (ก่อนย้ายล่าสุด)</th>
+                  <th className="py-3 px-3 w-56">ห้องปัจจุบัน (เลือกเปลี่ยนได้ทันที)</th>
+                  <th className="py-3 px-3">สถานะพัก (Admin เท่านั้น) &amp; กุญแจ</th>
+                  <th className="py-3 px-3 text-center w-24">โปรไฟล์</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {filteredExternalPeople.map((person, idx) => {
+                  const hasAlert = person.needsBuddyCare || person.isSpecialCare;
+                  const histCount = Array.isArray(person.roomChangeHistory) ? person.roomChangeHistory.length : 0;
+                  return (
+                    <tr key={person.id} className={hasAlert ? 'bg-rose-950/15 hover:bg-rose-950/25' : 'hover:bg-slate-900/60'}>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-white">{person.name}</span>
+                          {person.nickname !== '-' && (
+                            <span className="text-amber-300 text-[11px]">({person.nickname})</span>
+                          )}
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                            person.gender === 'ชาย'
+                              ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                              : 'bg-pink-500/15 text-pink-300 border-pink-500/30'
+                          }`}>
+                            {person.gender}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-bold">
+                            {person.uniShort}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          {person.callsign} • โทร: {person.phone}
+                        </div>
+                        {hasAlert && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {person.hasMedicalHistory && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/40 text-[10px] font-bold">
+                                โรค: {person.medicalHistory}
+                              </span>
+                            )}
+                            {person.hasFoodAllergy && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                                แพ้: {person.foodAllergy}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3 text-center">
+                        {person.previousRoom && person.previousRoom !== person.roomNumber ? (
+                          <div className="inline-flex flex-col items-center gap-0.5">
+                            <span className="px-2.5 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-200 border border-indigo-400/40 font-mono font-bold text-[11px]">
+                              ห้อง {person.previousRoom}
+                            </span>
+                            {person.roomChangedAt && (
+                              <span className="text-[9.5px] text-slate-400 font-mono">
+                                ย้าย {new Date(person.roomChangedAt).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}
+                              </span>
+                            )}
+                            {histCount > 1 && (
+                              <span className="text-[9.5px] text-indigo-300">
+                                (ย้ายแล้ว {histCount} ครั้ง)
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">- (ยังไม่เคยย้าย)</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3">
+                        {onUpdateAllocation ? (
+                          <div className="space-y-1">
+                            <select
+                              disabled={isMovingSingle}
+                              value={person.roomNumber || ''}
+                              onChange={(e) => handleMovePersonRoom(person, e.target.value, roomMoveNote)}
+                              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-sky-500/40 text-sky-200 font-bold text-xs cursor-pointer disabled:opacity-50 focus:outline-none focus:border-sky-400"
+                            >
+                              <option value="">-- ยังไม่ระบุห้อง --</option>
+                              {DORMITORY_ROOM_CONFIGS.filter(c => c.gender === person.gender).map(c => {
+                                const info = roomOccupancyMap[c.room] || { count: 0, capacity: 2, names: '' };
+                                const isCurrent = person.roomNumber === c.room;
+                                const suffix = info.count === 0
+                                  ? 'ว่าง 2'
+                                  : isCurrent
+                                    ? `ห้องปัจจุบัน • ${info.count}/${info.capacity}`
+                                    : info.count >= info.capacity
+                                      ? `เต็ม ${info.count}/${info.capacity}: ${info.names}`
+                                      : `มี ${info.count}/${info.capacity}: ${info.names}`;
+                                return (
+                                  <option key={c.room} value={c.room}>
+                                    ห้อง {c.room} ({suffix})
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            {person.roomChangeNote && (
+                              <div className="text-[10px] text-indigo-300 truncate" title={person.roomChangeNote}>
+                                📝 {person.roomChangeNote}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="font-mono font-bold text-sky-300">
+                            {person.roomNumber ? `ห้อง ${person.roomNumber}` : 'รอจัดห้อง'}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${
+                            person.dormOptOut
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          }`}>
+                            {person.dormOptOut ? '🚫 ไม่พักหอ (Admin)' : '🛏️ พักหอ'}
+                          </span>
+
+                          {onUpdateAllocation && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={busyKeyId === person.targetUpdateId}
+                                onClick={() => handleTogglePersonKeyHeld(person, !person.roomKeyHeld)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black border cursor-pointer disabled:opacity-50 ${
+                                  person.roomKeyHeld
+                                    ? 'bg-sky-500/25 text-sky-200 border-sky-400/60'
+                                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                                }`}
+                              >
+                                {person.roomKeyHeld ? '🔑 ถือกุญแจ ✓' : '🔑 รับกุญแจ'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busyKeyId === person.targetUpdateId}
+                                onClick={() => handleTogglePersonKeyReturned(person, !person.roomKeyReturned)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black border cursor-pointer disabled:opacity-50 ${
+                                  person.roomKeyReturned
+                                    ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60'
+                                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-emerald-200'
+                                }`}
+                              >
+                                {person.roomKeyReturned ? '✅ คืนแล้ว' : '📦 คืนกุญแจ'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busyKeyId === person.targetUpdateId}
+                                onClick={() => handleTogglePersonOptOut(person, !person.dormOptOut)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer disabled:opacity-50 ${
+                                  person.dormOptOut
+                                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                                    : 'bg-amber-600/15 text-amber-300 border-amber-500/30'
+                                }`}
+                                title="เฉพาะ Admin เท่านั้นที่กดปรับสถานะไม่พักหอได้"
+                              >
+                                {person.dormOptOut ? 'กลับมาพัก' : 'Admin ติ๊กไม่พักหอ'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPersonProfile(person, person.currentRoomObj)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 font-bold text-[11px] border border-slate-700 cursor-pointer"
+                        >
+                          ประวัติ/โปรไฟล์
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredExternalPeople.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-500">
+                      ไม่พบรายชื่อที่ตรงกับเงื่อนไขการค้นหา / ตัวกรอง
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -1691,9 +2062,9 @@ export default function AdminRoomsView({
               </div>
             </div>
 
-            {/* Accommodation & Roommate Card + Quick Room Move */}
+            {/* Accommodation & Roommate Card + Quick Room Move & History */}
             <div className="p-4 rounded-2xl bg-sky-950/40 border border-sky-500/30 space-y-2.5">
-              <div className="flex items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-slate-300 font-bold flex items-center gap-1.5">
                   <DoorClosed className="w-4 h-4 text-sky-400" />
                   <span>การจัดสรรห้องพัก:</span>
@@ -1702,40 +2073,18 @@ export default function AdminRoomsView({
                   <select
                     disabled={isMovingSingle}
                     value={selectedPerson.roomNumber || ''}
-                    onChange={async (e) => {
-                      const nextRoom = e.target.value;
-                      if (!nextRoom || nextRoom === selectedPerson.roomNumber) return;
-                      const roomVal = `ห้อง ${nextRoom}`;
-                      const confirmed = await confirmAction({
-                        title: 'ยืนยันการย้ายห้องพัก',
-                        message: `ต้องการย้าย ${selectedPerson.name} ไปยัง ${roomVal} ใช่หรือไม่?`,
-                        confirmText: '✓ ยืนยันย้ายห้อง',
-                        variant: 'info'
-                      });
-                      if (!confirmed) return;
-                      setIsMovingSingle(true);
-                      try {
-                        await onUpdateAllocation(selectedPerson.targetUpdateId, { room_assigned: roomVal });
-                        setSelectedPerson(prev => ({
-                          ...prev,
-                          roomNumber: nextRoom,
-                          rawRoom: roomVal,
-                          assignedRoom: roomVal
-                        }));
-                        if (triggerToast) triggerToast(`✓ ย้าย ${selectedPerson.name} ไปยัง${roomVal} เรียบร้อยแล้ว`, 'success');
-                      } catch (err) {
-                        console.error('Failed to move room:', err);
-                        if (triggerToast) triggerToast(err?.message || 'ย้ายห้องพักไม่สำเร็จ กรุณาลองใหม่', 'error');
-                      } finally {
-                        setIsMovingSingle(false);
-                      }
-                    }}
+                    onChange={(e) => handleMovePersonRoom(selectedPerson, e.target.value, roomMoveNote)}
                     className="font-mono font-black text-sky-300 px-2.5 py-1 rounded-lg bg-sky-900/60 border border-sky-500/40 text-xs cursor-pointer disabled:opacity-50"
                   >
                     <option value="">ยังไม่ระบุห้อง</option>
-                    {DORMITORY_ROOM_CONFIGS.filter(c => c.gender === selectedPerson.gender).map(c => (
-                      <option key={c.room} value={c.room}>ห้อง {c.room} ({c.gender})</option>
-                    ))}
+                    {DORMITORY_ROOM_CONFIGS.filter(c => c.gender === selectedPerson.gender).map(c => {
+                      const info = roomOccupancyMap[c.room] || { count: 0, capacity: 2 };
+                      return (
+                        <option key={c.room} value={c.room}>
+                          ห้อง {c.room} ({c.gender} • {info.count}/{info.capacity})
+                        </option>
+                      );
+                    })}
                   </select>
                 ) : (
                   <span className="font-mono font-black text-sky-300 px-2.5 py-0.5 rounded-lg bg-sky-900/60 border border-sky-500/40">
@@ -1743,6 +2092,44 @@ export default function AdminRoomsView({
                   </span>
                 )}
               </div>
+
+              {onUpdateAllocation && !selectedPerson.isMsu && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <input
+                    type="text"
+                    value={roomMoveNote}
+                    onChange={(e) => setRoomMoveNote(e.target.value)}
+                    placeholder="หมายเหตุการย้ายห้อง (ถ้ามี เช่น หอพักยืนยันห้องใหม่)..."
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+              )}
+
+              {(selectedPerson.previousRoom || (selectedPerson.roomChangeHistory && selectedPerson.roomChangeHistory.length > 0)) && (
+                <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 text-[11px] space-y-1.5">
+                  <div className="font-bold text-indigo-200 flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>ประวัติการเปลี่ยนห้องพัก (ห้องเก่า → ห้องปัจจุบัน):</span>
+                  </div>
+                  {selectedPerson.previousRoom && selectedPerson.previousRoom !== selectedPerson.roomNumber && (
+                    <div className="text-indigo-100 font-semibold">
+                      • ล่าสุด: <span className="text-amber-300">ห้อง {selectedPerson.previousRoom}</span> → <span className="text-emerald-300 font-bold">{selectedPerson.roomNumber ? `ห้อง ${selectedPerson.roomNumber}` : 'ยังไม่ระบุ'}</span>
+                      {selectedPerson.roomChangeNote ? ` (${selectedPerson.roomChangeNote})` : ''}
+                    </div>
+                  )}
+                  {Array.isArray(selectedPerson.roomChangeHistory) && selectedPerson.roomChangeHistory.length > 0 && (
+                    <div className="space-y-0.5 text-[10px] text-slate-300 max-h-24 overflow-y-auto pl-2 border-l-2 border-indigo-500/40">
+                      {selectedPerson.roomChangeHistory.map((h, i) => (
+                        <div key={i}>
+                          {i + 1}. {h.from} → <strong className="text-white">{h.to}</strong>
+                          {h.changed_at ? ` • ${new Date(h.changed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+                          {h.note ? ` (${h.note})` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {selectedPerson.roommate ? (
                 <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-1">
