@@ -78,7 +78,7 @@ import {
   Link2
 } from 'lucide-react';
 import { DataService, mergeAndDeduplicateAccounts, ensureHostedUrl, getAttendanceConfirmationInfo } from '../supabase';
-import { exportRegistrationsToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
+import { exportRegistrationsToExcel, exportCertificateListToExcel, exportMerchandiseOrdersToExcel, resolveFirstAndLastName } from '../utils/excelExporter';
 import { buildRoomMovePayload, parseRoomInfo } from '../utils/roomUtils';
 import { 
   DEFAULT_PAYMENT_CONFIG, 
@@ -5209,6 +5209,21 @@ export default function AdminDashboardView({
     }
   };
 
+  // Fast Excel (.xlsx) export specifically formatted for Certificates (แยก ผู้เข้าร่วม / Staff เรียง มมส -> มข -> ชาย -> หญิง -> ชื่อ สกุล)
+  const handleExportCertificateExcel = async () => {
+    if (!registrations || registrations.length === 0) {
+      triggerToast('ยังไม่มีข้อมูลผู้สมัครในระบบ');
+      return;
+    }
+    try {
+      const fileName = await exportCertificateListToExcel(registrations);
+      triggerToast(`ส่งออกรายชื่อเกียรติบัตรสำเร็จ: ${fileName}`);
+    } catch (err) {
+      console.error('Export Certificate Excel error:', err);
+      triggerToast('เกิดข้อผิดพลาดในการส่งออกรายชื่อเกียรติบัตร: ' + (err.message || ''));
+    }
+  };
+
   // Export CSV with Summary Tables at top (University x Gender Room Allocation, University x Shirt Sizes, Financial & Staff 280 Summary) + Sorted Detail Rows
   const handleExportCSV = async () => {
     if (!registrations || registrations.length === 0) {
@@ -6290,7 +6305,7 @@ export default function AdminDashboardView({
               onClick={handleExportExcel}
               disabled={isExportingExcel}
               className={`px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer ${isExportingExcel ? 'opacity-80 cursor-wait' : ''}`}
-              title="ส่งออกข้อมูลผู้สมัครทุกคน พร้อมฝังรูปถ่ายสลิปจริงลงในตาราง Excel (.xlsx)"
+              title="ส่งออกข้อมูลทุกคนเป็น Excel (.xlsx) แยกชีต ผู้เข้าร่วม / Staff / เกียรติบัตร เรียง มมส → มข ชาย → หญิง พร้อมรูปสลิป"
             >
               {isExportingExcel ? (
                 <>
@@ -6303,6 +6318,16 @@ export default function AdminDashboardView({
                   <span>ส่งออกข้อมูลทุกคนเป็น Excel (.xlsx)</span>
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportCertificateExcel}
+              className="px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-indigo-950/40 border border-indigo-400/30 transition-all active:scale-95 cursor-pointer"
+              title="ส่งออกรายชื่อเกียรติบัตร (.xlsx) แยกชีตผู้เข้าร่วม & Staff เรียง มมส → มข ชาย → หญิง ชื่อ-สกุล"
+            >
+              <Award className="w-4 h-4 text-indigo-100" />
+              <span>รายชื่อเกียรติบัตร (.xlsx)</span>
             </button>
 
             <button
